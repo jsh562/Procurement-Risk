@@ -1,0 +1,47 @@
+[project]
+name = "procurement-risk-checks"
+version = "0.1.0"
+description = "Cross-entry verification harness and aggregated coverage gate"
+requires-python = ">=3.12"
+dependencies = []
+
+# Deliberately NOT a uv workspace. A workspace resolves one dependency graph
+# across its members and cannot stop one member importing another's
+# dependencies — the exact property the four entries exist to guarantee.
+# The entries under /src are independent projects; this root project owns only
+# the cross-entry checks that have no single owning entry.
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "coverage==7.15.2", # HINT-003: identical across all entries; combine rejects a version mismatch
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+# The denominator is this epic's executable artifacts only. Configuration is
+# not coverable, and two of the four entries ship no runtime code yet, so a
+# repository-wide denominator would report a number that means nothing.
+source = ["tests/checks/helpers", "src/model/src/model/roster"]
+
+[tool.coverage.paths]
+# Each entry writes its own data file from its own working directory; these
+# map the differing roots onto one path so `combine` merges rather than
+# double-counts.
+helpers = ["tests/checks/helpers", "*/tests/checks/helpers"]
+roster = ["src/model/src/model/roster", "*/src/model/roster"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false

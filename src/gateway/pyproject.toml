@@ -1,0 +1,57 @@
+[project]
+name = "gateway"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "James Han", email = "jsh562@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.120.0",
+    "pydantic>=2.13.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "coverage==7.15.2",
+    "import-linter>=2.13",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/gateway"]
+
+[tool.importlinter]
+root_package = "gateway"
+# Required: without it the graph holds only this package's internal modules and
+# the contract below fails with `"anthropic" not present in the graph` — a
+# third-party distribution cannot be protected if it was never graphed.
+include_external_packages = true
+
+# TR-008: exactly one module in the repository may import the provider client.
+# `protected` is the correct contract here, not `forbidden` — a forbidden
+# contract detects indirect imports by default, which would flag every module
+# transitively reaching the wrapper and make the rule unsatisfiable.
+[[tool.importlinter.contracts]]
+name = "Only the provider wrapper imports the model-provider client"
+type = "protected"
+protected_modules = ["anthropic"]
+allowed_importers = ["gateway.provider"]

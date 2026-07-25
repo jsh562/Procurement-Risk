@@ -1,0 +1,44 @@
+"""TR-010 / SC-014: the provider client is named in exactly one source file."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from tests.checks.helpers.source_scan import format_violation, scan_source_root
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
+PROVIDER_NAME = "anthropic"
+
+
+def _mentions():
+    return scan_source_root(SRC_ROOT, PROVIDER_NAME, fixture_root=FIXTURE_ROOT)
+
+
+def test_provider_client_named_in_exactly_one_source_file() -> None:
+    mentions = _mentions()
+    assert len(mentions) == 1, format_violation(PROVIDER_NAME, mentions, REPO_ROOT)
+
+
+def test_the_one_naming_file_is_the_gateway_provider_module() -> None:
+    mentions = _mentions()
+    assert mentions, "scan found no provider mention at all — the scan itself is broken"
+    expected = SRC_ROOT / "gateway" / "src" / "gateway" / "provider.py"
+    assert mentions[0].path == expected
+
+
+def test_scan_reports_a_planted_second_site(tmp_path: Path) -> None:
+    """Positive control: a scan that cannot fail proves nothing."""
+    (tmp_path / "a.py").write_text("import anthropic\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("client = anthropic.Anthropic\n", encoding="utf-8")
+    assert len(scan_source_root(tmp_path, PROVIDER_NAME)) == 2
+
+
+@pytest.mark.parametrize("filename", ["uv.lock", "pyproject.toml", "package-lock.json"])
+def test_manifests_and_lockfiles_are_outside_the_scanned_set(tmp_path: Path, filename: str) -> None:
+    """These name the provider on a correct tree; scanning them fails always."""
+    (tmp_path / filename).write_text('name = "anthropic"\n', encoding="utf-8")
+    assert scan_source_root(tmp_path, PROVIDER_NAME) == []
