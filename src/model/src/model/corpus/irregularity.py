@@ -190,7 +190,10 @@ def _document_rng(seed: int, document_id: str) -> random.Random:
     on how many documents were injected before it, so inserting a project would
     silently rewrite every document after it.
     """
-    return random.Random(f"{seed}:irregularity:{document_id}")
+    # Suppression rationale: see generate.py — seeded determinism is the requirement (FR-021),
+    # so a cryptographic generator would defeat the property rather than harden
+    # it. Which irregularities a document carries must be reproducible.
+    return random.Random(f"{seed}:irregularity:{document_id}")  # noqa: S311
 
 
 def _blank(plan: DocumentPlan, rng: random.Random, config: GenerationConfig) -> DocumentPlan:

@@ -370,7 +370,17 @@ def fetch_document(
             )
 
         host = _check_hop(current, hop_index, active_policy)
-        request = urllib.request.Request(current, headers=dict(REQUEST_HEADERS), method="GET")
+        # noqa justification: S310 asks whether `file:` or a custom scheme could
+        # reach this call. `_check_hop` on the line above is the answer, and it
+        # runs on *every* hop rather than only the first — a redirect cannot
+        # smuggle in a scheme the original URL was checked for (CWE-918). It
+        # refuses anything but https, refuses a non-default port, refuses a host
+        # that is not an exact allow-list match, and refuses credentials in the
+        # URL. The opener additionally has redirect following disabled, so no
+        # request is ever issued that this line did not construct.
+        request = urllib.request.Request(  # noqa: S310
+            current, headers=dict(REQUEST_HEADERS), method="GET"
+        )
         try:
             response = active_opener.open(request, timeout=timeout)
         except urllib.error.HTTPError as exc:

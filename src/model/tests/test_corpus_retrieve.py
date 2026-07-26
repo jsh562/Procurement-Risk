@@ -869,10 +869,13 @@ def test_the_document_identifier_refuses_a_malformed_component(policy, section, 
 
 
 def test_the_unified_variant_carries_no_suffix() -> None:
+    # Suppression rationale: `token` here is the agency-variant token — UNIFIED, USACE, NAVFAC —
+    # matched by name rather than by meaning. Nothing in this epic holds a
+    # credential, and FR-002a forbids allow-listing a source that needs one.
     with pytest.raises(RetrievalPolicyError, match="must be the empty string"):
-        AgencyVariant(token="UNIFIED", section_suffix=".00 10", issuing_body="USACE")
+        AgencyVariant(token="UNIFIED", section_suffix=".00 10", issuing_body="USACE")  # noqa: S106
     with pytest.raises(RetrievalPolicyError, match="must be non-empty"):
-        AgencyVariant(token="USACE", section_suffix="", issuing_body="USACE")
+        AgencyVariant(token="USACE", section_suffix="", issuing_body="USACE")  # noqa: S106
 
 
 def test_a_missing_policy_is_an_error(tmp_path: Path) -> None:

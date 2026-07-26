@@ -1180,8 +1180,11 @@ def test_vr_062_an_issuing_body_naming_another_agency(corpus: CorpusFixture) -> 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
     try:
-        return subprocess.run(
-            ["git", "-C", str(root), *args],
+        # Suppression rationale: fixed argv, no shell, and `git` is resolved through PATH on
+        # purpose — the fixture asks what this developer's git reports about a
+        # throwaway repository it just created in tmp_path.
+        return subprocess.run(  # noqa: S603
+            ["git", "-C", str(root), *args],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,

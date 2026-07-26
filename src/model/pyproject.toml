@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.18.5",
     "arviz>=1.2.0",
     "gateway",
     "jsonschema[format-nongpl]>=4.26.0",
@@ -15,15 +16,24 @@ dependencies = [
     "pandas>=3.0.5",
     "pdfplumber>=0.11.10",
     "pillow>=12.3.0",
+    "psycopg[binary]>=3.3.4",
     "pymc>=6.2.0",
     "reportlab>=5.0.0",
+    "sqlalchemy>=2.0.51",
 ]
 
-# ADR-0011: the corpus jobs are modeling-owned command-line entry points, not
-# serving endpoints. Declared here so they are invoked by name rather than by
-# `python -m` against a path that would differ between the workflow and a
-# developer checkout. The modules land in Phases 3-5.
+# ADR-0011: every job this entry owns is a console entry point invoked through
+# the entry's own environment -- `uv run --directory src/model <name>` -- rather
+# than a container job. A context rooted at src/model could not resolve the
+# `gateway` path dependency below, and widening it to ./src would admit the
+# modeling boundary into the serving build context. docker-compose.yml is
+# untouched (TR-037).
+#
+# `migrate` arrived with the schema epic and the four corpus commands with the
+# corpus epic; they are unrelated jobs that happen to share one entry, so both
+# sets are declared here rather than either replacing the other.
 [project.scripts]
+migrate = "model.schema.cli:main"
 corpus-retrieve = "model.corpus.retrieve:main"
 corpus-generate = "model.corpus.generate:main"
 corpus-validate = "model.corpus.validate:main"
@@ -42,6 +52,7 @@ dev = [
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
     "pytest>=9.1.1",
+    "pytest-alembic>=0.12.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.0",
 ]
@@ -51,7 +62,12 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+
+# AD-003: security QC lives inside the lint category, not a third category.
+# `assert` is the test framework's assertion mechanism, so S101 is noise there.
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

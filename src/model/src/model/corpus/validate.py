@@ -134,7 +134,7 @@ LAYERS: tuple[str, ...] = (LAYER_REAL, LAYER_SYNTHETIC)
 SCHEMA_RELATIVE_PATH = "manifest.schema.json"
 DATASHEET_RELATIVE_PATH = "synthetic/datasheet.md"
 
-STATUS_PASS = "PASS"
+STATUS_PASS = "PASS"  # noqa: S105 — a rule outcome, not a credential
 STATUS_FAIL = "FAIL"
 STATUS_SKIPPED = "SKIPPED"
 
@@ -1566,7 +1566,10 @@ def _vr_013(corpus: Corpus) -> RuleOutcome:
 def _git(toplevel: Path, *args: str) -> tuple[int, str] | None:
     try:
         completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-            ["git", "-C", str(toplevel), *args],
+            # Suppression rationale: resolving `git` through PATH is intended — the check asks
+            # whether *this developer's* git sees the file as tracked, and a
+            # pinned absolute path would answer for a different installation.
+            ["git", "-C", str(toplevel), *args],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,

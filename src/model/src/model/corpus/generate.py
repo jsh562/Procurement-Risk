@@ -422,7 +422,12 @@ def _rng(seed: int, *parts: str) -> random.Random:
     document after it. Seeding from the identity makes each document's content
     a function of the seed and its own identity and nothing else.
     """
-    return random.Random(f"{seed}:" + ":".join(parts))
+    # noqa justification: a cryptographic generator is the wrong tool here, not
+    # a stronger one. FR-021 requires the same seed to reproduce an identical
+    # document-model hash across machines and runs; `secrets` would make that
+    # impossible by construction. Nothing here is a secret, a token, or a
+    # sampling decision anyone could gain by predicting.
+    return random.Random(f"{seed}:" + ":".join(parts))  # noqa: S311
 
 
 def _dates(rng: random.Random, base: date) -> tuple[tuple[str, str], ...]:

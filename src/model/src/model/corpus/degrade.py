@@ -198,7 +198,11 @@ def degraded_raster(
 
     # Seeded from what the model records and from nothing else, so the pixels
     # are a function of the recorded directive rather than of the run.
-    rng = random.Random(
+    # Suppression rationale: seeded from the recorded directive so the pixels are a function of
+    # what the manifest states, not of when the run happened. A cryptographic
+    # generator would make the same document render differently every time and
+    # break VR-041's byte-identity comparison.
+    rng = random.Random(  # noqa: S311
         f"{profile}:" + ":".join(f"{name}={values[name]}" for name in PARAMETER_NAMES)
     )
 

@@ -212,7 +212,7 @@ def hash_under_seed(seed: str) -> str:
     environment = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONUTF8": "1"}
     # Fixed argv against this interpreter, no shell: the only variable is the
     # environment the child starts with.
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - fixed argv, this interpreter, no shell
         [sys.executable, "-c", _SUBPROCESS_HASH, json.dumps(SEEDED_SPEC)],
         capture_output=True,
         text=True,
