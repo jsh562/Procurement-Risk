@@ -1,0 +1,90 @@
+# Local orchestration for E001.
+#
+# Ports avoid the conventional defaults deliberately: 5432 and 8000 are already
+# held on the target development machine, and a collision surfaces as a failure
+# at `up` rather than as a confusing failure at first use.
+#
+# TR-026: every externally pulled image is pinned by digest alongside its tag.
+
+services:
+  db:
+    # pgvector is required from the start — E003's schema depends on the
+    # extension existing, and adding it later means a migration that could
+    # have been avoided.
+    image: pgvector/pgvector:pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb
+    environment:
+      # TR-015: literal development-only credentials, committed on purpose and
+      # declared non-secret. The service binds to localhost and is never
+      # publicly exposed, and committing them is what lets a fresh clone start
+      # with no setup step. TR-025's prohibition covers model-provider
+      # credentials and is not weakened by this.
+      POSTGRES_USER: procurement
+      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_DB: procurement
+    ports:
+      - "5434:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U procurement -d procurement"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      # Context is /src, narrowed further by src/.dockerignore to the serving
+      # boundary and the gateway package. The modeling boundary is unreachable.
+      context: ./src
+      dockerfile: api/Dockerfile
+    ports:
+      - "8001:8000"
+    # The image's own CMD is a one-shot import smoke test, which the in-image
+    # checks rely on. Overridden here so the service is genuinely persistent:
+    # a service that exits on start is indistinguishable from a job, which is
+    # exactly the distinction TR-014 exists to make observable.
+    command:
+      [
+        "/app/.venv/bin/python",
+        "-c",
+        "import api, gateway; print('serving boundary up'); __import__('time').sleep(2**31)",
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://procurement:local-development-only@db:5432/procurement
+
+  web:
+    image: node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+    working_dir: /app
+    command: ["sh", "-c", "echo 'web boundary runs on the host in E001'; sleep infinity"]
+    ports:
+      - "3000:3000"
+
+  # --- Jobs -----------------------------------------------------------------
+  # One-shot work lives behind a non-default profile, so `docker compose up`
+  # never starts it. A job that starts with the persistent services would run
+  # on every developer's machine at every startup, which is how a corpus build
+  # ends up executing during someone's lunch break.
+  ingest:
+    profiles: ["jobs"]
+    build:
+      context: ./src
+      dockerfile: api/Dockerfile
+    command:
+      ["/app/.venv/bin/python", "-c", "print('ingest job: nothing to ingest in E001')"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  fit:
+    profiles: ["jobs"]
+    build:
+      context: ./src
+      dockerfile: api/Dockerfile
+    command: ["/app/.venv/bin/python", "-c", "print('fit job: no model to fit in E001')"]
+
+volumes:
+  db-data:

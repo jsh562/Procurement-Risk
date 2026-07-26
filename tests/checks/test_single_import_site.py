@@ -42,3 +42,29 @@ def test_manifests_and_lockfiles_are_outside_the_scanned_set(tmp_path: Path, fil
     """These name the provider on a correct tree; scanning them fails always."""
     (tmp_path / filename).write_text('name = "anthropic"\n', encoding="utf-8")
     assert scan_source_root(tmp_path, PROVIDER_NAME) == []
+
+
+# --- VR-013: exactly one module opens the roster -----------------------------
+# Same mechanism and same scanned root as the provider scan above, deliberately.
+# The roster has the same shape of risk: two readers means two definitions of
+# the same data, and the second one is always the one nobody remembers exists.
+
+ROSTER_FILENAME = "project-vendor-roster"
+
+
+def test_exactly_one_module_opens_the_roster() -> None:
+    mentions = scan_source_root(SRC_ROOT, ROSTER_FILENAME, fixture_root=FIXTURE_ROOT)
+    assert len(mentions) == 1, format_violation(ROSTER_FILENAME, mentions, REPO_ROOT)
+
+
+def test_the_one_roster_reader_lives_in_the_modeling_boundary() -> None:
+    mentions = scan_source_root(SRC_ROOT, ROSTER_FILENAME, fixture_root=FIXTURE_ROOT)
+    assert mentions, "scan found no roster reader at all"
+    expected = SRC_ROOT / "model" / "src" / "model" / "roster" / "reader.py"
+    assert mentions[0].path == expected
+
+
+def test_the_serving_boundary_never_reads_the_roster() -> None:
+    """TR-011 keeps the data directory out of the serving build context, so a
+    serving-side reader would fail inside the image rather than at review."""
+    assert not scan_source_root(SRC_ROOT / "api", ROSTER_FILENAME)

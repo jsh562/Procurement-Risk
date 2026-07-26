@@ -1,0 +1,11 @@
+[importlinter]
+root_package = boundary_fixture
+
+[importlinter:contract:computation-boundary]
+name = Model-facing code does not reach the computation package
+type = forbidden
+source_modules =
+    boundary_fixture.llm
+forbidden_modules =
+    boundary_fixture.compute
+allow_indirect_imports = False

@@ -1,0 +1,128 @@
+name: verify
+
+# Both triggers, deliberately.
+#
+# `push` is what makes the architecture contracts real: a violation fails the
+# build rather than raising a review comment. This was originally deferred to a
+# later epic as a scope decision, then closed here once the analyze phase made
+# the cost visible — it is one line.
+#
+# `workflow_dispatch` remains because the violation-injection input below is
+# on-demand evidence, not something to run on every push.
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      inject_violation:
+        description: "Plant a contract violation to evidence the checks fail"
+        type: choice
+        required: false
+        default: none
+        options:
+          - none
+          - provider-import
+          - computation-boundary
+
+permissions:
+  contents: read
+
+env:
+  # The build environment sits behind TLS interception; without this every
+  # index request fails with UnknownIssuer rather than a network error.
+  UV_NATIVE_TLS: "1"
+  # import-linter renders an emoji through `rich`. On Windows with a non-TTY
+  # stdout, rich falls back to a cp1252 legacy console encoder, raises
+  # UnicodeEncodeError, and exits 1 with no visible output — a passing contract
+  # that reports as broken. Linux runners are unaffected, so this is set for
+  # anyone reusing these steps on a Windows runner rather than for CI itself.
+  PYTHONUTF8: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Injection copies a production contract root to a scratch path and
+      # plants the violation there, so no violating file is ever committed —
+      # a committed violation would make the clean-tree run fail permanently.
+      - name: Plant violation (dispatch only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.inject_violation != 'none' }}
+        run: |
+          case "${{ inputs.inject_violation }}" in
+            provider-import)
+              printf 'import anthropic\n' > src/gateway/src/gateway/_injected.py ;;
+            computation-boundary)
+              printf 'from api.compute import nothing\n' > src/api/src/api/llm/_injected.py ;;
+          esac
+
+      - name: Sync every entry against its own lockfile
+        run: |
+          for entry in gateway api model; do
+            uv sync --locked --directory "src/$entry"
+          done
+          uv sync
+          npm ci --prefix src/web
+
+      - name: Lock verification
+        run: |
+          for entry in gateway api model; do uv lock --check --directory "src/$entry"; done
+
+      - name: Lint (Python)
+        run: |
+          for entry in gateway api model; do uv run --directory "src/$entry" ruff check .; done
+          uv run ruff check .
+
+      - name: Format check (Python)
+        run: |
+          for entry in gateway api model; do
+            uv run --directory "src/$entry" ruff format --check .
+          done
+
+      - name: Lint and format check (web)
+        run: |
+          npm run lint --prefix src/web
+          npx --prefix src/web prettier --check src/web
+
+      - name: Type check (web)
+        run: npx --prefix src/web tsc --noEmit --project src/web/tsconfig.json
+
+      - name: Architecture contracts
+        run: |
+          for entry in gateway api model; do uv run --directory "src/$entry" lint-imports; done
+
+      # Each entry writes its own coverage data file. pytest-cov overrides the
+      # `parallel` setting, so the files are kept apart by COVERAGE_FILE rather
+      # than by configuration, and combined at the root below.
+      - name: Unit tests (model)
+        env:
+          COVERAGE_FILE: ${{ github.workspace }}/.coverage.model
+        working-directory: src/model
+        run: uv run coverage run --source=src/model/roster -m pytest tests -q
+
+      - name: Unit tests (web)
+        run: npm test --prefix src/web
+
+      - name: Build serving image
+        run: docker build -f src/api/Dockerfile -t procurement-api:e001 src/
+
+      - name: Cross-entry checks, image assertions, and supply chain
+        env:
+          COVERAGE_FILE: ${{ github.workspace }}/.coverage.checks
+        run: uv run coverage run -m pytest tests/checks -q
+
+      # `combine` must succeed rather than be tolerated: if it silently fails,
+      # the gate reports on one entry's data and passes on a partial
+      # denominator. All entries pin one identical coverage version because
+      # combine rejects a data-file schema mismatch.
+      - name: Coverage gate
+        run: |
+          uv run coverage combine
+          uv run coverage report --fail-under=80

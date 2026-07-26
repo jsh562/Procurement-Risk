@@ -1,0 +1,11 @@
+[importlinter]
+root_package = provider_fixture
+include_external_packages = True
+
+[importlinter:contract:one-import-site]
+name = Only the wrapper imports the model-provider client
+type = protected
+protected_modules =
+    anthropic
+allowed_importers =
+    provider_fixture.wrapper

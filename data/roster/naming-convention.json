@@ -1,0 +1,18 @@
+{
+  "description": "Invented-name convention for the synthetic project and vendor roster. Expressed as patterns a check applies mechanically, so conformance is enforced rather than reviewed.",
+  "normalization": {
+    "casefold": true,
+    "strip_punctuation": [".", ",", "&", "'"],
+    "collapse_whitespace": true
+  },
+  "projects": {
+    "identifier_pattern": "^PRJ-[0-9]{3}$",
+    "name_pattern": "^(Thundervale|Kestrelmoor|Ashgrove Hollow|Pellmire|Quillhaven) (Transit Interchange|Water Reclamation Plant|Civic Archive|Regional Hospital|Freight Terminal)$",
+    "rule": "A fabricated placename drawn from the approved list, followed by a facility type. Placenames are invented compounds that return no real municipality."
+  },
+  "vendors": {
+    "identifier_pattern": "^VND-[0-9]{3}$",
+    "name_pattern": "^[A-Z][a-z]+(vex|thorne|quist|marrow|blen|drift|holt|spire) (Supply Co|Fabrication|Systems|Works|Materials|Industries)$",
+    "rule": "An invented compound stem carrying one of the approved fictional suffixes, followed by a trade-descriptive noun. The stem suffixes are chosen because no operating construction supplier uses them."
+  }
+}

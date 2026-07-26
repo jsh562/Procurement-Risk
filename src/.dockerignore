@@ -1,0 +1,14 @@
+# Deny everything, then re-admit only the two entries the serving image needs.
+# An allowlist, not a denylist: a new entry added under /src must be admitted
+# deliberately rather than arriving in the build context by default.
+*
+!api
+!gateway
+
+# Never ship build-host artifacts or the toolchain's caches.
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/tests
