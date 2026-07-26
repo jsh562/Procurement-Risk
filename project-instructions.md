@@ -107,4 +107,4 @@ Every model claim MUST be reported against a baseline strong enough that beating
 | 1.1.0 | 2026-07-25 | Source Code Layout expanded from three boundaries to four entries under `/src`, adding `/src/gateway` as a shared package, and Technology Stack updated to name three Python entries rather than two. Propagates ADR-0010, which supersedes ADR-0001 to resolve a conflict that had no solution under the three-boundary rule: both Python boundaries require model-provider access, exactly one module repository-wide may import the provider client, and neither boundary may depend on the other. |
 | 1.0.0 | 2026-07-25 | Initial project instructions. |
 
-**Version**: 1.2.1 | **Last Amended**: 2026-07-26
+**Version**: 1.2.2 | **Last Amended**: 2026-07-26
