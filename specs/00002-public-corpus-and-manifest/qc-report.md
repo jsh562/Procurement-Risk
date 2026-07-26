@@ -4,6 +4,17 @@
 **Run**: full (no prior report) | **Instructions**: `project-instructions.md` v1.2.0
 **Coverage target**: 80 | **Required categories**: linting, coverage | **Profile**: standard
 
+## Addendum — 2026-07-26, after merging `main`
+
+Every measured figure below records a run that actually happened and is left exactly as measured; restating any of it against the merged head would claim measurements not taken. What changed since:
+
+- The branch merged `main`, bringing E003's core data schema and E004's governance commits. `project-instructions.md` moved to **v1.2.1** (Storage narrowed to "no second datastore **of record**"), which does not reach this epic — it declares no datastore of any kind.
+- The compliance gate was re-run against v1.2.1 under the Governance rule that a feature audited against a superseded version re-runs its gate. Verdict **PASS**; the result is recorded in `spec.md` §Compliance Check and `plan.md` §Instructions Check.
+- The coverage command below names two packages; the merged workflow now scopes three (`roster`, `schema`, `corpus`), and the lockfile holds 89 packages rather than the 81 recorded under Security. Both are consequences of the merge, not corrections to this run.
+- On the merged tree, verified before the pull request: **1039 model tests passed with none skipped** — E003's schema tests ran against a live migrated database rather than being allowed to skip — plus 141 cross-entry checks, 5 gateway tests, and corpus validation still green at 59 rules over 51 documents.
+
+The pull-request run re-measures everything on the merged head, and that run is the authority for the merge gate.
+
 ## Overall Verdict: PASS
 
 All required categories passed. One success criterion is a **deliberate, published miss** (SC-001) rather than an oversight, and one work item is PARTIAL on a half that cannot be evidenced from a repository (US5). Both are recorded below with their causes rather than resolved away.
