@@ -82,6 +82,46 @@
 - **Pitfalls**: The script must follow the cross-host redirect, must stay out of the test path so no required check depends on the network, and cannot be the recorded provenance for a document it was never able to fetch.
 - **Sources**: <https://www.wbdg.org/robots.txt>, <https://www.publications.usace.army.mil/Portals/76/Publications/EngineerForms/Eng_Form_4025_2017May.pdf>
 
+## Requirements quality criteria as a standard
+
+- **Decision**: Hold each requirement against ISO/IEC/IEEE 29148:2018's nine characteristics — necessary, appropriate, unambiguous, complete, singular, feasible, verifiable, correct, conforming — and the set against its five: complete, consistent, feasible, comprehensible, able to be validated.
+- **Rationale**: Naming the standard's own characteristic makes a checklist item auditable against a published definition rather than a reviewer's private notion of "clear enough".
+- **Rejected**: Invented categories such as clarity, testability, or scope creep — 29148 already names *unambiguous*, *verifiable*, and *appropriate*, and its 2011 characteristic *implementation free* was folded into *appropriate*, so citing the older list mislabels items.
+- **Pitfalls**: *Verifiable* is the sharp edge — a determinism claim reads precise but fails it with no stated measurement procedure; *singular* catches AND-joined requirements; and traceability is a requirement *attribute* in 29148, not a tenth characteristic, so cite it as an attribute or as set-level traceability.
+- **Sources**: <https://www.modernrequirements.com/blogs/iso-29148-explained/>, <https://www.cwnp.com/req-eng/>
+
+## Data quality criteria for a dataset artifact
+
+- **Decision**: Assess the manifest set and corpus against the ISO/IEC 25012 characteristics that survive having no database — accuracy (syntactic and semantic), completeness, consistency, credibility, currentness, plus traceability, compliance, precision, and understandability.
+- **Rationale**: A manifest is metadata about files, so credibility is the license-basis-and-source question, traceability is the digest-and-retrieval-record question, and accuracy is whether a recorded value corresponds to the file it describes.
+- **Rejected**: The purely system-dependent characteristics — availability, portability, recoverability, runtime efficiency, confidentiality — since this epic ships no service, no store, and no runtime access path.
+- **Pitfalls**: 25012 splits accuracy into syntactic and semantic, which is exactly how a digest field fails — well-formed hex computed over the wrong bytes or the wrong algorithm — and consistency governs both agreement among the four digests and agreement between entries and the file tree.
+- **Sources**: <https://iso25000.com/index.php/en/iso-25000-standards/iso-25012/136-iso-iec-2012>, <https://arxiv.org/pdf/2102.11527>
+
+## Test-strategy completeness criteria
+
+- **Decision**: A strategy is adequately specified when, per objective, it names its test basis, test conditions, coverage items and the criteria over them, entry and exit criteria, and an explicit test oracle.
+- **Rationale**: An oracle is the source deciding whether an outcome is correct, so a claim with no named oracle has no pass/fail rule — and for a determinism claim the oracle is a self-comparison against a recorded reference, which obliges the strategy to state which environment dimensions vary between runs (wall clock, build path, file ordering, locale) or be trivially satisfied by running the same command twice.
+- **Rejected**: A pass-rate or line-coverage percentage as sole exit criterion, and "output is identical across runs" as an oracle statement, since neither identifies the varied dimension or the comparison artifact.
+- **Pitfalls**: For property-based testing, adequate means each property declares its relation class (round-trip, invariant, metamorphic, alternate implementation), its generator domain, and its example count — generated coverage is not systematic, so boundary values are missed unless separately named.
+- **Sources**: <https://glossary.istqb.org/en_US/term/coverage-item>, <https://swen90006.github.io/Property-based-testing.html>
+
+## Supply-chain criteria for new dependencies
+
+- **Decision**: Per new dependency, require an exact version pin plus artifact hash in a committed lockfile installed under hash-checking mode, the transitive closure enumerated and reviewed rather than accepted incidentally, and CI workflow actions pinned by full commit SHA.
+- **Rationale**: A pinned dependency is one set to a specific hash rather than a mutable version or range, and the committed lockfile plus SHA-pinned actions are the observable evidence a requirements checklist can test for.
+- **Rejected**: Leaning on build-provenance attestation alone, which covers an artifact's own build and explicitly not dependency review; and semantic-version ranges, which are unpinned even when a lockfile exists elsewhere.
+- **Pitfalls**: pdfplumber's transitive `charset-normalizer` and `cryptography`, and jsonschema's `format-nongpl` extras, mean a direct-dependency count understates the review surface — the requirement must state the closure and its license posture, not merely name four packages.
+- **Sources**: <https://github.com/ossf/scorecard/blob/main/docs/checks.md>, <https://slsa.dev/spec/v1.0/requirements>
+
+## Security criteria for path fields and redirect-following retrieval
+
+- **Decision**: Every manifest field naming a path needs a stated containment rule — resolve the real path first, then assert it stays under a declared base, rejecting absolute paths and symlinks (CWE-22, CWE-23, CWE-36, CWE-59, CWE-73). The retrieval script needs a host and scheme allowlist re-applied at every redirect hop, a bounded hop count, and integrity verification against a pre-recorded digest (CWE-918, CWE-345).
+- **Rationale**: A redirect bypasses the validation applied to the original URL, so following WBDG's documented cross-host 301 is defensible only if each hop is re-validated rather than trusted because the first hop was allowlisted.
+- **Rejected**: A string-prefix check on the raw path, defeated by a symlink and by `..` segments evaluated before normalization; and treating any hop after an allowlisted first request as trusted.
+- **Pitfalls**: CWE-601 concerns redirecting a *user* and is the wrong citation for a downloader — CWE-918 and CWE-345 are load-bearing — and HTTP clients have a history of auto-following into `file://` and `scp://`, so scheme restriction must be explicit rather than an assumed default.
+- **Sources**: <https://cwe.mitre.org/data/definitions/22.html>, <https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html>
+
 ## Summary
 
 | Topic | Decision | Rationale |
@@ -120,3 +160,13 @@
 | <https://python-jsonschema.readthedocs.io/en/stable/validate/> | schema validation | 2026-07-25 |
 | <https://python-jsonschema.readthedocs.io/en/stable/errors/> | schema validation | 2026-07-25 |
 | <https://www.wbdg.org/robots.txt> | retrieval | 2026-07-25 |
+| <https://www.modernrequirements.com/blogs/iso-29148-explained/> | requirements quality | 2026-07-25 |
+| <https://www.cwnp.com/req-eng/> | requirements quality | 2026-07-25 |
+| <https://iso25000.com/index.php/en/iso-25000-standards/iso-25012/136-iso-iec-2012> | data quality | 2026-07-25 |
+| <https://arxiv.org/pdf/2102.11527> | data quality | 2026-07-25 |
+| <https://glossary.istqb.org/en_US/term/coverage-item> | test-strategy completeness | 2026-07-25 |
+| <https://swen90006.github.io/Property-based-testing.html> | test-strategy completeness | 2026-07-25 |
+| <https://github.com/ossf/scorecard/blob/main/docs/checks.md> | supply chain | 2026-07-25 |
+| <https://slsa.dev/spec/v1.0/requirements> | supply chain | 2026-07-25 |
+| <https://cwe.mitre.org/data/definitions/22.html> | path and redirect security | 2026-07-25 |
+| <https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html> | path and redirect security | 2026-07-25 |
