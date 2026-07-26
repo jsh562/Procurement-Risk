@@ -286,6 +286,8 @@ N/A — no request path, no external service call, and no user-facing error stat
 
 Recorded by this branch under TR-052 and SC-027. **Applied on `main`** via `.github/skills/amend-project/SKILL.md`. This branch performs none of them — v1.2.0 serializes amendments on the default branch.
 
+> **All four are now discharged**, on `main`, after E003 merged. Per-request status is on each entry below. AR-1, AR-2 and AR-4 were applied as three separate serialized commits, each landing before the next began; AR-3 turned out to need no slot at all. Kept as a record of what was requested and why rather than deleted, so the reasoning survives with the outcome.
+
 ### AR-1 — `specs/project-plan.md`, Shared Data Entities table
 
 Two "Introduced by" cells are inconsistent with the same document's own E003 epic entry, which already lists these as E003 key entities:
@@ -297,11 +299,17 @@ Two "Introduced by" cells are inconsistent with the same document's own E003 epi
 
 Both "Consumed by" cells unchanged. The convention is the one the `Chunk` row already uses.
 
+**APPLIED** on `main` in `f4f4517`. The `Chunk` row was checked rather than assumed — it reads `E003 (schema), E006 (populated)` — and the diff is exactly the two cells.
+
 ### AR-2 — governance gap, Feature Workspace numbering
 
 Workspace prefix `00002` is held by both this epic (E003, `specs/00002-core-data-schema/`) and E002 (`specs/00002-public-corpus-and-manifest/`, referenced from ADR-0011's front matter). v1.2.0 added epic-start claiming for migration numbers and decision-record numbers but not for workspace numbers, and they have already collided under the same parallel-wave pressure that motivated the clause.
 
 Not actionable here — renaming a workspace mid-flight breaks every path in this plan and `tasks.md`. Recorded for a future amendment: *"Feature Workspace numbers are claimed at epic start, exactly as migration and decision-record numbers are."*
+
+**APPLIED** on `main` in `33026f0` as **v1.2.2**, with the clause extended to cover workspace numbers alongside decision-record and migration numbers, plus its ISO-dated changelog row.
+
+Two consequences recorded with it rather than left implicit. First, **E003 remains permanently non-compliant with the rule it asked for** — the `00002` collision cannot be undone, because the number is embedded in every path this epic's artifacts cite, and the amendment was written knowing that. Second, the bump **superseded v1.2.1, which both then-in-flight epics recorded as their audited version** (E002 and E004), so each carries a re-run obligation for its own next gate under the drift clause. That was disclosed in the commit rather than left for them to discover; discharging it is theirs, not this epic's.
 
 ### AR-3 — `.github/skills/analyze-compliance/SKILL.md`, prior-report handling
 
@@ -316,6 +324,10 @@ The rule is now in the skill at its §5 report-writing step, stated with the dis
 ### AR-4 — an ADR for artifact authority direction (analysis finding A-012)
 
 TR-056, TR-065, TR-076 and TR-083 make `data-model.md`, a Plan-phase artifact, normative over Specify-phase requirements. Accepted for E003 with its mitigation recorded in `spec.md` § Compliance Check, but the authority direction is a project-wide architectural question and binding it beyond this epic needs a decision record. ADRs may not be authored from a feature branch, so this is recorded rather than written: *"A Plan-phase artifact may be declared normative over a Specify-phase requirement, under stated conditions and with amendments labelled as corrections carrying their evidence."*
+
+**APPLIED** on `main` in `262fe9b` as [ADR-0017](../adrs/0017-plan-phase-artifact-normative-over-a-specify-phase-requirement.md), written through the ADR Author per the MADR authoring contract, superseding nothing, with its `specs/sad.md` catalog row. It states four testable conditions — a named and bounded scope, amendments labelled as corrections carrying evidence, no amendment adding or removing a named object, and enforcement by test rather than review — and cites E003's four in-flight `data-model.md` corrections as the worked precedent.
+
+It also discloses the limitation this epic's own enforcement carries: `test_table_ownership.py` matches identifiers inside `data-model.md` code spans, so agreement is checked at **name level only** and a constraint whose *definition* drifted while keeping its name would pass. Closing that means comparing `pg_get_constraintdef` against the document; of the four conditions, only the third is machine-checked today.
 
 ## Implementation Hints
 
