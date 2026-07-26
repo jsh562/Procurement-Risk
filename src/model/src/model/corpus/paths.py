@@ -42,7 +42,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 __all__ = [
     "DEFAULT_CORPUS_ROOT",
@@ -260,7 +260,28 @@ def resolve_within(base: Path, candidate: str | Path) -> Path:
 
     raw = Path(candidate)
     text = str(candidate)
-    if not text or raw.is_absolute() or raw.drive or text.startswith(("/", "\\")):
+
+    # Absoluteness is judged under both path flavours rather than the host's.
+    # A manifest is portable data read on Windows and on Linux, but `pathlib`
+    # answers `is_absolute()` and `.drive` against the running OS only: to a
+    # `PosixPath`, "C:/Windows/win.ini" is a *relative* path two segments deep
+    # with an oddly named first component, and it carries no drive at all. The
+    # single-flavour test that stood here therefore refused a drive letter on
+    # Windows and admitted the identical string on Linux, where it was joined
+    # onto the base and resolved — the guard's verdict depended on who ran it.
+    #
+    # Whether a corpus path is relative is a property of the string, so both
+    # flavours are asked and either one objecting is enough. The Windows drive
+    # test is kept alongside its `is_absolute()` because a drive-relative path
+    # ("C:doc.pdf") has a drive and no root, and is absolute under neither.
+    windows_view = PureWindowsPath(text)
+    if (
+        not text
+        or PurePosixPath(text).is_absolute()
+        or windows_view.is_absolute()
+        or windows_view.drive
+        or text.startswith(("/", "\\"))
+    ):
         raise CorpusPathError(
             f"VR-009: {text!r} is absolute or empty; a corpus path is relative to its location"
         )

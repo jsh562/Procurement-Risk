@@ -283,10 +283,25 @@ def test_an_absolute_or_empty_candidate_is_refused_by_name(tmp_path: Path, candi
     assert "VR-009" in str(raised.value)
 
 
-def test_a_drive_letter_candidate_is_refused(tmp_path: Path) -> None:
+# Every spelling a drive letter has, because the guard must not depend on the
+# host: `pathlib` calls all of these relative when it runs on Linux. The
+# original test asserted one of them and so guarded only that one -- the
+# forward-slash form was refused on Windows and admitted on Linux, where it was
+# joined onto the base as a two-segment relative path.
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "C:/Windows/win.ini",  # drive, root, forward slashes
+        "C:\\Windows\\win.ini",  # drive, root, backslashes
+        "c:/windows/win.ini",  # lower case is the same drive
+        "C:win.ini",  # drive-relative: has a drive, absolute under neither flavour
+    ],
+)
+def test_a_drive_letter_candidate_is_refused(tmp_path: Path, candidate: str) -> None:
     directory = a_location(tmp_path, "real/ufgs")
-    with pytest.raises(CorpusPathError):
-        resolve_within(directory, "C:/Windows/win.ini")
+    with pytest.raises(CorpusPathError) as raised:
+        resolve_within(directory, candidate)
+    assert "VR-009" in str(raised.value)
 
 
 def test_the_base_itself_is_not_a_containable_path(tmp_path: Path) -> None:
