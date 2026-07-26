@@ -143,6 +143,13 @@ jobs:
         working-directory: src/web
         run: npm test
 
+      # OBJ1 VC6 says "when the application builds". Nothing built it, so the
+      # criterion was unevidenced and a scaffold that could not compile would
+      # have passed every other check.
+      - name: Build (web)
+        working-directory: src/web
+        run: npm run build
+
       - name: Build serving image
         run: docker build -f src/api/Dockerfile -t procurement-api:e001 src/
 

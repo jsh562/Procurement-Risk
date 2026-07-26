@@ -228,3 +228,9 @@ compliance failures — things claimed as verified that nothing actually verifie
 - [X] T068 [BUG:WARNING] {TR-012} [requirement-gap] Marker environment hardcoded a patch version the image does not run
   > Error: IMAGE_ENVIRONMENT pinned python_full_version 3.12.7; the image runs 3.12.13
   > Fix hint: read from the image at check time. Harmless against today's two marker forms, wrong the moment a patch-level boundary appears.
+- [X] T069 [BUG:ERROR] {TR-001} [requirement-gap] OBJ1 VC6 said "when the application builds" and nothing built it
+  > Error: no workflow step and no test ran `next build`; the project root was asserted by two regexes over next.config.ts source text
+  > Fix hint: added a `Build (web)` CI step, and the boundary test now imports the config and compares resolved paths — a config pointing both keys at the wrong directory satisfied a text match and still broke module resolution.
+- [X] T070 [BUG:WARNING] {TR-012} [requirement-gap] OBJ4 VC4's blind spot was described in prose and asserted nowhere
+  > Error: no test showed that a re-locked modeling dependency passes the allowlist by design
+  > Fix hint: added a test that doctors a lock, adds pymc to the serving root, and asserts it lands in the expected set — proving the allowlist cannot catch this case, which is why the denylist and the scoped build context exist.

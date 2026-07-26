@@ -24,9 +24,17 @@ describe("web boundary scaffold", () => {
     expect(lockfiles).toEqual(["package-lock.json"]);
   });
 
-  it("pins both the tracing root and the bundler root to this boundary", () => {
-    const config = readFileSync(path.join(BOUNDARY, "next.config.ts"), "utf-8");
-    expect(config).toMatch(/outputFileTracingRoot/);
-    expect(config).toMatch(/turbopack:\s*\{[\s\S]*root:/);
+  it("resolves both the tracing root and the bundler root to this boundary", async () => {
+    // Load the config and compare resolved paths, rather than regex-matching
+    // the source text. A config that sets both keys to the wrong directory
+    // satisfies a text match and still breaks module resolution — which is the
+    // failure the pinning exists to prevent.
+    const loaded = await import("../next.config");
+    const config = loaded.default as {
+      outputFileTracingRoot?: string;
+      turbopack?: { root?: string };
+    };
+    expect(path.resolve(config.outputFileTracingRoot ?? "")).toBe(BOUNDARY);
+    expect(path.resolve(config.turbopack?.root ?? "")).toBe(BOUNDARY);
   });
 });
