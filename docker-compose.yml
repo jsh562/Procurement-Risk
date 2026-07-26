@@ -22,7 +22,15 @@ services:
       POSTGRES_PASSWORD: local-development-only
       POSTGRES_DB: procurement
     ports:
-      - "5434:5432"
+      # Parameterised, not because 5434 is wrong, but because a literal cannot
+      # solve the collision that actually happens. 5434 was chosen over 5432
+      # since the conventional port is taken on the target machine — and then
+      # several sibling checkouts of this repository appeared on the same disk,
+      # each binding 5434. Any fixed value collides with the copy that picked
+      # the same fixed value. The default is unchanged, so SC-010, TR-015 and
+      # IP-004 still describe what a plain `up` does; a sibling sets PRC_DB_PORT
+      # instead of editing a committed file.
+      - "${PRC_DB_PORT:-5434}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -39,7 +47,7 @@ services:
       context: ./src
       dockerfile: api/Dockerfile
     ports:
-      - "8001:8000"
+      - "${PRC_API_PORT:-8001}:8000"
     # The image's own CMD is a one-shot import smoke test, which the in-image
     # checks rely on. Overridden here so the service is genuinely persistent:
     # a service that exits on start is indistinguishable from a job, which is
@@ -61,7 +69,7 @@ services:
     working_dir: /app
     command: ["sh", "-c", "echo 'web boundary runs on the host in E001'; sleep infinity"]
     ports:
-      - "3000:3000"
+      - "${PRC_WEB_PORT:-3000}:3000"
 
   # --- Jobs -----------------------------------------------------------------
   # One-shot work lives behind a non-default profile, so `docker compose up`
