@@ -51,7 +51,8 @@ from model.corpus.manifest import (
     upstream_digest_of_response,
     write_manifest,
 )
-from model.roster.reader import read_roster
+from model.corpus.paths import REPO_ROOT
+from model.roster.reader import DEFAULT_ROSTER_PATH, read_roster
 
 DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -596,7 +597,10 @@ def test_generation_inputs_must_name_exactly_the_closed_three() -> None:
             "sub-0001.pdf",
             generation_inputs={
                 **dict.fromkeys(GENERATION_INPUT_PATHS, A_DIGEST),
-                "data/roster/project-vendor-roster.json": A_DIGEST,
+                # The roster, named through the reader rather than restated: VR-045
+                # permits exactly one source file to name that path, and a literal
+                # here would make this test the second one.
+                DEFAULT_ROSTER_PATH.relative_to(REPO_ROOT).as_posix(): A_DIGEST,
             },
         )
     assert "unexpected=" in str(raised.value)
@@ -610,9 +614,7 @@ def test_roster_hash_is_the_readers_value_and_is_not_recomputed() -> None:
     roster = read_roster()
     entry = a_synthetic_entry("sub-0001.pdf", roster_hash=roster_digest(roster))
     assert entry.roster_hash == roster.content_hash
-    assert roster_digest(roster) != sha256_of_file(
-        Path(__file__).resolve().parents[3] / "data" / "roster" / "project-vendor-roster.json"
-    )
+    assert roster_digest(roster) != sha256_of_file(DEFAULT_ROSTER_PATH)
 
 
 def test_a_digest_in_uppercase_hex_is_rejected() -> None:

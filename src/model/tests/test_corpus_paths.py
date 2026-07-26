@@ -36,6 +36,7 @@ from model.corpus.paths import (
     find_symlinks,
     resolve_within,
 )
+from model.roster.reader import DEFAULT_ROSTER_PATH
 
 
 def link(source: Path, target: Path) -> Path:
@@ -162,7 +163,11 @@ def test_a_symlinked_corpus_root_is_refused(tmp_path: Path) -> None:
 def test_the_default_corpus_root_is_data_corpus_under_the_repository_root() -> None:
     """FR-018 fixes the root; the derivation mirrors the roster reader's."""
     assert DEFAULT_CORPUS_ROOT == REPO_ROOT / "data" / "corpus"
-    assert (REPO_ROOT / "data" / "roster" / "project-vendor-roster.json").is_file()
+    # The roster fixture is reached through the reader's own constant. Restating
+    # its path here would make this file a second one naming it, which VR-045
+    # forbids — the derivation is what is being mirrored, not the literal.
+    assert DEFAULT_ROSTER_PATH.parent.parent == DEFAULT_CORPUS_ROOT.parent
+    assert DEFAULT_ROSTER_PATH.is_file()
 
 
 @pytest.mark.parametrize(

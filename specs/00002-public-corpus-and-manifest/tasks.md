@@ -66,15 +66,15 @@
 
 ## Phase 3: US1 - Vendor the Public-Domain Specification Layer (Priority: P1) 🎯 MVP
 
-- [ ] T016 [US1] {FR-002,FR-002a} Author data/corpus/real/retrieval-policy.json: allow-listed hosts with the 301 origin, closed agency_variants map, justified target sections, anchor 01 33 00
-- [ ] T017 [P] [US1] {FR-002} Author the committed target-section list weighted to Division 26 and 23 long-lead equipment in src/model/src/model/corpus/sources.py → exports: TARGET_SECTIONS
-- [ ] T018 [US1] {FR-002b} Implement the hop-walking retrieval client in src/model/src/model/corpus/retrieve.py: https only, exact host match, ≤5 hops, 50 MB cap → exports: fetch_document()
-- [ ] T019 [US1] {FR-001,FR-003,FR-008,FR-008c} Digest the response body before the write and vendor bytes unmodified in .../corpus/retrieve.py ← T018:fetch_document
-- [ ] T020 [US1] {FR-004,FR-005} Author data/corpus/real/exclusions.json and the ledger writer in .../corpus/retrieve.py — closed cause enum, every exclusion recorded with its cause
-- [ ] T021 [US1] {FR-001,FR-002} Run corpus-retrieve and vendor ≥20 sections over ≥6 distinct long-lead sections plus 01 33 00 into data/corpus/real/ufgs/ after:T019
-- [ ] T022 [US1] {FR-006b,FR-007,FR-008} Write data/corpus/real/ufgs/manifest.json once through the canonical writer — eight REAL fields and a four-part license basis per entry ← T010:write_manifest
-- [ ] T023 [US1] {FR-008b} Implement the re-verification entry point in src/model/src/model/corpus/reverify.py — re-fetch, compare to upstream_digest, never invoked by verify.yml
-- [ ] T024 [US1] {FR-002b,FR-008b} [COMPLETES FR-008b] Fixture tests for both clients in src/model/tests/test_corpus_retrieve.py and test_corpus_reverify.py — eight conditions, no network
+- [X] T016 [US1] {FR-002,FR-002a} Author data/corpus/real/retrieval-policy.json: allow-listed hosts with the 301 origin, closed agency_variants map, justified target sections, anchor 01 33 00
+- [X] T017 [P] [US1] {FR-002} Author the committed target-section list weighted to Division 26 and 23 long-lead equipment in src/model/src/model/corpus/sources.py → exports: TARGET_SECTIONS
+- [X] T018 [US1] {FR-002b} Implement the hop-walking retrieval client in src/model/src/model/corpus/retrieve.py: https only, exact host match, ≤5 hops, 50 MB cap → exports: fetch_document()
+- [X] T019 [US1] {FR-001,FR-003,FR-008,FR-008c} Digest the response body before the write and vendor bytes unmodified in .../corpus/retrieve.py ← T018:fetch_document
+- [X] T020 [US1] {FR-004,FR-005} Author data/corpus/real/exclusions.json and the ledger writer in .../corpus/retrieve.py — closed cause enum, every exclusion recorded with its cause
+- [X] T021 [US1] {FR-001,FR-002} Run corpus-retrieve and vendor ≥20 sections over ≥6 distinct long-lead sections plus 01 33 00 into data/corpus/real/ufgs/ after:T019
+- [X] T022 [US1] {FR-006b,FR-007,FR-008} Write data/corpus/real/ufgs/manifest.json once through the canonical writer — eight REAL fields and a four-part license basis per entry ← T010:write_manifest
+- [X] T023 [US1] {FR-008b} Implement the re-verification entry point in src/model/src/model/corpus/reverify.py — re-fetch, compare to upstream_digest, never invoked by verify.yml
+- [X] T024 [US1] {FR-002b,FR-008b} [COMPLETES FR-008b] Fixture tests for both clients in src/model/tests/test_corpus_retrieve.py and test_corpus_reverify.py — eight conditions, no network
 
 **Notes**: T024's eight conditions, stated once here: a redirect hop re-checked against the allow-list; a hop landing outside it; a host that merely *ends in* an allow-listed name (rejected — matching is exact equality); a redirect into a non-`https` scheme; a non-200 status; a sixth redirect hop; a body past 50 MB; and a digest diverging from the recorded `upstream_digest`. Both clients share one policy so the two network paths cannot drift. T018/T019/T020 write one file and are sequential. **The rules that check this layer land in Phase 4** — T030 (VR-018), T032 (VR-019…022), T033 (VR-025, VR-026, VR-062) — because they belong to the validator, not to retrieval. FR-008c's procedure (digest from the response body, never back-filled from the committed file) is observed by no committed check and is published as uncovered; T019 is where the obligation is discharged. A manual fallback for a blocking host records exactly the eight FR-008 fields and no others — an extra key fails the schema.
 
