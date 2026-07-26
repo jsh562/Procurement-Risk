@@ -45,6 +45,20 @@ def run_contract(fixture: str, config: str = ".importlinter") -> ContractResult:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(fixture_dir)
     env["UV_NATIVE_TLS"] = "1"
+    # import-linter renders a banner containing non-ASCII box characters through
+    # `rich`. Under a non-TTY stdout on Windows the child falls back to the
+    # legacy cp1252 console encoder, and the parent's reader thread then dies
+    # with UnicodeDecodeError — leaving `completed.stdout` as None and turning
+    # every fixture assertion into `NoneType + str` rather than a verdict.
+    #
+    # `.github/workflows/verify.yml` already sets this for the same reason and
+    # says so in a comment. Setting it there alone made the contract fixtures
+    # pass on CI and fail locally on Windows, which is the worst arrangement:
+    # the check that proves the other checks can fail was itself unreliable
+    # exactly where a developer would run it. The helper now carries its own
+    # requirement instead of inheriting it from whoever invoked it.
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     completed = subprocess.run(
         [
             "uv",
@@ -59,7 +73,14 @@ def run_contract(fixture: str, config: str = ".importlinter") -> ContractResult:
         cwd=fixture_dir,
         env=env,
         capture_output=True,
-        text=True,
+        # Both halves are needed. `PYTHONUTF8` above makes the child *emit*
+        # UTF-8; this makes the parent *decode* it. `text=True` alone would
+        # decode with the parent's locale — cp1252 on Windows — so the child
+        # writing correct UTF-8 would still kill the reader thread. `errors`
+        # is set so a surprising byte degrades one character rather than
+        # discarding the whole verdict.
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     return ContractResult(completed.returncode, completed.stdout + completed.stderr)
