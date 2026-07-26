@@ -10,9 +10,13 @@ Objectives 6/6; 47/47 validation criteria; 28/28 success criteria.
 Bug tasks T055-T066 all closed and re-measured. tasks.md 66/66 [X].
 
 Not measured here, recorded rather than implied:
-  - tests/checks/test_orchestration.py (8 tests) was not run — its teardown runs
+  - tests/checks/test_orchestration.py was not run — its teardown runs
     `docker compose down -v` and destroys the database volume. OBJ1 VC6 is
-    evidenced structurally instead. CI runs all 83.
+    evidenced structurally instead. CI runs the whole directory.
+    Update: main's 83df9b3 fixed the cross-checkout half of this (ports are now
+    parameterised and resolved at runtime) but not the local half — teardown is
+    still `down -v`, so it stays excluded from local runs. After merging main,
+    root cross-entry is 89 passing and the gate is 93% on 607 statements.
   - 11 gaps G-1..G-11 are disclosed in data-model.md under Principle VII, not fixed.
     SC-028 holds against role `procurement_app`, not the connecting superuser (G-11).
   - Analysis findings A-007/A-008/A-011/A-012 were resolved after this QC pass,

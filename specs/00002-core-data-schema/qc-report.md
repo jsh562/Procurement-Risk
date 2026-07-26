@@ -272,7 +272,13 @@ Not required; `manual-test.md` not generated.
 
 No database incident this run. The database stayed healthy throughout and stayed at head `0010`; the `0 skipped` validity check was met on every full-suite run - 429 mid-run and **455 passed, 0 skipped** on the final one, with `document` left empty and all its constraints verified intact after T066's negative controls. Scratch artefacts created during the audit (`.coverage.t056`, two ruff probe files) were removed; `git status` matches its pre-audit state apart from this report and the `tasks.md` additions.
 
-**Operational note, still standing**: `tests/checks/test_orchestration.py` is not safe to run from two checkouts of this repository on one host - it binds 5434 and tears down the volume with `-v`.
+**Operational note — half of this was fixed on `main` after the run, half was not.** The original note read: *"`tests/checks/test_orchestration.py` is not safe to run from two checkouts of this repository on one host — it binds 5434 and tears down the volume with `-v`."*
+
+`main` commit `83df9b3` addressed the **cross-checkout** half. `docker-compose.yml` now publishes `${PRC_DB_PORT:-5434}`, `tests/checks/helpers/ports.py` resolves a substitute port when the default is held, and the run warns loudly when it binds one so a green result cannot silently claim evidence for the committed topology. A sibling checkout no longer collides.
+
+The **local** half stands: teardown is still `_compose("down", "-v", …)` (`test_orchestration.py:168`), and Compose scopes that to this checkout's own project, so running the file still destroys this checkout's `db-data` volume and the applied migration chain. It therefore remains excluded from local QC runs for the reason that actually cost this epic a re-run, and OBJ1 VC6's second half is still evidenced structurally rather than by execution. CI is unaffected — it runs all of `tests/checks` against a fresh service container with nothing to lose.
+
+Measured after merging `main` into this branch: root cross-entry rises from **75 to 89** passing (`test_ports.py` adds 14), the coverage denominator from 535 to **607** statements as `helpers/ports.py` enters it at 89%, and the gate holds at **93%**, exit 0.
 
 **Second sibling-checkout defect, found while closing T065 and worth more attention than the task that exposed it.** Two of this checkout's three Python entry virtualenvs had their own package pointing at the sibling checkout `S:\claudecode\KayaDemoProcurementRisk` (no trailing `1`):
 
