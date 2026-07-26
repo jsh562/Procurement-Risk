@@ -234,3 +234,6 @@ compliance failures — things claimed as verified that nothing actually verifie
 - [X] T070 [BUG:WARNING] {TR-012} [requirement-gap] OBJ4 VC4's blind spot was described in prose and asserted nowhere
   > Error: no test showed that a re-locked modeling dependency passes the allowlist by design
   > Fix hint: added a test that doctors a lock, adds pymc to the serving root, and asserts it lands in the expected set — proving the allowlist cannot catch this case, which is why the denylist and the scoped build context exist.
+- [X] T071 [BUG:ERROR] {TR-022} [requirement-gap] The dispatch injection payload failed lint before reaching the contracts — .github/workflows/verify.yml
+  > Error: run #19 (dispatch, inject_violation=provider-import) failed at "Lint (Python)", not "Architecture contracts". The injected `import anthropic` is F401 (imported but unused), so ruff fails three steps before the contract runs.
+  > Fix hint: SC-013 requires the run to name the violated *check*. A run that fails for the wrong reason is not evidence the contract works. Payloads now carry `__all__` so they are lint-clean and still break their contract; verified locally — ruff passes, format passes, contract BROKEN and named. Needs one more dispatch to evidence.

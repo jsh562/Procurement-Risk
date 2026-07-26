@@ -11,6 +11,17 @@ name: verify
 # on-demand evidence, not something to run on every push.
 on:
   push:
+    # Specification artifacts cannot change any check's outcome — nothing under
+    # tests/, src/*/tests/, or the check harness reads specs/. Verified before
+    # adding this rather than assumed.
+    #
+    # Deliberately NOT `**.md`: data/roster/roster-datasheet.md is asserted by
+    # src/model/tests/test_roster_datasheet.py for its required sections, the
+    # literal SYNTHETIC token, and VR-016's no-literal-digest rule. A blanket
+    # Markdown ignore would silently stop verifying a file that is under test.
+    paths-ignore:
+      - "specs/**"
+      - "README.md"
   workflow_dispatch:
     inputs:
       inject_violation:
@@ -25,6 +36,13 @@ on:
 
 permissions:
   contents: read
+
+# When commits land close together on one ref, the older run is verifying code
+# that no longer exists. Grouped by ref so `main` and a feature branch never
+# cancel each other.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   # The build environment sits behind TLS interception; without this every
@@ -64,13 +82,19 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.inject_violation != 'none' }}
         run: |
           set -euo pipefail
+          # Each payload must be lint-clean while still breaking its contract.
+          # A bare `import anthropic` is F401 (imported but unused), so ruff
+          # fails three steps before the contracts run and the dispatch names
+          # "Lint (Python)" instead of the violated contract — a run that fails
+          # for the wrong reason is not evidence that the contract works.
+          # The `__all__` line is what makes the import "used".
           case "${{ inputs.inject_violation }}" in
             provider-import)
               target=src/gateway/src/gateway/_injected.py
-              printf 'import anthropic\n' > "$target" ;;
+              printf 'import anthropic\n\n__all__ = ["anthropic"]\n' > "$target" ;;
             computation-boundary)
               target=src/api/src/api/llm/_injected.py
-              printf 'from api.compute import nothing\n' > "$target" ;;
+              printf 'from api import compute\n\n__all__ = ["compute"]\n' > "$target" ;;
           esac
           echo "Planted violation at $target"
           # Confirm the file exists rather than asking git. The injected file is

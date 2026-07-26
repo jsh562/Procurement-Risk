@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-25 · **Iterations**: 2
 **Feature Directory**: `specs/00001-monorepo-scaffold-and-contracts`
-**Overall Verdict**: **FAIL** — one remaining item, blocked on an action I cannot perform
+**Overall Verdict**: **FAIL** — one item. Iteration 3 scoped to OBJ7; `verify.yml` was the only changed file.
 
 ## Changes from Prior Run
 
@@ -33,7 +33,29 @@ while fixing them, and two gaps iteration 1 recorded as PARTIAL without raising 
 | Checklist Fulfillment | PASSED | 8 spot-checked, 0 gaps |
 | Performance / Accessibility / Browser | SKIPPED | No NFRs; web ships no behaviour |
 
-## The one remaining failure — OBJ7
+## Iteration 3 — what the dispatch revealed
+
+Both dispatches have now run.
+
+| Run | Input | Result |
+|---|---|---|
+| #18 | `inject_violation: none` | **success**, 23/24 steps green — **evidences OBJ7 VC1** |
+| #19 | `inject_violation: provider-import` | **failure at "Lint (Python)"** — not at the contract |
+
+Run #19 is the first execution of the injection path repaired in T066, and it confirms that fix: the
+injection step itself **succeeded**. But the run then failed for the wrong reason. The injected file is
+a bare `import anthropic`, which ruff reports as **F401 (imported but unused)**, so lint fails three
+steps before `Architecture contracts` ever runs.
+
+SC-013 requires the violated run to *name the violated check*. Naming "Lint (Python)" is not evidence
+that the contract works — the contract never executed. Fixed under T071: both payloads now carry an
+`__all__` line making the import used. Verified locally on the exact payload — ruff clean, format
+clean, contract **BROKEN and named**. One more dispatch evidences it.
+
+This is the dispatch doing its job: it existed to prove the evidence path works, and the first real
+execution found that it didn't.
+
+## OBJ7 — the remaining failure
 
 OBJ7 VC1 and VC2 both read *"When the workflow is dispatched"*. **No `workflow_dispatch` run has ever
 occurred** — all runs are `push` events. SC-013 is satisfied by the pushed-branch path (run #14 clean,
