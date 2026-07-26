@@ -283,6 +283,7 @@ Project-level architectural decisions are maintained as standalone MADR files un
 | ADR-0014 | Provider SDK as an Optional Extra of the Gateway Package | accepted | 2026-07-25 | — | [0014-provider-sdk-as-an-optional-extra-of-the-gateway-package.md](adrs/0014-provider-sdk-as-an-optional-extra-of-the-gateway-package.md) |
 | ADR-0015 | Local Spool for Invocation Records Whose Database Write Fails | accepted | 2026-07-25 | — | [0015-local-spool-for-invocation-records-whose-database-write-fails.md](adrs/0015-local-spool-for-invocation-records-whose-database-write-fails.md) |
 | ADR-0016 | Database-Client Access Is Not Restricted by Schema Ownership | accepted | 2026-07-26 | ADR-0013 | [0016-database-client-access-is-not-restricted-by-schema-ownership.md](adrs/0016-database-client-access-is-not-restricted-by-schema-ownership.md) |
+| ADR-0017 | A Plan-Phase Artifact May Be Declared Normative Over a Specify-Phase Requirement | accepted | 2026-07-26 | — | [0017-plan-phase-artifact-normative-over-a-specify-phase-requirement.md](adrs/0017-plan-phase-artifact-normative-over-a-specify-phase-requirement.md) |
 
 <!-- Rows are managed by the ADR Author subagent. Do not embed full decision prose here. -->
 
