@@ -184,7 +184,15 @@ Further limits, stated rather than left to be discovered:
   differ in content, not in layout.
 - That any *particular* document is visually degraded is generator-asserted. Validation
   establishes only the necessary condition that a document recording `SCAN_DEGRADATION` carries
-  a full-page raster; the injector's unit tests are the evidence that degradation occurred.
+  a page-sized raster — at least half the page, which is as strong as this condition can be
+  made, because the citation anchor is required to sit outside every raster and a literally
+  full-page image is therefore forbidden by construction. The injector's unit tests, whose
+  oracle is the same page rendered with the profile disabled, are the evidence that
+  degradation occurred.
+- The raster is a re-rendering of the page's own text at a fixed sampling resolution, not a
+  photograph of paper. It carries no page skew from a feeder, no binding shadow, no dust, and
+  no ink bleed; blur, contrast loss, speckle, and a small rotation are the only artefacts, and
+  each is bounded by the committed generation configuration.
 - The irregularity injector and the structural deriver both read the same committed
   field-label vocabulary. A mistake common to both would make the re-derivation agree for the
   wrong reason; hand-authored fixtures stand in for a second vocabulary, but nothing

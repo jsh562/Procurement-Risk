@@ -119,15 +119,15 @@
 
 ## Phase 6: US4 - Keep the Synthetic Layer Honestly Messy (Priority: P2)
 
-- [ ] T048 [US4] {FR-030} Implement the closed five-value class enum and the four structural injectors in src/model/src/model/corpus/irregularity.py → exports: IrregularityClass, inject()
-- [ ] T049 [US4] {FR-032} Implement Pillow page-image degradation with the retained invisible text layer in src/model/src/model/corpus/degrade.py → exports: degrade_page()
-- [ ] T050 [US4] {FR-001a,FR-031a} Implement pdfplumber structural re-derivation with explicitly pinned word tolerances in src/model/src/model/corpus/derive.py → exports: derive_classes()
-- [ ] T051 [US4] {FR-031a} Author hand-written deriver fixtures in src/model/tests/test_corpus_derive.py — one positive and one negative document per structural class, fixture vocabulary after:T050
-- [ ] T052 [US4] {FR-031b,FR-032} Injector unit tests in src/model/tests/test_corpus_irregularity.py — VR-050 (1 of 72), control-page oracle across the declared parameter domain
-- [ ] T053 [US4] {FR-030,FR-031,FR-031a} [COMPLETES FR-031a] Structural re-derivation group in .../corpus/validate.py — VR-031…033, VR-035a…035d, VR-036 (8 of 72)
-- [ ] T054 [US4] {FR-032,FR-033} [COMPLETES FR-032] Citation-anchor group in .../corpus/validate.py — VR-037, VR-038, VR-039 (3 of 72)
-- [ ] T055 [US4] {FR-029} Layout-variety assertion in src/model/tests/test_corpus_generate.py — VR-049 (1 of 72): ≥2 template ids, none spanning all twelve vendors
-- [ ] T056 [US4] {FR-028,FR-030} [COMPLETES FR-030] Run corpus-generate once with injection enabled and commit 25–30 PDFs and five manifests under data/corpus/synthetic/PRJ-001…005/ after:T052
+- [X] T048 [US4] {FR-030} Implement the closed five-value class enum and the four structural injectors in src/model/src/model/corpus/irregularity.py → exports: IrregularityClass, inject()
+- [X] T049 [US4] {FR-032} Implement Pillow page-image degradation with the retained invisible text layer in src/model/src/model/corpus/degrade.py → exports: degrade_page()
+- [X] T050 [US4] {FR-001a,FR-031a} Implement pdfplumber structural re-derivation with explicitly pinned word tolerances in src/model/src/model/corpus/derive.py → exports: derive_classes()
+- [X] T051 [US4] {FR-031a} Author hand-written deriver fixtures in src/model/tests/test_corpus_derive.py — one positive and one negative document per structural class, fixture vocabulary after:T050
+- [X] T052 [US4] {FR-031b,FR-032} Injector unit tests in src/model/tests/test_corpus_irregularity.py — VR-050 (1 of 72), control-page oracle across the declared parameter domain
+- [X] T053 [US4] {FR-030,FR-031,FR-031a} [COMPLETES FR-031a] Structural re-derivation group in .../corpus/validate.py — VR-031…033, VR-035a…035d, VR-036 (8 of 72)
+- [X] T054 [US4] {FR-032,FR-033} [COMPLETES FR-032] Citation-anchor group in .../corpus/validate.py — VR-037, VR-038, VR-039 (3 of 72)
+- [X] T055 [US4] {FR-029} Layout-variety assertion in src/model/tests/test_corpus_generate.py — VR-049 (1 of 72): ≥2 template ids, none spanning all twelve vendors
+- [X] T056 [US4] {FR-028,FR-030} [COMPLETES FR-030] Run corpus-generate once with injection enabled and commit 25–30 PDFs and five manifests under data/corpus/synthetic/PRJ-001…005/ after:T052
 
 **Notes**: T056 is the single generation run this epic performs — the reason Phase 5 stops short of committing output. T050's tolerances (`x_tolerance`, `y_tolerance`, `keep_blank_chars`, `use_text_flow`) come from one module-level constant, never library defaults, and pdfplumber is pinned exactly in the lockfile the way the renderer is: the derived set is the oracle T053 judges the recorded set against, so a tolerance change is a change to the oracle, not a library upgrade. T051 exists because set equality over the committed layer alone is satisfied by a deriver that echoes what the entry recorded; its vocabulary is a fixture rather than the committed file, which is what makes the derivation independent of the injector. T052's oracle is the same page rendered with degradation disabled — body raster differs, extracted text layer identical, citation anchor outside every raster rectangle — asserted across the injector's declared parameter domain rather than over the pages the committed layer happens to hold. Rule totals: 1 + 8 + 3 + 1 = 13.
 

@@ -161,17 +161,15 @@ jobs:
       # entry point is the same one a developer runs, so a green CI run and a
       # green local run are the same assertion.
       #
-      # `--layer REAL` is TEMPORARY and is removed at T056, the single
-      # generation run that commits the synthetic layer. Until then the layer
-      # does not exist, and VR-005 and VR-066 are built to fail on a corpus
-      # missing it — that is their entry-criterion job, not a defect to suppress.
-      # Scoping states what is being validated instead of leaving a required
-      # check red for two phases: the three SYNTHETIC-scoped rules print
-      # SKIPPED with their reason on every run rather than passing silently, so
-      # the narrowing is visible in the log. T060 runs it unscoped over the
-      # complete corpus and is where the flag comes off.
+      # **Unscoped, deliberately.** This step carried `--layer REAL` while the
+      # synthetic layer did not exist, because VR-005 and VR-066 are built to
+      # fail on a corpus missing it — that is their entry-criterion job, not a
+      # defect to suppress. The layer landed with T056's single generation run,
+      # and the flag came off in the same change: left in place it would make
+      # the required check silently blind to all 25 synthetic documents and to
+      # the seventeen rules asserted only over them.
       - name: Corpus validation
-        run: uv run --directory src/model corpus-validate --layer REAL
+        run: uv run --directory src/model corpus-validate
 
       # The gateway holds the single permitted provider import site. Its tests
       # existed but no step ran them, so OBJ7's "every check runs" was false

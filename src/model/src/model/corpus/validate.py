@@ -7,13 +7,22 @@ failures are reported distinctly and short-circuit their location), and VR-066
 (every rule quantifying over a population reports that population's observed
 size and fails when it is empty).
 
-**The validator never re-runs the generator.** Everything here reads committed
-artifacts only. FR-031a requires re-derivation to be independent of what the
-generator recorded, so a validator that regenerated in order to validate could
-not distinguish a corpus defect from a generator defect — which is why
-`data-model.md` splits the 72 rules across two runners and gives this one
-VR-001…VR-039 and VR-051…VR-068. The rules needing a generator run live in
+**The validator never re-runs the generator, and writes nothing.** Everything
+here reads committed artifacts. FR-031a requires re-derivation to be independent
+of what the generator recorded, so a validator that regenerated in order to
+validate could not distinguish a corpus defect from a generator defect — which
+is why `data-model.md` splits the 72 rules across two runners and gives this one
+VR-001…VR-039 and VR-051…VR-068. The rules needing a generator *run* live in
 `src/model/tests/`.
+
+**One rule composes document models in memory, and it is named here rather than
+buried**: VR-039 compares each page's retained text layer against "the
+regenerated document model's per-page text", which is what `data-model.md`
+assigns to this runner. It calls `generate.compose_layer`, which plans, injects
+and composes from committed inputs and emits no file, renders no PDF and touches
+no path under the corpus root. The consequence is stated at the rule: its oracle
+is composed rather than recorded, so a generator change moves it. Every *other*
+rule here, VR-035a…VR-035d above all, derives from the emitted bytes alone.
 
 **Why a registry rather than a script.** Three properties fall out of it that a
 straight-line script would have to re-establish per rule: every rule declares
@@ -56,6 +65,7 @@ from model.corpus.manifest import (
     DIGEST_PATTERN,
     GENERATION_DATE_PATTERN,
     GENERATION_INPUT_PATHS,
+    IRREGULARITY_CLASSES,
     LAYER_REAL,
     LAYER_SYNTHETIC,
     MASTERFORMAT_PATTERN,
@@ -94,9 +104,11 @@ from model.corpus.sources import RetrievalPolicyError, load_policy
 from model.roster.reader import read_roster
 
 __all__ = [
+    "CLASSED_ENTRY_FLOOR",
     "DATASHEET_RELATIVE_PATH",
     "LAYERS",
     "PREPROCESSING_DISCLOSURE",
+    "RASTER_PAGE_FRACTION",
     "SCHEMA_RELATIVE_PATH",
     "STATED_LIMITS_DISCLOSURES",
     "Corpus",
@@ -134,6 +146,20 @@ READ_RULE_IDS = frozenset({"VR-001", "VR-002", "VR-003"})
 #: by the same edit that removes a section (`data-model.md` §Drift story).
 REAL_DOCUMENT_FLOOR = 20
 DISTINCT_SECTION_FLOOR = 6
+
+#: VR-033's floor (SC-019), held here for the reason VR-025's two are: a floor
+#: read from the generation configuration that decides whether it is met could
+#: be lowered by the same edit that stops meeting it.
+CLASSED_ENTRY_FLOOR = 0.80
+
+#: VR-036's "full-page raster", narrowed and stated. FR-032 forbids a raster
+#: that covers the citation anchor, so a *literally* full-page image is
+#: prohibited by the construction VR-036 exists to observe; the body region a
+#: raster may occupy is a little over seven tenths of a letter page. A raster
+#: covering at least half the page is therefore the strongest necessary
+#: condition compatible with FR-032, and half is chosen rather than 0.71 so a
+#: future margin change is not a corpus failure.
+RASTER_PAGE_FRACTION = 0.50
 
 
 # ---------------------------------------------------------------------------
@@ -2884,6 +2910,528 @@ def _vr_055(corpus: Corpus) -> RuleOutcome:
             ),
         )
     return RuleOutcome(observed=1, failures=())
+
+
+# ---------------------------------------------------------------------------
+# T053 - the structural re-derivation group
+# VR-031, VR-032, VR-033, VR-035a, VR-035b, VR-035c, VR-035d, VR-036
+#
+# **The comparison is `derived == recorded ∩ {the four structural classes}`,
+# never `derived == recorded`.** `SCAN_DEGRADATION` is not derivable from
+# structure (FR-031b), so comparing against the whole recorded set would fail
+# every degraded document for something that is not a defect
+# (`data-model.md` §Irregularity Class). Each of VR-035a…VR-035d decides its own
+# class in **both** directions — recorded but not derived, and derived but not
+# recorded — and the four together are the set equality VR-035 states.
+#
+# Derivation reads the emitted file and nothing the generator recorded. The
+# residual independence gap is disclosed rather than closed here: the injector
+# and the deriver share `field-label-vocabulary.json`, and what excludes a
+# misreading common to both is a test condition — the hand-authored fixtures of
+# `test_corpus_derive.py`, whose vocabulary is a fixture and whose expected sets
+# were written by hand.
+# ---------------------------------------------------------------------------
+
+
+def _read_pdf(corpus: Corpus, entry: EntryRef) -> object:
+    """One document's pages, read once and shared by every rule that needs them.
+
+    Returns the pages or the exception that prevented reading them; the caller
+    reports the failure under its own rule identifier, because "this document
+    could not be structurally derived" is a different finding from "this
+    document does not open" (VR-013).
+    """
+
+    def load() -> object:
+        from model.corpus.derive import read_document
+
+        return read_document(entry.document_path)
+
+    return corpus.cached(f"pdf:{entry.location_id}/{entry.location}", load)
+
+
+def _derived_classes(corpus: Corpus, entry: EntryRef) -> object:
+    def load() -> object:
+        from model.corpus.derive import derive_classes
+
+        pages = _read_pdf(corpus, entry)
+        if isinstance(pages, Exception):
+            raise pages
+        return derive_classes(pages)
+
+    return corpus.cached(f"derived:{entry.location_id}/{entry.location}", load)
+
+
+def _recorded_classes(entry: EntryRef) -> frozenset[str]:
+    recorded = entry.payload.get("irregularity_classes")
+    if not isinstance(recorded, list):
+        return frozenset()
+    return frozenset(value for value in recorded if isinstance(value, str))
+
+
+def _derivable_documents(corpus: Corpus) -> tuple[EntryRef, ...]:
+    """SYNTHETIC entries naming a file that exists, in manifest order."""
+    return tuple(
+        entry
+        for entry in corpus.entry_list(LAYER_SYNTHETIC)
+        if _is_regular_file(entry.document_path)
+    )
+
+
+def _class_outcome(corpus: Corpus, rule_id: str, class_name: str) -> RuleOutcome:
+    """VR-035a…VR-035d, written once because they are one comparison per class.
+
+    Four hand-written copies would be four places for the both-directions
+    reasoning to drift; the class name is the only thing that varies.
+    """
+    entries = _derivable_documents(corpus)
+    failures: list[Failure] = []
+    for entry in entries:
+        derived = _derived_classes(corpus, entry)
+        if isinstance(derived, Exception):
+            failures.append(
+                entry.failure(
+                    rule_id,
+                    f"the document opened but its structural derivation failed: {derived}; it is "
+                    "never skipped so the run can continue, which would exempt it from every "
+                    "rule asserted over emitted documents",
+                )
+            )
+            continue
+        recorded = _recorded_classes(entry)
+        if (class_name in derived) != (class_name in recorded):
+            direction = (
+                "derived from the document but not recorded"
+                if class_name in derived
+                else "recorded but not derived from the document"
+            )
+            failures.append(
+                entry.failure(
+                    rule_id,
+                    f"{class_name} is {direction}; derived {sorted(derived)}, "
+                    f"recorded {sorted(recorded)}",
+                )
+            )
+    return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+@rule(
+    "VR-031",
+    summary="irregularity_classes is a subset of the closed five, unique and ascending",
+    population="SYNTHETIC entries",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_031(corpus: Corpus) -> RuleOutcome:
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    failures: list[Failure] = []
+    for entry in entries:
+        recorded = entry.payload.get("irregularity_classes")
+        if not isinstance(recorded, list):
+            failures.append(
+                entry.failure(
+                    "VR-031",
+                    f"irregularity_classes is {recorded!r}; an array is required, empty where the "
+                    "document carries none",
+                )
+            )
+            continue
+        unknown = sorted({value for value in recorded if value not in IRREGULARITY_CLASSES})
+        if unknown:
+            failures.append(
+                entry.failure(
+                    "VR-031",
+                    f"irregularity_classes names {unknown}, outside the closed five "
+                    f"{list(IRREGULARITY_CLASSES)}",
+                )
+            )
+        if len(set(recorded)) != len(recorded):
+            failures.append(
+                entry.failure("VR-031", f"irregularity_classes repeats a value: {recorded}")
+            )
+        if list(recorded) != sorted(recorded):
+            failures.append(
+                entry.failure(
+                    "VR-031",
+                    f"irregularity_classes is not ascending: recorded {recorded}, expected "
+                    f"{sorted(recorded)}; MS-2 sorts it so one content has one serialization",
+                )
+            )
+    return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+@rule(
+    "VR-032",
+    summary="All five irregularity classes appear at least once across the synthetic layer",
+    population="SYNTHETIC entries",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_032(corpus: Corpus) -> RuleOutcome:
+    """FR-030, at layer level.
+
+    A class nothing records leaves every rule asserted over it quantifying over
+    an empty set — the vacuity VR-066 generalises and this rule closes for the
+    five by name.
+    """
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    present: set[str] = set()
+    for entry in entries:
+        present |= _recorded_classes(entry)
+    missing = sorted(set(IRREGULARITY_CLASSES) - present)
+    failures = (
+        (
+            Failure(
+                "VR-032",
+                f"classes present {sorted(present)}, expected all five "
+                f"{list(IRREGULARITY_CLASSES)}; missing {missing}",
+            ),
+        )
+        if missing
+        else ()
+    )
+    return RuleOutcome(observed=len(entries), failures=failures)
+
+
+@rule(
+    "VR-033",
+    summary="At least 80% of SYNTHETIC entries carry at least one irregularity class",
+    population="SYNTHETIC entries",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_033(corpus: Corpus) -> RuleOutcome:
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    classed = sum(1 for entry in entries if _recorded_classes(entry))
+    failures: tuple[Failure, ...] = ()
+    if entries and classed < CLASSED_ENTRY_FLOOR * len(entries):
+        failures = (
+            Failure(
+                "VR-033",
+                f"{classed} of {len(entries)} SYNTHETIC entries carry at least one irregularity "
+                f"class ({classed / len(entries):.0%}), below the floor of "
+                f"{CLASSED_ENTRY_FLOOR:.0%}; a layer this clean inflates every downstream "
+                "extraction result",
+            ),
+        )
+    return RuleOutcome(observed=len(entries), failures=failures)
+
+
+@rule(
+    "VR-035a",
+    summary="MISSING_OR_BLANK_FIELD is derived from the document exactly when it is recorded",
+    population="SYNTHETIC documents structurally re-derived",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_035a(corpus: Corpus) -> RuleOutcome:
+    return _class_outcome(corpus, "VR-035a", "MISSING_OR_BLANK_FIELD")
+
+
+@rule(
+    "VR-035b",
+    summary="INCONSISTENT_FIELD_LABEL is derived from the document exactly when it is recorded",
+    population="SYNTHETIC documents structurally re-derived",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_035b(corpus: Corpus) -> RuleOutcome:
+    return _class_outcome(corpus, "VR-035b", "INCONSISTENT_FIELD_LABEL")
+
+
+@rule(
+    "VR-035c",
+    summary="OUT_OF_ORDER_DATE is derived from the document exactly when it is recorded",
+    population="SYNTHETIC documents structurally re-derived",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_035c(corpus: Corpus) -> RuleOutcome:
+    return _class_outcome(corpus, "VR-035c", "OUT_OF_ORDER_DATE")
+
+
+@rule(
+    "VR-035d",
+    summary="PAGE_SPLIT_FIELD is derived from the document exactly when it is recorded",
+    population="SYNTHETIC documents structurally re-derived",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_035d(corpus: Corpus) -> RuleOutcome:
+    """The one class decided from geometry rather than from text alone.
+
+    A label that is the last text object on page *n* with its value's first text
+    object on page *n+1*. Word boxes come from `derive.WORD_EXTRACTION`, whose
+    four tolerances are pinned in one module-level constant and never taken from
+    the library's defaults: this derived set is the oracle the recorded set is
+    judged against, so a silent tolerance change would move the oracle rather
+    than the corpus.
+    """
+    return _class_outcome(corpus, "VR-035d", "PAGE_SPLIT_FIELD")
+
+
+@rule(
+    "VR-036",
+    summary="A document recording SCAN_DEGRADATION carries a page-sized raster; one not "
+    "recording it carries no raster at all",
+    population="SYNTHETIC documents inspected for a raster",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_036(corpus: Corpus) -> RuleOutcome:
+    """**A necessary condition only, and it says so.**
+
+    It closes the case of a class recorded on a document with no raster page at
+    all. It does **not** establish that the image is degraded and does **not**
+    satisfy FR-031b: nothing about a PDF's structure distinguishes a degraded
+    raster from a clean render of the same body. That evidence is VR-050's, in
+    the injector unit tests, where the oracle is the same page rendered with the
+    profile disabled.
+    """
+    entries = _derivable_documents(corpus)
+    failures: list[Failure] = []
+    for entry in entries:
+        pages = _read_pdf(corpus, entry)
+        if isinstance(pages, Exception):
+            failures.append(entry.failure("VR-036", f"could not be read for raster: {pages}"))
+            continue
+        records = "SCAN_DEGRADATION" in _recorded_classes(entry)
+        page_sized = [
+            page
+            for page in pages
+            if any(image.area >= RASTER_PAGE_FRACTION * page.area for image in page.images)
+        ]
+        any_raster = [page for page in pages if page.images]
+        if records and not page_sized:
+            failures.append(
+                entry.failure(
+                    "VR-036",
+                    f"records SCAN_DEGRADATION but no page carries a raster covering at least "
+                    f"{RASTER_PAGE_FRACTION:.0%} of the page ({len(any_raster)} page(s) carry any "
+                    "image at all)",
+                )
+            )
+        if not records and any_raster:
+            failures.append(
+                entry.failure(
+                    "VR-036",
+                    f"records no SCAN_DEGRADATION but page(s) "
+                    f"{[page.number for page in any_raster]} carry a raster image",
+                )
+            )
+    return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+# ---------------------------------------------------------------------------
+# T054 - the citation-anchor group
+# VR-037, VR-038, VR-039
+#
+# FR-032's promise is that **no page requires optical character recognition**,
+# and these three are what make it an assertion. VR-037 checks the anchor is
+# real text lying outside every raster rectangle; VR-038 is the non-vacuity
+# guard that stops VR-037 being true over an empty set of degraded pages; and
+# VR-039 ties the *whole* retained text layer to the document model rather than
+# merely observing that some text survived.
+# ---------------------------------------------------------------------------
+
+
+def _document_identifier(entry: EntryRef) -> str:
+    """The identifier the citation anchor carries: the file's own stem.
+
+    Taken from `location` rather than from a recorded identity field because
+    VR-027 gives a SYNTHETIC entry no such field, and filenames carry no
+    semantics any *other* rule depends on — this one asserts the anchor and the
+    filename agree, which is a property worth having rather than an assumption.
+    """
+    return entry.location[:-4] if entry.location.lower().endswith(".pdf") else entry.location
+
+
+@rule(
+    "VR-037",
+    summary="Every synthetic page carries its citation anchor as text, outside every raster "
+    "rectangle",
+    population="SYNTHETIC pages",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_037(corpus: Corpus) -> RuleOutcome:
+    entries = _derivable_documents(corpus)
+    failures: list[Failure] = []
+    observed = 0
+    for entry in entries:
+        pages = _read_pdf(corpus, entry)
+        if isinstance(pages, Exception):
+            failures.append(entry.failure("VR-037", f"could not be read: {pages}"))
+            continue
+        identifier = _document_identifier(entry)
+        for page in pages:
+            observed += 1
+            if not page.text.strip():
+                failures.append(
+                    entry.failure(
+                        "VR-037",
+                        f"page {page.number} extracts no text at all; it would require optical "
+                        "character recognition to read",
+                    )
+                )
+                continue
+            anchor = next(
+                (
+                    line
+                    for line in page.lines
+                    if identifier in line.text and f"Page {page.number}" in line.text
+                ),
+                None,
+            )
+            if anchor is None:
+                failures.append(
+                    entry.failure(
+                        "VR-037",
+                        f"page {page.number} carries no text object holding both the document "
+                        f"identifier {identifier!r} and 'Page {page.number}'; the citation "
+                        f"anchor is what a page number resolves to. Extracted first line: "
+                        f"{page.lines[0].text!r}",
+                    )
+                )
+                continue
+            covered = [
+                word.text
+                for word in anchor.words
+                for image in page.images
+                if word.rect.intersects(image)
+            ]
+            if covered:
+                failures.append(
+                    entry.failure(
+                        "VR-037",
+                        f"page {page.number}'s citation anchor word(s) {sorted(set(covered))} lie "
+                        "inside a raster rectangle; keeping the anchor outside every raster is a "
+                        "property of the layout, not a masking trick",
+                    )
+                )
+    return RuleOutcome(observed=observed, failures=tuple(failures))
+
+
+@rule(
+    "VR-038",
+    summary="At least one page in the synthetic layer carries injected degradation",
+    population="SYNTHETIC pages",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_038(corpus: Corpus) -> RuleOutcome:
+    """Non-vacuity for VR-037.
+
+    Without it, "no degraded page requires recognition" is true over an empty
+    set of degraded pages — the defect STF-001 found once already, stated here
+    for the population it was found in.
+    """
+    entries = _derivable_documents(corpus)
+    observed = 0
+    degraded = 0
+    failures: list[Failure] = []
+    for entry in entries:
+        pages = _read_pdf(corpus, entry)
+        if isinstance(pages, Exception):
+            failures.append(entry.failure("VR-038", f"could not be read: {pages}"))
+            continue
+        observed += len(pages)
+        degraded += sum(
+            1
+            for page in pages
+            if any(image.area >= RASTER_PAGE_FRACTION * page.area for image in page.images)
+        )
+    if not degraded:
+        failures.append(
+            Failure(
+                "VR-038",
+                f"0 of {observed} synthetic page(s) carry injected degradation; VR-037's "
+                "guarantee would be true over an empty set",
+            )
+        )
+    return RuleOutcome(observed=observed, failures=tuple(failures))
+
+
+@rule(
+    "VR-039",
+    summary="Per-page extracted text equals the regenerated document model's page text",
+    population="SYNTHETIC pages",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_039(corpus: Corpus) -> RuleOutcome:
+    """Ties the retained text layer to the **model**, not merely to itself.
+
+    Without this, a degraded page whose invisible layer had lost half its lines
+    would still satisfy VR-037 — the anchor is outside the raster and the page
+    extracts *some* text. The comparison that catches it needs the text the page
+    was supposed to carry, and the only committed source of that is the model.
+
+    **What is regenerated here, and what is not.** `compose_layer` plans,
+    injects and composes the document models from committed inputs — the
+    generation configuration, the roster, the vocabulary — and **writes
+    nothing**: no PDF is rendered, no manifest emitted, no path under the corpus
+    root touched. That is the narrowest reading of `data-model.md`'s
+    "regenerated document model" that this runner can carry, and the residual is
+    stated rather than hidden: because the oracle is composed rather than
+    recorded, a change to the generator moves this rule as well as the corpus.
+    That is the same failure VR-040a reports from the other side, and it is why
+    the two are assigned to different runners.
+    """
+
+    def compose() -> object:
+        from model.corpus.generate import compose_layer, load_config
+
+        documents = compose_layer(config=load_config(root=corpus.root))
+        return {
+            (document.plan.project_id, document.plan.location): document for document in documents
+        }
+
+    composed = corpus.cached("composed-layer", compose)
+    entries = _derivable_documents(corpus)
+    if isinstance(composed, Exception):
+        return RuleOutcome(
+            observed=0,
+            failures=(
+                Failure(
+                    "VR-039",
+                    f"the document models could not be composed from the committed inputs, so "
+                    f"there is nothing to compare the retained text layer against: {composed}",
+                ),
+            ),
+        )
+
+    from model.corpus.derive import normalize_page_text, page_text
+
+    failures: list[Failure] = []
+    observed = 0
+    for entry in entries:
+        pages = _read_pdf(corpus, entry)
+        if isinstance(pages, Exception):
+            failures.append(entry.failure("VR-039", f"could not be read: {pages}"))
+            continue
+        project_id = (entry.reading.document or {}).get("project_id")
+        document = composed.get((project_id, entry.location))  # type: ignore[union-attr]
+        if document is None:
+            failures.append(
+                entry.failure(
+                    "VR-039",
+                    "no regenerated document model corresponds to this file; the committed layer "
+                    "holds a document the generator does not now produce",
+                )
+            )
+            continue
+        modelled_pages = len(document.model.pages)
+        if len(pages) != modelled_pages:
+            failures.append(
+                entry.failure(
+                    "VR-039",
+                    f"the file carries {len(pages)} page(s) and its model {modelled_pages}",
+                )
+            )
+            continue
+        for page, modelled in zip(pages, document.model.pages, strict=True):
+            observed += 1
+            extracted = page_text(page)
+            expected = normalize_page_text(modelled.text)
+            if extracted != expected:
+                failures.append(
+                    entry.failure(
+                        "VR-039",
+                        f"page {page.number}'s retained text layer does not equal the model's "
+                        f"page text.\n    extracted: {extracted!r}\n    model:     {expected!r}",
+                    )
+                )
+    return RuleOutcome(observed=observed, failures=tuple(failures))
 
 
 # ---------------------------------------------------------------------------

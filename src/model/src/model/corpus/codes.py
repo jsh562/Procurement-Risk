@@ -70,6 +70,7 @@ __all__ = [
     "alternate_labels",
     "canonical_label",
     "descriptor_code",
+    "fold_label",
     "load_vocabulary",
 ]
 
@@ -219,6 +220,20 @@ def _fold(value: str) -> str:
     string comparison.
     """
     return " ".join(unicodedata.normalize("NFC", value).casefold().split())
+
+
+def fold_label(value: str) -> str:
+    """The public name of the folding above, for the deriver.
+
+    `derive.py` has to recognise a label in extracted text, and it must do so in
+    exactly the form disjointness was asserted in when the vocabulary was read.
+    A second folding written there would be a second definition of "the same
+    label", and the two could disagree about a pair this reader had already
+    admitted.
+    """
+    if not isinstance(value, str):
+        raise CodesError(f"a label is folded from a string, found {type(value).__name__}")
+    return _fold(value)
 
 
 def _text(value: object, what: str) -> str:

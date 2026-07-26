@@ -33,14 +33,17 @@ that emitted twenty-four conforming documents and then discovered the
 twenty-fifth was impossible would leave a corpus location half-populated and
 every population rule reporting a number nobody chose.
 
-**The injector seam is present and empty.** `inject` rewrites the planned
-documents — adding irregularity classes, substituting labels, blanking values,
-selecting degradation profiles — between planning and model construction, and
-`degrader` renders a page whose directive names a profile. Both arrive in
-Phase 6 with `irregularity.py` and `degrade.py`; neither is implemented here,
-and neither is made harder to add by its absence. Until they land every page
-renders under `render.UNDEGRADED_PROFILE` and every entry records an empty
-class list, which is an honest record of a layer that carries none.
+**The injector seam is filled, and it is on by default.** `inject` rewrites the
+planned documents — adding irregularity classes, substituting labels, blanking
+values, splitting a field across a page boundary, selecting degradation
+profiles — between planning and model construction, and `degrader` renders a
+page whose directive names a profile. `irregularity.inject` and
+`degrade.degrade_page` are the defaults rather than an opt-in, because the
+committed layer is generated with them: a plain `corpus-generate` that produced
+a *clean* layer would not reproduce the committed one, and VR-040a, VR-041 and
+VR-042 all compare a plain re-run against exactly that. Passing `inject=None`
+asks for the clean layer explicitly, which is what the deriver's negative
+fixtures want and nothing else does.
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ import argparse
 import json
 import random
 import sys
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -63,9 +67,12 @@ from model.corpus.codes import (
     DescriptorCode,
     canonical_label,
 )
+from model.corpus.degrade import degrade_page
 from model.corpus.equipment import CATEGORIES, section_for_category, unbacked_sections
+from model.corpus.irregularity import inject as inject_irregularities
 from model.corpus.manifest import (
     GENERATION_INPUT_PATHS,
+    IRREGULARITY_CLASSES,
     Manifest,
     SyntheticEntry,
     SyntheticLicenseBasis,
@@ -83,7 +90,9 @@ from model.corpus.paths import (
 )
 from model.corpus.render import UNDEGRADED_PROFILE, DocumentLayout, PageRender, render_document
 from model.corpus.templates import (
+    LABEL_SUFFIX,
     FieldEntry,
+    Line,
     assign_templates,
     layout_lines,
     page_text,
@@ -93,6 +102,7 @@ from model.roster.reader import Roster, read_roster
 
 __all__ = [
     "CONFIG_INPUT_PATH",
+    "DEFAULT",
     "SYNTHETIC_LAYER_DIRECTORY",
     "DocumentPlan",
     "GeneratedDocument",
@@ -101,11 +111,18 @@ __all__ = [
     "GeneratorError",
     "MaterialItem",
     "build_document",
+    "compose_layer",
     "generate_corpus",
     "load_config",
     "main",
     "plan_layer",
 ]
+
+#: The sentinel meaning "use this epic's own injector / degrader". Needed
+#: because `None` already means something different and load-bearing: an
+#: explicit request for a layer with no injection at all. Two distinct absences
+#: collapsed into one value would make "clean layer" unrequestable.
+DEFAULT = object()
 
 # Taken from the closed three `manifest.py` holds rather than written out again.
 CONFIG_INPUT_PATH = next(
@@ -365,6 +382,12 @@ class DocumentPlan:
     irregularity_classes: tuple[str, ...] = ()
     field_labels: Mapping[str, str] = MappingProxyType({})
     blank_fields: frozenset[str] = frozenset()
+    #: The transmittal field whose label ends page one and whose value opens
+    #: page two (`PAGE_SPLIT_FIELD`). Recorded on the plan rather than performed
+    #: by the injector because `build_document` below is the single place a
+    #: page's lines are decided, and a second composer would be a second answer
+    #: to what the page says.
+    split_field: str = ""
 
     @property
     def location(self) -> str:
@@ -603,6 +626,31 @@ def _item_fields(plan: DocumentPlan) -> tuple[FieldEntry, ...]:
     return tuple(entries)
 
 
+def _split_entry(plan: DocumentPlan, transmittal: Sequence[FieldEntry]) -> FieldEntry | None:
+    """The transmittal entry this document splits across the page break, if any.
+
+    Refuses a split of a field with no value to carry over: the point of the
+    class is that the value continues on the next page, and a split of an empty
+    value would render as a bare label ending page one with nothing following
+    it — indistinguishable from `MISSING_OR_BLANK_FIELD` in the emitted artifact
+    and therefore underivable (`derive.py`, the one ambiguity).
+    """
+    if not plan.split_field:
+        return None
+    entry = next((item for item in transmittal if item.key == plan.split_field), None)
+    if entry is None:
+        raise GeneratorError(
+            f"{plan.document_id}: split_field {plan.split_field!r} is not a transmittal field of "
+            f"this document; PAGE_SPLIT_FIELD is a relation between its two pages"
+        )
+    if not entry.value.strip():
+        raise GeneratorError(
+            f"{plan.document_id}: split_field {plan.split_field!r} carries no value to continue "
+            "on the next page, so the split would be indistinguishable from a blanked field"
+        )
+    return entry
+
+
 def build_document(plan: DocumentPlan) -> GeneratedDocument:
     """Compose one plan into a hashed model and the layout that renders it."""
     layout_template = template(plan.template_id)
@@ -614,6 +662,7 @@ def build_document(plan: DocumentPlan) -> GeneratedDocument:
 
     transmittal = _transmittal_fields(plan)
     items = _item_fields(plan)
+    split = _split_entry(plan, transmittal)
 
     def anchor(number: int) -> str:
         # FR-032's citation anchor: the document identifier and the page
@@ -623,7 +672,7 @@ def build_document(plan: DocumentPlan) -> GeneratedDocument:
     first = layout_lines(
         layout_template,
         anchor=anchor(1),
-        fields=transmittal,
+        fields=tuple(entry for entry in transmittal if split is None or entry.key != split.key),
         heading="Transmittal Record",
     )
     second = layout_lines(
@@ -634,6 +683,18 @@ def build_document(plan: DocumentPlan) -> GeneratedDocument:
         trailing_text=REMARKS,
         with_title=False,
     )
+    if split is not None:
+        # The label is appended after every other line on page one, so it is
+        # the page's last text object; the value is inserted immediately after
+        # page two's citation anchor, so it is that page's first body text
+        # object. Both halves are what VR-035d decides the class from.
+        label = f"{split.label}{LABEL_SUFFIX}"
+        first = (*first, Line(text=label, style="field_label", label=label))
+        second = (
+            second[0],
+            Line(text=split.value, style="field_value", value=split.value),
+            *second[1:],
+        )
 
     pages = tuple(
         Page(text=page_text(lines), directive=directive)
@@ -763,13 +824,45 @@ class GenerationResult:
         return len(self.documents)
 
 
+def compose_layer(
+    *,
+    config: GenerationConfig | None = None,
+    roster: Roster | None = None,
+    inject: Callable[[Sequence[DocumentPlan]], Sequence[DocumentPlan]] | None | object = DEFAULT,
+) -> tuple[GeneratedDocument, ...]:
+    """Plan, inject and compose the whole layer — **writing nothing at all**.
+
+    Separated from `generate_corpus` because two callers need the models
+    without the files. `generate_corpus` is one. The other is VR-039, which
+    compares each committed page's extracted text against the document model's;
+    that comparison needs the models and must not need a rendered layer, so a
+    validator can obtain them from committed inputs — the configuration, the
+    roster, the vocabulary — without a single byte being written.
+    """
+    settings = config or load_config()
+    projects_and_vendors = roster if roster is not None else read_roster()
+
+    plans = plan_layer(projects_and_vendors, settings)
+    if inject is DEFAULT:
+        plans = inject_irregularities(plans, config=settings)
+    elif inject is not None:
+        plans = tuple(inject(plans))  # type: ignore[operator]
+        for plan in plans:
+            if not isinstance(plan, DocumentPlan):
+                raise GeneratorError(
+                    f"the injector returned a {type(plan).__name__}, expected a DocumentPlan"
+                )
+    _assert_coverage(projects_and_vendors, plans)
+    return tuple(build_document(plan) for plan in plans)
+
+
 def generate_corpus(
     root: Path | None = None,
     *,
     config: GenerationConfig | None = None,
     roster: Roster | None = None,
-    inject: Callable[[Sequence[DocumentPlan]], Sequence[DocumentPlan]] | None = None,
-    degrader: Callable[[PageRender], None] | None = None,
+    inject: Callable[[Sequence[DocumentPlan]], Sequence[DocumentPlan]] | None | object = DEFAULT,
+    degrader: Callable[[PageRender], None] | None | object = DEFAULT,
 ) -> GenerationResult:
     """Generate the whole synthetic layer under `root` and write its manifests.
 
@@ -779,23 +872,18 @@ def generate_corpus(
     tests compare a fresh run against the committed layer without rewriting it
     in place — an in-place re-run would compare a file against itself.
 
+    `inject` and `degrader` default to this epic's own — `irregularity.inject`
+    and `degrade.degrade_page` — because the committed layer is generated with
+    them and a plain re-run has to reproduce it. `inject=None` and
+    `degrader=None` request a clean layer explicitly.
+
     The real layer is never touched. MS-6 makes the real manifest a
     write-once artifact, so a generator defect cannot perturb its record.
     """
     settings = config or load_config()
     projects_and_vendors = roster if roster is not None else read_roster()
-
-    plans = plan_layer(projects_and_vendors, settings)
-    if inject is not None:
-        plans = tuple(inject(plans))
-        for plan in plans:
-            if not isinstance(plan, DocumentPlan):
-                raise GeneratorError(
-                    f"the injector returned a {type(plan).__name__}, expected a DocumentPlan"
-                )
-    _assert_coverage(projects_and_vendors, plans)
-
-    documents = tuple(build_document(plan) for plan in plans)
+    documents = compose_layer(config=settings, roster=projects_and_vendors, inject=inject)
+    render_with = degrade_page if degrader is DEFAULT else degrader
 
     base = Path(root) if root is not None else DEFAULT_CORPUS_ROOT
     layer_directory = base / SYNTHETIC_LAYER_DIRECTORY
@@ -816,7 +904,7 @@ def generate_corpus(
         entries: list[SyntheticEntry] = []
         for document in by_project[project_id]:
             target = location / document.plan.location
-            render_document(document.layout, target, degrader=degrader)
+            render_document(document.layout, target, degrader=render_with)  # type: ignore[arg-type]
             entries.append(
                 SyntheticEntry(
                     location=document.plan.location,
@@ -900,6 +988,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  manifests: {len(result.manifests)}")
     for project_id, chain in result.chains.items():
         print(f"  resubmittals in {project_id}: {', '.join(chain) or 'none'}")
+    # FR-030 and SC-019 are layer-level claims, so the run reports the observed
+    # distribution rather than leaving an operator to read twenty-five manifests
+    # to find out whether the layer it just wrote satisfies them.
+    counts = Counter(
+        value for document in result.documents for value in document.plan.irregularity_classes
+    )
+    classed = sum(1 for document in result.documents if document.plan.irregularity_classes)
+    degraded = sum(
+        1
+        for document in result.documents
+        for page in document.model.pages
+        if page.directive.degradation_profile != UNDEGRADED_PROFILE
+    )
+    print(
+        f"  documents carrying >= 1 irregularity class: {classed}/{result.document_count} "
+        f"({classed / result.document_count:.0%})"
+        if result.document_count
+        else "  no document"
+    )
+    for value in IRREGULARITY_CLASSES:
+        print(f"    {value}: {counts.get(value, 0)}")
+    print(f"  pages carrying injected degradation: {degraded}")
     return 0
 
 

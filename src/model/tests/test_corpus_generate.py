@@ -54,6 +54,7 @@ from model.corpus.generate import (
 from model.corpus.manifest import MANIFEST_FILENAME
 from model.corpus.model import DocumentModel, FieldValue, Page, RenderDirective, document_model_hash
 from model.corpus.paths import DEFAULT_CORPUS_ROOT, REPO_ROOT
+from model.corpus.templates import TemplateError, assign_templates
 from model.roster.reader import read_roster
 
 # --------------------------------------------------------------------------
@@ -906,3 +907,118 @@ def test_the_generator_refuses_to_write_a_layer_it_cannot_complete(tmp_path: Pat
         generate_corpus(root, inject=lambda plans: plans[:1])
     assert "FR-024" in str(raised.value) or "FR-025" in str(raised.value), str(raised.value)
     assert not list(root.rglob("*.pdf")), "a partial layer was written"
+
+
+# --------------------------------------------------------------------------
+# T055 - VR-049: layout variety
+#
+# Uniform layout across a synthetic layer makes downstream chunking and
+# retrieval look better than they are, and the inflation is invisible in a
+# pooled metric (`spec.md` §Risk). The rule has two halves and they fail
+# differently: a layer using one template is uniform outright, and a layer using
+# three of which one covers every vendor is uniform in the dimension that
+# matters — nothing partitions by it.
+#
+# Asserted over the **regenerated models**, not over `templates.TEMPLATES`: the
+# set of templates that exists is not the set a layer used, and a generator that
+# assigned one template to every document would leave the declared set
+# untouched. It lives in this file rather than in `corpus-validate` for the
+# same reason: `template_id` is not a recorded manifest field, so the property
+# is only observable by re-running the generator.
+# --------------------------------------------------------------------------
+
+TEMPLATE_ID_FLOOR = 2
+
+
+def vendors_by_template(documents: Iterable[GeneratedDocument]) -> Mapping[str, frozenset[str]]:
+    """Which vendors each template id was used for, over an emitted layer."""
+    grouped: dict[str, set[str]] = {}
+    for document in documents:
+        grouped.setdefault(document.plan.template_id, set()).add(document.plan.vendor_id)
+    return {template_id: frozenset(vendors) for template_id, vendors in grouped.items()}
+
+
+def layout_variety_failures(
+    documents: Iterable[GeneratedDocument], vendor_count: int
+) -> tuple[str, ...]:
+    """VR-049's two halves, as findings rather than as one boolean."""
+    grouped = vendors_by_template(documents)
+    failures: list[str] = []
+    if len(grouped) < TEMPLATE_ID_FLOOR:
+        failures.append(
+            f"the layer uses {len(grouped)} template id(s) {sorted(grouped)}, below the floor "
+            f"of {TEMPLATE_ID_FLOOR}"
+        )
+    for template_id, vendors in sorted(grouped.items()):
+        if len(vendors) >= vendor_count:
+            failures.append(
+                f"template {template_id!r} spans all {len(vendors)} vendor(s), so no result can "
+                "be partitioned by layout"
+            )
+    return tuple(failures)
+
+
+def test_vr_049_the_layer_uses_at_least_two_templates_and_none_spans_every_vendor(
+    generated,
+) -> None:
+    vendors = {document.plan.vendor_id for document in generated.documents}
+    assert len(vendors) == ROSTER_VENDORS, sorted(vendors)
+    failures = layout_variety_failures(generated.documents, ROSTER_VENDORS)
+    assert not failures, "VR-049: " + "; ".join(failures)
+
+
+def test_vr_049_every_template_the_layer_uses_covers_at_least_one_vendor(generated) -> None:
+    """The population's own non-vacuity: a template id recorded on no document
+    would make the second half true over an empty vendor set."""
+    grouped = vendors_by_template(generated.documents)
+    assert grouped
+    assert all(vendors for vendors in grouped.values()), grouped
+
+
+def test_vr_049_a_layer_on_one_template_is_reported(generated) -> None:
+    """The first half's failing direction."""
+    flattened = [
+        replace(document, plan=replace(document.plan, template_id="TPL-STACKED-A"))
+        for document in generated.documents
+    ]
+    failures = layout_variety_failures(flattened, ROSTER_VENDORS)
+    assert failures and "below the floor" in failures[0], failures
+
+
+def test_vr_049_a_template_spanning_every_vendor_is_reported(generated) -> None:
+    """The second half's failing direction, and the reason it is a separate case:
+    a layer can use two template ids and still be uniform if one of them covers
+    every vendor, which the template-count half alone would pass."""
+    documents = list(generated.documents)
+    spanning = [
+        replace(document, plan=replace(document.plan, template_id="TPL-INLINE-B"))
+        for document in documents
+    ]
+    # One document moved to a second template so the count half passes and only
+    # the spanning half can be what fires. Its vendor still appears on the
+    # spanning template through that vendor's other submittals.
+    spanning[0] = replace(
+        documents[0], plan=replace(documents[0].plan, template_id="TPL-COMPACT-C")
+    )
+    failures = layout_variety_failures(spanning, ROSTER_VENDORS)
+    assert len(vendors_by_template(spanning)) >= TEMPLATE_ID_FLOOR
+    assert failures, "a template covering every vendor was not reported"
+    assert all("spans all" in failure for failure in failures), failures
+
+
+def test_vr_049_the_assignment_is_a_property_of_the_function_not_of_luck(generated) -> None:
+    """FR-029 is met by construction rather than by sampling.
+
+    `assign_templates` round-robins over the sorted vendor identifiers, so the
+    spread cannot fail for a roster of at least two vendors; a hash-derived
+    assignment would satisfy the requirement by luck and leave VR-049 to discover
+    the exception after a corpus was committed.
+    """
+    assignment = assign_templates(document.plan.vendor_id for document in generated.documents)
+    used = {assignment[vendor] for vendor in assignment}
+    assert len(used) >= TEMPLATE_ID_FLOOR
+    for template_id in used:
+        covered = {vendor for vendor, name in assignment.items() if name == template_id}
+        assert covered != set(assignment), template_id
+    with pytest.raises(TemplateError):
+        assign_templates(["VND-001"])

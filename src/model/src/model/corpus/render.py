@@ -68,7 +68,9 @@ __all__ = [
     "UNDEGRADED_PROFILE",
     "DocumentLayout",
     "PageRender",
+    "PlacedText",
     "RenderError",
+    "body_line_layout",
     "draw_body_lines",
     "render_document",
 ]
@@ -237,6 +239,74 @@ def _line_height(layout: LayoutTemplate, line: Line) -> float:
     return layout.leading * (1.0 + _STYLE_SPACE_BEFORE.get(line.style, 0.0))
 
 
+@dataclass(frozen=True)
+class PlacedText:
+    """One string, at the position and size the body layout puts it.
+
+    The unit both consumers of the body layout work in: the canvas draws these
+    at a render mode, and the degradation injector rasters the same list at the
+    same coordinates. Two independent layouts would be two answers to "where
+    does this line sit", and a raster that disagreed with the text beneath it
+    would look like a scan of a *different* document.
+    """
+
+    text: str
+    x: float
+    baseline: float
+    font: str
+    size: float
+
+
+def body_line_layout(
+    layout: LayoutTemplate,
+    lines: Sequence[Line],
+    *,
+    body_rect: tuple[float, float, float, float] = BODY_RECT,
+) -> tuple[PlacedText, ...]:
+    """Where every body string goes, top-to-bottom inside `body_rect`.
+
+    Anchor lines are skipped here — the anchor is drawn once, in the header
+    band, by `render_document`, and drawing it again inside the body would put
+    a copy of it under the raster and defeat FR-032's guarantee.
+
+    Overflow raises rather than spilling or truncating. A silently dropped line
+    would break VR-039, which compares extracted page text against the model's,
+    and the model is fixed before rendering begins.
+    """
+    left, bottom, _right, top = body_rect
+    cursor = top
+    placed: list[PlacedText] = []
+    for line in lines:
+        if line.style == "anchor":
+            continue
+        font = _STYLE_FONTS.get(line.style)
+        if font is None:
+            raise RenderError(f"no drawing rule for line style {line.style!r}")
+        size = float(layout.body_font_size + _STYLE_SIZE_DELTA[line.style])
+        cursor -= _line_height(layout, line)
+        if cursor < bottom:
+            raise RenderError(
+                f"page content overflows the body rectangle at line {line.text!r}; "
+                "the generator must split the page rather than the renderer truncate it"
+            )
+        indent = _STYLE_INDENT[line.style]
+        if line.style == "field_inline":
+            placed.append(PlacedText(line.label, left + indent, cursor, _FONT_BOLD, size))
+            if line.value:
+                placed.append(
+                    PlacedText(
+                        line.value,
+                        left + indent + layout.label_width,
+                        cursor,
+                        _FONT_REGULAR,
+                        size,
+                    )
+                )
+        else:
+            placed.append(PlacedText(line.text, left + indent, cursor, font, size))
+    return tuple(placed)
+
+
 def draw_body_lines(
     target: Any,
     layout: LayoutTemplate,
@@ -251,46 +321,10 @@ def draw_body_lines(
     its raster: calling this with `invisible=True` produces the same glyph
     positions at render mode 3, so the extracted text layer of a degraded page
     is byte-for-byte the extracted text of its undegraded control.
-
-    Anchor lines are skipped here — the anchor is drawn once, in the header
-    band, by `render_document`, and drawing it again inside the body would put
-    a copy of it under the raster and defeat FR-032's guarantee.
-
-    Overflow raises rather than spilling or truncating. A silently dropped line
-    would break VR-039, which compares extracted page text against the model's,
-    and the model is fixed before rendering begins.
     """
-    left, bottom, _right, top = body_rect
-    cursor = top
-    for line in lines:
-        if line.style == "anchor":
-            continue
-        font = _STYLE_FONTS.get(line.style)
-        if font is None:
-            raise RenderError(f"no drawing rule for line style {line.style!r}")
-        size = layout.body_font_size + _STYLE_SIZE_DELTA[line.style]
-        cursor -= _line_height(layout, line)
-        if cursor < bottom:
-            raise RenderError(
-                f"page content overflows the body rectangle at line {line.text!r}; "
-                "the generator must split the page rather than the renderer truncate it"
-            )
-        indent = _STYLE_INDENT[line.style]
-        mode = TEXT_RENDER_INVISIBLE if invisible else TEXT_RENDER_VISIBLE
-        if line.style == "field_inline":
-            _draw_text(target, left + indent, cursor, line.label, _FONT_BOLD, size, mode)
-            if line.value:
-                _draw_text(
-                    target,
-                    left + indent + layout.label_width,
-                    cursor,
-                    line.value,
-                    _FONT_REGULAR,
-                    size,
-                    mode,
-                )
-        else:
-            _draw_text(target, left + indent, cursor, line.text, font, size, mode)
+    mode = TEXT_RENDER_INVISIBLE if invisible else TEXT_RENDER_VISIBLE
+    for placed in body_line_layout(layout, lines, body_rect=body_rect):
+        _draw_text(target, placed.x, placed.baseline, placed.text, placed.font, placed.size, mode)
 
 
 @dataclass(frozen=True)
