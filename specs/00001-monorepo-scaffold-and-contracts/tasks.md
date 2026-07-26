@@ -44,7 +44,7 @@
 - [X] T003 [OBJ1] {TR-002,TR-003,TR-024} Create standalone uv project src/gateway/ (pyproject.toml, src/gateway/__init__.py, uv.lock); PyPI only, no web framework, no modeling stack
 - [X] T004 [P] [OBJ1] {TR-002,TR-024} Create standalone uv project src/api/ declaring FastAPI and the gateway path dependency, never src/model; commit uv.lock after:T003
 - [X] T005 [P] [OBJ1] {TR-002,TR-024} Create standalone uv project src/model/ declaring PyMC, ArviZ, pandas, NumPy and the gateway path dependency, never src/api; commit uv.lock after:T003
-- [X] T006 [OBJ1] {TR-001,TR-024} Scaffold Next.js 15 App Router in src/web with a single package-lock.json; pin turbopack.root and outputFileTracingRoot in next.config.ts
+- [X] T006 [OBJ1] {TR-001,TR-024} Scaffold Next.js 16 App Router in src/web with a single package-lock.json; pin turbopack.root and outputFileTracingRoot in next.config.ts
 - [X] T007 [OBJ1] {TR-023} Verify each entry's lockfile against its own manifest: `uv lock --check` and `uv sync --locked` per Python entry, `npm ci` in src/web; none consults another's
 - [X] T008 [P] [OBJ1] {TR-001} Assert exactly four entries under /src, each with its own dependency manifest, and exactly one JS lockfile in src/web, in tests/checks/test_layout.py
 - [X] T009 [P] [OBJ1] {TR-004} Compare declared third-party deps in tests/checks/test_dependency_isolation.py; none of model's appears in api's resolved set, first-party path deps excluded
@@ -219,3 +219,12 @@ compliance failures — things claimed as verified that nothing actually verifie
 - [X] T065 [BUG:WARNING] {TR-008} [test-coverage] The single permitted provider import site has no test — src/gateway/src/gateway/provider.py
   > Error: client_type() is invoked by nothing; the module is exercised only as a side effect of import-linter building its graph
   > Fix hint: the most architecturally load-bearing module in the repository is its least tested. E004 implements the wrapper; a test asserting client_type() returns the SDK class costs three lines now.
+- [X] T066 [BUG:ERROR] [RECURRING] {TR-022} [requirement-gap] The dispatch injection guard fired on the success path and killed the step — .github/workflows/verify.yml
+  > Error: `git diff --quiet && { ...; exit 1; } || true` — the injected file is untracked, `git diff` ignores untracked files, so the guard fired whenever injection *succeeded*; `|| true` cannot catch an `exit`
+  > Fix hint: introduced by T063's own fix and invisible because the step is `skipped` in every push run. Replaced with `test -s "$target"`. Reproduced verbatim in a throwaway repo before and after.
+- [X] T067 [BUG:ERROR] {TR-020} [requirement-gap] Gateway tests ran nowhere in CI, so "every check runs" was false
+  > Error: verify.yml had `Unit tests (model)` and `Unit tests (web)` only; the 5 gateway tests added for T065 were never invoked on a runner
+  > Fix hint: added a `Unit tests (gateway)` step. The gateway holds the single permitted provider import site, so it was the worst possible entry to omit.
+- [X] T068 [BUG:WARNING] {TR-012} [requirement-gap] Marker environment hardcoded a patch version the image does not run
+  > Error: IMAGE_ENVIRONMENT pinned python_full_version 3.12.7; the image runs 3.12.13
+  > Fix hint: read from the image at check time. Harmless against today's two marker forms, wrong the moment a patch-level boundary appears.

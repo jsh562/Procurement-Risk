@@ -51,6 +51,31 @@ def _lock_packages(lock_path: Path) -> dict[str, dict]:
 # resolve against whoever evaluates them, and this host is Windows while the
 # image is Linux — evaluating on the host expects `colorama` (win32-only) to be
 # present and the equality assertion below fails on a correct image.
+def _image_python_version(image: str = IMAGE_TAG) -> str:
+    """Read the interpreter version from the image rather than assuming it.
+
+    A hardcoded patch level is wrong the moment the base image moves, and a
+    marker with a patch-level boundary would then evaluate against a version
+    that is not in the image.
+    """
+    completed = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/app/.venv/bin/python",
+            image,
+            "-c",
+            "import sys;print('.'.join(map(str,sys.version_info[:3])))",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout.strip()
+
+
 IMAGE_ENVIRONMENT: dict[str, str] = {
     "sys_platform": "linux",
     "platform_system": "Linux",
@@ -87,7 +112,11 @@ def expected_distributions(
     it makes the set wrong in a direction that only shows up when the equality
     the requirement actually asks for is asserted.
     """
-    environment = environment or IMAGE_ENVIRONMENT
+    if environment is None:
+        environment = {**IMAGE_ENVIRONMENT}
+        version = _image_python_version()
+        environment["python_full_version"] = version
+        environment["python_version"] = ".".join(version.split(".")[:2])
     packages = _lock_packages(lock_path)
     seen: set[str] = set()
     queue = [normalize(root)]

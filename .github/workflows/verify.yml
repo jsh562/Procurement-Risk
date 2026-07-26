@@ -73,8 +73,12 @@ jobs:
               printf 'from api.compute import nothing\n' > "$target" ;;
           esac
           echo "Planted violation at $target"
-          # Fail loudly if this ever runs somewhere the tree is not disposable.
-          git diff --quiet && { echo "::error::injection wrote nothing"; exit 1; } || true
+          # Confirm the file exists rather than asking git. The injected file is
+          # untracked, `git diff` does not report untracked files, so a
+          # `git diff --quiet` guard fires on the success path and kills the
+          # step — the dispatch evidence path would fail at injection and never
+          # reach the contracts it exists to trip.
+          test -s "$target" || { echo "::error::injection wrote nothing to $target"; exit 1; }
 
       - name: Sync every Python entry against its own lockfile
         run: |
@@ -128,6 +132,12 @@ jobs:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage.model
         working-directory: src/model
         run: uv run coverage run --source=src/model/roster -m pytest tests -q
+
+      # The gateway holds the single permitted provider import site. Its tests
+      # existed but no step ran them, so OBJ7's "every check runs" was false
+      # for the most load-bearing module in the repository.
+      - name: Unit tests (gateway)
+        run: uv run --directory src/gateway python -m pytest tests -q
 
       - name: Unit tests (web)
         working-directory: src/web
