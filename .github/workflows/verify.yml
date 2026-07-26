@@ -50,18 +50,31 @@ jobs:
         with:
           node-version: "22"
 
-      # Injection copies a production contract root to a scratch path and
-      # plants the violation there, so no violating file is ever committed —
-      # a committed violation would make the clean-tree run fail permanently.
-      - name: Plant violation (dispatch only)
+      # The violation is written into the checked-out working tree of an
+      # ephemeral runner and never committed — TR-022's prohibition is on
+      # committing a violation to a production contract root, which would make
+      # the clean-tree run fail permanently, not on materialising one at runtime.
+      #
+      # It is written into the production root deliberately rather than a
+      # scratch copy: the contracts run against the real root, so a violation
+      # placed anywhere else would not be seen and the run would pass, proving
+      # nothing. An earlier comment here claimed a scratch copy that did not
+      # exist; the mechanism is described accurately now.
+      - name: Plant violation in the runner's working tree (dispatch only)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.inject_violation != 'none' }}
         run: |
+          set -euo pipefail
           case "${{ inputs.inject_violation }}" in
             provider-import)
-              printf 'import anthropic\n' > src/gateway/src/gateway/_injected.py ;;
+              target=src/gateway/src/gateway/_injected.py
+              printf 'import anthropic\n' > "$target" ;;
             computation-boundary)
-              printf 'from api.compute import nothing\n' > src/api/src/api/llm/_injected.py ;;
+              target=src/api/src/api/llm/_injected.py
+              printf 'from api.compute import nothing\n' > "$target" ;;
           esac
+          echo "Planted violation at $target"
+          # Fail loudly if this ever runs somewhere the tree is not disposable.
+          git diff --quiet && { echo "::error::injection wrote nothing"; exit 1; } || true
 
       - name: Sync every Python entry against its own lockfile
         run: |

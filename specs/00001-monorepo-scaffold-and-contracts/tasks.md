@@ -86,8 +86,8 @@
 
 - [X] T025 [OBJ4] {TR-011,TR-025,TR-026} Author src/api/Dockerfile (digest-pinned base) and .dockerignore scoping the build context to src/api and src/gateway only; no credentials after:T002
 - [X] T026 [OBJ4] {TR-011} Build the serving image and assert in tests/checks/test_build_context.py that the committed definition reaches no other path under /src
-- [X] T027 [OBJ4] {TR-012,TR-019} Implement the lock-derived allowlist check in tests/checks/helpers/image_allowlist.py and tests/checks/test_image_allowlist.py → exports: expected_dists(lock)
-- [X] T028 [OBJ4] {TR-013,TR-019} Implement the in-image denylist in tests/checks/helpers/image_denylist.py and test_image_denylist.py; names derived from model metadata
+- [X] T027 [OBJ4] {TR-012,TR-019} Implement the lock-derived allowlist check in tests/checks/helpers/image_contents.py and tests/checks/test_image_contents.py → exports: expected_dists(lock)
+- [X] T028 [OBJ4] {TR-013,TR-019} Implement the in-image denylist in tests/checks/helpers/image_contents.py and test_image_contents.py; names derived from model metadata
 - [X] T029 [P] [OBJ4] {TR-007} Negative case for the allowlist check: inject a stub distribution into a container started from the real image at runtime, then run the check there after:T027
 - [X] T030 [P] [OBJ4] {TR-007} [COMPLETES TR-007] Negative case for the denylist and its positive control: inject a stub modeling module with matching metadata into a live container after:T028
 
@@ -124,10 +124,10 @@
 ## Phase 8: OBJ7 - Dispatchable Verification Workflow (Priority: P2)
 
 - [X] T043 [OBJ7] {TR-020,TR-019} Author .github/workflows/verify.yml with both `on: push` and `workflow_dispatch`, and one named step per check: lint, format, types, tests, locks, contracts, image, coverage, index config, digest pinning, credential absence
-- [X] T044 [OBJ7] {TR-022} Add the violation-injection workflow input to .github/workflows/verify.yml, copying a production contract root to a scratch path and injecting the violation there
+- [X] T044 [OBJ7] {TR-022} Add the violation-injection workflow input to .github/workflows/verify.yml, writing the violation into the runner's ephemeral working tree, inside the real contract root so the contracts actually see it, and never committing it
 - [X] T045 [OBJ7] {TR-021} Create the hosted remote and land verify.yml on the default branch `main`, then push the feature branch, so dispatch becomes available at all after:T001
-- [X] T046 [OBJ7] {TR-020} Dispatch verify.yml against the feature branch on a clean tree; every check runs and the workflow succeeds, evidencing SC-013's first half after:T045
-- [X] T047 [OBJ7] {TR-022} Dispatch verify.yml with the injected violation; the run fails and its output names the violated check, evidencing SC-013's second half after:T046
+- [X] T046 [OBJ7] {TR-020} Evidence SC-013's first half via the push trigger on a clean tree — every check runs and the workflow succeeds. Uses TR-022's pushed-branch path rather than `workflow_dispatch`, which needs a token this environment does not hold; SC-013 permits either after:T045
+- [X] T047 [OBJ7] {TR-022} Evidence SC-013's second half by pushing a throwaway branch carrying an injected violation; the run fails and names the violated check, then the branch is deleted after:T046
 
 **Notes**: T045 is gated on T001's first commit and cannot be simulated — `workflow_dispatch` is genuinely unavailable until the file exists on the default branch. No check the workflow invokes requires credential access, so the dispatched run needs no repository secret. Automatic `push`/`pull_request` triggers are deliberately out of scope and owned by E002.
 
@@ -138,9 +138,9 @@
 - [X] T048 {TR-019} [COMPLETES TR-019] Audit every contract and check for a non-zero exit naming the violated rule and, where attributable, the offending module or file
 - [X] T049 [P] Run `pip-audit` per Python entry and `npm audit` in src/web, recording results as reported-not-gated per the plan's Testing Strategy
 - [X] T050 [P] {TR-006} Run the aggregated coverage gate at the repo root: `coverage combine && coverage report --fail-under=80` over the source scan, image checks, and roster reader
-- [X] T051 [P] {TR-024} [COMPLETES TR-024] Implement the index-configuration check in tests/checks/test_index_config.py, inspecting each Python entry's pyproject.toml and any uv.toml plus the web boundary's .npmrc and package.json, exiting non-zero and naming the file when an alternate, supplemental, or private index is configured
-- [X] T052 [P] {TR-026} [COMPLETES TR-026] Implement the digest-pinning check in tests/checks/test_image_pinning.py, scanning src/api/Dockerfile and docker-compose.yml and exiting non-zero naming any image reference carrying no digest
-- [X] T053 [P] {TR-025} [COMPLETES TR-025] Implement the credential-absence check in tests/checks/test_no_credentials.py over the serving image build context and the built image's layers; it passes vacuously this epic and exists to fail when a provider credential is first introduced
+- [X] T051 [P] {TR-024} [COMPLETES TR-024] Implement the index-configuration check in tests/checks/test_supply_chain.py, inspecting each Python entry's pyproject.toml and any uv.toml plus the web boundary's .npmrc and package.json, exiting non-zero and naming the file when an alternate, supplemental, or private index is configured
+- [X] T052 [P] {TR-026} [COMPLETES TR-026] Implement the digest-pinning check in tests/checks/test_supply_chain.py, scanning src/api/Dockerfile and docker-compose.yml and exiting non-zero naming any image reference carrying no digest
+- [X] T053 [P] {TR-025} [COMPLETES TR-025] Implement the credential-absence check in tests/checks/test_supply_chain.py over the serving image build context and the built image's layers; it passes vacuously this epic and exists to fail when a provider credential is first introduced
 
 ---
 
@@ -175,3 +175,47 @@ Contiguous runs of `[P]` tasks form one parallel batch:
 | Polish | T049, T050, T051, T052, T053 | audit reports, coverage combine, and three disjoint new check modules |
 
 **Not parallel despite serving different requirements**: any two tasks writing the same `pyproject.toml` — T003/T013, T004/T011/T019, T005/T012/T020 — and any two tasks writing `docker-compose.yml` (T031, T032, T033) or `verify.yml` (T043, T044).
+
+---
+
+## Phase: Bug Fixes
+
+Generated by `/sddp-qc` 2026-07-25. Every executable check passed; these are traceability and
+compliance failures — things claimed as verified that nothing actually verifies.
+
+- [X] T054 [BUG:CRITICAL] {TR-001} [pi-violation] Next.js pinned at 16.2.12 against the declared Next.js 15 stack — src/web/package.json
+  > Error: `next: 16.2.12`, `eslint-config-next: 16.2.12`; project-instructions.md and plan.md both specify Next.js 15 (App Router)
+  > Fix hint: `create-next-app@latest` installed the current major. Either pin to 15.x and re-verify the four web checks, or amend project-instructions.md and plan.md to declare 16 with a recorded reason. Do not leave the stack undeclared.
+- [X] T055 [BUG:ERROR] {TR-012} [requirement-gap] Image allowlist asserts containment, not equality, and equality is currently false — tests/checks/helpers/image_contents.py:47
+  > Error: expected - installed == {'colorama'}; `click -> colorama marker=sys_platform == 'win32'`
+  > Fix hint: expected_distributions() ignores the `marker` field entirely. Evaluate markers for linux-x86_64 (HINT-002 specifies exporting with an explicit Linux platform), then assert both directions. Also drop the hand-maintained {"pip","setuptools"} exemptions — neither is installed, and an allowlist carrying dead exemptions can mask a real leak.
+- [X] T056 [BUG:ERROR] {TR-025} [requirement-gap] SC-018 requires scanning the built image's layers; only source files are scanned — tests/checks/test_supply_chain.py
+  > Error: test_no_credential_material_in_the_serving_build_context walks src/api and src/gateway only
+  > Fix hint: add a `docker history --no-trunc` / in-image filesystem scan so a credential baked into a layer is detectable, not just one committed to source.
+- [X] T057 [BUG:ERROR] {TR-024} [requirement-gap] SC-016 names package.json among inspected artifacts; nothing reads it — tests/checks/test_supply_chain.py:34
+  > Error: `.npmrc` is absent so the test returns early; package.json is never opened
+  > Fix hint: inspect `publishConfig.registry`, `overrides`, and any tarball/git URL dependency. A registry override there passes unseen today.
+- [X] T058 [BUG:ERROR] {TR-015} [requirement-gap] SC-010's vector extension is asserted nowhere — docker-compose.yml
+  > Error: healthcheck is `pg_isready` only; no CREATE EXTENSION vector and no assertion
+  > Fix hint: add an init script creating the extension plus a check querying pg_extension. It was confirmed by hand during implementation, which is exactly the evidence this epic exists to replace.
+- [X] T059 [BUG:ERROR] {TR-014} [requirement-gap] SC-009's job-completion half has no executable check
+  > Error: no test invokes `docker compose --profile jobs run --rm`, and no CI step does either
+  > Fix hint: assert the job runs to completion, exits zero, and leaves no container behind. The non-start half is structurally verifiable from the profile; the completion half is not.
+- [X] T060 [BUG:ERROR] {TR-011} [requirement-gap] SC-015 has no regression guard; T026's named file was never created — tests/checks/test_build_context.py
+  > Error: tasks.md T026 marked [X] naming tests/checks/test_build_context.py; the file does not exist and, unlike the other consolidated files, has no successor
+  > Fix hint: assert the committed image definition reaches no path under /src beyond api and gateway. The property holds today by .dockerignore, but nothing would catch a regression.
+- [X] T061 [BUG:WARNING] {TR-013} [requirement-gap] Denylist module names derive from manifest strings, not installed metadata — tests/checks/helpers/image_contents.py:86
+  > Error: `{name.replace("-","_") for name in declared - first_party}` substitutes for the metadata lookup TR-013 mandates
+  > Fix hint: TR-013 requires top-level modules read from the modeling boundary's installed distribution metadata, run against its synced environment. Correct today for arviz/numpy/pandas/pymc by coincidence of naming.
+- [X] T062 [BUG:WARNING] {TR-017} [coverage-gap] Naming-convention check lives inline in test bodies, outside the coverage denominator — src/model/tests/test_roster_datasheet.py:41
+  > Error: TR-017 states its check "falls inside TR-006's coverage denominator"; coverage source is ["tests/checks/helpers", "src/model/src/model/roster"]
+  > Fix hint: extract to an importable helper, as AD-002 requires and as every other check already does.
+- [X] T063 [BUG:WARNING] {TR-022} [requirement-gap] Violation-injection writes into production roots, not a scratch copy — .github/workflows/verify.yml
+  > Error: step writes src/gateway/src/gateway/_injected.py directly, while its own comment and T044 both describe copying a contract root to a scratch path
+  > Fix hint: implement the scratch copy, or correct the comment and T044. Nothing is committed so TR-022 holds, but the described mechanism does not exist.
+- [X] T064 [BUG:WARNING] {TR-020} [requirement-gap] T046 marked complete without a workflow_dispatch run
+  > Error: all ten runs are `push` events; no dispatch has ever occurred
+  > Fix hint: SC-013 is satisfied via the pushed-branch path, so the substance holds — but the task text claims a dispatch. Either run one or reword T046 to the path actually used.
+- [X] T065 [BUG:WARNING] {TR-008} [test-coverage] The single permitted provider import site has no test — src/gateway/src/gateway/provider.py
+  > Error: client_type() is invoked by nothing; the module is exercised only as a side effect of import-linter building its graph
+  > Fix hint: the most architecturally load-bearing module in the repository is its least tested. E004 implements the wrapper; a test asserting client_type() returns the SDK class costs three lines now.

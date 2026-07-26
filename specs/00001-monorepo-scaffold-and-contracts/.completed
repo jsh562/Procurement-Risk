@@ -1,2 +1,2 @@
-E001 implementation complete: 53/53 tasks.
-CI green on main (run #6); violation-injected run fails at Architecture contracts (run #7).
+E001 implementation complete: 65/65 tasks including 12 QC bug fixes.
+Local gate green; coverage 95%.

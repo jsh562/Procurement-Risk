@@ -9,6 +9,7 @@ from tests.checks.helpers.image_contents import (
     import_succeeds,
     installed_distributions,
     modeling_module_names,
+    normalize,
 )
 
 
@@ -22,14 +23,26 @@ def test_the_derived_expectation_is_not_empty() -> None:
     assert expected_distributions(), "lock-derived expectation is empty; the walk is broken"
 
 
-def test_nothing_installed_is_unaccounted_for(installed: set[str]) -> None:
-    """The load-bearing direction: no distribution the lock does not explain."""
-    unaccounted = installed - expected_distributions() - {"api", "gateway", "pip", "setuptools"}
+def test_installed_set_equals_the_lock_derived_set(installed: set[str]) -> None:
+    """TR-012 / SC-007 assert equality, so assert equality — not containment.
+
+    Only `api` is exempt: it is the serving boundary's own distribution, the
+    root the closure is walked from, so it is installed but never appears as
+    its own dependency. `pip` and `setuptools` were exempted here previously
+    and are not installed at all; a dead exemption inside an allowlist is a
+    standing permission for exactly the thing the allowlist exists to refuse.
+    """
+    expected = expected_distributions() | {"api"}
+    unaccounted = installed - expected
+    missing = expected - installed
     assert not unaccounted, f"installed but absent from the lockfile: {sorted(unaccounted)}"
+    assert not missing, f"lockfile expects distributions the image lacks: {sorted(missing)}"
 
 
 def test_no_modeling_distribution_reached_the_image(installed: set[str]) -> None:
-    intrusion = installed & {"pymc", "arviz", "pandas", "numpy"}
+    # Derived, not hand-listed — a literal set here would silently stop
+    # covering the modeling boundary the moment it declares something new.
+    intrusion = installed & {normalize(m) for m in modeling_module_names()}
     assert not intrusion, f"modeling stack reached the serving image: {sorted(intrusion)}"
 
 

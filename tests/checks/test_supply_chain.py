@@ -7,13 +7,16 @@ analyze phase caught that; these are the checks that close it.
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+IMAGE_TAG = "procurement-api:e001"
 SRC_ROOT = REPO_ROOT / "src"
 PYTHON_ENTRIES = ("api", "gateway", "model")
 
@@ -39,6 +42,30 @@ def test_the_web_boundary_configures_no_alternate_registry() -> None:
     assert not re.search(r"^\s*(registry|@[\w-]+:registry)\s*=", text, re.M), (
         f"web boundary configures a non-default registry:\n{text}"
     )
+
+
+def test_the_web_manifest_configures_no_alternate_registry() -> None:
+    """SC-016 names package.json among the inspected artifacts.
+
+    `.npmrc` absence counts as compliance, so a check that reads only `.npmrc`
+    returns early and inspects nothing — the criterion passes while the file
+    that can actually redirect resolution is never opened.
+    """
+    manifest = json.loads((SRC_ROOT / "web" / "package.json").read_text(encoding="utf-8"))
+
+    publish_registry = manifest.get("publishConfig", {}).get("registry")
+    assert not publish_registry, f"web manifest sets publishConfig.registry: {publish_registry}"
+
+    # A dependency pinned to a URL or a git ref bypasses the registry entirely,
+    # which is the same escape the .npmrc check exists to close.
+    offenders = {
+        name: spec
+        for section in ("dependencies", "devDependencies", "overrides", "resolutions")
+        for name, spec in (manifest.get(section) or {}).items()
+        if isinstance(spec, str)
+        and any(spec.startswith(p) for p in ("http:", "https:", "git+", "git:", "file:"))
+    }
+    assert not offenders, f"dependencies resolve outside the public registry: {offenders}"
 
 
 def test_the_index_check_would_notice_a_planted_alternate(tmp_path: Path) -> None:
@@ -105,3 +132,68 @@ def test_the_credential_check_would_notice_a_planted_secret(tmp_path: Path) -> N
     planted = tmp_path / "config.py"
     planted.write_text('ANTHROPIC_API_KEY = "sk-ant-planted12345"\n', encoding="utf-8")
     assert CREDENTIAL_MARKERS.search(planted.read_text(encoding="utf-8"))
+
+
+def test_no_credential_material_in_the_built_image() -> None:
+    """SC-018's second half: the built image and its layers, not just source.
+
+    A credential can enter through a build argument, an ENV line, or a file
+    deleted in a later layer but still present in an earlier one. None of that
+    is visible to a scan over committed source, which is all the previous check
+    performed.
+    """
+    history = subprocess.run(
+        ["docker", "history", "--no-trunc", "--format", "{{.CreatedBy}}", IMAGE_TAG],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert not CREDENTIAL_MARKERS.search(history), "credential material in an image layer command"
+
+    env = subprocess.run(
+        ["docker", "inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", IMAGE_TAG],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert not CREDENTIAL_MARKERS.search(env), f"credential material in image environment: {env}"
+
+    # The filesystem too — an ENV-free image can still carry a copied secret.
+    found = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/bin/sh",
+            IMAGE_TAG,
+            "-c",
+            "grep -rIl -E 'sk-ant-[A-Za-z0-9_-]{8,}' /app 2>/dev/null || true",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    assert not found, f"credential material inside the image filesystem: {found}"
+
+
+def test_the_image_credential_scan_would_notice_a_planted_secret() -> None:
+    """Positive control: a scan whose passing state is "found nothing" proves
+    nothing unless it is shown finding something."""
+    planted = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/bin/sh",
+            IMAGE_TAG,
+            "-c",
+            "printf 'ANTHROPIC_API_KEY=sk-ant-planted12345' > /tmp/leak && "
+            "grep -rIl -E 'sk-ant-[A-Za-z0-9_-]{8,}' /tmp 2>/dev/null || true",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    assert "/tmp/leak" in planted, "the image-side scan cannot detect a planted secret"

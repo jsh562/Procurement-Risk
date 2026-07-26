@@ -11,7 +11,7 @@
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x on Node 22 (web); Python 3.12 (api, model, gateway)
-**Primary Dependencies**: Next.js 15 App Router; FastAPI; PyMC/ArviZ; Anthropic SDK (gateway); uv 0.8.14; npm 11.6.1
+**Primary Dependencies**: Next.js 16 App Router; FastAPI; PyMC/ArviZ; Anthropic SDK (gateway); uv 0.8.14; npm 11.6.1
 **Storage**: PostgreSQL 16 + pgvector — service provisioned only; schema owned by E003
 **Testing**: pytest + pytest-cov + Hypothesis (api, model); pytest (gateway); Vitest (web); import-linter (contracts)
 **Target Platform**: Linux containers under Docker Compose; host is Windows 10 with Git Bash
@@ -35,9 +35,9 @@
 | VI. Evaluate Before You Tune | No evaluation set in this epic; E014 owns the harness | N/A |
 | VII. Publish the Miss | The dispatch-only deviation was disclosed in six places, then closed during analyze by adding `on: push` rather than carried to E002 | PASS |
 | VIII. Honest Opponents | No model claim or baseline in this epic | N/A |
-| Technology Stack | TypeScript 5.x on Node 22 (web); Python 3.12 (api, model, gateway); Next.js 15, FastAPI, PyMC/ArviZ; PostgreSQL 16 + pgvector | PASS |
+| Technology Stack | TypeScript 5.x on Node 22 (web); Python 3.12 (api, model, gateway); Next.js 16, FastAPI, PyMC/ArviZ; PostgreSQL 16 + pgvector | PASS |
 | Testing & Quality Policy | Coverage 80% aggregated; both required categories — linting (covering lint, static analysis, and code quality) and coverage — delivered for all four entries | PASS |
-| Source Code Layout | Four entries under `/src` per ADR-0010, instructions v1.1.2; the cross-entry check harness under `/tests` is covered by the scoped exception v1.1.2 added for verification with no single owning entry | PASS |
+| Source Code Layout | Four entries under `/src` per ADR-0010, instructions v1.1.3; the cross-entry check harness under `/tests` is covered by the scoped exception v1.1.2 added for verification with no single owning entry | PASS |
 | Development Workflow / CI | `on: push` plus `workflow_dispatch`; contract violations fail the build. PR triggering and branch protection remain with E002 | PASS |
 | Data Provenance | Roster is SYNTHETIC with a five-section datasheet and an enforced real-firm exclusion list | PASS |
 | Governance | AD-001…AD-005 all feature-local. Single-path model invocation and the computation boundary are both **specified** but neither is automatically enforced this epic — see the CI deviation. Whether that relaxes the constraints or only defers their automation is the judgment the Development Workflow row puts to the user | PASS (qualified — see Development Workflow / CI) |
@@ -49,7 +49,7 @@ C4Container
     title Container View
     Person(dev, "Developer")
     System_Boundary(repo, "Monorepo") {
-        Container(web, "web", "Next.js 15", "Interface scaffold")
+        Container(web, "web", "Next.js 16", "Interface scaffold")
         Container(api, "api", "FastAPI", "Serving scaffold")
         Container(model, "model", "PyMC", "Offline jobs")
         Container(gw, "gateway", "Python", "Provider client")
@@ -179,7 +179,7 @@ N/A — scaffold epic. Every failure mode is a build-time check exiting non-zero
 
 ```text
 /src
-├── web/                       # Next.js 15, npm, exactly one lockfile
+├── web/                       # Next.js 16, npm, exactly one lockfile
 │   ├── app/                   # App Router — not src/app, one wins silently
 │   ├── __tests__/             # Vitest
 │   ├── eslint.config.mjs      # ESLint + Prettier

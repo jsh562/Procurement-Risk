@@ -47,7 +47,7 @@ Every model claim MUST be reported against a baseline strong enough that beating
 <!-- Downstream phases (Plan, QC, Autopilot) read this section as the authoritative tech-stack reference. -->
 
 - **Language/Runtime**: TypeScript 5.x on Node 22 (web); Python 3.12 (api, model, gateway)
-- **Frameworks**: Next.js 15 (App Router) and React; FastAPI with Pydantic; PyMC, ArviZ, pandas, NumPy; ONNX Runtime for INT8 CPU inference; Anthropic SDK targeting `claude-opus-5`
+- **Frameworks**: Next.js 16 (App Router) and React; FastAPI with Pydantic; PyMC, ArviZ, pandas, NumPy; ONNX Runtime for INT8 CPU inference; Anthropic SDK targeting `claude-opus-5`
 - **Storage**: PostgreSQL 16 with `pgvector` and native `tsvector` — a single instance holding document chunks, procurement records, resolved entities, posterior artifacts, and model-invocation records. No second datastore.
 - **Infrastructure**: Docker Compose for local development, with one-shot jobs under a non-default profile; Vercel plus a container host with managed Postgres for the hosted demonstration
 
@@ -95,9 +95,10 @@ Every model claim MUST be reported against a baseline strong enough that beating
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1.3 | 2026-07-25 | Technology Stack: Next.js 15 -> 16 (App Router). The scaffold was created with `create-next-app@latest`, which installed 16.2.12; QC caught the mismatch against the declared 15 and raised it as a CRITICAL stack deviation. Amended rather than downgraded: 16 is the current major, the four web checks (ESLint, Prettier, tsc, Vitest) pass against it locally and on CI, and pinning a greenfield scaffold back to satisfy a version chosen before the scaffold existed would cost work and buy nothing. Propagated to `specs/sad.md` and the E001 plan. |
 | 1.1.2 | 2026-07-25 | Source Code Layout gained a narrow exception to "tests live alongside the code they cover": cross-entry verification with no single owning entry lives under `/tests` at the repository root. Raised by the E001 analyze phase, which found the check harness placed there under a "build tooling" classification the instructions did not grant. Several E001 checks compare the serving boundary's dependency set against the modeling boundary's, or assert on a built image — no entry owns them, and a fifth entry under `/src` would contradict the four-entry rule. The exception is scoped so entry-local tests cannot migrate under it. |
 | 1.1.1 | 2026-07-25 | Clarified Required QC Categories: "linting, static analysis, coverage" named three phrases that resolve to two categories, since quality control maps lint and static analysis to the same one. An audit read the phrasing as a third enforced category and filed a false finding against the derived policy. Wording only — keyword extraction and the derived policy are unchanged. |
 | 1.1.0 | 2026-07-25 | Source Code Layout expanded from three boundaries to four entries under `/src`, adding `/src/gateway` as a shared package, and Technology Stack updated to name three Python entries rather than two. Propagates ADR-0010, which supersedes ADR-0001 to resolve a conflict that had no solution under the three-boundary rule: both Python boundaries require model-provider access, exactly one module repository-wide may import the provider client, and neither boundary may depend on the other. |
 | 1.0.0 | 2026-07-25 | Initial project instructions. |
 
-**Version**: 1.1.2 | **Last Amended**: 2026-07-25
+**Version**: 1.1.3 | **Last Amended**: 2026-07-25

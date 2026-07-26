@@ -20,7 +20,7 @@ STUB = "pymc"
 def test_allowlist_would_reject_an_injected_distribution() -> None:
     probe = inject_stub_and_probe(STUB)
     assert STUB in probe["installed"], "stub did not register as an installed distribution"
-    accounted = expected_distributions() | {"api", "gateway", "pip", "setuptools"}
+    accounted = expected_distributions() | {"api"}
     unaccounted = probe["installed"] - accounted
     assert STUB in unaccounted, "the allowlist check would not have flagged the injected stub"
 

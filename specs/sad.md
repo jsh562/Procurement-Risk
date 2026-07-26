@@ -13,7 +13,7 @@ Two constraints shape nearly every decision below and are treated as architectur
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x on Node 22 (web); Python 3.12 (api, model, gateway)
-**Primary Dependencies**: Next.js 15 App Router, React; FastAPI, Pydantic, psycopg; PyMC, ArviZ, pandas, NumPy; ONNX Runtime (INT8 CPU inference); Anthropic SDK (`claude-opus-5`)<br>
+**Primary Dependencies**: Next.js 16 App Router, React; FastAPI, Pydantic, psycopg; PyMC, ArviZ, pandas, NumPy; ONNX Runtime (INT8 CPU inference); Anthropic SDK (`claude-opus-5`)<br>
 **Storage**: PostgreSQL 16 with `pgvector` (HNSW) and native `tsvector` full-text — single instance, no second datastore
 **Testing**: pytest with Hypothesis for property-based tests over pure scoring functions; Vitest and Playwright for the web tier; `import-linter` for architecture contracts; a `reproduce` job that re-runs the evaluation harness and diffs against a committed results manifest<br>
 **Target Platform**: Linux containers under Docker Compose for local development; Vercel (web) plus a container host with managed Postgres for the hosted demo
