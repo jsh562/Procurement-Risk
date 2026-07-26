@@ -104,34 +104,65 @@ def test_the_recorded_digests_are_well_formed() -> None:
             assert len(digest) == len("@sha256:") + 64
 
 
-# --- SC-018: no credential material in the build context or its layers --------
+# --- SC-018: no credential material in the committed tree or the image layers -
 
 CREDENTIAL_MARKERS = re.compile(
     r"(ANTHROPIC_API_KEY\s*[=:]\s*\S|sk-ant-[A-Za-z0-9_-]{8,}|AWS_SECRET_ACCESS_KEY\s*[=:]\s*\S)"
 )
 
+# Scanning only the serving build context left the modelling entry and the
+# corpus tree outside the check: a retrieval or generation script under
+# src/model, or a manifest under data/, could carry a credential the scan
+# would never open. Both are committed, so both are in scope.
+CREDENTIAL_SCAN_ROOTS = (*(SRC_ROOT / entry for entry in PYTHON_ENTRIES), REPO_ROOT / "data")
 
-def test_no_credential_material_in_the_serving_build_context() -> None:
-    """Passes vacuously this epic — E001 supplies no provider credential. It
-    exists to fail the moment one is introduced, which is the only time the
-    assertion could ever be worth anything."""
+
+def _credential_offenders(roots: tuple[Path, ...]) -> list[Path]:
+    """Walk `roots` for credential markers, tolerating anything unreadable as text.
+
+    data/ holds committed PDFs, so a binary file is expected rather than
+    exceptional; it decodes to a UnicodeDecodeError and is skipped, exactly as
+    an unreadable file always was.
+    """
     offenders = []
-    for entry in ("api", "gateway"):
-        for path in (SRC_ROOT / entry).rglob("*"):
+    for root in roots:
+        for path in root.rglob("*"):
             if not path.is_file() or ".venv" in path.parts or "node_modules" in path.parts:
                 continue
             try:
                 if CREDENTIAL_MARKERS.search(path.read_text(encoding="utf-8")):
-                    offenders.append(path.relative_to(REPO_ROOT).as_posix())
+                    offenders.append(path)
             except (UnicodeDecodeError, OSError):
                 continue
-    assert not offenders, f"credential material in the serving build context: {offenders}"
+    return offenders
+
+
+def test_no_credential_material_in_the_committed_source_and_data_trees() -> None:
+    """Passes vacuously this epic — neither E001 nor E002 supplies a provider
+    credential, and FR-002a forbids allow-listing a source that needs one. It
+    exists to fail the moment one is introduced, which is the only time the
+    assertion could ever be worth anything."""
+    # A scan root that stopped existing would scan nothing and pass silently,
+    # which is the failure mode this whole check is built against.
+    missing = [r.relative_to(REPO_ROOT).as_posix() for r in CREDENTIAL_SCAN_ROOTS if not r.is_dir()]
+    assert not missing, f"credential scan roots are missing: {missing}"
+
+    offenders = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in _credential_offenders(CREDENTIAL_SCAN_ROOTS)
+    ]
+    assert not offenders, f"credential material in the committed tree: {offenders}"
 
 
 def test_the_credential_check_would_notice_a_planted_secret(tmp_path: Path) -> None:
+    """Positive control, run through the same walk the real scan uses so that
+    widening the population cannot leave this asserting on the regex alone."""
     planted = tmp_path / "config.py"
     planted.write_text('ANTHROPIC_API_KEY = "sk-ant-planted12345"\n', encoding="utf-8")
-    assert CREDENTIAL_MARKERS.search(planted.read_text(encoding="utf-8"))
+    # A committed PDF next to it: the walk must reach the secret regardless.
+    (tmp_path / "document.pdf").write_bytes(b"%PDF-1.7\n\x00\x80\xff\xfe binary\n")
+
+    assert _credential_offenders((tmp_path,)) == [planted]
 
 
 def test_no_credential_material_in_the_built_image() -> None:

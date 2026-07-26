@@ -10,10 +10,24 @@ requires-python = ">=3.12"
 dependencies = [
     "arviz>=1.2.0",
     "gateway",
+    "jsonschema[format-nongpl]>=4.26.0",
     "numpy>=2.4.6",
     "pandas>=3.0.5",
+    "pdfplumber>=0.11.10",
+    "pillow>=12.3.0",
     "pymc>=6.2.0",
+    "reportlab>=5.0.0",
 ]
+
+# ADR-0011: the corpus jobs are modeling-owned command-line entry points, not
+# serving endpoints. Declared here so they are invoked by name rather than by
+# `python -m` against a path that would differ between the workflow and a
+# developer checkout. The modules land in Phases 3-5.
+[project.scripts]
+corpus-retrieve = "model.corpus.retrieve:main"
+corpus-generate = "model.corpus.generate:main"
+corpus-validate = "model.corpus.validate:main"
+corpus-reverify = "model.corpus.reverify:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
@@ -48,6 +62,11 @@ source = ["src/model"]
 
 [tool.importlinter]
 root_package = "model"
+# Required by the corpus contract below: `gateway` sits outside the `model` root
+# package, and import-linter refuses to name an external module as forbidden
+# unless the graph is built with external packages in it. Without this the
+# contract is not merely weaker — it fails to load at all.
+include_external_packages = true
 
 # TR-009: model-facing code must never reach deterministic computation.
 # Indirect detection stays ON here — laundering the dependency through an
@@ -57,4 +76,17 @@ name = "Model-facing code does not reach the computation package"
 type = "forbidden"
 source_modules = ["model.llm"]
 forbidden_modules = ["model.compute"]
+allow_indirect_imports = false
+
+# FR-022: corpus generation completes with no language-model invocation. Stated
+# as a build-gating contract rather than an assertion, so the offline claim is
+# enforced on every commit instead of being re-argued per review. `gateway` is
+# named alongside `model.llm` because reaching the provider through the shared
+# client is the same violation by another route. Indirect detection stays ON:
+# laundering the dependency through an intermediate module is the evasion.
+[[tool.importlinter.contracts]]
+name = "Corpus code does not reach the model provider"
+type = "forbidden"
+source_modules = ["model.corpus"]
+forbidden_modules = ["model.llm", "gateway"]
 allow_indirect_imports = false

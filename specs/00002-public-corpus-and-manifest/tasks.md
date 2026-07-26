@@ -37,12 +37,12 @@
 
 ## Phase 1: Setup (Repository / Workspace Delta)
 
-- [ ] T001 Create the empty package `src/model/src/model/corpus/__init__.py` so the new import contract and the widened coverage scope resolve against a real module
-- [ ] T002 Add reportlab, pillow, pdfplumber, and jsonschema[format-nongpl] to src/model/pyproject.toml and regenerate src/model/uv.lock with exact pins and artifact hashes
-- [ ] T003 {FR-015,FR-008b} Declare corpus-retrieve, corpus-generate, corpus-validate, and corpus-reverify in src/model/pyproject.toml `[project.scripts]`
-- [ ] T004 {FR-022} Add the forbidden import-linter contract from `model.corpus` to `model.llm` and `gateway`, `allow_indirect_imports = false`, in src/model/pyproject.toml after:T001
-- [ ] T005 Widen the model coverage scope to `--source=src/model/roster,src/model/corpus` in .github/workflows/verify.yml after:T001
-- [ ] T006 [P] Widen the credential scan in tests/checks/test_supply_chain.py to the `model` entry and the `data/` root
+- [X] T001 Create the empty package `src/model/src/model/corpus/__init__.py` so the new import contract and the widened coverage scope resolve against a real module
+- [X] T002 Add reportlab, pillow, pdfplumber, and jsonschema[format-nongpl] to src/model/pyproject.toml and regenerate src/model/uv.lock with exact pins and artifact hashes
+- [X] T003 {FR-015,FR-008b} Declare corpus-retrieve, corpus-generate, corpus-validate, and corpus-reverify in src/model/pyproject.toml `[project.scripts]`
+- [X] T004 {FR-022} Add the forbidden import-linter contract from `model.corpus` to `model.llm` and `gateway`, `allow_indirect_imports = false`, in src/model/pyproject.toml after:T001
+- [X] T005 Widen the model coverage scope to `--source=src/model/roster,src/model/corpus` in .github/workflows/verify.yml after:T001
+- [X] T006 [P] Widen the credential scan in tests/checks/test_supply_chain.py to the `model` entry and the `data/` root
 
 **Notes**: T004 and T005 sit here rather than later on purpose — HINT-002 warns that a coverage gate left at `--source=src/model/roster` passes at 80% while measuring none of this epic's code, and an import contract added after the package would leave the offline claim unenforced across every commit in between. Both need T001 first: `lint-imports` errors on a `source_modules` entry that does not exist, and `--source` on an absent path measures nothing. T005 is the first of three separate edits to `verify.yml`; the corpus-validation step is T034 (FR-017) and the `pull_request` trigger is T057 (FR-034). T006 is vacuous on the day it lands — this epic introduces no credential and FR-002a forbids allow-listing a source needing one — and exists to fail the moment one appears.
 
@@ -50,15 +50,15 @@
 
 ## Phase 2: Foundational (Cross-Work-Item Blockers)
 
-- [ ] T007 [P] Register the Hypothesis profile — `max_examples=200`, `derandomize=True`, `deadline=None` — in src/model/tests/conftest.py and select it in CI
-- [ ] T008 {FR-021} Commit failing property tests PB-1…PB-4 and PB-6 with their named boundary cases in src/model/tests/test_corpus_model_hash.py, with no corpus/model.py beside them
-- [ ] T009 {FR-007,FR-021} Implement DM-1…DM-6 canonical serialization and document_model_hash in src/model/src/model/corpus/model.py after:T008 → exports: DocumentModel, document_model_hash()
-- [ ] T010 {FR-006b,FR-007} Implement entry value objects, the MS-1…MS-6 manifest writer, and the sha256 helpers in src/model/src/model/corpus/manifest.py → exports: ManifestEntry, write_manifest()
-- [ ] T011 {FR-006b} Add PB-5 and the duplicate-key, case-collision, and empty-class boundary cases in src/model/tests/test_corpus_manifest.py ← T010:write_manifest
-- [ ] T012 {FR-017a,FR-018} Implement corpus root, non-following location discovery, and containment in src/model/src/model/corpus/paths.py → exports: discover_locations(), resolve_within()
-- [ ] T013 [P] {FR-006a,FR-007,FR-014} Author the draft 2020-12 base of data/corpus/manifest.schema.json: common entry fields, digest pattern, closed layer enum, additionalProperties false
-- [ ] T014 {FR-008,FR-009,FR-010,FR-033} Add the layer conditional and both prohibited-key clauses — eight REAL and seven SYNTHETIC fields — to data/corpus/manifest.schema.json
-- [ ] T015 {FR-005,FR-011,FR-012,FR-012a} Add per-layer license-basis subschemas to data/corpus/manifest.schema.json: closed basis_id, closed statute, point-of-use enum, SYNTHETIC consts
+- [X] T007 [P] Register the Hypothesis profile — `max_examples=200`, `derandomize=True`, `deadline=None` — in src/model/tests/conftest.py and select it in CI
+- [X] T008 {FR-021} Commit failing property tests PB-1…PB-4 and PB-6 with their named boundary cases in src/model/tests/test_corpus_model_hash.py, with no corpus/model.py beside them
+- [X] T009 {FR-007,FR-021} Implement DM-1…DM-6 canonical serialization and document_model_hash in src/model/src/model/corpus/model.py after:T008 → exports: DocumentModel, document_model_hash()
+- [X] T010 {FR-006b,FR-007} Implement entry value objects, the MS-1…MS-6 manifest writer, and the sha256 helpers in src/model/src/model/corpus/manifest.py → exports: ManifestEntry, write_manifest()
+- [X] T011 {FR-006b} Add PB-5 and the duplicate-key, case-collision, and empty-class boundary cases in src/model/tests/test_corpus_manifest.py ← T010:write_manifest
+- [X] T012 {FR-017a,FR-018} Implement corpus root, non-following location discovery, and containment in src/model/src/model/corpus/paths.py → exports: discover_locations(), resolve_within()
+- [X] T013 [P] {FR-006a,FR-007,FR-014} Author the draft 2020-12 base of data/corpus/manifest.schema.json: common entry fields, digest pattern, closed layer enum, additionalProperties false
+- [X] T014 {FR-008,FR-009,FR-010,FR-033} Add the layer conditional and both prohibited-key clauses — eight REAL and seven SYNTHETIC fields — to data/corpus/manifest.schema.json
+- [X] T015 {FR-005,FR-011,FR-012,FR-012a} Add per-layer license-basis subschemas to data/corpus/manifest.schema.json: closed basis_id, closed statute, point-of-use enum, SYNTHETIC consts
 
 **Notes**: Everything here blocks two or more stories. `model.py` and `manifest.py` are where every determinism claim in the epic reduces to — discovering the serialization wrong after 25 PDFs are committed means regenerating all of them (HINT-001). `manifest.schema.json` is authored here rather than in US2 because US1 writes the real manifest against it before the validator exists. T013→T014→T015 edit one file and are sequential; only T013 is parallel-safe. The five digest kinds stay distinct in `manifest.py`: `content_hash` and `generation_inputs.*` are over raw bytes, `roster_hash` is the reader's canonical-content value, `document_model_hash` is over the pre-render model, `upstream_digest` is over retrieved bytes.
 

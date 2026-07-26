@@ -155,7 +155,7 @@ jobs:
         env:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage.model
         working-directory: src/model
-        run: uv run coverage run --source=src/model/roster -m pytest tests -q
+        run: uv run coverage run --source=src/model/roster,src/model/corpus -m pytest tests -q
 
       # The gateway holds the single permitted provider import site. Its tests
       # existed but no step ran them, so OBJ7's "every check runs" was false

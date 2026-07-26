@@ -24,6 +24,7 @@ import unicodedata
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+
 from model.corpus.model import (
     DocumentModel,
     DocumentModelError,
