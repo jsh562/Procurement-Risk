@@ -226,7 +226,7 @@ The distinguishing choice is that **the trace is surfaced in the interface**, no
 
 ### Data Management
 
-All data is public-domain or synthetic. Every corpus document is labeled `REAL` or `SYNTHETIC` in a shipped manifest carrying source, issuing body, retrieval date, and license basis; copyrighted reference standards are cited, never included. Licenses are not mixed within a corpus location.
+All data is public-domain or synthetic. Every corpus document is labeled `REAL` or `SYNTHETIC` in a shipped manifest carrying its license basis and layer-appropriate provenance — source, issuing body, and retrieval date when retrieved; generator identity, seed, generation date, and fixture hashes when generated. A generated document carries no retrieval provenance, because recording one would be a fabrication rather than a harmless placeholder. Copyrighted reference standards are cited, never included. Licenses are not mixed within a corpus location, compared over the governing basis identifier rather than over per-document components.
 
 Retention, backup, and restore are out of scope — the entire dataset is regenerable from the repository plus the ingestion and generation jobs, which is a stronger property than a backup for this system. Schema evolution uses forward-only migrations. Forecast artifacts carry a `schema_version` so a stale reader fails loudly rather than misreading array offsets. Citation and confidence columns are `NOT NULL`, which makes an unattributed extracted value impossible to store rather than merely detectable ({SAD:ADR-0008}).
 

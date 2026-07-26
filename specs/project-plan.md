@@ -123,11 +123,14 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Interface shell contention (E010, E011; later E012, E013).** Parallel interface epics both modify routing and layout. Mitigation: the shell — navigation, layout, data-fetching conventions — is established once in E010 and treated as read-only by later interface epics.
 - **Retrieval configuration surface (E008 vs E014).** E014 exercises the exact-search path while E008 owns the configuration flag. Mitigation: the flag controls index usage only; filters, fusion, fetch depth, and reranking are shared code, per ADR-0005.
 - **Draw-array contract (E007 vs E010).** E007 writes both the canonical draw array and the derived survival array; E010 reads the latter. Mitigation: schema version on the forecast run, checked by the reader.
+- **Amendment during flight (any wave with more than one epic).** The contended resource is not two epics amending at once — it is one epic amending while the others are mid-flight. The amendment procedure re-derives whole managed sections rather than patching lines, this plan is rewritten by every amendment and holds every epic's entry, and unchecked epics are precisely the ones another epic's amendment may adjust. Meanwhile the in-flight branches keep validating against the instruction version they were cut from, and quality control treats any violation as critical — so an epic can pass its gate against a rule that no longer exists. Mitigation: amendments serialize on the default branch, and every feature records the instruction version its compliance audit ran against, so drift is detectable at the next gate rather than at merge.
 
 ### Shared Resource Conflicts
 
 | Resource | Contending epics | Resolution |
 |---|---|---|
+| Governance documents | Any epic raising an amendment | Single writer: one amendment in flight at a time, performed on the default branch and landed before the next begins. A feature branch records the need and does not perform it. Every in-flight epic rebases and re-runs its compliance gate afterwards |
+| Decision record numbers | Any epic creating an ADR | Number claimed at epic start, as migration numbers are |
 | Migration sequence | E003, E004, E005, E006 | Numbers claimed at epic start; disjoint table ownership |
 | Interface shell | E010, E011, E012, E013 | Established in E010, read-only thereafter |
 | Retrieval configuration | E008, E014 | Flag scope limited to index usage |
@@ -166,21 +169,21 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 
 - **Category**: PRODUCT · **Priority**: P1
 - **Source**: {PRD:CAP-001}
-- **Scope**: Assemble the document corpus as a real public-domain base of federal specification sections plus a synthesized project-document layer of submittals and transmittals tied to the planned projects and vendors. Every document is recorded in a manifest with source, issuing body, retrieval date, license basis, and a REAL or SYNTHETIC label.
+- **Scope**: Assemble the document corpus as a real public-domain base of federal specification sections plus a synthesized project-document layer of submittals and transmittals tied to the planned projects and vendors. Every document is recorded in a manifest with its license basis, a REAL or SYNTHETIC label, and the provenance its layer actually has — source, issuing body, and retrieval date when retrieved; generator identity, seed, generation date, and fixture hashes when generated.
 - **Actors**: Developer, evaluator
 - **Key entities**: Document, CorpusManifestEntry, ProjectVendorRoster
 - **Depends on**: E001
 - **Dependency contracts**: E002 needs the project/vendor roster fixture from E001 before authoring the synthesized project-document layer. The dependency is partial — sourcing and manifesting the public-domain documents has no dependency on E001 and can proceed immediately.
 - **Depended on by**: E006
-- **Also owns**: Adding automatic push and pull-request triggers to the verification workflow E001 ships as dispatch-only. E001 defers this by one epic; until it lands, contract violations are detected only when someone dispatches the workflow, which is a recorded deviation from the project's CI requirement that violations fail the build.
+- **Also owns**: Adding the `pull_request` trigger to the verification workflow. E001 originally deferred all automatic triggering to this epic, then closed the `push` half during its own analyze phase once the cost was visible — it was one line — so contract violations already fail the build. What remains is the merge gate: a pull request is not verified unless someone pushes its head. Branch protection stays out of scope for both epics, being a hosting-platform setting no committed artifact can assert.
 - **Produces (shared)**: Vendored document set, corpus manifest
 - **Constraints**: Public domain or synthetic only; copyrighted reference standards cited, never included; licenses not mixed within a corpus location
 - **Acceptance criteria**:
   - [ ] The corpus spans the planned long-lead specification divisions and totals within the target document count
-  - [ ] Every document carries a manifest entry with source, issuing body, retrieval date, and license basis
+  - [ ] Every document carries a manifest entry with its license basis and its layer's provenance — source, issuing body, and retrieval date when retrieved; generator identity, seed, generation date, and fixture hashes when generated — with a generated document carrying no retrieval fields at all
   - [ ] Every document is labeled REAL or SYNTHETIC, and the counts match the intended composition
   - [ ] Synthesized project documents reference the same projects and vendors the procurement history will use, recording the roster content hash they were generated from
-  - [ ] The verification workflow carries `push` and `pull_request` triggers and runs automatically, closing the deviation E001 deferred
+  - [ ] The verification workflow carries a `pull_request` trigger alongside the `push` trigger E001 landed, so a pull request is verified without anyone pushing its head
 - **Specify input**:
   - Description: Assemble and document a legally clean corpus combining verbatim public-domain federal specifications with synthesized project submittals, each carrying auditable provenance.
   - Actors: Developer, evaluator
@@ -690,4 +693,5 @@ Before starting any epic in Wave N+1, verify:
 2. The technical context document reflects any decision made or changed during Wave N; a material change means a superseding decision record, not an edit.
 3. Every shared artifact listed for Wave N under Shared Artifact Surface exists and is reachable by its declared consumers.
 4. Every dependency contract declared by a Wave N+1 epic is satisfiable against what Wave N actually produced — in particular the forecast-run schema version, the review-queue record shape, and the retrieval configuration flag's scope.
-5. Migration numbers for the next wave are claimed before any parallel epic begins, so concurrent schema work cannot collide.
+5. Migration numbers and decision-record numbers for the next wave are claimed before any parallel epic begins, so concurrent schema work cannot collide and two epics cannot allocate the same ADR number.
+6. No epic enters the wave carrying a compliance audit against a superseded version of the project instructions. Any amendment landed during Wave N is picked up by rebasing, and the affected epics re-run their compliance gate before starting Wave N+1 work.
