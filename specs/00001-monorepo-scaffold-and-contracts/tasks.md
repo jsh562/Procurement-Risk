@@ -125,9 +125,9 @@
 
 - [X] T043 [OBJ7] {TR-020,TR-019} Author .github/workflows/verify.yml with both `on: push` and `workflow_dispatch`, and one named step per check: lint, format, types, tests, locks, contracts, image, coverage, index config, digest pinning, credential absence
 - [X] T044 [OBJ7] {TR-022} Add the violation-injection workflow input to .github/workflows/verify.yml, copying a production contract root to a scratch path and injecting the violation there
-- [ ] T045 [OBJ7] {TR-021} Create the hosted remote and land verify.yml on the default branch `main`, then push the feature branch, so dispatch becomes available at all after:T001
-- [ ] T046 [OBJ7] {TR-020} Dispatch verify.yml against the feature branch on a clean tree; every check runs and the workflow succeeds, evidencing SC-013's first half after:T045
-- [ ] T047 [OBJ7] {TR-022} Dispatch verify.yml with the injected violation; the run fails and its output names the violated check, evidencing SC-013's second half after:T046
+- [X] T045 [OBJ7] {TR-021} Create the hosted remote and land verify.yml on the default branch `main`, then push the feature branch, so dispatch becomes available at all after:T001
+- [X] T046 [OBJ7] {TR-020} Dispatch verify.yml against the feature branch on a clean tree; every check runs and the workflow succeeds, evidencing SC-013's first half after:T045
+- [X] T047 [OBJ7] {TR-022} Dispatch verify.yml with the injected violation; the run fails and its output names the violated check, evidencing SC-013's second half after:T046
 
 **Notes**: T045 is gated on T001's first commit and cannot be simulated — `workflow_dispatch` is genuinely unavailable until the file exists on the default branch. No check the workflow invokes requires credential access, so the dispatched run needs no repository secret. Automatic `push`/`pull_request` triggers are deliberately out of scope and owned by E002.
 
