@@ -58,6 +58,52 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    # The model entry's schema tests assert constraint rejection, index presence,
+    # and deferred-constraint behaviour at commit. All three are enforced by the
+    # server, so there is nothing a fake or an in-process engine could stand in
+    # for — the tests need a real PostgreSQL with pgvector.
+    #
+    # The image reference is copied byte-for-byte from the Compose `db` service
+    # (AD-001). One image, one digest, one source of truth: a CI database that
+    # has drifted from the local one turns a green build into a statement about
+    # a different server than the developer ran against. Update the pin in
+    # docker-compose.yml and copy it here; never the other way round.
+    #
+    # Structural note: service containers are job-scoped by GitHub Actions'
+    # design — there is no way to attach one to a subset of steps. Giving only
+    # the model entry a database therefore means a second job, which costs an
+    # extra runner plus its own checkout and `uv sync`, and splits
+    # `.coverage.model` away from `.coverage.checks` so the coverage gate below
+    # could no longer combine them without artifact upload/download. A Postgres
+    # container idling through the web build is by far the cheaper of the two,
+    # so the service stays on this job.
+    services:
+      db:
+        image: pgvector/pgvector:pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb
+        env:
+          # TR-015: the same literal development-only credentials the Compose
+          # service commits on purpose, declared non-secret there and here. The
+          # container is reachable only from this job's steps, and matching the
+          # values keeps one DATABASE_URL shape across local and CI.
+          POSTGRES_USER: procurement
+          POSTGRES_PASSWORD: local-development-only
+          POSTGRES_DB: procurement
+        # 5432 on the runner, against Compose's 5434 on a developer's host — the
+        # local port dodges a collision that does not exist here. Tests read
+        # DATABASE_URL rather than a port precisely because the two differ.
+        ports:
+          - 5432:5432
+        # Equivalent to the Compose service's pg_isready check. Without it the
+        # job starts its steps against a server still initialising its data
+        # directory, and the first schema test fails on a refused connection
+        # that has nothing to do with the schema.
+        options: >-
+          --health-cmd "pg_isready -U procurement -d procurement"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -148,20 +194,68 @@ jobs:
         run: |
           for entry in gateway api model; do uv run --directory "src/$entry" lint-imports; done
 
+      # TR-007 / ADR-0011: the migration runner is reached as a console entry
+      # point through the modeling entry's own environment, so it appears here as
+      # `uv run --directory src/model` like every other Python step rather than
+      # as a `docker compose run` of a job container. There is no image to build
+      # and no Compose service to start; determinism comes from the entry's
+      # lockfile, which the sync step above already enforced with `--locked`.
+      #
+      # Placed before the model tests, not after: the schema tests query a
+      # migrated database, so an unapplied chain fails them on missing relations
+      # rather than on anything they assert. Applying it here rather than from a
+      # session fixture also means the chain is exercised exactly as a developer
+      # or a deployment runs it, and a failure names this step instead of
+      # surfacing as a collection error inside pytest.
+      #
+      # The same DATABASE_URL literal as the step below — the runner's service
+      # container publishes 5432, against Compose's 5434 on a developer's host.
+      # It is repeated rather than hoisted to the job's `env:` because only these
+      # two steps touch a database, and a job-wide URL would silently point the
+      # web and image steps at one too.
+      - name: Apply the migration chain (model)
+        env:
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+        run: uv run --directory src/model migrate
+
       # Each entry writes its own coverage data file. pytest-cov overrides the
       # `parallel` setting, so the files are kept apart by COVERAGE_FILE rather
       # than by configuration, and combined at the root below.
       - name: Unit tests (model)
         env:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage.model
+          # The schema tests read this from the environment and never hardcode a
+          # port: it is 5432 here and 5434 against the Compose service on a
+          # developer's host.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+          # Turns an unset DATABASE_URL from a skip into a refusal to start.
+          # Without it, deleting the line above would leave 344 of the suite's
+          # 425 tests skipped and this step still green — measured, not feared.
+          # Redundant with the `CI` variable the runner sets, which the same
+          # check already honours; stated anyway so the demand is visible next
+          # to the value it demands, and so a runner that does not set `CI`
+          # (`act`, a bare self-hosted script) is still covered.
+          REQUIRE_DB: "1"
         working-directory: src/model
-        run: uv run coverage run --source=src/model/roster -m pytest tests -q
+        # --source overrides the root pyproject.toml `source` list rather than
+        # merging with it, so every package in that list must appear here too or
+        # it lands in the denominator with no hits. E003 added the schema
+        # package to the config; this line has to match it.
+        run: uv run coverage run --source=src/model/roster,src/model/schema -m pytest tests -q
 
       # The gateway holds the single permitted provider import site. Its tests
       # existed but no step ran them, so OBJ7's "every check runs" was false
       # for the most load-bearing module in the repository.
+      #
+      # Under `coverage run` since E003's QC: `provider.py` is named in the root
+      # `[tool.coverage.run] source` list, so without a data file from this step
+      # its statements would sit in the denominator with zero hits and drag the
+      # gate down while looking like untested code. Its own COVERAGE_FILE, like
+      # the two steps above, because `combine` merges by file.
       - name: Unit tests (gateway)
-        run: uv run --directory src/gateway python -m pytest tests -q
+        env:
+          COVERAGE_FILE: ${{ github.workspace }}/.coverage.gateway
+        run: uv run --directory src/gateway coverage run -m pytest tests -q
 
       - name: Unit tests (web)
         working-directory: src/web
