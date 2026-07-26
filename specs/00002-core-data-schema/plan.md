@@ -309,7 +309,9 @@ The skill says only *"Write the complete analysis report to `FEATURE_DIR/analysi
 
 Recorded for a future amendment: *"When an analysis pass renumbers its finding series, the prior report is archived as `analysis-report-<date>.md` rather than overwritten, whenever any of its finding IDs is cited outside the report. Superseding a verdict does not license deleting the definition of an item still open."*
 
-Nothing in this branch can carry the fix — the skill is project-level, and v1.2.0 serializes amendments on the default branch. The A-rows themselves have been restored into `analysis-report.md` here, which repairs the damage without touching the rule that allowed it.
+**APPLIED, and this entry's own premise was wrong.** An earlier revision read *"Nothing in this branch can carry the fix — the skill is project-level, and v1.2.0 serializes amendments on the default branch."* Both halves are false. `.gitignore` excludes `/.github/skills/`, so the file is untracked and absent from `origin/main` entirely: it is local tooling, not a registered document, so it needed no amendment slot, no default-branch ceremony, and no commit. The amendment-serialization clause governs the documents *it* names, and this is not one of them. Classifying a target without checking whether it was even in the repository is the same mistake that produced the overwrite this entry is about.
+
+The rule is now in the skill at its §5 report-writing step, stated with the distinction that matters — superseding a **verdict** is the point of a re-run; deleting the **definition** of a still-open finding is not the same act — and carrying E003's own incident as the worked example. The 21 A-rows were separately restored into `analysis-report.md` with per-row dispositions, so the damage and the rule that allowed it are both closed.
 
 ### AR-4 — an ADR for artifact authority direction (analysis finding A-012)
 

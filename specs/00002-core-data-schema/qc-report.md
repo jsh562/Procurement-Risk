@@ -1,9 +1,15 @@
 # QC Report: Core Data Schema
 
 **Feature**: `00002-core-data-schema` (E003) | **Date**: 2026-07-26 | **Run**: 2 (re-audit of run 1, verdict FAIL)
-**Governing document**: `project-instructions.md` **v1.2.0**
+**Governing document**: `project-instructions.md` **v1.2.0** — superseded since this run; **checked, no re-run required.** See below.
 **QC policy**: profile `standard` | required categories **linting, coverage** | coverage threshold **80**
 **Branch**: `00002-core-data-schema` | database: `kayademoprocurementrisk1-db-1`, host port 5434, chain at head `0010`
+
+> **Version drift, checked and closed — recorded so the next reader does not have to re-derive it.** This run audited **v1.2.0**. Two amendments have landed since: **v1.2.1** and **v1.2.2**. Governance requires that *"a feature whose recorded compliance audit names a superseded version MUST re-run its compliance gate **before passing its next phase gate**,"* with the stated rationale that *"an amendment moves the ground under every epic **already in flight**."* E003 passed its last gate and is merged: it has no next gate and is not in flight, so the clause does not fire.
+>
+> That is procedure, and procedure alone would be a thin reason. The substance is independent of it: **v1.2.1** only *narrowed* "No second datastore" to "No second datastore of record", and a narrowed prohibition cannot create a new violation — it can only permit more. **v1.2.2** extends epic-start number claiming to Feature Workspace numbers; it is the amendment E003 itself requested as AR-2, it constrains how a *future* workspace number is allocated, and it makes no demand on delivered schema. Neither can change a verdict in this report.
+>
+> Disclosed rather than glossed: E003 **is** one of the two workspaces whose `00002` prefix collision motivated v1.2.2, and that collision is not retroactively fixable — a workspace number is embedded in every path this epic's artifacts cite. v1.2.2 says so explicitly. E003 is therefore permanently non-compliant with a rule it asked for, by construction, and the amendment was written knowing that. The other two epics in flight at the time (E002, E004) both recorded v1.2.1 and do carry the re-run obligation for their own gates; this note speaks only for E003.
 
 ## Overall Verdict: PASS
 
