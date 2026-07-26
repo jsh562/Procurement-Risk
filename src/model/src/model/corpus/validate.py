@@ -12,8 +12,11 @@ here reads committed artifacts. FR-031a requires re-derivation to be independent
 of what the generator recorded, so a validator that regenerated in order to
 validate could not distinguish a corpus defect from a generator defect — which
 is why `data-model.md` splits the 72 rules across two runners and gives this one
-VR-001…VR-039 and VR-051…VR-068. The rules needing a generator *run* live in
-`src/model/tests/`.
+VR-001…VR-033, VR-035…VR-039 and VR-051…VR-068 — **59 registered rules**, with
+VR-035 registered as its four sub-rules VR-035a…VR-035d. The rules needing a
+generator *run* live in `src/model/tests/`, VR-034 among them: its failing
+direction is a layer emitted below the document floor, which only a generation
+run produces.
 
 **One rule composes document models in memory, and it is named here rather than
 buried**: VR-039 compares each page's retained text layer against "the

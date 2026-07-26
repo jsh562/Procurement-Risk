@@ -226,7 +226,20 @@ jobs:
       # the gate reports on one entry's data and passes on a partial
       # denominator. All entries pin one identical coverage version because
       # combine rejects a data-file schema mismatch.
+      # SC-026 is two floors, not one. The aggregate is the first; the second is
+      # `model.corpus` measured alone, because an aggregate over several packages
+      # is an average — an already-covered package floats an uncovered new one
+      # across the threshold, which is the exact failure the criterion was
+      # written to prevent and which the aggregate alone cannot report.
+      #
+      # `--include` selects from the *combined* data rather than re-measuring, so
+      # the second report costs nothing and cannot disagree with the first about
+      # what ran. An unexecuted module still lands in this denominator at 0%:
+      # the model step's `--source=…,src/model/corpus` records every importable
+      # file under the package whether a test reached it or not, so a new module
+      # nothing covers subtracts here instead of being averaged away.
       - name: Coverage gate
         run: |
           uv run coverage combine
           uv run coverage report --fail-under=80
+          uv run coverage report --include='*/model/corpus/*' --fail-under=80
