@@ -14,7 +14,14 @@ Five groups, one per task, each failing a different way when it is wrong:
   `0.0` and `1.0` are ordinary values and not errors. And the cited page cannot
   disagree with its source chunk's page, which is the one claim in this file that
   a careless test will pass without ever exercising -- see
-  `test_a_page_belonging_to_a_different_chunk_is_rejected`.
+  `test_a_page_belonging_to_a_different_chunk_is_rejected`. The group closes on
+  **TR-078**'s third clause: a stored citation survives a `document_id` key-space
+  change, asserted end to end with a citation row actually in place while the
+  cascade runs. The *mechanical* half of that requirement -- the chunks follow the
+  new key and keep their `chunk_id` -- lives in
+  `test_chunk.py::test_updating_a_document_key_cascades_to_every_chunk`, and the
+  two halves are deliberately in different files: the insert machinery an
+  `extracted_value` row needs is here.
 * **T025 -- multi-source provenance (TR-018, TR-059, TR-060).** A three-chunk
   value is recoverable in one read of `v_extracted_value_provenance`, ordinal 1
   denoting the anchor. The two constraints capping the contributor set only work
@@ -683,6 +690,231 @@ def test_deleting_a_chunk_a_value_cites_is_refused(
         db_session.execute(
             text("DELETE FROM chunk WHERE chunk_id = :chunk_id"), {"chunk_id": anchor.chunk_id}
         )
+
+
+#: The key `document.document_id` moves to. Well-formed under
+#: `ck_document__id_format`, so the `UPDATE` reaches `fk_chunk__document` instead
+#: of stopping at the format check, and a *different* string from
+#: `SOURCE_DOCUMENT`'s, so a rename that happened and one that did nothing cannot
+#: look alike.
+RENAMED_SOURCE_DOCUMENT_ID = "example-piping-submittal-2026-r2"
+
+#: The key-space change TR-078 describes, as the one statement a forward migration
+#: would issue. It names only `document`: that nothing here touches `chunk` or
+#: `extracted_value` is the entire point, since any propagation has to come from
+#: the schema rather than from the statement.
+RENAME_DOCUMENT_KEY = text(
+    "UPDATE document SET document_id = :new_document_id WHERE document_id = :old_document_id"
+)
+
+#: The citation as a *consumer* reads it: out of `v_extracted_value_provenance`,
+#: resolved through the chunk to the document it was read from. Reading it this
+#: way rather than off `extracted_value`'s own columns is what makes the assertion
+#: "the citation survives" instead of "the row was not deleted".
+#:
+#: The chunk join is spelled with an explicit `ON` and not `USING (chunk_id)`,
+#: because the view and `chunk` both expose `page_number` and the merged-column
+#: form leaves an unqualified reference to it ambiguous. Joining on *both*
+#: citation columns is also the stronger form: the query returns a row only while
+#: the cited page still agrees with its chunk's page, which is what the citation
+#: means (TR-017).
+#:
+#: The `ORDER BY` lives here and not in the view (TR-060), exactly as it does in
+#: `provenance_of`.
+CITATION_THROUGH_THE_PROVENANCE_VIEW = text(
+    """
+    SELECT provenance.contributor_ordinal,
+           provenance.chunk_id,
+           provenance.page_number,
+           document.document_id AS resolved_document_id,
+           document.title AS resolved_title
+    FROM v_extracted_value_provenance AS provenance
+    JOIN chunk ON chunk.chunk_id = provenance.chunk_id
+              AND chunk.page_number = provenance.page_number
+    JOIN document ON document.document_id = chunk.document_id
+                 AND document.document_type = chunk.document_type
+                 AND document.project_id = chunk.project_id
+    WHERE provenance.extracted_value_id = :extracted_value_id
+    ORDER BY provenance.contributor_ordinal
+    """
+)
+
+#: The citation row's own columns, plus the two facts that reveal a rewrite.
+#:
+#: `ctid` is the load-bearing one. PostgreSQL implements every `UPDATE` -- one
+#: performed by a referential action included -- as a new tuple version at a new
+#: physical location, so an unchanged `ctid` says this row was not rewritten at
+#: all, which is a stronger claim than "its columns still hold the same values".
+#: It is stable for the life of the test because nothing inside a transaction
+#: moves a live tuple: plain `VACUUM` never relocates one and `VACUUM FULL` cannot
+#: run in a transaction block.
+#:
+#: `extracted_at` is **corroborating and not the assertion**. No cascade would
+#: have rewritten that column even if one had reached this row -- there is no
+#: trigger on it -- so on its own it would be evidence of very little.
+STORED_CITATION_ROW_IDENTITY = text(
+    """
+    SELECT extracted_value_id, source_chunk_id, cited_page, extracted_at, ctid::text AS ctid
+    FROM extracted_value
+    WHERE extracted_value_id = :extracted_value_id
+    """
+)
+
+#: Unqualified reads, with no `WHERE`. `db_session` commits nothing, so the only
+#: rows visible are the calling test's -- and reading the whole table is what makes
+#: "one document row afterwards" a claim about every row rather than about the one
+#: the test remembered to look at.
+ALL_DOCUMENT_KEYS = text("SELECT document_id FROM document ORDER BY document_id")
+EXTRACTED_VALUE_ROW_COUNT = text("SELECT count(*) FROM extracted_value")
+
+
+def test_tr078_a_stored_citation_survives_a_document_key_space_change(
+    db_session: Session, source_document: Mapping[str, Any], anchor: Citation
+) -> None:
+    """TR-078, third clause: a citation is untouched by an in-place key change.
+
+    **This is the end-to-end half of TR-078. The mechanical half is
+    `test_chunk.py::test_updating_a_document_key_cascades_to_every_chunk`**, and
+    the two are meant to be found from each other. That one covers the first two
+    clauses -- the forward migration updates the key in place, and it propagates to
+    every chunk by cascade -- and stands in for this third clause by asserting the
+    *reason* it should hold: `chunk_id` is unchanged across the cascade, and
+    `chunk_id` is half of what `extracted_value.(source_chunk_id, cited_page)`
+    references. It never inserts a citation.
+
+    That inference is sound and it is still not the claim. Three things are only
+    observable with a citation row actually present while the cascade runs:
+
+    * **The cascade rewrites the referenced rows.** Every `chunk` row the rename
+      touches is the referenced side of three foreign keys from `0006` --
+      `fk_extracted_value__chunk_page`, `fk_evcc__chunk_page` and
+      `fk_extraction_failure__chunk` -- each `MATCH FULL ON DELETE RESTRICT ON
+      UPDATE CASCADE`. That the rewrite trips none of those `RESTRICT` edges and
+      fires none of those cascades rests on PostgreSQL comparing the *referenced
+      key* old-to-new and doing nothing when it is equal. With no citation in the
+      table there is nothing for that machinery to consider, so nothing about it is
+      tested.
+    * **`chunk_id` surviving is weaker than the citation resolving.** A state where
+      every `chunk_id` is preserved *and* the citation resolves to the wrong
+      document is constructible -- `ON UPDATE SET DEFAULT` on `fk_chunk__document`
+      with a decoy document to land on produces exactly it, and the mechanical
+      assertion passes throughout. Only the join-through assertion below catches
+      that, which is the whole reason this test exists rather than being folded
+      into the other one.
+    * **The consumer's read path.** The citation is read back through
+      `v_extracted_value_provenance` and resolved onward to the document, because
+      "the citation survives" is a claim about what a reader can recover, not about
+      which bytes are still in the row.
+
+    Also asserted: the row was not *rewritten*, by `ctid`. A cascade that reached
+    this row and set its citation columns to the values they already held would
+    leave every column assertion above green while having written a new tuple
+    version, and `ctid` is what distinguishes those two worlds. `extracted_at` is
+    checked beside it as corroboration only -- see
+    `STORED_CITATION_ROW_IDENTITY`.
+
+    Why the requirement's last words matter: "so no reload of loaded rows is
+    required". If a key-space change forced a delete-and-reload of the chunks, each
+    reloaded chunk would take a new `chunk_id`, and every stored citation in the
+    corpus would point at a row that no longer exists. That is the unattributable
+    number Principle I forbids, arrived at by a migration nobody thought was
+    destructive.
+    """
+    old_document_id = source_document["document_id"]
+    value_id = insert_value(db_session, value_row(anchor))
+
+    before_citation = db_session.execute(
+        CITATION_THROUGH_THE_PROVENANCE_VIEW, {"extracted_value_id": value_id}
+    ).all()
+    before_row = db_session.execute(
+        STORED_CITATION_ROW_IDENTITY, {"extracted_value_id": value_id}
+    ).one()
+
+    assert [row.resolved_document_id for row in before_citation] == [old_document_id], (
+        "the citation must resolve to the *old* key before the rename, or the assertions "
+        f"after it are vacuous; got {[row.resolved_document_id for row in before_citation]!r}"
+    )
+
+    renamed = db_session.execute(
+        RENAME_DOCUMENT_KEY,
+        {"new_document_id": RENAMED_SOURCE_DOCUMENT_ID, "old_document_id": old_document_id},
+    )
+    assert renamed.rowcount == 1, (
+        f"the key-space change must update exactly one document row; it matched "
+        f"{renamed.rowcount}. A refusal here means `fk_chunk__document` no longer carries "
+        f"ON UPDATE CASCADE, and TR-078's forward migration is impossible rather than merely "
+        f"untested"
+    )
+    assert db_session.execute(ALL_DOCUMENT_KEYS).scalars().all() == [RENAMED_SOURCE_DOCUMENT_ID], (
+        "the key moved *in place*: one document row afterwards, carrying the new key. Two "
+        "rows would mean the change had been performed as a copy, which is the reload TR-078 "
+        "says is not required"
+    )
+
+    after_citation = db_session.execute(
+        CITATION_THROUGH_THE_PROVENANCE_VIEW, {"extracted_value_id": value_id}
+    ).all()
+    after_row = db_session.execute(
+        STORED_CITATION_ROW_IDENTITY, {"extracted_value_id": value_id}
+    ).one()
+
+    assert len(after_citation) == 1, (
+        "the value's one citation must still be recoverable through the provenance view "
+        f"after the rename; the view now returns {after_citation!r}. Zero rows means the "
+        "citation stopped resolving -- either the row is gone, or its page no longer agrees "
+        "with its chunk's, which is what the join in this query refuses to paper over"
+    )
+    citation = after_citation[0]
+    assert (citation.chunk_id, citation.page_number) == (anchor.chunk_id, anchor.page_number), (
+        "the citation must still name the same chunk and the same page (TR-078: citations "
+        "reference the chunk, not the document, so a document rename cannot move them); got "
+        f"{(citation.chunk_id, citation.page_number)!r}, expected "
+        f"{(anchor.chunk_id, anchor.page_number)!r}"
+    )
+    assert citation.resolved_document_id == RENAMED_SOURCE_DOCUMENT_ID, (
+        "the citation must resolve onward to the *renamed* document. This is the assertion "
+        "the mechanical half in test_chunk.py cannot make: an unchanged chunk_id says the "
+        "citation still points at the same chunk, and says nothing about which document that "
+        f"chunk now belongs to. Got {citation.resolved_document_id!r}"
+    )
+    assert citation.resolved_title == source_document["title"], (
+        "and it must be the same document under a new key rather than a different document "
+        f"the chunk was re-pointed at; got title {citation.resolved_title!r}"
+    )
+
+    surviving_rows = db_session.execute(EXTRACTED_VALUE_ROW_COUNT).scalar_one()
+    assert surviving_rows == 1, (
+        "no citation row may be added or removed by a key-space change; the table holds "
+        f"{surviving_rows} rows"
+    )
+
+    identity_before = (
+        before_row.extracted_value_id,
+        before_row.source_chunk_id,
+        before_row.cited_page,
+    )
+    identity_after = (
+        after_row.extracted_value_id,
+        after_row.source_chunk_id,
+        after_row.cited_page,
+    )
+    assert identity_after == identity_before, (
+        "the primary key and both citation columns must be identical across the rename; they "
+        f"went from {identity_before!r} to {identity_after!r}"
+    )
+    assert after_row.ctid == before_row.ctid, (
+        "the citation row must not have been *rewritten*, which is stronger than its columns "
+        "still holding the same values: a cascade that reached this row and set the citation "
+        "to what it already was would leave every assertion above green while writing a new "
+        f"tuple version. ctid moved from {before_row.ctid} to {after_row.ctid}, so something "
+        "did reach it -- TR-078's 'untouched' is false and one of the three ON UPDATE CASCADE "
+        "edges onto `chunk` is firing when the referenced key has not changed"
+    )
+    assert after_row.extracted_at == before_row.extracted_at, (
+        f"corroborating only: extracted_at went from {before_row.extracted_at!r} to "
+        f"{after_row.extracted_at!r}. The ctid assertion above is the one that carries the "
+        "claim -- a rewrite would not have touched this column either"
+    )
 
 
 # --------------------------------------------------------------------------- #

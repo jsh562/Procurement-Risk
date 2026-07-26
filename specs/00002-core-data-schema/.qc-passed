@@ -15,5 +15,12 @@ Not measured here, recorded rather than implied:
     evidenced structurally instead. CI runs all 83.
   - 11 gaps G-1..G-11 are disclosed in data-model.md under Principle VII, not fixed.
     SC-028 holds against role `procurement_app`, not the connecting superuser (G-11).
-  - Analysis findings A-007/A-008/A-011/A-012 (duplicate requirement clusters,
-    ~24 requirements without acceptance coverage) remain deferred by user decision.
+  - Analysis findings A-007/A-008/A-011/A-012 were resolved after this QC pass,
+    in a follow-up commit on the same branch. See spec.md > Compliance Check.
+    A-007 closed as will-not-merge on evidence (14 of 15 clusters are genuine
+    specialisations, each the sole anchor for its own named constraint; only
+    TR-053 was a true duplicate). A-008 split: 16 documentation gaps left on
+    record, 5 verification gaps closed by test, TR-064 unverifiable by nature.
+    A-011 closed by reclassifying 11 soft MUSTs in place. A-012 (data-model.md
+    normative over spec requirements) accepted with its mitigation named;
+    an ADR to bind it beyond E003 is carried forward to main.

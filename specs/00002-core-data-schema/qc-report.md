@@ -24,6 +24,8 @@ An earlier revision of this report held the verdict at "PASS on both required ca
 
 The 455 is up from run 1's 425: +4 from T057 and T058, +26 from T066. The denominator grew from 526 statements to 535 because T065 added `src/gateway` to it, and the percentage held at 94%.
 
+> **455 is this run's figure and is left as measured.** Post-QC remediation of analysis findings A-007/A-008/A-011/A-012 (tasks T067-T075, see `tasks.md` § Phase: Post-QC Remediation) subsequently added 8 more tests, taking the model suite to **463 passed, 0 skipped** with the gate still at 94% and exit 0. That work is deliberately **not** folded into the numbers above: those were measured by this QC run, and rewriting them to a later total would claim the run verified something it never saw. The later figure is recorded here so a reader who runs the suite today and counts 463 knows why it differs.
+
 Both required categories are green, measured end to end from `.github/workflows/verify.yml`:
 
 | Required category | Measurement | Result |

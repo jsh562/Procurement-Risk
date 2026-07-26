@@ -2,7 +2,8 @@
 
 Everything here is migration `0007`: `purchase_order_line`, `lifecycle_event`,
 `v_purchase_order_line_current_state`, and
-`fk_purchase_order_line__closing_event`. Three groups, one per task:
+`fk_purchase_order_line__closing_event`. Three groups, one per task, plus one
+group covering the column set the deliverable task declared:
 
 * **T032 -- censoring and the deferred closing pointer (TR-021, TR-066,
   TR-067).** An open line persists with *no* lifecycle event and is identifiable
@@ -17,6 +18,11 @@ Everything here is migration `0007`: `purchase_order_line`, `lifecycle_event`,
 * **T034 -- dates and the frozen identifier formats (TR-023, TR-024, TR-025).**
   An inverted order/need-by pair refused and a same-day pair *accepted*, plus
   malformed `PRJ-###`, `VND-###`, and roster hashes.
+* **T029 -- the column set (TR-020).** No test task claimed TR-020, so the eight
+  facts it requires a line to carry were present in this file only as literals
+  inside `line_row`. They are now read out of `information_schema.columns`,
+  because a column dropped from the table and from that builder together would
+  otherwise leave every test here green.
 
 **Why the deferral needs two steps, and why one of them alone is worthless.**
 `conftest.db_session` runs every test inside an outer transaction that is rolled
@@ -1669,3 +1675,90 @@ def test_a_line_missing_a_format_checked_column_is_rejected_as_a_not_null_violat
     `assert_not_null_violation`.
     """
     assert_not_null_violation(db_session, line_row(**{column: None}), column)
+
+
+# --------------------------------------------------------------------------- #
+# T029 -- the eight facts TR-020 requires a line to carry (TR-020)
+# --------------------------------------------------------------------------- #
+
+#: The column set TR-020 names, in the requirement's own order, mapped to the
+#: columns `0007` declares. Read the requirement rather than the table: "project
+#: reference, vendor reference, material category, order date, need-by date,
+#: criticality, lifecycle state, and open-or-closed indicator" is eight facts, and
+#: `is_closed` is the last of them -- the delivered table also carries
+#: `closing_event_id`, but that is TR-021's pointer and not TR-020's indicator.
+TR020_REQUIRED_COLUMNS: tuple[str, ...] = (
+    "project_id",
+    "vendor_id",
+    "material_category",
+    "order_date",
+    "need_by_date",
+    "criticality",
+    "lifecycle_state",
+    "is_closed",
+)
+
+LINE_COLUMNS = text(
+    """
+    SELECT column_name, is_nullable
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'purchase_order_line'
+    ORDER BY ordinal_position
+    """
+)
+
+
+def test_a_line_carries_every_column_tr020_requires(db_session: Session) -> None:
+    """TR-020: the eight facts a purchase-order line must store, read from the catalogue.
+
+    **A subset assertion, deliberately, and this is the one thing to understand
+    before extending it.** TR-020 names eight facts; `purchase_order_line` has
+    twenty-one columns. The extra thirteen are other requirements' -- the natural
+    key `(po_number, line_number)`, the roster hash (TR-024), the closing pointer
+    and its two generated companions (TR-021, TR-065), the four match fields E009
+    needs, the surrogate key, and `created_at` (TR-063). So this asserts that the
+    required set is **present**, not that the column list is exactly it: a closed
+    set here would fail the next time some other requirement legitimately adds a
+    column, and the test would be reporting a schema change rather than a TR-020
+    violation.
+
+    **Why the catalogue and not an insert.** Every other test in this file drives
+    the table through `line_row`, which names each column in `LINE_INSERT` -- so a
+    column TR-020 requires could be dropped from the table and from that builder
+    together and the whole file would stay green while the requirement was no
+    longer met. Before this test, `criticality` and `material_category` appeared in
+    this module only as fixture literals; nothing asserted the table had to have
+    them at all. Reading `information_schema.columns` is what makes the column set
+    a claim about the schema rather than about the fixture.
+
+    `is_nullable` is asserted with presence and is not decoration. "MUST store each
+    purchase-order line with ... criticality" is not satisfied by a column that
+    accepts NULL: a line stored without its criticality band is a line the
+    worklist cannot rank, and it would be indistinguishable from one whose band is
+    genuinely unknown. The paired direction -- that the `NOT NULL` is actually
+    enforced on insert -- is
+    `test_a_line_missing_a_format_checked_column_is_rejected_as_a_not_null_violation`
+    for the six columns that also carry a format or date check.
+    """
+    columns = {row.column_name: row.is_nullable for row in db_session.execute(LINE_COLUMNS)}
+
+    assert columns, (
+        "information_schema reported no columns for purchase_order_line, so everything "
+        "below would be asserted against an empty mapping"
+    )
+
+    missing = [column for column in TR020_REQUIRED_COLUMNS if column not in columns]
+    assert not missing, (
+        f"TR-020 requires a line to carry project reference, vendor reference, material "
+        f"category, order date, need-by date, criticality, lifecycle state, and the "
+        f"open-or-closed indicator. These are absent from purchase_order_line: {missing}. "
+        f"The table declares {sorted(columns)}"
+    )
+
+    nullable = [column for column in TR020_REQUIRED_COLUMNS if columns[column] != "NO"]
+    assert not nullable, (
+        f"every column TR-020 names must be NOT NULL -- a line that can be stored without "
+        f"one of these eight facts does not 'store each purchase-order line with' it, and "
+        f"the absence would be indistinguishable from a genuinely unknown value. Nullable: "
+        f"{nullable}"
+    )

@@ -22,6 +22,17 @@ column or the constraint the literal declared**. Reversing that repair would
 change the shape of stored data to match a bookkeeping row, which is exactly
 backwards.
 
+**Drift control is not value control, and TR-056 needs the second one.** Every
+comparison above is between two copies of a number, which says nothing about
+whether either copy is the number the epic decided on. TR-056 fixes three of the
+six by name -- a 365-day survival horizon, 4,000 draws per run, and a
+probability-sum tolerance of `1e-9` -- and two of those three have no DDL literal
+to be compared against at all, so the published row is the only place in the
+schema they appear. `test_the_seeded_row_carries_the_three_values_tr056_fixes`
+asserts the values themselves for that reason. It is the one test here whose
+expected numbers are literals, and deliberately so: resolving them from the row
+under test would assert that a value equals itself.
+
 **TR-079 -- the seeded reference data has no recovery path but the chain.** The
 constants row and the 22 vocabulary rows are written by migrations `0002` and
 `0005`, in the same revisions that create their tables, so neither table is ever
@@ -44,7 +55,7 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
 from pathlib import Path
 
@@ -473,4 +484,68 @@ def test_every_published_constant_is_readable_over_the_connection(
     assert published[column] is not None, (
         f"`schema_constants.{column}` is NULL. Every constant column is NOT NULL by "
         f"declaration, so this indicates the table was rebuilt without its constraints."
+    )
+
+
+#: The three values TR-056 fixes by name: a survival horizon of 365 days, a
+#: per-run draw count of 4000, and a probability-sum tolerance of 1e-9. Written as
+#: literals because the requirement writes them as literals -- these are the
+#: numbers the requirement *is*, and a test that resolved them from the row it is
+#: checking, or from the DDL that seeded it, would assert only that a value equals
+#: itself.
+TR056_FIXED_VALUES: Mapping[str, float] = {
+    "survival_horizon_days": 365,
+    "draw_count": 4000,
+    "probability_sum_tolerance": 1e-9,
+}
+
+
+@pytest.mark.parametrize(
+    ("column", "expected"),
+    list(TR056_FIXED_VALUES.items()),
+    ids=list(TR056_FIXED_VALUES),
+)
+def test_the_seeded_row_carries_the_three_values_tr056_fixes(
+    db_session: Session, column: str, expected: float
+) -> None:
+    """TR-056: the seeded row holds 365, 4000, and 1e-9 -- the values, not just non-nulls.
+
+    The gap this closes is narrow and was easy to miss. Two tests already look at
+    these columns and neither pins a value.
+    `test_every_published_constant_is_readable_over_the_connection` asserts they
+    are non-null, which a row of `1`, `1`, `0.5` would satisfy.
+    `test_published_tolerance_equals_the_literal_inside_the_residual_check` asserts
+    `probability_sum_tolerance` **agrees with the DDL literal** -- a drift check,
+    and a real one, but it passes just as happily if the row and the constraint
+    both say `1e-3`. Agreement between two copies is not the same claim as either
+    copy being right, and TR-056 is the requirement that says which number is
+    right.
+
+    `survival_horizon_days` and `draw_count` have no DDL literal to be compared
+    against at all -- `data-model.md` §Declared Constants records "none" for both,
+    since each is carried per run in `forecast_run.horizon_days` and
+    `.draw_count`. So for two of the three, this file's drift control had nothing
+    to say and the published row was the only statement of the value anywhere in
+    the schema. That is exactly the position TR-056 was written to fix: each of
+    these three was *chosen* during planning rather than measured, and each is
+    recorded in the data model as a scope decision with its evidence, reversal
+    trigger, and production-scale alternative (Principle VII). A silently altered
+    horizon would change every survival grid the modelling arm fits, and nothing
+    in the suite would name it.
+
+    Repairing a failure here means one of two things and never a third: either the
+    seed in migration `0002` is wrong and a new forward migration corrects the row
+    (TR-079 -- the row has no recovery path but the chain), or the *decision* has
+    changed, in which case TR-056 and the scope-decision record change first and
+    this test follows them. Editing the expected value to match the database would
+    retroactively adjust a declared constant to fit the data, which Principle VII
+    forbids.
+    """
+    published = _published_constants(db_session)
+
+    assert published[column] == expected, (
+        f"TR-056 fixes `{column}` at {expected!r}; the seeded row publishes "
+        f"{published[column]!r}. Correct the row in a new forward migration if the seed "
+        f"drifted, or amend TR-056 and the data model's scope-decision record first if the "
+        f"value was deliberately changed -- never by editing the number expected here."
     )

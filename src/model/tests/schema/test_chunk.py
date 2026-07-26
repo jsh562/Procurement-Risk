@@ -1,6 +1,6 @@
 """The `chunk` table and the `document` row it resolves through.
 
-Four groups of claims, each of which fails a different way when it is wrong:
+Five groups of claims, each of which fails a different way when it is wrong:
 
 * **Weighting (TR-010).** `search_vector` carries four arms at four weights --
   A heading, B part number, C section, D body. Wrong-arm text is not a visible
@@ -26,6 +26,13 @@ Four groups of claims, each of which fails a different way when it is wrong:
   `pytest.raises(IntegrityError)` is green when a typo'd fixture row trips a
   different rule first and the constraint under test was never reached. See
   `conftest.assert_rejects`.
+* **Propagation (TR-078).** `fk_chunk__document` carries two referential actions
+  answering two different requirements, and only one of them is a rejection.
+  `ON DELETE RESTRICT` is TR-046's and refuses; `ON UPDATE CASCADE` is TR-078's
+  and *accepts*, moving the key in place and carrying every chunk with it. A
+  wrong update action is invisible until someone changes the key space, so it is
+  asserted both ways round -- the rows are shown to follow, and the catalogue is
+  read for the letter that made them.
 
 **Two kinds of rejection deliberately do not use `assert_rejects`,** and both
 exceptions are load-bearing rather than convenience:
@@ -1037,11 +1044,18 @@ def test_deleting_a_document_with_chunks_is_refused(
     real_document: Mapping[str, Any],
     assert_rejects: RejectionAsserter,
 ) -> None:
-    """TR-046, TR-078: `ON DELETE RESTRICT` -- a citation is never silently orphaned.
+    """TR-046: `ON DELETE RESTRICT` -- a citation is never silently orphaned.
 
     The other direction of the same foreign key. Dropping a document out from
     under its chunks would leave every page citation resolving through them
     pointing at nothing, which is the unattributable number Principle I forbids.
+
+    **TR-078 is deliberately not cited here.** `fk_chunk__document` carries two
+    referential actions and they answer two different requirements: `ON DELETE
+    RESTRICT` is this test's, and `ON UPDATE CASCADE` is TR-078's -- see
+    `test_updating_a_document_key_cascades_to_every_chunk`. Naming both
+    requirements on a test that only ever deletes would leave the cascade
+    unexercised while the traceability matrix read as though it were covered.
     """
     insert_chunk(db_session, chunk_row(real_document))
 
@@ -1423,7 +1437,8 @@ def test_a_license_basis_of_only_the_letter_v_is_accepted(db_session: Session, l
 
 
 # --------------------------------------------------------------------------- #
-# T019 -- G-9 document_id format (TR-041, TR-077) and TR-074
+# T019 -- G-9 document_id format (TR-041, TR-077), TR-074, and the key space
+#         (TR-078)
 # --------------------------------------------------------------------------- #
 
 #: The format this epic declares on E002's behalf: lowercase kebab slug,
@@ -1534,4 +1549,133 @@ def test_one_source_under_two_projects_inserts_twice(db_session: Session) -> Non
     assert list(projects) == ["PRJ-001", "PRJ-002"], (
         "the same source under two project identifiers must produce two rows (TR-074); "
         f"got {list(projects)}"
+    )
+
+
+#: `pg_constraint.confupdtype`: `c` is CASCADE. Named rather than written as a
+#: bare `"c"` at the assertion, because the letter is the entire content of
+#: TR-078's declared mechanism and a reader should not have to look it up.
+CASCADE = "c"
+
+#: The key `document_id` moves to. A well-formed slug under
+#: `ck_document__id_format` -- so the update reaches the foreign key instead of
+#: stopping at the format check -- and a *different* string from the baseline's,
+#: so a cascade that fired and a cascade that did nothing cannot look alike.
+RENAMED_DOCUMENT_ID = "example-standards-piping-2022-r2"
+
+#: The key-space change TR-078 describes, as the one statement a forward
+#: migration would issue. It names only `document`; that nothing here touches
+#: `chunk` is the point, since the propagation has to come from the schema.
+UPDATE_DOCUMENT_ID = text(
+    "UPDATE document SET document_id = :new_document_id WHERE document_id = :old_document_id"
+)
+
+#: Every chunk's document reference, in insertion order. No `WHERE`: `db_session`
+#: rolls back in teardown and commits nothing, so the only chunks visible are the
+#: ones the calling test wrote -- and reading the whole table is what makes "every
+#: chunk followed the key" a claim about all of them rather than about a list the
+#: test remembered to check.
+CHUNK_DOCUMENT_KEYS = text(
+    """
+    SELECT chunk_id, document_id, document_type, project_id
+    FROM chunk
+    ORDER BY ordinal
+    """
+)
+
+DOCUMENT_KEYS = text("SELECT document_id FROM document ORDER BY document_id")
+
+FOREIGN_KEY_UPDATE_ACTION = text(
+    """
+    SELECT confupdtype
+    FROM pg_constraint
+    WHERE conname = :conname AND conrelid = 'chunk'::regclass
+    """
+)
+
+
+def test_updating_a_document_key_cascades_to_every_chunk(
+    db_session: Session, real_document: Mapping[str, Any]
+) -> None:
+    """TR-078: the key space changes in place and every chunk follows by cascade.
+
+    This is the requirement's whole mechanism, and it is the *update* direction of
+    `fk_chunk__document` -- not the delete direction, which is TR-046's and is
+    covered by `test_deleting_a_document_with_chunks_is_refused`.
+
+    **What TR-078 actually promises, and why the cascade is what keeps it.** A
+    later change to the `document_id` key space is to be a forward migration that
+    updates the key *in place*, propagating to every chunk, with extracted-value
+    citations untouched because they reference the chunk and not the document.
+    Without `ON UPDATE CASCADE` the `UPDATE` below is refused outright -- the
+    default `NO ACTION` leaves the chunks' references dangling -- and the only
+    remaining route is to delete every chunk and reload it. A reloaded chunk is a
+    new `chunk_id`, and `extracted_value.(source_chunk_id, cited_page)` points at
+    exactly that, so "no reload of loaded rows is required" would become "every
+    citation in the corpus is invalidated". That is the failure this test exists
+    to detect, and it is silent in the schema: a foreign key with the wrong update
+    action looks identical to one with the right one until someone tries it.
+
+    Two chunks, not one, so the cascade is shown to reach *every* referencing row
+    rather than the first. `chunk_id` is asserted unchanged in the same read: it
+    is the column the citation tables reference, and its stability is the
+    mechanical reason the citations survive a key-space change. The catalogue is
+    then read for `confupdtype`, so the behaviour and the declaration that causes
+    it are both pinned -- behaviour alone would pass against a schema that
+    achieved the same thing by a trigger, which `data-model.md`'s mechanism map
+    says this schema does not have.
+    """
+    old_document_id = real_document["document_id"]
+    insert_chunk(db_session, chunk_row(real_document, ordinal=0, page_number=1))
+    insert_chunk(db_session, chunk_row(real_document, ordinal=1, page_number=2))
+
+    before = db_session.execute(CHUNK_DOCUMENT_KEYS).all()
+    assert [row.document_id for row in before] == [old_document_id, old_document_id], (
+        "both chunks must reference the old key before the update, or the cascade below "
+        f"has nothing to move and the assertion after it is vacuous; got {before!r}"
+    )
+
+    updated = db_session.execute(
+        UPDATE_DOCUMENT_ID,
+        {"new_document_id": RENAMED_DOCUMENT_ID, "old_document_id": old_document_id},
+    )
+    assert updated.rowcount == 1, (
+        f"the key-space change must update exactly one document row; it matched {updated.rowcount}"
+    )
+
+    assert db_session.execute(DOCUMENT_KEYS).scalars().all() == [RENAMED_DOCUMENT_ID], (
+        "the key moved *in place*: one document row afterwards, carrying the new key. Two "
+        "rows would mean the change had been performed as a copy, which is the reload "
+        "TR-078 says is not required"
+    )
+
+    after = db_session.execute(CHUNK_DOCUMENT_KEYS).all()
+    assert [row.document_id for row in after] == [RENAMED_DOCUMENT_ID, RENAMED_DOCUMENT_ID], (
+        f"every chunk's document_id must follow the document's by cascade (TR-078); got "
+        f"{[row.document_id for row in after]!r}. Without ON UPDATE CASCADE the UPDATE "
+        f"above would have been refused instead, and a key-space change could not be a "
+        f"forward migration at all"
+    )
+    assert [row.chunk_id for row in after] == [row.chunk_id for row in before], (
+        "the chunks keep their identifiers. That is why extracted-value citations are "
+        "untouched by a key-space change -- they reference (source_chunk_id, cited_page), "
+        "not the document -- and it is the half of TR-078 that a delete-and-reload could "
+        "not preserve"
+    )
+    assert [(row.document_type, row.project_id) for row in after] == [
+        (row.document_type, row.project_id) for row in before
+    ], (
+        "only the renamed column moved. The other two columns of the composite reference "
+        "are part of the same key and must be carried across unchanged"
+    )
+
+    update_action = db_session.execute(
+        FOREIGN_KEY_UPDATE_ACTION, {"conname": "fk_chunk__document"}
+    ).scalar_one()
+    assert update_action == CASCADE, (
+        f"fk_chunk__document must declare ON UPDATE CASCADE -- pg_constraint.confupdtype "
+        f"{CASCADE!r} -- which is the mechanism data-model.md names as TR-078's carrier. Got "
+        f"{update_action!r}. The behavioural assertions above would also fail, but this is "
+        f"the one that says *why*, and it is what distinguishes a declared cascade from any "
+        f"other means of achieving the same propagation"
     )
