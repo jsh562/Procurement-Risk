@@ -20,7 +20,7 @@ dod_source: null
 
 ### Wave 2 — Data Layer, Model Boundary, and Corpus
 
-> The first parallel band. E003 and E004 both add migrations and are parallel-safe only because they own disjoint tables; migration numbers are claimed at epic start. E002 adds no schema, so it is unconditionally parallel with both.
+> The first parallel band. E003 and E004 both add migrations and are parallel-safe only because they own disjoint tables and pre-claimed prefix blocks — `0001`–`0099` and `0100`–`0199` ({SAD:ADR-0013}). One asymmetry, recorded during E004 planning: E003 owns the Alembic configuration and the runner in `/src/model`, so E004 authors revisions in its block but cannot apply them until that arrangement exists. The two remain parallel because authoring does not wait, only applying does. E002 adds no schema, so it is unconditionally parallel with both.
 
 - [ ] E002 [P1] [PRODUCT] [P] {PRD:CAP-001} Public Corpus and Manifest — real public-domain specs plus synthesized project documents, with provenance
 - [ ] E003 [P1] [TECHNICAL] [P] {SAD:ADR-0002}{SAD:ADR-0004}{SAD:ADR-0008} Core Data Schema — single-store schema with traceability enforced by constraints
@@ -199,10 +199,10 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Actors**: Developer, database
 - **Key entities**: Chunk, ExtractedValue, PurchaseOrderLine, LifecycleEvent, ResolvedEntity, ForecastRun, PosteriorDraws, SurvivalArray
 - **Depends on**: E001
-- **Dependency contracts**: E003 needs the repository layout and container definitions from E001
+- **Dependency contracts**: E003 needs the repository layout and container definitions from E001. It owns the Alembic configuration, the migration runner, and every schema asset in `/src/model` per {SAD:ADR-0013}, and E004 contributes migration files into that arrangement rather than building a second runner. E003 confines itself to prefixes `0001`–`0099`.
 - **Depended on by**: E004, E005, E006, E007
 - **Produces (shared)**: Database schema, migration sequence, forecast-run contract with active-run pointer
-- **Constraints**: One instance, no second datastore; citation and confidence columns non-null; forecast artifacts carry a schema version; forward-only migrations
+- **Constraints**: One instance, no second datastore of record ({SAD:ADR-0015}); citation and confidence columns non-null; forecast artifacts carry a schema version; forward-only migrations
 - **Acceptance criteria**:
   - [ ] Vector and full-text search both operate against the chunk table with field weighting applied
   - [ ] An extracted value without a page citation and a confidence cannot be inserted
@@ -224,8 +224,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Actors**: Developer, model provider
 - **Key entities**: ModelInvocation, ResponseFixture, PriceTableVersion
 - **Depends on**: E001
-- **Dependency contracts**: E004 needs the import-contract harness from E001; owns its own invocation table migration
-- **Depended on by**: E006, E011, E013
+- **Dependency contracts**: E004 needs the import-contract harness from E001; owns its own invocation table migration, contributed as Alembic revisions in its claimed `0100`–`0199` prefix block into the arrangement E003 owns in `/src/model` per {SAD:ADR-0013}. E004 builds no migration runner of its own. The gateway retains a database client for the sole purpose of writing invocation records, which {SAD:ADR-0010} lists among its sanctioned contents.
+- **Depended on by**: E006, E011, E013, E014
 - **Produces (shared)**: Gateway module, invocation table, fixture cache
 - **Constraints**: Exactly one module may import the provider client; no unvalidated value reaches storage or interface; the credential is redacted by the gateway itself
 - **Acceptance criteria**:
@@ -464,8 +464,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Scope**: Build the evaluation harness covering retrieval, identity resolution, and forecast calibration. Evaluation sets are canonicalized, hashed, and committed before any tuning; the harness verifies the hash and aborts on mismatch. Results are written to a committed manifest that a reproduction job diffs against within the published tolerance.
 - **Actors**: Developer, evaluator
 - **Key entities**: GoldenSetItem, LabeledPair, ResultsManifest
-- **Depends on**: E007, E008, E009
-- **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007
+- **Depends on**: E004, E007, E008, E009
+- **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007. It also needs E004's `replay` mode to resolve every model-dependent step with no network and no credential, and owns publishing replayed and live numbers side by side — the decoding-variance disclosure {SAD:ADR-0007} commits to, which E004 supplies the modes and the invocation record for but does not perform. Edge added during E004 planning.
 - **Depended on by**: E015
 - **Produces (shared)**: Frozen evaluation sets with hashes, evaluation harness, results manifest, reproduction job
 - **Constraints**: Sets frozen and hashed before tuning; retrieval evaluation runs the exact-search path; a missed target is published, never suppressed
@@ -634,6 +634,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0008 Deterministic Provenance and Computation Boundary | accepted | E001, E003, E006 |
 | ADR-0009 Reproducibility Gate as a Published Tolerance | accepted | E014 |
 | ADR-0010 Source Layout with a Shared Gateway Package | accepted | E001, E004 |
+| ADR-0014 Provider SDK as an Optional Extra of the Gateway Package | accepted | E004, E006, E011 |
+| ADR-0015 Local Spool for Invocation Records Whose Database Write Fails | accepted | E004, E013 |
 
 ### Deployment Decisions
 
@@ -658,7 +660,7 @@ None. All 14 capabilities and all 9 accepted architecture decisions map to at le
 | ReviewQueueItem | E009 | E016 |
 | ForecastRun | E003, E007 | E010, E012, E014 |
 | PosteriorDraws / SurvivalArray | E007 | E010, E012, E019 |
-| ModelInvocation | E004 | E013 |
+| ModelInvocation | E004 | E013, E014 |
 | CriticalityOverride | E017 | E010 (ranking) |
 
 ### API Surfaces
@@ -675,7 +677,7 @@ None. All 14 capabilities and all 9 accepted architecture decisions map to at le
 
 | Module | Introduced by | Consumed by |
 |---|---|---|
-| Model gateway | E004 | E006, E011, E013 |
+| Model gateway | E004 | E006, E011, E013, E014 |
 | Retrieval module and fusion statement | E008 | E011, E014 |
 | Reranker session | E008 | E014 |
 | Risk-read module | E010 | E012, E017, E019 |
