@@ -1,0 +1,139 @@
+{
+  "description": "FR-004 / FR-005. Every candidate considered for the REAL corpus layer and not vendored, with the cause it was dropped for. Causes come from the closed enum in model.corpus.retrieve (EXCLUSION_CAUSES); the enum lives in code rather than in this file, because a closed set held inside the artifact it constrains can be widened by the same edit that adds a record needing the new value. Written and appended by model.corpus.retrieve, read by the validator (VR-026). The ledger's integrity is checkable; its completeness is not - a candidate dropped with no record leaves no artifact - and that gap is published rather than claimed closed. No record carries LICENSE_BASIS_NOT_ESTABLISHABLE or REPRODUCES_COPYRIGHTED_STANDARD as at the decision date below; the enum stays open to all four causes rather than being narrowed to the two in use.",
+  "exclusions": [
+    {
+      "candidate_identifier": "ENG Form 4025 (2017-05)",
+      "cause": "RETRIEVAL_FAILED",
+      "decided_on": "2026-07-26",
+      "note": "The USACE transmittal form, considered as a real-layer document because it is the form the synthetic transmittals approximate. Its host, publications.usace.army.mil, returned 403 to automated retrieval and is not on the policy's allow-list; FR-002a forbids allow-listing a source that will not serve anonymously, and spoofing a user agent to defeat the block was rejected in research. Consequence recorded rather than worked around: the descriptor codes and review-code letters in the synthetic layer are a documented approximation, disclosed in the synthetic datasheet under FR-023a.",
+      "source_location": "https://www.publications.usace.army.mil/Portals/76/Publications/EngineerForms/Eng_Form_4025_2017May.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 52 00.00 40 (2007-04)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Heating Boilers, AFCEC variant. WBDG records it RETIRED_SUPERSEDED and the published path 403s through the documented redirect. The unified 23 52 00 was vendored in its place.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2052%2000.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 61 00.00 40 (2006-06)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Refrigerant Compressors, AFCEC variant - a long-lead chiller-plant candidate. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. No active replacement under this number, so the chiller coverage rests on 23 64 10 and 23 65 00.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2061%2000.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 64 00 (2016-11)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Packaged Water Chillers, Absorption Type. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. Vapour-compression chillers under 23 64 10 were vendored instead.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2064%2000.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 64 00.00 10 (2008-01)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Liquid Chillers, USACE variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2064%2000.00%2010.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 73 00.00 40 (2006-06)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Indoor Central-Station Air-Handling Units, AFCEC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2073%2000.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 73 13 (2010-08)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Modular Indoor Central-Station Air-Handling Units - the air-handling section the epic's target list named. RETIRED_SUPERSEDED at WBDG and 403 through the redirect, and no active UFGS section covers indoor central-station air handlers under any variant. Air-handling coverage is therefore carried by 23 72 00 energy recovery and 23 81 23 precision cooling, and this is the one place where the intended target list could not be met as written.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2073%2013.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 23 81 23.00 40 (2006-06)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Computer-Room Air-Conditioners, AFCEC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. The unified 23 81 23 was vendored in its place.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2081%2023.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 11 13 (2006-04)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Secondary Unit Substations under the unsuffixed number - superseded, and the number now carries a different title. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. The NAVFAC variant 26 11 13.00 20 (Primary Unit Substation) was vendored, and 26 11 16 covers secondary unit substations.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2013.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 11 13.00 40 (2006-06)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Primary Unit Substations, AFCEC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2013.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 11 16.00 40 (2006-06)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Secondary Unit Substations, AFCEC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. One of the 32 Division 23 and 26 sections carrying the '.00 40' suffix, every one of which is retired - which is why AFCEC is not an admitted agency variant in the retrieval policy.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2016.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 12 00.00 40 (2007-07)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Medium-Voltage Transformers, AFCEC variant - the '26 12 00' number the epic's target list named directly. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. No active section carries the bare 26 12 00 number under any variant, so medium-voltage transformer coverage is carried by 26 12 19 and 26 12 21 instead.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2012%2000.00%2040.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 13 00.00 20 (2011-08)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "SF6/High-Firepoint Fluids Insulated Pad-Mounted Switchgear, NAVFAC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. The unified 26 13 00 was vendored in its place.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2000.00%2020.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 32 13.00 20 (2018-08)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Single Operation Generator Sets, NAVFAC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. Generator coverage rests on the unified 26 32 15.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2013.00%2020.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 32 15.00 10 (2007-10)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Diesel-Generator Set Stationary 100-2500 kW, USACE variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. Superseded by the unified 26 32 15, which was vendored.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2015.00%2010.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 32 26 (2006-04)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Motor-Generator Sets, 400 Hertz. RETIRED_SUPERSEDED at WBDG; 403 through the redirect.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2026.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 32 33.00 10 (2007-10)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Uninterruptible Power Supply Systems, USACE variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect. The unified 26 33 53 covers static UPS and was vendored.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2033.00%2010.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 32 33.00 20 (2006-04)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Installation of Uninterruptible Power Supply Systems, NAVFAC variant. RETIRED_SUPERSEDED at WBDG; 403 through the redirect.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2033.00%2020.pdf"
+    },
+    {
+      "candidate_identifier": "UFGS 26 35 33 (2008-04)",
+      "cause": "WITHDRAWN_OR_UNRETRIEVABLE",
+      "decided_on": "2026-07-26",
+      "note": "Power Factor Correction Equipment. RETIRED_SUPERSEDED at WBDG; 403 through the redirect.",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2035%2033.pdf"
+    }
+  ],
+  "ledger_id": "ufgs-real-layer-exclusion-ledger"
+}

@@ -1,0 +1,659 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Corpus manifest",
+  "description": "One manifest per corpus location (FR-006a). A corpus location is any directory under data/corpus/ holding a file named manifest.json; there is no aggregate index above the manifest set. Hand-authored for the real layer, written by the generator for the synthetic layer, and read by src/model/src/model/corpus/validate.py through jsonschema.Draft202012Validator with iter_errors() so every failure names its document and its rule (VR-002, VR-003, AD-005).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "location_id",
+    "layer",
+    "entries"
+  ],
+  "properties": {
+    "location_id": {
+      "description": "POSIX path of this location relative to data/corpus/. Equality with the containing directory is VR-004's, which this pattern cannot express.",
+      "type": "string",
+      "pattern": "^(real|synthetic)/[A-Za-z0-9][A-Za-z0-9-]*$"
+    },
+    "layer": {
+      "description": "The layer of every document in this location. VR-007 additionally holds every entry's layer equal to this value; a location holds exactly one layer (FR-014a).",
+      "$ref": "#/$defs/layer"
+    },
+    "project_id": {
+      "description": "Roster project this synthetic location belongs to. Present if and only if layer is SYNTHETIC. Equality with the final segment of location_id and membership in read_roster().projects are VR-006's.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$"
+    },
+    "entries": {
+      "description": "One entry per document in this location. minItems is the non-vacuity floor of VR-066: a manifest with no entries would satisfy every 'for every entry' rule by quantifying over nothing. Uniqueness by location (VR-011) and ascending codepoint order by location (VR-063, MS-1) are asserted by the validator, because JSON Schema can express neither uniqueness keyed on a property nor an ordering.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "if": {
+    "required": [
+      "layer"
+    ],
+    "properties": {
+      "layer": {
+        "const": "SYNTHETIC"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "project_id"
+    ]
+  },
+  "else": {
+    "not": {
+      "required": [
+        "project_id"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/driftMarkersProhibited"
+    }
+  ],
+  "$defs": {
+    "layer": {
+      "title": "Layer label",
+      "description": "Closed set of exactly two values (FR-014, VR-014). A third value fails here, before any semantic rule runs.",
+      "enum": [
+        "REAL",
+        "SYNTHETIC"
+      ]
+    },
+    "digest": {
+      "title": "SHA-256 digest",
+      "description": "Every digest an entry records takes this one form (FR-007, VR-016): the literal prefix sha256: followed by 64 lowercase hexadecimal characters. Uppercase hexadecimal fails, because the recorded form must be the one read_roster() emits and the one every downstream comparison assumes. The form is shared; the five digest kinds are not interchangeable - see data-model.md, The Digest Kinds, Kept Distinct.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "driftMarkersProhibited": {
+      "title": "No hand-maintained drift marker",
+      "description": "Manifests carry no version, revision, generated_at, or updated field (VR-058). additionalProperties: false already rejects all four; the absence is asserted explicitly as well so it survives any later edit that loosens the strict-key rule. A hand-maintained marker makes drift recordable but not detectable, and a generated_at would additionally break the byte-identity comparison of VR-042 by rewriting the manifest on every run (FR-009a, SC-012).",
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "version"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "revision"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "generated_at"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "updated"
+            ]
+          }
+        }
+      ]
+    },
+    "entry": {
+      "title": "Corpus manifest entry",
+      "description": "Describes exactly one committed document. An entry's applicable set is the four common fields below plus its layer's set, no more and no fewer; every field in it is required and non-empty, and there is no default (FR-010). additionalProperties: false is what makes a field outside the set a failure rather than an ignored extra.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "layer",
+        "license_basis",
+        "content_hash"
+      ],
+      "properties": {
+        "location": {
+          "description": "The document's filename within its own corpus location: a single name, no path separator, no '..', never absolute. Locations are flat (VR-064), so a bare filename is the whole path. Resolution and containment are VR-009's, and the symbolic-link prohibition VR-067's; neither is expressible here.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*\\.pdf$"
+        },
+        "layer": {
+          "description": "This document's layer. Selects which additional field set applies below.",
+          "$ref": "#/$defs/layer"
+        },
+        "license_basis": {
+          "description": "The governing basis for this document. Its shape is fixed per layer under the layer conditional; the two shapes share only basis_id, the one component FR-013 compares within a location (FR-012a, VR-008).",
+          "type": "object"
+        },
+        "content_hash": {
+          "description": "sha256 over the committed file's raw bytes, exactly as on disk. VR-012 recomputes it on every run and never trusts the recorded value as evidence of itself.",
+          "$ref": "#/$defs/digest"
+        },
+        "source_location": {
+          "description": "REAL only. The absolute https URL that was requested - the first-hop URL, never the final target of a redirect (FR-008). Exact-host membership in retrieval-policy.json's allow-list is VR-022's.",
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[^\\s/]+/[^\\s]*$"
+        },
+        "retrieval_response_status": {
+          "description": "REAL only. The status observed at retrieval. A non-200 means the document was not retrieved and its record belongs in the exclusion ledger, so 200 is the only admissible value (VR-019).",
+          "type": "integer",
+          "const": 200
+        },
+        "retrieved_at": {
+          "description": "REAL only. RFC 3339, UTC, 'Z' suffix - a historical constant recorded once and never re-read (MS-5). VR-020 additionally holds it not in the future.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"
+        },
+        "issuing_body": {
+          "description": "REAL only. Held equal to the issuing body retrieval-policy.json records for this entry's agency_variant by VR-062; an entry naming one agency's variant and another's issuing body describes two different documents (FR-008d).",
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "masterformat_section": {
+          "description": "REAL only. The bare six-digit section number, without any agency suffix, so that agency variants of one number count once toward the distinct-section floor of VR-025. Prohibited on a SYNTHETIC entry as an entry field only - the section a synthetic document answers is document content under FR-023, asserted over the regenerated model by VR-046.",
+          "type": "string",
+          "pattern": "^[0-9]{2} [0-9]{2} [0-9]{2}$"
+        },
+        "agency_variant": {
+          "description": "REAL only. Membership in the closed variant set of retrieval-policy.json is VR-021's; the set lives there rather than here because it carries each variant's section suffix and issuing body too.",
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "revision_date": {
+          "description": "REAL only. Month precision, which is the precision UFGS publishes at (VR-021).",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}$"
+        },
+        "upstream_digest": {
+          "description": "REAL only. sha256 over the bytes as retrieved, computed from the response body before the file was written (FR-008c). VR-018 holds it equal to content_hash; that equality is a comparison rather than a tautology only under FR-008c, which no offline check observes.",
+          "$ref": "#/$defs/digest"
+        },
+        "generator_id": {
+          "description": "SYNTHETIC only. Held equal to the committed value in generation-config.json by VR-030.",
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "seed": {
+          "description": "SYNTHETIC only. The committed seed; held equal to generation-config.json by VR-030.",
+          "type": "integer"
+        },
+        "generation_date": {
+          "description": "SYNTHETIC only. A committed constant, never a wall-clock read (FR-009a) - that is what makes a re-run under an unchanged seed and roster a no-op on the file system (MS-5). VR-030 holds it equal to generation-config.json.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "roster_hash": {
+          "description": "SYNTHETIC only. The E001 roster reader's content_hash, recorded verbatim - a digest over the roster's canonical re-serialized content, never over the roster file's bytes (FR-020). VR-029 compares it against read_roster().content_hash as evaluated now. It is the first of the four generation inputs FR-009b covers, carried in its own field precisely because its computation differs from the raw-byte digests in generation_inputs.",
+          "$ref": "#/$defs/digest"
+        },
+        "generation_inputs": {
+          "description": "SYNTHETIC only. The remaining three generation inputs, each digested over its file's raw bytes (FR-009b).",
+          "$ref": "#/$defs/generationInputs"
+        },
+        "document_model_hash": {
+          "description": "SYNTHETIC only. sha256 over the canonical serialization of the pre-render document model (DM-1...DM-6), never over rendered bytes. VR-040 re-derives it by re-running the generator.",
+          "$ref": "#/$defs/digest"
+        },
+        "irregularity_classes": {
+          "description": "SYNTHETIC only. The classes this document carries, machine-readable so downstream results can be partitioned without opening a document (FR-033).",
+          "$ref": "#/$defs/irregularityClasses"
+        }
+      },
+      "if": {
+        "required": [
+          "layer"
+        ],
+        "properties": {
+          "layer": {
+            "const": "REAL"
+          }
+        }
+      },
+      "then": {
+        "$ref": "#/$defs/realEntryConstraints"
+      },
+      "else": {
+        "$ref": "#/$defs/syntheticEntryConstraints"
+      }
+    },
+    "realEntryConstraints": {
+      "title": "REAL entry - required set and prohibitions",
+      "description": "A REAL entry carries exactly the four common fields plus these eight (FR-008, VR-017) and none of the seven generation fields. A retrieved document was not generated, and a generation record it does not have is the same provenance falsehood FR-009 forbids in the other direction. Note the branch selection: this subschema applies when layer is exactly REAL, so a missing or unknown layer falls to the SYNTHETIC branch and is additionally reported by the layer enum and the entry's required set.",
+      "required": [
+        "source_location",
+        "retrieval_response_status",
+        "retrieved_at",
+        "issuing_body",
+        "masterformat_section",
+        "agency_variant",
+        "revision_date",
+        "upstream_digest"
+      ],
+      "properties": {
+        "license_basis": {
+          "$ref": "#/$defs/realLicenseBasis"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/generationFieldsProhibited"
+        }
+      ]
+    },
+    "syntheticEntryConstraints": {
+      "title": "SYNTHETIC entry - required set and prohibitions",
+      "description": "A SYNTHETIC entry carries exactly the four common fields plus these seven (FR-009, VR-027) and none of the eight retrieval fields. A generated document has no such origin and recording one would be a provenance falsehood.",
+      "required": [
+        "generator_id",
+        "seed",
+        "generation_date",
+        "roster_hash",
+        "generation_inputs",
+        "document_model_hash",
+        "irregularity_classes"
+      ],
+      "properties": {
+        "license_basis": {
+          "$ref": "#/$defs/syntheticLicenseBasis"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/retrievalFieldsProhibited"
+        }
+      ]
+    },
+    "retrievalFieldsProhibited": {
+      "title": "No retrieval field on a SYNTHETIC entry",
+      "description": "The eight REAL-only fields, each prohibited on its own so that a violation names the offending field rather than reporting that the entry failed some composite rule, and so that the prohibition survives an edit that loosens additionalProperties: false (VR-027). A single not/required over all eight would only forbid carrying all eight at once.",
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "source_location"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "retrieval_response_status"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "retrieved_at"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "issuing_body"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "masterformat_section"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "agency_variant"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "revision_date"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "upstream_digest"
+            ]
+          }
+        }
+      ]
+    },
+    "generationFieldsProhibited": {
+      "title": "No generation field on a REAL entry",
+      "description": "The seven SYNTHETIC-only fields, each prohibited on its own, for the reasons given under retrievalFieldsProhibited. The asymmetry is enforced in both directions rather than only against the synthetic layer (VR-017).",
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "generator_id"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "seed"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "generation_date"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "roster_hash"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "generation_inputs"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "document_model_hash"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "irregularity_classes"
+            ]
+          }
+        }
+      ]
+    },
+    "generationInputs": {
+      "title": "Generation-input digests",
+      "description": "A closed three-key map from repository-relative path to a digest over that file's raw bytes (FR-009b, VR-061). The keys are fixed here rather than left open because the enumeration is closed by maintenance: extending it is the same change that gives the generator a further committed input. The roster is the fourth generation input and is deliberately not a key - its digest is roster_hash, computed over canonical content rather than bytes, and mixing the two procedures into one mapping would report a roster reformat as drift. Because the keys are path-valued, VR-061 compares them as literal strings against this set before any filesystem access (CWE-73).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "data/corpus/synthetic/equipment-category-map.json",
+        "data/corpus/synthetic/field-label-vocabulary.json",
+        "data/corpus/synthetic/generation-config.json"
+      ],
+      "properties": {
+        "data/corpus/synthetic/equipment-category-map.json": {
+          "$ref": "#/$defs/digest"
+        },
+        "data/corpus/synthetic/field-label-vocabulary.json": {
+          "$ref": "#/$defs/digest"
+        },
+        "data/corpus/synthetic/generation-config.json": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "basisId": {
+      "title": "Governing basis identifier",
+      "description": "The closed two-value set FR-012a mandates, required in both layers. This is the only component FR-013 compares within a corpus location (VR-008): the per-document components of a REAL basis differ from one document to the next by construction, so comparing whole license bases would make every real location illegal. Each layer's subschema pins this to its own value, so a basis and the layer that carries it cannot disagree.",
+      "enum": [
+        "us-gov-17usc105-ufgs",
+        "project-generated-no-third-party-rights"
+      ]
+    },
+    "statute": {
+      "title": "Governing statute",
+      "description": "Closed, not free text (FR-011, VR-023): the single statute the public-domain federal basis denotes. Non-emptiness alone would admit a citation conferring no public-domain status while satisfying every stated rule, which is the failure mode FR-012a already closed for the basis identifier. Extending the closed basis_id set is what extends this one, in the same change.",
+      "enum": [
+        "17 U.S.C. §105(a)"
+      ]
+    },
+    "realLicenseBasis": {
+      "title": "REAL license basis",
+      "description": "Four required components (FR-011); a basis naming only a statute fails. statute is keyed to basis_id by both being fixed in this one subschema, so the two cannot name different bases. document_identifier restates the entry's own section, variant suffix, and revision date - the pattern below fixes its shape, and VR-023 holds it equal to the canonical composition so the restatement cannot drift from what it restates.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_id",
+        "statute",
+        "document_identifier",
+        "point_of_use_check"
+      ],
+      "properties": {
+        "basis_id": {
+          "$ref": "#/$defs/basisId",
+          "const": "us-gov-17usc105-ufgs"
+        },
+        "statute": {
+          "$ref": "#/$defs/statute"
+        },
+        "document_identifier": {
+          "description": "\"UFGS \" + masterformat_section + the agency variant's section suffix + \" (\" + revision_date + \")\". The suffix is left open here because retrieval-policy.json carries it, populated from what the source actually shows; the equality against this entry's own fields is VR-023's.",
+          "type": "string",
+          "pattern": "^UFGS [0-9]{2} [0-9]{2} [0-9]{2}[^()]* \\([0-9]{4}-[0-9]{2}\\)$"
+        },
+        "point_of_use_check": {
+          "description": "The outcome of the point-of-use copyright check, which covers the whole document rather than a sample and is performed at retrieval (FR-011). A single admissible value: any other outcome means the candidate was excluded under FR-005 and its record belongs in exclusions.json, never in a manifest (VR-024). An enum rather than prose because a prose outcome is not checkable.",
+          "enum": [
+            "NO_COPYRIGHTED_EXCERPT_FOUND"
+          ]
+        }
+      }
+    },
+    "syntheticLicenseBasis": {
+      "title": "SYNTHETIC license basis",
+      "description": "FR-012's two machine-checkable constants alongside the human-readable statement (VR-028). Free text alone would assert the claim with nothing able to test it, which is why generated_by_this_project and third_party_rights are const rather than described. Carries no statute, no document identifier, and no point-of-use outcome: a generated document rests on none of them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_id",
+        "generated_by_this_project",
+        "third_party_rights",
+        "statement"
+      ],
+      "properties": {
+        "basis_id": {
+          "$ref": "#/$defs/basisId",
+          "const": "project-generated-no-third-party-rights"
+        },
+        "generated_by_this_project": {
+          "const": true
+        },
+        "third_party_rights": {
+          "const": "NONE"
+        },
+        "statement": {
+          "description": "The human-readable restatement of the two constants above. Required and non-empty (FR-012).",
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "irregularityClass": {
+      "title": "Irregularity class",
+      "description": "The closed five (FR-030, VR-031). Four are structural and re-derived from the emitted PDF; SCAN_DEGRADATION is not derivable from structure, so VR-036 adds a necessary condition only and the injector unit tests are its evidence path.",
+      "enum": [
+        "INCONSISTENT_FIELD_LABEL",
+        "MISSING_OR_BLANK_FIELD",
+        "OUT_OF_ORDER_DATE",
+        "PAGE_SPLIT_FIELD",
+        "SCAN_DEGRADATION"
+      ]
+    },
+    "irregularityClasses": {
+      "title": "Recorded irregularity classes",
+      "description": "A subset of the closed five, unique and sorted ascending in codepoint order (VR-031, MS-2), possibly empty. The items and uniqueItems assertions below name an unknown or repeated class directly; the enum is the same rule stated exactly - it is the complete list of the 32 sorted subsets of a five-value set, which is how ordering is expressible in JSON Schema at all. Sortedness is enforced here and not only in the validator because MS-2 is what makes the byte-identity comparison of VR-042 meaningful. Regenerate this list in the same change that alters the class enum above.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/irregularityClass"
+      },
+      "enum": [
+        [],
+        [
+          "INCONSISTENT_FIELD_LABEL"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD"
+        ],
+        [
+          "OUT_OF_ORDER_DATE"
+        ],
+        [
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "OUT_OF_ORDER_DATE"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "OUT_OF_ORDER_DATE",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "OUT_OF_ORDER_DATE",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ],
+        [
+          "INCONSISTENT_FIELD_LABEL",
+          "MISSING_OR_BLANK_FIELD",
+          "OUT_OF_ORDER_DATE",
+          "PAGE_SPLIT_FIELD",
+          "SCAN_DEGRADATION"
+        ]
+      ]
+    }
+  }
+}

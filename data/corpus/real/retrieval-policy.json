@@ -1,0 +1,334 @@
+{
+  "policy_id": "ufgs-real-layer-retrieval-policy",
+  "description": "FR-002 / FR-002a. The committed policy governing retrieval of the REAL corpus layer: which hosts a fetch may land on, which agency variants of a UFGS section number may be recorded, which sections are targeted and why, and the anchor section every real layer must include. Read by the validator (VR-021, VR-022, VR-023, VR-025, VR-062) and by model.corpus.sources, which exposes this file rather than restating it — a second literal list in Python would be the drift this single-source rule exists to prevent.",
+  "normative_note": "This file is read by the validator and is covered by no content_hash (data-model.md, Drift story). A loosening edit — widening source_hosts, adding an agency variant, removing a target section — fails nothing and is held only by the FR-036 pull-request sign-off. Edit it in the same change as the corpus it governs.",
+  "not_configured_here": "The FR-002b transport controls are code constants in model.corpus.retrieve — https-only, exact per-hop host equality, at most 5 hops, at most 50 MB of body, no credentials — and are deliberately NOT expressed as values in this file. A security bound read from an undigested JSON file can be loosened by editing that file; the same bound written as a module constant cannot be, without a source change that review and the test suite both see.",
+  "source_hosts": [
+    "www.wbdg.org",
+    "nibs-s3-wbdg3-production.s3.us-east-1.amazonaws.com"
+  ],
+  "source_host_notes": {
+    "www.wbdg.org": {
+      "role": "First hop. The published UFGS document path, https://www.wbdg.org/FFC/DOD/UFGS/UFGS <section>.pdf, is what every entry records as source_location.",
+      "observed_behaviour": "Returns 301 for an active section, with Location on the storage origin below. Returns 403 through the same redirect for a section whose status is RETIRED_SUPERSEDED.",
+      "anonymous_access": true,
+      "robots_txt": "User-agent: * / Allow: / / Disallow: /auth/ — the retrieved paths are outside /auth/.",
+      "verified_on": "2026-07-26"
+    },
+    "nibs-s3-wbdg3-production.s3.us-east-1.amazonaws.com": {
+      "role": "Second hop. The public storage origin the first hop redirects to; it serves the PDF body. Listed because FR-002b re-evaluates the allow-list at EVERY hop — without this entry the epic's one documented redirect would be refused by the policy that is supposed to govern it.",
+      "observed_behaviour": "Serves 200 application/pdf to a non-browser client. The Location header carries an explicit :443 port, so host comparison is made on the parsed hostname rather than on netloc.",
+      "anonymous_access": true,
+      "robots_txt": "Not consulted: the origin is reached only by following a redirect issued by www.wbdg.org, whose robots.txt allows the path.",
+      "verified_on": "2026-07-26"
+    }
+  },
+  "agency_variants": {
+    "UNIFIED": {
+      "section_suffix": "",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "note": "An unsuffixed section is issued jointly, and its cover page carries the joint agency line. The 'Preparing Activity' line differs between unsuffixed documents (NAVFAC on 26 23 00, USACE on 01 33 00), so it cannot key the issuing body for this variant; the joint line, which every document carries, can."
+    },
+    "USACE": {
+      "section_suffix": ".00 10",
+      "issuing_body": "USACE",
+      "note": "Observed on the cover of every '.00 10' section retrieved: 'Preparing Activity: USACE' (26 11 14.00 10, 26 22 00.00 10, 26 28 00.00 10)."
+    },
+    "NAVFAC": {
+      "section_suffix": ".00 20",
+      "issuing_body": "NAVFAC",
+      "note": "Observed on the cover of every '.00 20' section retrieved: 'Preparing Activity: NAVFAC' (26 11 13.00 20, 23 52 43.00 20)."
+    }
+  },
+  "agency_variants_not_admitted": {
+    "AFCEC": {
+      "would_be_section_suffix": ".00 40",
+      "reason": "Every '.00 40' section in Divisions 23 and 26 — all 32 of them — is RETIRED_SUPERSEDED, and each 403s through the redirect. Admitting a variant token no retrievable document can carry would widen the closed set VR-021 checks membership against for nothing.",
+      "verified_on": "2026-07-26"
+    },
+    "NASA": {
+      "would_be_section_suffix": "varies",
+      "reason": "NASA-designated sections carry a sub-numbered suffix whose first pair is not '00' (for example 26 27 13.10 30), so the variant does not map to one section_suffix the way the three admitted tokens do. Admitting it would break the FR-011 document_identifier composition, which appends exactly one suffix per variant.",
+      "verified_on": "2026-07-26"
+    }
+  },
+  "lead_time_reference": {
+    "basis": "research.md, MasterFormat coverage for long-lead equipment",
+    "source": "https://usevawn.com/resources/electrical-equipment-lead-times/",
+    "retrieved_on": "2026-07-25",
+    "quoted_figures": "As of June 2026: about 128 weeks for a power transformer and 144 weeks for a generator step-up, against 15 to 23 weeks for panelboards.",
+    "honesty_note": "Only the three figures above are quoted from a source. No per-section week count is claimed anywhere in this file; each target is placed in a class defined below relative to those figures, and the placement is a reviewable judgement, not a measurement. FR-002's 'weighted toward long-lead equipment' carries no threshold, so this list and its justifications ARE the judgement — checkable by review, not by the validator."
+  },
+  "lead_time_classes": {
+    "EXTREME_LEAD": "Equipment in the same procurement class as the 128-week transformer and 144-week generator figures the reference quotes: medium-voltage transformers, unit substations, medium-voltage switchgear, and engine-generator sets. A submittal here is the schedule's binding constraint.",
+    "LONG_LEAD": "Equipment routinely quoted well beyond the 15-to-23-week panelboard band in the same survey but not in the transformer or generator class: low-voltage switchgear, switchboards, motor control centres, static UPS, transfer switches, chillers, boilers, cooling towers.",
+    "SUPPORTING_LONG_LEAD": "Items whose own manufacture is shorter but whose submittal is gated by, or gates, a piece of equipment above — plant piping, hydronic pumps, energy-recovery sections. Included so a resubmittal chain has something to depend on, and labelled so no reader mistakes them for the weighting."
+  },
+  "target_sections": [
+    {
+      "masterformat_section": "26 05 13",
+      "agency_variant": "UNIFIED",
+      "title": "Medium-Voltage Cables",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2005%2013.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Medium-voltage cable is ordered against the same distribution build-out as the substation and switchgear sections below and is quoted far above the panelboard band; a late cable release strands equipment that arrived on time.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 11 13",
+      "agency_variant": "NAVFAC",
+      "title": "Primary Unit Substation",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2013.00%2020.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "A primary unit substation is a transformer plus medium-voltage switching in one assembly, so it inherits the transformer lead time the reference quotes at about 128 weeks.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 11 14",
+      "agency_variant": "USACE",
+      "title": "Main Electric Supply Station and Substation",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2014.00%2010.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "The main supply station is the site's single point of connection; its transformers and medium-voltage apparatus are the longest-lead items on an electrical package and nothing downstream energizes without them.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 11 16",
+      "agency_variant": "UNIFIED",
+      "title": "Secondary Unit Substations",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2016.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "Same assembly class as 26 11 13 at the secondary voltage level, and ordered on the same transformer lead time.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 12 19",
+      "agency_variant": "UNIFIED",
+      "title": "Pad-Mounted, Liquid-Filled, Medium Voltage Transformers",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2012%2019.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "This is the power transformer the reference's 128-week figure names directly. It is the reason the corpus is weighted toward Division 26 at all.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 12 21",
+      "agency_variant": "UNIFIED",
+      "title": "Single-Phase Pad-Mounted Transformers",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2012%2021.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "A smaller unit than 26 12 19 but drawn from the same constrained transformer capacity, so it queues behind the same production backlog.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 13 00",
+      "agency_variant": "UNIFIED",
+      "title": "SF6/High-Firepoint Fluids Insulated Pad-Mounted Switchgear",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2000.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "Medium-voltage switchgear is built to order against the same apparatus supply chain as the transformers above; the interrupter and its insulating medium are the constrained parts.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 13 13",
+      "agency_variant": "UNIFIED",
+      "title": "Metal-Clad Switchgear",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2013.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "Metal-clad medium-voltage switchgear is engineered per lineup, so the drawing submittal itself sits on the critical path before manufacture even starts.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 13 14",
+      "agency_variant": "UNIFIED",
+      "title": "Switchgear House",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2014.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "The prefabricated enclosure is released only after the switchgear lineup it houses is fixed, so its schedule is chained to 26 13 13's.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 22 00",
+      "agency_variant": "USACE",
+      "title": "480-Volt Station Service Switchgear and Transformers",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2022%2000.00%2010.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "Station-service equipment combines a transformer with switchgear and carries the transformer lead time; it also powers the plant's own auxiliaries, so a slip here delays commissioning rather than only installation.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 23 00",
+      "agency_variant": "UNIFIED",
+      "title": "Low Voltage Switchgear",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2023%2000.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Low-voltage switchgear is built to a project-specific lineup and is quoted well past the panelboard band the reference uses as its short-lead comparison.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 24 13",
+      "agency_variant": "UNIFIED",
+      "title": "Switchboards",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2024%2013.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Switchboards are the tier immediately below switchgear and share its build-to-order constraint; the reference's short-lead band covers panelboards, not switchboards.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 28 00",
+      "agency_variant": "USACE",
+      "title": "Motor Control Centers, Switchboards and Panelboards",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2028%2000.00%2010.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Motor control centres are configured per starter schedule and hold up mechanical equipment energization. The section also names panelboards, which the reference puts at 15 to 23 weeks — included deliberately so the corpus holds one document spanning both ends of the band rather than only its extreme.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 29 23",
+      "agency_variant": "UNIFIED",
+      "title": "Adjustable Speed Drive (ASD) Systems Under 600 Volts",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2029%2023.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Drives are semiconductor assemblies and inherited the component shortages that lengthened electrical equipment lead times generally; they are also the section most likely to be resubmitted after a motor data change.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 32 15",
+      "agency_variant": "UNIFIED",
+      "title": "Engine-Generator Set Stationary 15-2500 kW, with Auxiliaries",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2015.pdf",
+      "lead_time_class": "EXTREME_LEAD",
+      "lead_time_justification": "Generating plant is the second figure the reference quotes, at about 144 weeks for a generator step-up. Standby generation is also the item a facility cannot be occupied without.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 33 53",
+      "agency_variant": "UNIFIED",
+      "title": "Static Uninterruptible Power Supply (UPS)",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2033%2053.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "A static UPS is a power-electronics assembly with a battery system quoted separately; both sit well above the panelboard band and both must be approved before the room they serve is fitted out.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "26 36 23",
+      "agency_variant": "UNIFIED",
+      "title": "Automatic Transfer Switches and By-Pass/Isolation Switches",
+      "division": "26",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2036%2023.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Transfer switches are ordered with the generator they switch and are gated by the same approval; a generator that arrives without its transfer equipment cannot be commissioned.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 21 23",
+      "agency_variant": "UNIFIED",
+      "title": "Hydronic Pumps",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2021%2023.pdf",
+      "lead_time_class": "SUPPORTING_LONG_LEAD",
+      "lead_time_justification": "Pumps are selected against the chiller and boiler duties in 23 64 10 and 23 52 00, so their submittal follows those and is revised whenever either changes. Labelled supporting rather than long-lead: the pump itself is not the constraint.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 52 00",
+      "agency_variant": "UNIFIED",
+      "title": "Heating Boilers",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2052%2000.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Boilers are pressure vessels requiring code stamping and third-party inspection, which puts approval and manufacture well past the mechanical trim items around them.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 52 43",
+      "agency_variant": "NAVFAC",
+      "title": "Low Pressure Water Heating Boilers (Under 800,000 BTU/HR Output)",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2052%2043.00%2020.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "The agency-variant counterpart to 23 52 00 at small capacity, carrying the same code-stamp and inspection gate. Included also because the corpus needs more than one document under a single agency variant for the variant rules to have a population.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 64 10",
+      "agency_variant": "UNIFIED",
+      "title": "Water Chillers, Vapor Compression Type",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2064%2010.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "The chiller is the Division 23 counterpart of the transformer: a single large machine, built to order, that the entire cooling plant is scheduled around.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 64 26",
+      "agency_variant": "UNIFIED",
+      "title": "Chilled, Chilled-Hot, and Condenser Water Piping Systems",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2064%2026.pdf",
+      "lead_time_class": "SUPPORTING_LONG_LEAD",
+      "lead_time_justification": "Plant piping is fabricated to the chiller and tower connections, so its submittal depends on 23 64 10 and 23 65 00 being approved first. Labelled supporting: the pipe is not scarce, the sequence is.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 65 00",
+      "agency_variant": "UNIFIED",
+      "title": "Cooling Towers and Remote Evaporatively-Cooled Condensers",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2065%2000.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Field-erected and factory-assembled towers are both built to order and structurally coordinated before release, so the tower approval gates the chiller plant alongside the chiller itself.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 72 00",
+      "agency_variant": "UNIFIED",
+      "title": "Energy Recovery Systems",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2072%2000.pdf",
+      "lead_time_class": "SUPPORTING_LONG_LEAD",
+      "lead_time_justification": "Recovery sections ship inside the air-handling equipment they serve, so their approval is bound to that unit's release rather than being an independent constraint.",
+      "resolution_verified_on": "2026-07-26"
+    },
+    {
+      "masterformat_section": "23 81 23",
+      "agency_variant": "UNIFIED",
+      "title": "Computer Room Air Conditioning Units",
+      "division": "23",
+      "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2081%2023.pdf",
+      "lead_time_class": "LONG_LEAD",
+      "lead_time_justification": "Precision cooling units are configured per room load and are ordered alongside the UPS in 26 33 53; the two together gate occupancy of the space they serve.",
+      "resolution_verified_on": "2026-07-26"
+    }
+  ],
+  "anchor_section": "01 33 00",
+  "anchor": {
+    "masterformat_section": "01 33 00",
+    "agency_variant": "UNIFIED",
+    "title": "Submittal Procedures",
+    "division": "01",
+    "source_url": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2001%2033%2000.pdf",
+    "rationale": "Not a long-lead equipment section and deliberately not listed among them. It is the section that defines the submittal, the descriptor codes, the approving-authority marking and the resubmittal convention that every other document in this corpus is read against, which is why FR-002 requires it by name and VR-025 checks for it separately from the distinct-section floor.",
+    "resolution_verified_on": "2026-07-26"
+  },
+  "coverage_floor": {
+    "documents": 20,
+    "distinct_masterformat_sections": 6,
+    "note": "VR-025's floor, restated here so the list above can be read against it. This policy names 25 target sections plus the anchor, all verified to resolve on the date recorded per entry; the margin exists so a section withdrawn between authoring and retrieval does not put the layer under the floor. Distinct sections are counted by section number, so two agency variants of one number count once."
+  }
+}

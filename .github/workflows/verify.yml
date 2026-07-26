@@ -1,11 +1,25 @@
 name: verify
 
-# Both triggers, deliberately.
+# All three triggers, deliberately.
 #
 # `push` is what makes the architecture contracts real: a violation fails the
 # build rather than raising a review comment. This was originally deferred to a
 # later epic as a scope decision, then closed here once the analyze phase made
 # the cost visible — it is one line.
+#
+# `pull_request` (FR-034) makes the merge gate authoritative: a push run and a
+# pull-request run may cover the same head commit, but they are independent runs
+# scoped by ref, and the pull-request one is what judges the merge.
+#
+# `pull_request` and NOT `pull_request_target` (FR-034a(b)). The two are not
+# interchangeable spellings: `pull_request_target` runs the *base* ref's
+# workflow definition with the base repository's token and secret access while
+# checking out head content, which is a different execution surface from the one
+# FR-034a states. What runs here is the proposed head content under a
+# `contents: read` token with no secret in reach (FR-034a(a), (c)), so the
+# reachable consequence of a hostile head is bounded to a wrong verdict on its
+# own pull request. tests/checks/test_workflow_triggers.py asserts all three of
+# those properties against this file.
 #
 # `workflow_dispatch` remains because the violation-injection input below is
 # on-demand evidence, not something to run on every push.
@@ -22,6 +36,18 @@ on:
     paths-ignore:
       - "specs/**"
       - "README.md"
+  # Against the default branch, named explicitly rather than left to the
+  # `pull_request` default of "any base ref" — FR-034 states the base, and the
+  # committed trigger check reads this list to assert it.
+  #
+  # No `paths-ignore` here, unlike `push` above, and the asymmetry is the point.
+  # A skipped push run costs nothing; a pull-request run that is skipped by path
+  # filtering reports no status at all, and a required check with no status
+  # leaves the pull request pending forever rather than passing. The merge gate
+  # therefore runs on every pull request, including a specs-only one.
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       inject_violation:
@@ -239,9 +265,26 @@ jobs:
         working-directory: src/model
         # --source overrides the root pyproject.toml `source` list rather than
         # merging with it, so every package in that list must appear here too or
-        # it lands in the denominator with no hits. E003 added the schema
-        # package to the config; this line has to match it.
-        run: uv run coverage run --source=src/model/roster,src/model/schema -m pytest tests -q
+        # it lands in the denominator with no hits. Three packages now: roster
+        # from the scaffold, schema from E003, corpus from E002. Both epics
+        # widened this line independently and the union is what is correct —
+        # dropping either package would put it in the denominator uncovered and
+        # drag the gate down while measuring nothing.
+        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus -m pytest tests -q
+
+      # FR-017: corpus validation runs automatically, not on demand. The console
+      # entry point is the same one a developer runs, so a green CI run and a
+      # green local run are the same assertion.
+      #
+      # **Unscoped, deliberately.** This step carried `--layer REAL` while the
+      # synthetic layer did not exist, because VR-005 and VR-066 are built to
+      # fail on a corpus missing it — that is their entry-criterion job, not a
+      # defect to suppress. The layer landed with T056's single generation run,
+      # and the flag came off in the same change: left in place it would make
+      # the required check silently blind to all 25 synthetic documents and to
+      # the seventeen rules asserted only over them.
+      - name: Corpus validation
+        run: uv run --directory src/model corpus-validate
 
       # The gateway holds the single permitted provider import site. Its tests
       # existed but no step ran them, so OBJ7's "every check runs" was false
@@ -280,7 +323,20 @@ jobs:
       # the gate reports on one entry's data and passes on a partial
       # denominator. All entries pin one identical coverage version because
       # combine rejects a data-file schema mismatch.
+      # SC-026 is two floors, not one. The aggregate is the first; the second is
+      # `model.corpus` measured alone, because an aggregate over several packages
+      # is an average — an already-covered package floats an uncovered new one
+      # across the threshold, which is the exact failure the criterion was
+      # written to prevent and which the aggregate alone cannot report.
+      #
+      # `--include` selects from the *combined* data rather than re-measuring, so
+      # the second report costs nothing and cannot disagree with the first about
+      # what ran. An unexecuted module still lands in this denominator at 0%:
+      # the model step's `--source=…,src/model/corpus` records every importable
+      # file under the package whether a test reached it or not, so a new module
+      # nothing covers subtracts here instead of being averaged away.
       - name: Coverage gate
         run: |
           uv run coverage combine
           uv run coverage report --fail-under=80
+          uv run coverage report --include='*/model/corpus/*' --fail-under=80

@@ -11,21 +11,33 @@ dependencies = [
     "alembic>=1.18.5",
     "arviz>=1.2.0",
     "gateway",
+    "jsonschema[format-nongpl]>=4.26.0",
     "numpy>=2.4.6",
     "pandas>=3.0.5",
+    "pdfplumber>=0.11.10",
+    "pillow>=12.3.0",
     "psycopg[binary]>=3.3.4",
     "pymc>=6.2.0",
+    "reportlab>=5.0.0",
     "sqlalchemy>=2.0.51",
 ]
 
-# TR-007 / ADR-0011: the migration runner is a console entry point invoked
-# through this entry's own environment -- `uv run --directory src/model migrate`
-# -- and is deliberately not packaged as a container job. A context rooted at
-# src/model could not resolve the `gateway` path dependency below in any case,
-# and widening it to ./src would mean admitting the modeling boundary into the
-# serving build context. docker-compose.yml is untouched (TR-037).
+# ADR-0011: every job this entry owns is a console entry point invoked through
+# the entry's own environment -- `uv run --directory src/model <name>` -- rather
+# than a container job. A context rooted at src/model could not resolve the
+# `gateway` path dependency below, and widening it to ./src would admit the
+# modeling boundary into the serving build context. docker-compose.yml is
+# untouched (TR-037).
+#
+# `migrate` arrived with the schema epic and the four corpus commands with the
+# corpus epic; they are unrelated jobs that happen to share one entry, so both
+# sets are declared here rather than either replacing the other.
 [project.scripts]
 migrate = "model.schema.cli:main"
+corpus-retrieve = "model.corpus.retrieve:main"
+corpus-generate = "model.corpus.generate:main"
+corpus-validate = "model.corpus.validate:main"
+corpus-reverify = "model.corpus.reverify:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
@@ -66,6 +78,11 @@ source = ["src/model"]
 
 [tool.importlinter]
 root_package = "model"
+# Required by the corpus contract below: `gateway` sits outside the `model` root
+# package, and import-linter refuses to name an external module as forbidden
+# unless the graph is built with external packages in it. Without this the
+# contract is not merely weaker — it fails to load at all.
+include_external_packages = true
 
 # TR-009: model-facing code must never reach deterministic computation.
 # Indirect detection stays ON here — laundering the dependency through an
@@ -75,4 +92,17 @@ name = "Model-facing code does not reach the computation package"
 type = "forbidden"
 source_modules = ["model.llm"]
 forbidden_modules = ["model.compute"]
+allow_indirect_imports = false
+
+# FR-022: corpus generation completes with no language-model invocation. Stated
+# as a build-gating contract rather than an assertion, so the offline claim is
+# enforced on every commit instead of being re-argued per review. `gateway` is
+# named alongside `model.llm` because reaching the provider through the shared
+# client is the same violation by another route. Indirect detection stays ON:
+# laundering the dependency through an intermediate module is the evasion.
+[[tool.importlinter.contracts]]
+name = "Corpus code does not reach the model provider"
+type = "forbidden"
+source_modules = ["model.corpus"]
+forbidden_modules = ["model.llm", "gateway"]
 allow_indirect_imports = false
