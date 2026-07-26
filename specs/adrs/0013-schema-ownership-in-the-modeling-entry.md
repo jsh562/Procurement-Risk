@@ -1,10 +1,10 @@
 ---
 adr_id: ADR-0013
-status: accepted
+status: superseded
 date: 2026-07-25
 tags: [layout, schema, migrations, data, governance]
 supersedes: []
-superseded_by: ""
+superseded_by: "ADR-0016"
 related_artifacts: ["ADR-0002", "ADR-0003", "ADR-0010", "ADR-0012", "specs/sad.md", "specs/00002-core-data-schema/spec.md", "E003", "E004", "E005", "E006", "E007"]
 deciders: ["Project owner", "Solution architect"]
 ---
@@ -13,7 +13,7 @@ deciders: ["Project owner", "Solution architect"]
 
 ## Status
 
-Accepted.
+Superseded by [ADR-0016](../adrs/0016-database-client-access-is-not-restricted-by-schema-ownership.md), on the database-client clause only. The schema-ownership decision below stands: `/src/model` owns the migration tooling, the DDL, and every schema asset, and is what the migration job image builds from; the shared constants are published through `schema_constants`; the reserved prefix blocks and the single-head check are unchanged. ADR-0016 replaces only the database-client half of the consequence clause "Exactly one entry — `/src/model` — declares the database client and migration tooling," holding that an entry may declare a Postgres driver for a purpose an accepted record already sanctions. Migration tooling, ORMs, and schema assets remain exclusive to `/src/model`.
 
 Alembic migrations and all schema assets live in `/src/model`; shared constants are published in a single-row `schema_constants` table that `/src/api` reads over the connection rather than importing; migration numbers are claimed in reserved filename-prefix blocks layered over Alembic's revision identifiers.
 

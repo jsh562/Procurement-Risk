@@ -634,8 +634,12 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0008 Deterministic Provenance and Computation Boundary | accepted | E001, E003, E006 |
 | ADR-0009 Reproducibility Gate as a Published Tolerance | accepted | E014 |
 | ADR-0010 Source Layout with a Shared Gateway Package | accepted | E001, E004 |
+| ADR-0011 Model-Owned One-Shot Jobs Invoked as Console Entry Points | accepted | E001, E005, E006, E007 |
+| ADR-0012 Embedding Model and Vector Dimension | accepted | E003, E006, E008 |
+| ADR-0013 Schema Ownership in the Modeling Entry | superseded by ADR-0016 | E003, E004, E005, E006, E007 |
 | ADR-0014 Provider SDK as an Optional Extra of the Gateway Package | accepted | E004, E006, E011 |
 | ADR-0015 Local Spool for Invocation Records Whose Database Write Fails | accepted | E004, E013 |
+| ADR-0016 Database-Client Access Is Not Restricted by Schema Ownership | accepted | E003, E004, E005, E006, E007 |
 
 ### Deployment Decisions
 
