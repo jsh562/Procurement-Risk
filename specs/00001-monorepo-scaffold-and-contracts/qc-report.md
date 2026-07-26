@@ -1,139 +1,88 @@
 # QC Report: Monorepo Scaffold and Contracts
 
-**Date**: 2026-07-25
+**Date**: 2026-07-25 · **Iterations**: 2
 **Feature Directory**: `specs/00001-monorepo-scaffold-and-contracts`
-**Overall Verdict**: **FAIL**
+**Overall Verdict**: **FAIL** — one remaining item, blocked on an action I cannot perform
 
-Every executable check passes. QC fails on requirements traceability: one project-instructions
-violation and six success criteria that are stated but not actually verified by anything. The
-distinction matters — nothing here is broken, but several things claimed as proven are not.
+## Changes from Prior Run
+
+| Metric | Iteration 1 | Iteration 2 | Delta |
+|---|---|---|---|
+| Tests | 86 | **110** | +24 |
+| Coverage | 94% | **95%** | +1 |
+| Success criteria verified | 12/18 | **17/18** | +5 |
+| Objectives fully passed | 3/7 | **6/7** | +3 |
+| Open bug tasks | 12 | **0** | −12 |
+| CI steps | 21 | **24** | +3 |
+| PI violations | 1 CRITICAL | **0** | −1 |
+
+17 bug tasks were closed across two iterations: the 12 from iteration 1, three regressions I introduced
+while fixing them, and two gaps iteration 1 recorded as PARTIAL without raising tasks for.
 
 ## Summary
 
 | Check | Status | Details |
-|-------|--------|---------|
-| Build / compile | PASSED | `tsc --noEmit` clean; serving image builds |
-| Static Analysis / Linting *(PI-mandated)* | PASSED | 12/12 — ruff ×4, ruff format ×3, ESLint, Prettier, import-linter ×3 |
-| Tests | PASSED | 86 passed, 0 failed |
-| Code Coverage *(PI-mandated)* | PASSED | 94% vs 80% threshold |
-| Security *(not PI-mandated)* | WARNING | `pip-audit` unrunnable; `npm audit` 12 high, 0 critical |
-| PI Compliance | **FAILED** | Next.js major version deviates from the declared stack |
-| Requirements Traceability | **FAILED** | 12/18 SC verified; 3/7 objectives fully passed |
+|---|---|---|
+| Build / compile | PASSED | `tsc --noEmit`, `next build`, serving image |
+| Static Analysis / Linting *(PI-mandated)* | PASSED | ruff ×4, format ×4, ESLint, Prettier, import-linter ×3 |
+| Tests | PASSED | 110 passed, 0 failed |
+| Coverage *(PI-mandated)* | PASSED | 95% vs 80% |
+| Security *(not mandated)* | WARNING | `pip-audit` unrunnable; `npm audit` 12 high, 0 critical, dev-only |
+| PI Compliance | PASSED | Next.js deviation resolved at v1.1.3 |
+| Requirements Traceability | **FAILED** | 17/18 SC; OBJ7 unevidenced |
 | Checklist Fulfillment | PASSED | 8 spot-checked, 0 gaps |
-| Performance / Accessibility | SKIPPED | No NFRs in `spec.md` |
-| Browser Runtime | SKIPPED | Web boundary ships no behaviour this epic |
+| Performance / Accessibility / Browser | SKIPPED | No NFRs; web ships no behaviour |
 
-## Test Results — PASSED
+## The one remaining failure — OBJ7
 
-- Runner: pytest 9.1.1 + Vitest. Total **86**, Passed **86**, Failed **0**.
-- Cross-entry checks 55 · model unit tests 28 · web unit tests 3.
-- CI: run #9 (`main`, `de57fb4`) all steps green. Run #7 (injected violation) failed at
-  **Architecture contracts** with every earlier step green — the contracts demonstrably gate.
+OBJ7 VC1 and VC2 both read *"When the workflow is dispatched"*. **No `workflow_dispatch` run has ever
+occurred** — all runs are `push` events. SC-013 is satisfied by the pushed-branch path (run #14 clean,
+run #7 failing at `Architecture contracts`), but SC-013's alternative clause governs which branch the
+*violated* run uses, not the trigger event. Marking T046 honest was not the same as making it true.
 
-## Code Coverage — 94%
+Dispatching requires a token this environment does not hold. **Two clicks in the Actions tab close it**:
 
-- Threshold: 80% (`.github/sddp-config.md` → Derived QC Policy). Status: **PASSED**.
-- `reader.py` 91%, `source_scan.py` 89%, `contract_runner.py` 96%, `entries.py` 100%, `image_contents.py` 100%.
-- Denominator is scoped by TR-006 to the source scan, image checks, and roster reader.
-  `src/gateway/src/gateway/provider.py` sits outside it and has **no test** — see W6.
+1. Actions → `verify` → *Run workflow* on `main`, leaving `inject_violation` at `none` → expect success.
+2. Same, with `inject_violation: provider-import` → expect failure at **Architecture contracts**.
 
-## Static Analysis — PASSED
+The second is worth running specifically because that path was broken until this iteration and has
+still never executed — see T066.
 
-- ruff 0.16.0, ESLint 9, Prettier, `tsc`, import-linter 2.13. Critical issues 0, warnings 0.
-- All three architecture contracts KEPT on a clean tree and BROKEN on planted violations.
+## Regressions found and fixed within this run
 
-## Security Audit — WARNING (category not PI-mandated)
+| ID | What | How it hid |
+|---|---|---|
+| T066 | The dispatch injection guard fired on the **success** path and killed the step. `git diff` ignores untracked files, so `git diff --quiet` exited 0; `\|\| true` cannot catch an `exit`. | The step is `skipped` in every push run, so 11 green runs never touched it. Introduced by T063's own fix. |
+| T067 | Gateway tests ran nowhere in CI — the entry holding the single permitted provider import site. | Added by T065 without a workflow step; local runs passed. |
+| T068 | Marker environment hardcoded Python 3.12.7; the image runs 3.12.13. | Harmless against today's two marker forms. |
 
-- `pip-audit`: **SKIPPED** — cannot reach PyPI. `requests` reads `certifi`, which lacks the
-  locally-installed TLS-interception root; `uv` works only because `UV_NATIVE_TLS=1` reads the
-  Windows store. Not a code defect.
-- `npm audit`: 12 high, **0 critical**. All chain from `brace-expansion` (DoS) through ESLint —
-  **dev dependencies only**, absent from the serving image. `npm audit fix` resolves none without
-  a major-version bump.
+## Requirements Traceability — 6/7 objectives, 17/18 SC
 
-## Project Instructions Compliance — FAILED
+| ID | Status | Evidence |
+|---|---|---|
+| OBJ1 | PASSED | `next build` now runs in CI; the boundary test resolves both roots instead of regex-matching config text |
+| OBJ2, OBJ3, OBJ6 | PASSED | Unchanged from iteration 1 |
+| OBJ4 | PASSED | VC1 via `test_build_context.py` (asks Docker what the build stage holds); VC2 equality now genuine; VC4's blind spot asserted |
+| OBJ5 | PASSED | `test_orchestration.py` — pgvector asserted, jobs proven to run, exit, and leave nothing |
+| OBJ7 | **FAILED** | No dispatch has ever occurred |
+| SC-001…SC-006, SC-008, SC-011…SC-018 | PASSED | 17 of 18 |
+| SC-013 | PASSED (qualified) | Runs #14 and #7, both `push` events |
 
-**CRITICAL — Technology Stack deviation.** `project-instructions.md` and `plan.md` both specify
-**Next.js 15 (App Router)**. `src/web/package.json` pins `next: 16.2.12` and
-`eslint-config-next: 16.2.12`. `create-next-app@latest` installed the current major and nothing
-recorded or justified the bump. Per `AGENTS.md`, any `project-instructions.md` violation is CRITICAL.
+## Verified non-vacuous
 
-Verified compliant: four entries under `/src`; no `uv` workspace table; neither Python boundary
-declares the other; Python 3.12 / Node 22; roster labelled SYNTHETIC with a datasheet; contracts
-gate the build via `on: push`; no committed credential.
+Independent re-verification confirmed the fixes are real, not cosmetic: marker evaluation is
+load-bearing (substituting the host environment reintroduces `colorama`); `installed_distributions`
+uses `check=True` so a Docker failure raises rather than returning an empty set; the two-directional
+equality means an empty `installed` fails on `missing`; the orchestration fixture uses `check=True`
+so a failed `up` errors rather than skipping; and `ls /build` is compared with `==`, not containment.
 
-> A blanket regex initially flagged a credential. Verified false: the only matches were the
-> detector's own pattern literal and a deliberately-fake `sk-ant-planted12345` inside its
-> positive-control test, which writes to a temp directory.
+## Security Audit — WARNING (not PI-mandated)
 
-## Requirements Traceability — 3/7 objectives PASSED, 12/18 SC verified
-
-| ID | Type | Status | Notes |
-|----|------|--------|-------|
-| OBJ1 | Work Item | PARTIAL (5/6) | VC6's "when the application builds" never executes — `next build` runs nowhere; root pinning asserted by regex over config text |
-| OBJ2 | Work Item | PASSED | All five TR-007 mechanisms have real negative fixtures with positive controls |
-| OBJ3 | Work Item | PASSED | VC2 additionally evidenced live by CI run #7 |
-| OBJ4 | Work Item | PARTIAL (2/5) | VC1 has no check; **VC2 FAILED**; VC4 half-evidenced |
-| OBJ5 | Work Item | PARTIAL (2/4) | VC2 and VC3 have no executable check, no CI step, no recorded run |
-| OBJ6 | Work Item | PASSED | VC1–VC5 met |
-| OBJ7 | Work Item | PARTIAL | Substance met via push runs; **no `workflow_dispatch` run has ever occurred** |
-| SC-001…SC-006, SC-008 | Success Criteria | PASSED | Lock isolation, layout, coverage, fixtures, laundering, indirect reach, in-image imports |
-| SC-007 | Success Criteria | **FAILED** | Equality not asserted and currently false — see E1 |
-| SC-009 | Success Criteria | **FAILED** | Job completion / no leftover container verified by hand only |
-| SC-010 | Success Criteria | **FAILED** | Vector extension asserted nowhere; healthcheck is `pg_isready` only |
-| SC-011…SC-015, SC-017 | Success Criteria | PASSED | SC-015 artifact-only (no executable check) |
-| SC-016 | Success Criteria | **FAILED** | `package.json` — named by the criterion — inspected by nothing |
-| SC-018 | Success Criteria | **FAILED** | Built image and its layers never inspected |
-
-## Traceability Gaps
-
-- `tasks.md` names **six files that do not exist**: `test_build_context.py`, `helpers/image_allowlist.py`,
-  `test_image_allowlist.py`, `helpers/image_denylist.py`, `test_index_config.py`, `test_no_credentials.py`.
-  Five were consolidated into `image_contents.py` / `test_image_contents.py` / `test_supply_chain.py`;
-  **`test_build_context.py` has no successor**, so SC-015 has no regression guard.
-- **T026 and T046 were marked complete without their deliverable existing.** T046 claims a dispatched
-  run; all ten runs in the repository are `push` events. This is a marking error on my part, not a
-  tooling failure.
-- OBJ6 VC4's "without adding a dependency" is true by inspection but asserted by no test.
-- `src/api/tests/` and `src/gateway/tests/` do not exist while both `pyproject.toml` files set
-  `testpaths = ["tests"]`; collectors exit 0 with `PytestConfigWarning`.
-
-## Checklist Fulfillment — 8/8 spot-checked, 0 gaps
-
-Security: no committed credential (PASSED), build context deny-all + two allows (PASSED), three
-external images digest-pinned (PASSED), no alternate index configured (PASSED).
-Testing: three negative fixtures (PASSED), positive controls present (PASSED), vacuous-pass guards
-present on image checks (PASSED), fixtures outside production roots (PASSED).
-
-## Performance — SKIPPED
-No performance NFRs in `spec.md` (0 keyword signals).
-
-## Accessibility — SKIPPED
-No accessibility NFRs in `spec.md` (0 keyword signals).
-
-## Browser Runtime Validation — SKIPPED
-Not required. The web boundary ships no behaviour this epic; its three tests assert filesystem and
-configuration properties. No probe performed.
-
-## Manual Testing — Not Required
-
-## Tool Recommendations
-
-- `pip-audit`: unrunnable under local TLS interception. Fix — build a combined PEM (certifi + the
-  interception root exported from the Windows store) and set `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE`.
-
-## Bug Context
-
-| Bug Task | Error Output | Related |
-|----------|-------------|---------|
-| T054 | `next: 16.2.12` vs declared `Next.js 15` | `src/web/package.json`, `project-instructions.md` |
-| T055 | `expected - installed == {'colorama'}`; `click -> colorama marker=sys_platform == 'win32'` | `helpers/image_contents.py:47` |
-| T056 | `test_no_credential_material_in_the_serving_build_context` walks source only | `test_supply_chain.py` |
-| T057 | `.npmrc` absent → test returns early; `package.json` never read | `test_supply_chain.py:34` |
-| T058 | No `CREATE EXTENSION vector` and no assertion anywhere | `docker-compose.yml` |
-| T059 | No check invokes `docker compose --profile jobs run` | — |
-| T060 | `tests/checks/test_build_context.py` absent, no successor | `tasks.md` T026 |
+- `pip-audit`: SKIPPED. `requests` reads `certifi`, which lacks the locally-installed TLS-interception
+  root; `uv` works only via `UV_NATIVE_TLS=1`. Environmental, not a code defect.
+- `npm audit`: 12 high, **0 critical**, all `brace-expansion` through ESLint — dev-only, absent from the
+  serving image. No fix without a major-version bump.
 
 ## Bug Tasks Generated
 
-T054 (CRITICAL) · T055–T060 (ERROR) · T061–T065 (WARNING). See `tasks.md § Phase: Bug Fixes`.
+None. T054–T070 are all closed. OBJ7 needs a dispatch, not a code change.
