@@ -68,3 +68,46 @@ def test_the_serving_boundary_never_reads_the_roster() -> None:
     """TR-011 keeps the data directory out of the serving build context, so a
     serving-side reader would fail inside the image rather than at review."""
     assert not scan_source_root(SRC_ROOT / "api", ROSTER_FILENAME)
+
+
+# --- VR-045: the corpus generator declares no project and no vendor ----------
+# E002's generator obtains projects and vendors solely through
+# `model.roster.reader.read_roster`. The mechanism is this same scan rather than
+# a second one: a generator that opened the roster itself, or copied a project
+# identifier into a literal, would be a second definition of E001's data with
+# nothing comparing the two — and the second definition is always the one nobody
+# remembers exists.
+
+
+def test_vr_045_the_corpus_package_names_no_roster_path() -> None:
+    """The count stays at one after E002 lands, and the one is E001's reader."""
+    mentions = scan_source_root(SRC_ROOT, ROSTER_FILENAME, fixture_root=FIXTURE_ROOT)
+    offenders = [
+        mention
+        for mention in mentions
+        if mention.path != SRC_ROOT / "model" / "src" / "model" / "roster" / "reader.py"
+    ]
+    assert not offenders, (
+        "VR-045: " + format_violation(ROSTER_FILENAME, mentions, REPO_ROOT)
+    )
+
+
+def test_vr_045_scan_reports_a_generator_that_opens_the_roster_itself(tmp_path: Path) -> None:
+    """The failing direction, planted: a scan that cannot fail proves nothing.
+
+    The planted module is shaped like the defect the rule refuses — a corpus
+    module resolving the roster's own filename instead of calling the reader.
+    """
+    reader = tmp_path / "reader.py"
+    reader.write_text("ROSTER = 'project-vendor-roster.json'\n", encoding="utf-8")
+    generate = tmp_path / "generate.py"
+    generate.write_text(
+        "ROSTER = DATA / 'roster' / 'project-vendor-roster.json'\n", encoding="utf-8"
+    )
+    mentions = scan_source_root(tmp_path, ROSTER_FILENAME)
+    assert len(mentions) == 2, (
+        "VR-045: " + format_violation(ROSTER_FILENAME, mentions, tmp_path)
+    )
+    assert generate in {mention.path for mention in mentions}, (
+        "VR-045: the scan missed a second module naming the roster path"
+    )

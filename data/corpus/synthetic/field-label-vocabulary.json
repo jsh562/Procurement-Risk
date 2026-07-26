@@ -1,0 +1,122 @@
+{
+  "date_field_order": [
+    "date_submitted",
+    "date_received",
+    "date_returned"
+  ],
+  "fields": {
+    "action_stamp": {
+      "alternate_labels": [
+        "Action Taken",
+        "Review Action"
+      ],
+      "canonical_label": "Reviewer Action"
+    },
+    "approving_authority": {
+      "alternate_labels": [
+        "Approval Authority",
+        "Approving Office"
+      ],
+      "canonical_label": "Approving Authority"
+    },
+    "contract_number": {
+      "alternate_labels": [
+        "Contract Number",
+        "Contract Reference"
+      ],
+      "canonical_label": "Contract No."
+    },
+    "date_received": {
+      "alternate_labels": [
+        "Received On",
+        "Receipt Date"
+      ],
+      "canonical_label": "Date Received"
+    },
+    "date_returned": {
+      "alternate_labels": [
+        "Returned On",
+        "Return Date"
+      ],
+      "canonical_label": "Date Returned"
+    },
+    "date_submitted": {
+      "alternate_labels": [
+        "Submitted On",
+        "Submittal Date"
+      ],
+      "canonical_label": "Date Submitted"
+    },
+    "descriptor_code": {
+      "alternate_labels": [
+        "Descriptor Code",
+        "SD Code"
+      ],
+      "canonical_label": "Submittal Descriptor"
+    },
+    "equipment_category": {
+      "alternate_labels": [
+        "Category",
+        "Equipment Class"
+      ],
+      "canonical_label": "Equipment Category"
+    },
+    "material_item": {
+      "alternate_labels": [
+        "Item Description",
+        "Equipment Item"
+      ],
+      "canonical_label": "Material Item"
+    },
+    "project_identifier": {
+      "alternate_labels": [
+        "Project No.",
+        "Project Identifier"
+      ],
+      "canonical_label": "Project"
+    },
+    "quantity": {
+      "alternate_labels": [
+        "Qty.",
+        "Item Quantity"
+      ],
+      "canonical_label": "Quantity"
+    },
+    "revision_suffix": {
+      "alternate_labels": [
+        "Rev.",
+        "Revision No."
+      ],
+      "canonical_label": "Revision"
+    },
+    "specification_section": {
+      "alternate_labels": [
+        "Spec Section",
+        "Section Reference"
+      ],
+      "canonical_label": "Specification Section"
+    },
+    "transmittal_number": {
+      "alternate_labels": [
+        "Transmittal Number",
+        "Submittal Transmittal No."
+      ],
+      "canonical_label": "Transmittal No."
+    },
+    "vendor_name": {
+      "alternate_labels": [
+        "Supplier",
+        "Subcontractor"
+      ],
+      "canonical_label": "Vendor"
+    }
+  },
+  "structural_fields": [
+    "transmittal_number",
+    "specification_section",
+    "descriptor_code",
+    "approving_authority",
+    "revision_suffix",
+    "action_stamp"
+  ]
+}

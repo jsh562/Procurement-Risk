@@ -54,6 +54,7 @@ __all__ = [
     "corpus_root",
     "discover_locations",
     "find_symlinks",
+    "repository_relative_path",
     "resolve_within",
 ]
 
@@ -200,6 +201,33 @@ def find_symlinks(root: Path | None = None) -> tuple[Path, ...]:
     holds.
     """
     return _scan(corpus_root(root)).links
+
+
+def repository_relative_path(repo_relative: str, root: Path | None = None) -> Path:
+    """Resolve a repository-relative corpus path under the corpus root.
+
+    The generation inputs of FR-009b are recorded as **repository-relative**
+    strings (`data/corpus/synthetic/…`) because that is the form a manifest
+    carries, while every path rule here is expressed relative to the corpus
+    root. This converts between the two once, so no module has to restate the
+    `data/corpus` prefix as a literal: the prefix is derived from
+    `DEFAULT_CORPUS_ROOT` and `REPO_ROOT` rather than written down again.
+
+    The string is passed in rather than imported from `manifest.py` — that
+    module already imports this one, and the closed three-value set stays where
+    the entry that records it lives.
+
+    Resolution goes through `resolve_within`, so a generation input is held to
+    the same containment ordering and link prohibition as a corpus document
+    (VR-009, VR-067). The target need not exist; a caller's own open reports
+    that, and reporting it here would make the two failures indistinguishable.
+    """
+    prefix = DEFAULT_CORPUS_ROOT.relative_to(REPO_ROOT).as_posix() + "/"
+    if not isinstance(repo_relative, str) or not repo_relative.startswith(prefix):
+        raise CorpusPathError(
+            f"{repo_relative!r} is not a repository-relative path under {prefix!r}"
+        )
+    return resolve_within(corpus_root(root), repo_relative[len(prefix) :])
 
 
 def resolve_within(base: Path, candidate: str | Path) -> Path:

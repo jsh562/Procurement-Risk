@@ -99,19 +99,19 @@
 
 ## Phase 5: US3 - Generate the Project-Document Layer from the Roster (Priority: P1) 🎯 MVP
 
-- [ ] T035 [P] [US3] {FR-023a} Define the approximated descriptor codes, review-code letters, and field labels in src/model/src/model/corpus/codes.py → exports: DESCRIPTOR_CODES, ACTION_CODES
-- [ ] T036 [US3] {FR-009a,FR-026} Author the three committed generation inputs in data/corpus/synthetic/ — generation-config.json, equipment-category-map.json, field-label-vocabulary.json after:T021
-- [ ] T037 [US3] {FR-026} Implement equipment-category to MasterFormat mapping in src/model/src/model/corpus/equipment.py after:T036 → exports: section_for_category()
-- [ ] T038 [US3] {FR-023,FR-029} Implement per-vendor layout templates carrying the six structural fields in src/model/src/model/corpus/templates.py ← T035:DESCRIPTOR_CODES
-- [ ] T039 [US3] {FR-021a,FR-021b,FR-032} Implement the deterministic ReportLab canvas — invariant=True, explicit producer, header outside the raster rect — in .../corpus/render.py
-- [ ] T040 [US3] {FR-019,FR-020,FR-024,FR-025} Implement the generator in src/model/src/model/corpus/generate.py — roster only via read_roster(), roster_hash verbatim, pre-write coverage assertions
-- [ ] T041 [US3] {FR-009,FR-009b,FR-017a,FR-031} [COMPLETES FR-017a] Emit the five per-project manifests from .../corpus/generate.py — seven SYNTHETIC fields, generation_inputs digests, classes
-- [ ] T042 [US3] {FR-009a,FR-009b,FR-016,FR-020} Roster and generation-input drift group in .../corpus/validate.py — VR-029, VR-030, VR-061 (3 of 72), naming every stale document
-- [ ] T043 [US3] {FR-023a,FR-027,FR-032a} Author data/corpus/synthetic/datasheet.md and add the datasheet group in .../corpus/validate.py — VR-051…055 (5 of 72)
-- [ ] T044 [US3] {FR-022} Offline and boundary group — VR-043 socket guard, VR-044 negative fixture in tests/fixtures/corpus_offline/, VR-045 roster import site (3 of 72)
-- [ ] T045 [US3] {FR-021} [COMPLETES FR-021] Determinism tests in src/model/tests/test_corpus_generate.py — VR-040a stability against the committed manifest, VR-040b sensitivity (2 of 72)
-- [ ] T046 [US3] {FR-006b,FR-021a} [COMPLETES FR-006b] Byte-identity tests in src/model/tests/test_corpus_generate.py — VR-041 re-render, VR-042 manifests into tmp_path (2 of 72)
-- [ ] T047 [US3] {FR-023,FR-024,FR-025,FR-026} [COMPLETES FR-026] Content and population tests in src/model/tests/test_corpus_generate.py — VR-034, VR-046, VR-047, VR-048 (4 of 72)
+- [X] T035 [P] [US3] {FR-023a} Define the approximated descriptor codes, review-code letters, and field labels in src/model/src/model/corpus/codes.py → exports: DESCRIPTOR_CODES, ACTION_CODES
+- [X] T036 [US3] {FR-009a,FR-026} Author the three committed generation inputs in data/corpus/synthetic/ — generation-config.json, equipment-category-map.json, field-label-vocabulary.json after:T021
+- [X] T037 [US3] {FR-026} Implement equipment-category to MasterFormat mapping in src/model/src/model/corpus/equipment.py after:T036 → exports: section_for_category()
+- [X] T038 [US3] {FR-023,FR-029} Implement per-vendor layout templates carrying the six structural fields in src/model/src/model/corpus/templates.py ← T035:DESCRIPTOR_CODES
+- [X] T039 [US3] {FR-021a,FR-021b,FR-032} Implement the deterministic ReportLab canvas — invariant=True, explicit producer, header outside the raster rect — in .../corpus/render.py
+- [X] T040 [US3] {FR-019,FR-020,FR-024,FR-025} Implement the generator in src/model/src/model/corpus/generate.py — roster only via read_roster(), roster_hash verbatim, pre-write coverage assertions
+- [X] T041 [US3] {FR-009,FR-009b,FR-017a,FR-031} [COMPLETES FR-017a] Emit the five per-project manifests from .../corpus/generate.py — seven SYNTHETIC fields, generation_inputs digests, classes
+- [X] T042 [US3] {FR-009a,FR-009b,FR-016,FR-020} Roster and generation-input drift group in .../corpus/validate.py — VR-029, VR-030, VR-061 (3 of 72), naming every stale document
+- [X] T043 [US3] {FR-023a,FR-027,FR-032a} Author data/corpus/synthetic/datasheet.md and add the datasheet group in .../corpus/validate.py — VR-051…055 (5 of 72)
+- [X] T044 [US3] {FR-022} Offline and boundary group — VR-043 socket guard, VR-044 negative fixture in tests/fixtures/corpus_offline/, VR-045 roster import site (3 of 72)
+- [X] T045 [US3] {FR-021} [COMPLETES FR-021] Determinism tests in src/model/tests/test_corpus_generate.py — VR-040a stability against the committed manifest, VR-040b sensitivity (2 of 72)
+- [X] T046 [US3] {FR-006b,FR-021a} [COMPLETES FR-006b] Byte-identity tests in src/model/tests/test_corpus_generate.py — VR-041 re-render, VR-042 manifests into tmp_path (2 of 72)
+- [X] T047 [US3] {FR-023,FR-024,FR-025,FR-026} [COMPLETES FR-026] Content and population tests in src/model/tests/test_corpus_generate.py — VR-034, VR-046, VR-047, VR-048 (4 of 72)
 
 **Notes**: **The committed layer is written once, at T056 in Phase 6, not here.** Generating a clean layer at the end of this phase and regenerating it after the US4 injectors land would commit ~30 PDFs twice into a repository that deliberately ships the corpus without large-file indirection (spec §Excluded, SC-014), leaving a dead binary blob per document in history permanently. US3 stays independently testable without that commit: T045, T046, and T047 run the full pipeline into `tmp_path` and assert every US3 scenario there, and T042's drift rules run against the emitted tree. If delivery stops at P1, run T056 with the injector set empty. T036 depends on T021 because FR-026 requires every equipment category to map to a section the vendored real layer actually holds — the real layer must exist first. T045's two runs differ in six named dimensions — absolute checkout path, process, `PYTHONHASHSEED`, non-UTC `TZ`, non-C `LC_ALL`, shuffled directory enumeration — so the criterion is not satisfiable by running one command twice in one directory; T046 writes into a temporary tree, never the working copy, or the byte comparison compares a file against itself. T044's socket guard is installed **before** the generator package is imported, so an import-time fetch is inside the observation window.
 

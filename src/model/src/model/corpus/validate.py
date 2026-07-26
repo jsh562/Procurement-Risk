@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -53,6 +54,8 @@ from urllib.parse import urlsplit
 from model.corpus.manifest import (
     COMMON_FIELDS,
     DIGEST_PATTERN,
+    GENERATION_DATE_PATTERN,
+    GENERATION_INPUT_PATHS,
     LAYER_REAL,
     LAYER_SYNTHETIC,
     MASTERFORMAT_PATTERN,
@@ -66,6 +69,7 @@ from model.corpus.manifest import (
     THIRD_PARTY_RIGHTS,
     ManifestError,
     content_hash_of_file,
+    sha256_of_file,
 )
 from model.corpus.paths import (
     DEFAULT_CORPUS_ROOT,
@@ -75,6 +79,7 @@ from model.corpus.paths import (
     corpus_root,
     discover_locations,
     find_symlinks,
+    repository_relative_path,
     resolve_within,
 )
 
@@ -89,8 +94,11 @@ from model.corpus.sources import RetrievalPolicyError, load_policy
 from model.roster.reader import read_roster
 
 __all__ = [
+    "DATASHEET_RELATIVE_PATH",
     "LAYERS",
+    "PREPROCESSING_DISCLOSURE",
     "SCHEMA_RELATIVE_PATH",
+    "STATED_LIMITS_DISCLOSURES",
     "Corpus",
     "Failure",
     "LocationReading",
@@ -105,10 +113,11 @@ __all__ = [
 
 LAYERS: tuple[str, ...] = (LAYER_REAL, LAYER_SYNTHETIC)
 
-# Validator-owned literal, resolved through `resolve_within` so the artifact
-# deciding what a manifest may say is governed by the same containment and link
-# rules as the documents it governs (VR-009, VR-061, VR-065, VR-067).
+# Validator-owned literals, resolved through `resolve_within` so the artifacts
+# deciding what a manifest may say are governed by the same containment and link
+# rules as the documents they govern (VR-009, VR-061, VR-065, VR-067).
 SCHEMA_RELATIVE_PATH = "manifest.schema.json"
+DATASHEET_RELATIVE_PATH = "synthetic/datasheet.md"
 
 STATUS_PASS = "PASS"
 STATUS_FAIL = "FAIL"
@@ -2366,6 +2375,515 @@ def _vr_062(corpus: Corpus) -> RuleOutcome:
                 )
             )
     return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+# ---------------------------------------------------------------------------
+# T042 - roster and generation-input drift
+# VR-029, VR-030, VR-061
+#
+# **The distinction this group exists to keep.** `roster_hash` is the reader's
+# canonical-content value and `generation_inputs.*` are raw-byte digests, and
+# they are computed differently on purpose (`data-model.md` §The Digest Kinds,
+# Kept Distinct). Conflating them makes a roster *reformat* read as drift, which
+# the lifecycle table declares it is not, and makes a generation-input edit
+# invisible to `sha256sum`. Two rules rather than one is what keeps the two
+# procedures legible from the field name.
+#
+# Both name **every** stale document rather than stopping at the first: a run
+# that reported one of twenty-five would be run twenty-five times.
+# ---------------------------------------------------------------------------
+
+
+@rule(
+    "VR-029",
+    summary="Every SYNTHETIC roster_hash equals read_roster().content_hash as evaluated now",
+    population="SYNTHETIC entries",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_029(corpus: Corpus) -> RuleOutcome:
+    """Roster drift, against a **live reader call** rather than a stored copy.
+
+    The comparison is against `read_roster().content_hash` — a digest over the
+    roster's canonical re-serialized content, not over the roster file's bytes.
+    That is why a roster reformat moves nothing here by design (FR-020, and
+    `data-model.md` §State & Lifecycle), and why this rule is not the same check
+    as VR-061's over the other three generation inputs.
+
+    Detection, not reconciliation: a stale entry is named and the run fails.
+    Nothing is regenerated, because a validator that regenerated to validate
+    could not tell a corpus defect from a generator defect.
+    """
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    roster = corpus.cached("roster", read_roster)
+    if isinstance(roster, Exception):
+        return RuleOutcome(
+            observed=len(entries),
+            failures=(Failure("VR-029", f"the roster could not be read: {roster}"),),
+        )
+
+    current = roster.content_hash
+    failures = tuple(
+        entry.failure(
+            "VR-029",
+            f"roster_hash records {entry.payload.get('roster_hash')!r} but read_roster() now "
+            f"yields {current!r}; this document is stale and must be regenerated or the roster "
+            "reverted",
+        )
+        for entry in entries
+        if entry.payload.get("roster_hash") != current
+    )
+    return RuleOutcome(observed=len(entries), failures=failures)
+
+
+@rule(
+    "VR-030",
+    summary="generator_id, seed and generation_date equal the committed generation-config values",
+    population="SYNTHETIC entries",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_030(corpus: Corpus) -> RuleOutcome:
+    """FR-009a's committed constant, checked against the artifact that holds it.
+
+    A generator that stamped a wall-clock date fails here on the first run after
+    the constant's date, and would additionally rewrite every manifest on every
+    run — the regression VR-042 exists to catch downstream of this one.
+
+    The configuration is read through the generator's own `load_config`, not a
+    second parser: a validator that accepted a configuration the generator
+    rejects would report agreement with a file the generator could not have
+    used. The import is local because it pulls the renderer in behind it, and
+    the validator must stay importable without one.
+    """
+    from model.corpus.generate import load_config
+
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    config = corpus.cached("generation-config", lambda: load_config(root=corpus.root))
+    if isinstance(config, Exception):
+        return RuleOutcome(
+            observed=len(entries),
+            failures=(
+                Failure(
+                    "VR-030",
+                    f"the committed generation configuration could not be read: {config}",
+                ),
+            ),
+        )
+
+    expected = {
+        "generator_id": config.generator_id,
+        "seed": config.seed,
+        "generation_date": config.generation_date,
+    }
+    failures: list[Failure] = []
+    for entry in entries:
+        for name, value in expected.items():
+            if entry.payload.get(name) != value:
+                failures.append(
+                    entry.failure(
+                        "VR-030",
+                        f"{name} records {entry.payload.get(name)!r} but the committed "
+                        f"generation configuration holds {value!r}",
+                    )
+                )
+        recorded_date = entry.payload.get("generation_date")
+        if not isinstance(recorded_date, str) or not GENERATION_DATE_PATTERN.fullmatch(
+            recorded_date
+        ):
+            failures.append(
+                entry.failure(
+                    "VR-030",
+                    f"generation_date is {recorded_date!r}; "
+                    f"{GENERATION_DATE_PATTERN.pattern} is required and the value is a "
+                    "committed constant, never a wall-clock read",
+                )
+            )
+    return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+@rule(
+    "VR-061",
+    summary="generation_inputs names exactly the three committed inputs and each digest equals "
+    "that file's current raw bytes",
+    population="SYNTHETIC entries",
+    layers=(LAYER_SYNTHETIC,),
+)
+def _vr_061(corpus: Corpus) -> RuleOutcome:
+    """Supporting-artifact drift, with the key set treated as untrusted input.
+
+    **Order of operations, stated because it is the control** (CWE-73): every
+    key is compared as a **literal string** against the closed three-value set
+    of repository-relative paths *before* any filesystem access. A key outside
+    that set fails on set equality and is never opened, so no traversal sequence
+    in a manifest-supplied key ever reaches a resolution step. Only a key inside
+    the set is resolved, and it is resolved through `repository_relative_path`,
+    which applies VR-009's ordering and VR-067's link prohibition.
+
+    The roster is **not** a key here. It is the fourth generation input and its
+    digest is `roster_hash`, compared by VR-029 against a live reader call,
+    because the reader's value is over canonical content while every value in
+    this mapping is over raw bytes. A mapping whose values were computed by two
+    procedures depending on the key is the conflation the field split prevents.
+
+    Attribution is **by recorded field**: a drifted input names every document
+    whose own entry records it, never every synthetic document on the assumption
+    that they all share every input.
+    """
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    expected = frozenset(GENERATION_INPUT_PATHS)
+
+    failures: list[Failure] = []
+    recorders: dict[str, list[EntryRef]] = {}
+    for entry in entries:
+        recorded = entry.payload.get("generation_inputs")
+        if not isinstance(recorded, Mapping):
+            failures.append(
+                entry.failure(
+                    "VR-061",
+                    f"generation_inputs is {recorded!r}; a mapping of repository-relative path "
+                    "to raw-byte digest is required",
+                )
+            )
+            continue
+        keys = frozenset(str(key) for key in recorded)
+        if keys != expected:
+            failures.append(
+                entry.failure(
+                    "VR-061",
+                    f"generation_inputs names {sorted(keys)}; exactly "
+                    f"{sorted(expected)} is required. Unexpected key(s) "
+                    f"{sorted(keys - expected)} fail on set equality and are never opened, and "
+                    f"missing key(s) {sorted(expected - keys)} leave an input undigested",
+                )
+            )
+        for key in sorted(keys & expected):
+            recorders.setdefault(key, []).append(entry)
+
+    for key in sorted(recorders):
+        current = corpus.cached(
+            f"generation-input:{key}",
+            lambda relative=key: sha256_of_file(repository_relative_path(relative, corpus.root)),
+        )
+        if isinstance(current, Exception):
+            failures.append(
+                Failure(
+                    "VR-061",
+                    f"the generation input {key} could not be digested: {current}",
+                )
+            )
+            continue
+        for entry in recorders[key]:
+            inputs = entry.payload["generation_inputs"]
+            if inputs[key] != current:
+                failures.append(
+                    entry.failure(
+                        "VR-061",
+                        f"generation_inputs[{key!r}] records {inputs[key]!r} but that file's "
+                        f"current raw bytes digest to {current!r}; the input drifted and this "
+                        "document was generated from the earlier one",
+                    )
+                )
+    return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+# ---------------------------------------------------------------------------
+# T043 - the synthetic corpus datasheet
+# VR-051, VR-052, VR-053, VR-054, VR-055
+#
+# Presence is a heading check, not a reading (VR-051), and the two disclosures
+# of VR-052 are **stated sub-conditions rather than reader judgement**: the
+# phrases each must carry are held below as data, so a datasheet that gestures
+# at a limit without stating it fails, and so an author knows what the rule
+# requires without reading the rule.
+# ---------------------------------------------------------------------------
+
+#: FR-027's eight, in the order the datasheet is expected to present them.
+DATASHEET_SECTIONS: tuple[str, ...] = (
+    "Motivation",
+    "Composition",
+    "Generation Process",
+    "Preprocessing",
+    "Intended Uses",
+    "Distribution",
+    "Maintenance",
+    "Stated Limits",
+)
+
+#: VR-052's two, each as `(what it discloses, the phrases that state it)`.
+#: Matched case-insensitively over the `Stated Limits` body only, so a phrase
+#: appearing elsewhere in the document does not discharge a limit.
+STATED_LIMITS_DISCLOSURES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "FR-023a - the transmittal codes and field labels are a documented approximation of "
+        "federal practice, not a reproduction of a live form (the form revision returned 403 "
+        "to automated retrieval, so the codes could not be verified)",
+        ("transmittal code", "field label", "documented approximation", "not a reproduction"),
+    ),
+    (
+        "FR-032a - the retained text layer carries no recognition error, so the corpus "
+        "evidences no robustness to genuine scan noise",
+        ("retained text layer", "no recognition error"),
+    ),
+)
+
+#: VR-053's answer, which is "none" and must say so. The four verbs are the
+#: ones `data-model.md` names; both spellings of the third are admitted because
+#: the disclosure is about the answer, not about orthography.
+PREPROCESSING_DISCLOSURE: tuple[tuple[str, ...], ...] = (
+    ("no source dataset",),
+    ("cleaned",),
+    ("filtered",),
+    ("labelled", "labeled"),
+    ("sampled",),
+)
+
+#: VR-054's second half. `sha256:` is the first.
+_HEX_RUN = re.compile(r"[0-9a-fA-F]{64}")
+
+
+def _datasheet_text(corpus: Corpus, rule_id: str) -> tuple[str | None, tuple[Failure, ...]]:
+    """The datasheet's text, or this rule's own failure explaining why not.
+
+    Resolved through `resolve_within` rather than joined: the datasheet is a
+    validator-owned literal path, and VR-065 enumerates it, but it is held to
+    the same containment ordering and link prohibition as a corpus document.
+    """
+    cached = corpus.cached(
+        "datasheet",
+        lambda: resolve_within(corpus.root, DATASHEET_RELATIVE_PATH).read_text(encoding="utf-8"),
+    )
+    if isinstance(cached, Exception):
+        return None, (
+            Failure(
+                rule_id,
+                f"the synthetic corpus datasheet at {DATASHEET_RELATIVE_PATH} could not be "
+                f"read: {cached}",
+            ),
+        )
+    return str(cached), ()
+
+
+def _heading_pattern(heading: str) -> re.Pattern[str]:
+    return re.compile(rf"^##[ \t]+{re.escape(heading)}[ \t]*$", re.IGNORECASE | re.MULTILINE)
+
+
+def _section_body(text: str, heading: str) -> str | None:
+    """The text under one level-2 heading, up to the next level-2 heading.
+
+    `None` when the heading is absent — VR-051's finding, not this helper's, so
+    the caller reports it under its own rule rather than twice.
+    """
+    match = _heading_pattern(heading).search(text)
+    if match is None:
+        return None
+    rest = text[match.end() :]
+    following = re.search(r"^##[ \t]+\S", rest, re.MULTILINE)
+    return rest[: following.start()] if following else rest
+
+
+@rule(
+    "VR-051",
+    summary="The datasheet carries all eight required disclosures as level-2 headings",
+    population="required datasheet disclosures",
+)
+def _vr_051(corpus: Corpus) -> RuleOutcome:
+    text, failures = _datasheet_text(corpus, "VR-051")
+    if text is None:
+        return RuleOutcome(observed=len(DATASHEET_SECTIONS), failures=failures)
+    missing = tuple(
+        Failure(
+            "VR-051",
+            f"the datasheet carries no level-2 heading {heading!r}; presence is a heading "
+            "check, not a reading, and all eight of "
+            f"{list(DATASHEET_SECTIONS)} are required",
+        )
+        for heading in DATASHEET_SECTIONS
+        if _heading_pattern(heading).search(text) is None
+    )
+    return RuleOutcome(observed=len(DATASHEET_SECTIONS), failures=missing)
+
+
+@rule(
+    "VR-052",
+    summary="Stated Limits carries the approximation disclosure and the text-layer disclosure",
+    population="required Stated Limits disclosures",
+)
+def _vr_052(corpus: Corpus) -> RuleOutcome:
+    """Two disclosures, each as stated sub-conditions rather than judgement.
+
+    Whether the approximation is a *good* one is unverifiable here — the live
+    form returned 403 — which is exactly why FR-023a demands disclosure rather
+    than fidelity, and why this rule checks that the limit is stated rather than
+    that it is met.
+    """
+    text, failures = _datasheet_text(corpus, "VR-052")
+    if text is None:
+        return RuleOutcome(observed=len(STATED_LIMITS_DISCLOSURES), failures=failures)
+
+    body = _section_body(text, "Stated Limits")
+    if body is None:
+        return RuleOutcome(
+            observed=len(STATED_LIMITS_DISCLOSURES),
+            failures=(
+                Failure(
+                    "VR-052",
+                    "the datasheet has no 'Stated Limits' section to carry the two required "
+                    "disclosures (VR-051 reports the missing heading)",
+                ),
+            ),
+        )
+
+    folded = body.casefold()
+    collected: list[Failure] = []
+    for what, phrases in STATED_LIMITS_DISCLOSURES:
+        absent = [phrase for phrase in phrases if phrase.casefold() not in folded]
+        if absent:
+            collected.append(
+                Failure(
+                    "VR-052",
+                    f"'Stated Limits' does not state {what}: the phrase(s) {absent} are absent. "
+                    "The disclosure is a stated sub-condition, not a reader's inference",
+                )
+            )
+    return RuleOutcome(observed=len(STATED_LIMITS_DISCLOSURES), failures=tuple(collected))
+
+
+@rule(
+    "VR-053",
+    summary="Preprocessing is non-empty and states that no source dataset was preprocessed",
+    population="required Preprocessing disclosures",
+)
+def _vr_053(corpus: Corpus) -> RuleOutcome:
+    """Required even though the answer is "none".
+
+    The opposite of E001's roster datasheet, where the category was omitted with
+    a reason: a reader cannot tell an unanswered question from one whose answer
+    happens to be nothing, so this section is required and must say so.
+    """
+    text, failures = _datasheet_text(corpus, "VR-053")
+    if text is None:
+        return RuleOutcome(observed=len(PREPROCESSING_DISCLOSURE), failures=failures)
+
+    body = _section_body(text, "Preprocessing")
+    if body is None:
+        return RuleOutcome(
+            observed=len(PREPROCESSING_DISCLOSURE),
+            failures=(
+                Failure(
+                    "VR-053",
+                    "the datasheet has no 'Preprocessing' section; it is required here even "
+                    "though the answer is 'none' (VR-051 reports the missing heading)",
+                ),
+            ),
+        )
+    if not body.strip():
+        return RuleOutcome(
+            observed=len(PREPROCESSING_DISCLOSURE),
+            failures=(
+                Failure("VR-053", "'Preprocessing' is present but empty; it must state 'none'"),
+            ),
+        )
+
+    folded = body.casefold()
+    absent = tuple(
+        Failure(
+            "VR-053",
+            f"'Preprocessing' does not state that no source dataset was {list(spellings)}: "
+            "the section must say that nothing was cleaned, filtered, labelled or sampled, "
+            "not merely that preprocessing is out of scope",
+        )
+        for spellings in PREPROCESSING_DISCLOSURE
+        if not any(spelling.casefold() in folded for spelling in spellings)
+    )
+    return RuleOutcome(observed=len(PREPROCESSING_DISCLOSURE), failures=absent)
+
+
+@rule(
+    "VR-054",
+    summary="The datasheet carries no literal digest - no sha256: value and no 64-hex run",
+    population="datasheets scanned for a literal digest",
+)
+def _vr_054(corpus: Corpus) -> RuleOutcome:
+    """A committed digest goes stale, and a stale one is indistinguishable from
+    real drift. E001 VR-016's reasoning, applied to this datasheet: the
+    manifests record every digest, and documentation describes them."""
+    text, failures = _datasheet_text(corpus, "VR-054")
+    if text is None:
+        return RuleOutcome(observed=1, failures=failures)
+
+    collected: list[Failure] = []
+    if "sha256:" in text.casefold():
+        collected.append(
+            Failure(
+                "VR-054",
+                "the datasheet carries a literal 'sha256:' value; a digest copied into prose is "
+                "a second source of truth that nothing updates",
+            )
+        )
+    run = _HEX_RUN.search(text)
+    if run is not None:
+        collected.append(
+            Failure(
+                "VR-054",
+                f"the datasheet carries a 64-character hexadecimal run at offset {run.start()} "
+                f"({run.group()[:12]}...); a committed digest goes stale",
+            )
+        )
+    return RuleOutcome(observed=1, failures=tuple(collected))
+
+
+@rule(
+    "VR-055",
+    summary="The datasheet resolves under the corpus root and outside every corpus location",
+    population="datasheets located",
+)
+def _vr_055(corpus: Corpus) -> RuleOutcome:
+    """Outside every location, so it is not itself a corpus document.
+
+    Resolution is `resolve_within`'s, whose declared base is the corpus root —
+    fixed at `data/corpus/` by FR-018 — so a real path under it is under `data/`
+    by construction. That is the same reasoning VR-009 uses to keep one declared
+    base rather than three competing ones.
+    """
+    try:
+        path = resolve_within(corpus.root, DATASHEET_RELATIVE_PATH)
+    except CorpusPathError as exc:
+        return RuleOutcome(
+            observed=1,
+            failures=(
+                Failure("VR-055", f"the datasheet does not resolve under the corpus root: {exc}"),
+            ),
+        )
+    if not _is_regular_file(path):
+        return RuleOutcome(
+            observed=1,
+            failures=(
+                Failure(
+                    "VR-055",
+                    f"{DATASHEET_RELATIVE_PATH} is not an existing regular file "
+                    "(tested without following links)",
+                ),
+            ),
+        )
+    if corpus.is_inside_a_location(path):
+        inside = next(
+            directory.relative_to(corpus.root).as_posix()
+            for directory in corpus.location_dirs()
+            if path.is_relative_to(directory)
+        )
+        return RuleOutcome(
+            observed=1,
+            failures=(
+                Failure(
+                    "VR-055",
+                    f"the datasheet sits inside corpus location {inside!r}, which would make it "
+                    "a corpus document requiring a manifest entry; it belongs outside every "
+                    "location",
+                    inside,
+                    path.name,
+                ),
+            ),
+        )
+    return RuleOutcome(observed=1, failures=())
 
 
 # ---------------------------------------------------------------------------
