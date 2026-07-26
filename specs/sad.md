@@ -189,6 +189,7 @@ flowchart TB
         LW["web<br>Next.js"] --> LA["api<br>FastAPI + ONNX"]
         LA --> LDB[("postgres<br>pgvector")]
         LJ["jobs (profile: jobs)<br>one-shot"] -.writes.-> LDB
+        LM["model jobs<br>console entry points"] -.writes.-> LDB
     end
     subgraph Hosted["Hosted — P2"]
         HW["Vercel<br>web"] --> HA["Container host<br>api"]
@@ -198,7 +199,7 @@ flowchart TB
     Local -.->|"same artifacts, same schema"| Hosted
 ```
 
-Job containers are declared under a non-default profile so ordinary startup brings up only the three persistent services, and the API never declares a startup dependency on a job. The base image is pinned by digest and dependencies by hash, so environment drift is not an admissible source of variance in published numbers.
+Jobs reach their runtime one of two ways ({SAD:ADR-0011}). Containerized jobs are declared under a non-default profile so ordinary startup brings up only the three persistent services, and the API never declares a startup dependency on a job; their base image is pinned by digest and dependencies by hash. A job owned by the modeling boundary is invoked instead as a console entry point through that entry's own environment, because the modeling boundary cannot share the serving build context without defeating the contracts that keep the two apart — its determinism is bound by the entry's lockfile rather than by an image digest. Either way environment drift is not an admissible source of variance in published numbers; the mechanism differs, the guarantee does not.
 
 ## Cross-Cutting Concerns
 
