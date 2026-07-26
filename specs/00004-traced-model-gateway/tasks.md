@@ -54,7 +54,7 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 - [ ] T008 [P] [OBJ1] {TR-002} Create the gateway-owned error hierarchy in src/gateway/src/gateway/errors.py → exports: GatewayError, GatewayConfigError
 - [ ] T009 [OBJ1] {TR-001,TR-003,TR-004} Replace the client_type placeholder with a function-local lazy anthropic import in src/gateway/src/gateway/provider.py
 - [ ] T010 [OBJ1] {TR-002} Create the public invocation surface in src/gateway/src/gateway/api.py ← T007:InvocationRequest → exports: invoke
-- [ ] T011 [OBJ1] {TR-031,TR-047,TR-080} Add the explicit trace-id request field, 32-hex domain validation at the boundary, and generation in models.py and api.py after:T010
+- [ ] T011 [OBJ1] {TR-031,TR-047,TR-080} Add the explicit trace-id request field, 32-hex domain validation at the boundary, and generation in src/gateway/src/gateway/models.py and src/gateway/src/gateway/api.py after:T010
 - [ ] T012 [OBJ1] {TR-032,TR-075} [COMPLETES TR-032] Create the orchestration module over provider, validation, compute, and record in src/gateway/src/gateway/orchestrator.py
 - [ ] T013 [P] [OBJ1] {TR-002} Add the runtime public-surface check reporting a leaked provider type by name in src/gateway/tests/test_public_surface.py
 - [ ] T014 [OBJ1] {TR-002,TR-004} [COMPLETES TR-002] Enumerate the public entry points and assert client_type is absent in src/gateway/tests/test_api_surface.py
@@ -84,7 +84,7 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 - [ ] T028 [OBJ3] {TR-015,TR-046,TR-049} Author Alembic revision 0101_price_table_entry (composite PK, four NUMERIC(12,6) rates, restrictive FK) in src/model/migrations/versions/ after:T027
 - [ ] T029 [OBJ3] {TR-012,TR-013,TR-016,TR-031,TR-044,TR-046} Author Alembic revision 0102_llm_invocation (named CHECKs, both indexes, pin COMMENT) in src/model/migrations/versions/ after:T028
 - [ ] T030 [OBJ3] {TR-015,TR-081} [COMPLETES TR-015] Author Alembic revision 0103_seed_price_table (sourced version plus entries, ON CONFLICT DO NOTHING) in src/model/migrations/versions/ after:T029
-- [ ] T031 [OBJ3] {TR-017} WITHDRAWN 2026-07-26 — ADR-0013 gives E003 the Alembic runner in /src/model; E004 builds none. No work remains under this id
+- [ ] T031 [OBJ3] {TR-017} WITHDRAWN 2026-07-26 — ADR-0013 gives E003 the Alembic runner in src/model; E004 builds none. No work remains under this id
 - [ ] T032 [OBJ3] {TR-017,TR-050} Verify apply-from-empty and second-run-no-op for this epic's revisions against E003's runner in src/gateway/tests/test_migrations.py (VR-027) after:T030
 - [ ] T033 [P] [OBJ3] {TR-018,TR-051} Add the prefix-block, duplicate-prefix, and single-head check over E003's revision directory in tests/checks/test_migration_ranges.py (VR-028)
 - [ ] T034 [P] [OBJ3] {TR-014,TR-028,TR-049} Write failing Hypothesis property tests for cost, sum-then-quantize-once, and decimal round trip in src/gateway/tests/test_compute_pricing.py
@@ -94,8 +94,8 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 - [ ] T038 [P] [OBJ3] {TR-028,TR-040,TR-056} Write failing Hypothesis property tests for duration and attempt aggregation in src/gateway/tests/test_compute_timing.py
 - [ ] T039 [OBJ3] {TR-040,TR-056} Implement monotonic duration arithmetic and attempt-count aggregation in src/gateway/src/gateway/compute/timing.py after:T038 → exports: elapsed_ms
 - [ ] T040 [OBJ3] {TR-035,TR-045} Implement the gateway-owned connection and own-transaction write in src/gateway/src/gateway/record/writer.py → exports: RecordWriter
-- [ ] T041 [OBJ3] {TR-011,TR-012,TR-037,TR-043} Populate the closed field list, resolution mode, fixture key, and pricing timestamp in src/gateway/src/gateway/record/writer.py ← T035:compute_cost
-- [ ] T042 [OBJ3] {TR-048} Verify the pinned price-table version resolves before request construction in config.py and orchestrator.py (VR-025) after:T026
+- [ ] T041 [OBJ3] {TR-011,TR-012,TR-037,TR-043} Populate the closed field list, resolution mode, fixture key, and pricing timestamp in src/gateway/src/gateway/record/writer.py ← T035:compute_cost ← T040:RecordWriter ← T039:elapsed_ms
+- [ ] T042 [OBJ3] {TR-048} Verify the pinned price-table version resolves before request construction in src/gateway/src/gateway/config.py and src/gateway/src/gateway/orchestrator.py (VR-025) after:T026
 - [ ] T043 [OBJ3] {TR-058,TR-077} Emit the absent-cost warning and the invocation-completion log line in src/gateway/src/gateway/record/writer.py after:T041
 - [ ] T044 [OBJ3] {TR-036,TR-041,TR-045} Implement fail-closed spooling to local SQLite in src/gateway/src/gateway/record/spool.py after:T040 → exports: InvocationSpool
 - [ ] T045 [OBJ3] {TR-052,TR-053,TR-054,TR-077} Implement the invocation-triggered exactly-once drain with depth logging in src/gateway/src/gateway/record/reconcile.py ← T044:InvocationSpool
@@ -128,8 +128,8 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 - [ ] T062 [OBJ5] {TR-062,TR-065} Add the single credential key and the bounded configuration-failure message exclusion set to src/gateway/src/gateway/config.py after:T052
 - [ ] T063 [OBJ5] {TR-024,TR-059} Implement fail-closed credential redaction over the five-sink egress inventory in src/gateway/src/gateway/redaction.py → exports: redact
 - [ ] T064 [OBJ5] {TR-061} Read the credential once at construction and hold it off every repr'd or serialized object in src/gateway/src/gateway/provider.py after:T009
-- [ ] T065 [OBJ5] {TR-025,TR-064} Normalize provider exceptions to status, error type, and request id with no chained cause in errors.py and provider.py after:T008
-- [ ] T066 [OBJ5] {TR-026,TR-066} Default content capture off and apply the closed log field list in config.py, redaction.py, and record/writer.py ← T063:redact
+- [ ] T065 [OBJ5] {TR-025,TR-064} Normalize provider exceptions to status, error type, and request id with no chained cause in src/gateway/src/gateway/errors.py and src/gateway/src/gateway/provider.py after:T008
+- [ ] T066 [OBJ5] {TR-026,TR-066} Default content capture off and apply the closed log field list in src/gateway/src/gateway/config.py, src/gateway/src/gateway/redaction.py, and src/gateway/src/gateway/record/writer.py ← T063:redact
 - [ ] T067 [OBJ5] {TR-030,TR-060} Implement the two-detector scan with a seeded positive case per sink in src/gateway/tests/test_fixture_credential_scan.py after:T063
 - [ ] T068 [P] [OBJ5] {TR-024,TR-061} Add repr, traceback, and committed-fixture redaction tests in src/gateway/tests/test_redaction.py
 - [ ] T069 [P] [OBJ5] {TR-066,TR-076} Add the per-sink not-captured marker test over record, spool, error, logs, and fixture in src/gateway/tests/test_not_captured.py (VR-037)
@@ -148,7 +148,7 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T073 [P] Add the fixture-store 25 MB and spool-depth 10 MB soft-cap warning checks in src/gateway/tests/test_fixtures.py and test_spool_reconcile.py (AD-008)
+- [ ] T073 [P] Add the fixture-store 25 MB and spool-depth 10 MB soft-cap warning checks in src/gateway/tests/test_fixtures.py and src/gateway/tests/test_spool_reconcile.py (AD-008)
 - [ ] T074 Verify the gateway entry reaches ≥85% line coverage in the root combined report with the provider-path exclusion stated (AD-007) after:T005
 - [ ] T075 [P] Benchmark gateway overhead ≤50 ms p95 excluding provider time and replay resolution ≤10 ms p95 (AD-008)
 
@@ -165,7 +165,7 @@ Setup → Delivery Work Items (OBJ1 → OBJ2 → OBJ3 → OBJ4 → OBJ5 → OBJ6
 - **Hints carried by tasks whose line had no room for the reference**: T035 implements HINT-004 (sum all four billing-class terms at full precision, quantize once); T045 implements HINT-005 (`ON CONFLICT DO NOTHING` suppresses primary-key conflicts only — an unresolvable FK is retained and logged, never dropped, and never fails the triggering invocation); T049 implements HINT-009 (compare against the information schema of a migrated database, never against `models.py`).
 - **Cross-phase edges**: T021→T009/T018, T022→T012/T020, T025→T021, T042→T026, T051/T052→T018, T062→T052, T064→T009, T065→T008, T071→T060, T074→T005.
 - **Within-phase edges** (same rule, listed separately so the cross-phase set stays accurate): T023→T022, T066→T063.
-- **Symbol-import edges gate execution exactly as `after:` does.** Four tasks carry a `← T###:Symbol` edge and no `after:` at all — T010←T007, T041←T035, T045←T044, T066←T063 — so a consumer reading only `after:` under-constrains them. Both forms must be honoured.
+- **Symbol-import edges gate execution exactly as `after:` does.** Four tasks carry a `← T###:Symbol` edge and no `after:` at all — T010←T007, T041←T035/T040/T039, T045←T044, T066←T063 — so a consumer reading only `after:` under-constrains them. Both forms must be honoured.
 - **P1 boundary**: Phases 1–6 (T001–T070) are the viable deliverable. Phase 7 (OBJ6, P2) and Phase 8 are omittable without breaking any P1 criterion.
 - Tasks marked `[P]` can run in parallel within their phase — they touch distinct files and carry no `after:T###` or `← T###:` edge to another task in the same batch.
 - A task with `after:T###` or `← T###:Symbol` must not be `[P]`-batched with the referenced task; the implementing agent must verify the referenced task is `[X]` before executing.
