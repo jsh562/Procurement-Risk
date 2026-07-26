@@ -660,10 +660,10 @@ None. All 14 capabilities and all 9 accepted architecture decisions map to at le
 | ExtractedValue | E003, E006 | E009, E012 |
 | PurchaseOrderLine | E003, E005 | E007, E009, E010, E017, E019 |
 | LifecycleEvent | E003, E005 | E007 |
-| ResolvedEntity | E009 | E012, E014, E016 |
+| ResolvedEntity | E003 (schema), E009 (populated) | E012, E014, E016 |
 | ReviewQueueItem | E009 | E016 |
 | ForecastRun | E003, E007 | E010, E012, E014 |
-| PosteriorDraws / SurvivalArray | E007 | E010, E012, E019 |
+| PosteriorDraws / SurvivalArray | E003 (schema), E007 (populated) | E010, E012, E019 |
 | ModelInvocation | E004 | E013, E014 |
 | CriticalityOverride | E017 | E010 (ranking) |
 
