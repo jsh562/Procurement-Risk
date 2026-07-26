@@ -1,0 +1,52 @@
+{
+  "degradation": {
+    "profiles": {
+      "SCAN_HEAVY": {
+        "blur_radius_tenths": {
+          "max": 12,
+          "min": 6
+        },
+        "contrast_percent": {
+          "max": 80,
+          "min": 62
+        },
+        "noise_percent": {
+          "max": 9,
+          "min": 4
+        },
+        "rotation_millidegrees": {
+          "max": 900,
+          "min": -900
+        }
+      },
+      "SCAN_LIGHT": {
+        "blur_radius_tenths": {
+          "max": 5,
+          "min": 2
+        },
+        "contrast_percent": {
+          "max": 98,
+          "min": 88
+        },
+        "noise_percent": {
+          "max": 3,
+          "min": 1
+        },
+        "rotation_millidegrees": {
+          "max": 300,
+          "min": -300
+        }
+      }
+    }
+  },
+  "documents_per_project": 5,
+  "generation_date": "2026-07-26",
+  "generator_id": "model.corpus.generate/1",
+  "items_per_document": {
+    "max": 3,
+    "min": 1
+  },
+  "pages_per_document": 2,
+  "renderer_requirement": "reportlab",
+  "seed": 20260726
+}

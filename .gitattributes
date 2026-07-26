@@ -1,0 +1,26 @@
+# Corpus artifacts are digested over their raw committed bytes, so their line
+# endings are content rather than presentation. `core.autocrlf` is true on the
+# Windows development machine, and without these rules a checkout rewrites the
+# generation inputs to CRLF while the Linux verification runner — the platform
+# of record for every byte-identity claim (MS-4) — sees LF. The recorded
+# `generation_inputs` digests would then fail VR-061 on CI for a line-ending
+# reason unrelated to content, which is exactly the trap HINT-004 names.
+#
+# This materialised during implementation: a stash/pop round-trip rewrote all
+# three generation inputs. Pinning them here makes the working copy agree with
+# the index on every platform instead of relying on nobody running the wrong
+# git command.
+data/corpus/**/*.json text eol=lf
+data/corpus/**/*.md   text eol=lf
+
+# Vendored specifications and generated documents are binary. Git already
+# detects them, but saying so explicitly keeps a future `text=auto` from ever
+# reaching them — a single rewritten byte breaks `content_hash`.
+data/corpus/**/*.pdf  binary
+
+# The roster fixture is hashed over a canonical re-serialization rather than
+# raw bytes, so its digest already survives a line-ending rewrite by design
+# (E001 VR-008b). It is pinned anyway: the file is compared byte-for-byte by
+# other checks, and one convention for `data/` is easier to keep than two.
+data/roster/**/*.json text eol=lf
+data/roster/**/*.md   text eol=lf

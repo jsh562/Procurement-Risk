@@ -60,6 +60,17 @@ def locked_distributions(entry: str) -> set[str]:
     return {normalize(package["name"]) for package in lock["package"]}
 
 
+def declared_contracts(entry: str) -> list[str]:
+    """The names of every import-linter contract this entry declares.
+
+    Read from the manifest rather than from a list kept beside the fixtures, so
+    a contract added to any entry without a negative fixture standing in for it
+    surfaces as a failing check rather than as an untested contract (FR-035).
+    """
+    importlinter = manifest(entry).get("tool", {}).get("importlinter", {})
+    return [contract["name"] for contract in importlinter.get("contracts", [])]
+
+
 def javascript_lockfiles() -> list[Path]:
     names = ("package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb")
     web = SRC_ROOT / "web"

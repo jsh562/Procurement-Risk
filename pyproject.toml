@@ -51,6 +51,7 @@ source = [
     "tests/checks/helpers",
     "src/model/src/model/roster",
     "src/model/src/model/schema",
+    "src/model/src/model/corpus",
     "src/gateway/src/gateway",
 ]
 
@@ -61,6 +62,11 @@ source = [
 helpers = ["tests/checks/helpers", "*/tests/checks/helpers"]
 roster = ["src/model/src/model/roster", "*/src/model/roster"]
 schema = ["src/model/src/model/schema", "*/src/model/schema"]
+# Added with E002. It works today without this entry only because the model
+# step passes an explicit `--source` and the data file holds absolute paths, so
+# the mapping is never consulted -- an accident that ends the moment anyone
+# sets `relative_files` or the step loses its explicit scope.
+corpus = ["src/model/src/model/corpus", "*/src/model/corpus"]
 gateway = ["src/gateway/src/gateway", "*/src/gateway"]
 
 [tool.coverage.report]
