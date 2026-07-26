@@ -17,7 +17,7 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 
 - `[OBJ1]` → Provider-type-free traced invocation path — public surface, lazy provider import, orchestration seam, three build-time contracts (P1)
 - `[OBJ2]` → Schema-validated output with bounded repair — validation, one repair, transport budget, deadline, total outcome mapping (P1)
-- `[OBJ3]` → Invocation record with recomputable cost — migrations `0100`–`0103`, runner, pricing and timing arithmetic, record writer, spool and reconcile, read contract (P1)
+- `[OBJ3]` → Invocation record with recomputable cost — revisions `0100`–`0103` authored into E003's directory, pricing and timing arithmetic, record writer, spool and reconcile, read contract (P1)
 - `[OBJ4]` → Content-hash fixtures and offline replay — canonical serialization, digests, fixture store, mode selection, network guard (P1)
 - `[OBJ5]` → Credential redaction and error normalization — five-sink egress inventory, two-detector scan, normalized errors, closed log field list (P1)
 - `[OBJ6]` → Provider-reaching smoke and fixture refresh — opt-in gated, separable from P1 (P2)

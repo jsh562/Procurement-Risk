@@ -58,13 +58,13 @@
 - **Pitfalls**: Unbounded spool growth while Postgres is down, and the irreducible billed-but-unrecorded window if the process dies between the provider response and the spool commit.
 - **Sources**: https://microservices.io/patterns/data/transactional-outbox.html, https://www.sqlite.org/whentouse.html
 
-## Library-owned migrations with claimed number ranges
+## Migrations owned by the modeling entry, with claimed prefix blocks
 
-- **Decision**: Apply raw numbered SQL files in filename order from two configured source directories into one migration ledger, using a runner that pulls neither an ORM nor a web framework.
-- **Rationale**: Forward-only raw SQL with a multi-source configuration is the documented way to merge migrations owned by separate packages into one database and one ledger.
-- **Rejected**: Alembic, which pulls SQLAlchemy and models parallel streams as a revision graph needing branch labels and merge revisions — machinery that fights a numeric claimed-range convention.
-- **Pitfalls**: No runner enforces a claimed range, so ownership must live in the filename prefix and be asserted by a check that every file falls inside its epic's range with no duplicates across directories.
-- **Sources**: https://ollycope.com/software/yoyo/latest/, https://alembic.sqlalchemy.org/en/latest/branches.html
+- **Decision**: Alembic, owned by `/src/model` per {SAD:ADR-0013}, with each epic's ownership expressed as a reserved filename-prefix block layered over Alembic's revision identifiers — `0001`–`0099` for E003, `0100`–`0199` for E004.
+- **Rationale**: One database implies one schema owner, and the entry that writes nearly every domain table is the natural holder of the tooling; prefix blocks give parallel epics disjoint authoring space without renegotiating numbers.
+- **Rejected**: A raw-SQL runner owned by the gateway — this epic's original choice, withdrawn because it would have required superseding ADR-0010's gateway-minimality consequence, and because two runners against one database is the collision the arrangement exists to prevent.
+- **Pitfalls**: No runner enforces a block, so ownership must be asserted by a check over the revision directory covering prefix range, duplicate prefixes, and a single head — a merge revision or a second head silently makes the apply order ambiguous.
+- **Sources**: https://alembic.sqlalchemy.org/en/latest/branches.html, https://ollycope.com/software/yoyo/latest/
 
 ## Coverage instrumentation across monorepo entries
 
@@ -117,7 +117,7 @@
 | Credential redaction | Three separate egress obligations, not one logging filter | Tracebacks and provider error bodies leak on paths a log filter never sees |
 | Optional provider extra and lazy import | Optional-dependency extra plus a function-local SDK import and a local protocol for typing | Only form importable and type-checkable with the SDK absent under the import contract |
 | Local spool for failed record writes | SQLite spool keyed on invocation id, conflict-ignoring insert, delete after commit | At-least-once delivery plus an idempotent sink yields an exactly-once effect |
-| Library-owned migrations with claimed ranges | Numbered raw SQL from two source directories into one ledger, plus a range check | Forward-only SQL with no ORM; range ownership is a convention no runner enforces |
+| Migrations owned by the modeling entry | Alembic in `/src/model`, prefix blocks over revision ids, plus prefix and single-head checks | One database implies one schema owner; block ownership is a convention no runner enforces |
 | Coverage across monorepo entries | Per-entry data file, parallel mode, relative files, root combine with path remapping | Path remapping is what merges per-entry measurements into one source tree |
 | Per-request deadline and retry budget | Per-attempt timeout inside an outer monotonic deadline; expiry is one transport failure | Per-operation timeouts multiply by attempts and are unbounded without a ceiling |
 | Data-integrity requirement quality | ISO/IEC 25012 inherent-versus-system-dependent split, stated as named constraints under INCOSE measurability rules | A constraint has a verdict; a property does not |
@@ -142,8 +142,8 @@
 | https://peps.python.org/pep-0562/ | optional extra and lazy import | 2026-07-25 |
 | https://microservices.io/patterns/data/transactional-outbox.html | local spool for failed writes | 2026-07-25 |
 | https://www.sqlite.org/whentouse.html | local spool for failed writes | 2026-07-25 |
-| https://ollycope.com/software/yoyo/latest/ | library-owned migrations | 2026-07-25 |
-| https://alembic.sqlalchemy.org/en/latest/branches.html | library-owned migrations | 2026-07-25 |
+| https://ollycope.com/software/yoyo/latest/ | migrations ownership and prefix blocks | 2026-07-25 |
+| https://alembic.sqlalchemy.org/en/latest/branches.html | migrations ownership and prefix blocks | 2026-07-25 |
 | https://coverage.readthedocs.io/en/latest/config.html | coverage across monorepo entries | 2026-07-25 |
 | https://coverage.readthedocs.io/en/latest/commands/cmd_combine.html | coverage across monorepo entries | 2026-07-25 |
 | https://www.python-httpx.org/advanced/timeouts/ | deadline and retry budget | 2026-07-25 |

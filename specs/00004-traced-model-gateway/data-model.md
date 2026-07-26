@@ -414,4 +414,4 @@ Two further items are noted rather than divergent: the exact spelling of `gen_ai
 | SC-021 | VR-017, VR-018; spool state machine |
 | SC-023 | VR-035 |
 | IP-005 | E013 Read Contract table |
-| IP-008 | Migrations — shared runner-owned `schema_migration` ledger with a `source` column, outside both claimed ranges |
+| IP-008 | Migrations — Alembic's own version table, created and maintained by E003's runner in `/src/model`, outside every epic's prefix block |
