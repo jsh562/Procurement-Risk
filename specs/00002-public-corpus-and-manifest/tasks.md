@@ -82,16 +82,16 @@
 
 ## Phase 4: US2 - Record and Validate Per-Document Provenance (Priority: P1) 🎯 MVP
 
-- [ ] T025 [US2] {FR-015} Implement the validator core in src/model/src/model/corpus/validate.py — rule registry, all failures collected, non-zero exit — VR-056, VR-057, VR-066 (3 of 72)
-- [ ] T026 [US2] {FR-015} [COMPLETES FR-015] Build the negative-corpus fixture harness in src/model/tests/test_corpus_validate.py — tmp_path builder plus an assert-fails-naming-rule helper
-- [ ] T027 [US2] {FR-006a,FR-006b,FR-010,FR-014} Schema-conformance and field-set group in .../corpus/validate.py — VR-001…003, VR-014…017, VR-027, VR-058, VR-063 (10 of 72)
-- [ ] T028 [US2] {FR-001a,FR-006,FR-014a,FR-017a,FR-018a} Location topology and file↔entry reconciliation group in .../corpus/validate.py — VR-004…007, 010, 011, 013, 059, 060, 064, 065 (11 of 72)
-- [ ] T029 [US2] {FR-006,FR-018} Path containment, symlink prohibition, and case-collision group in .../corpus/validate.py — VR-009, VR-067, VR-068 (3 of 72) ← T012:resolve_within
-- [ ] T030 [US2] {FR-007,FR-008a} [COMPLETES FR-007] Digest recomputation group in .../corpus/validate.py — VR-012 file bytes, VR-018 content hash equals upstream digest (2 of 72)
-- [ ] T031 [US2] {FR-005,FR-011,FR-012,FR-012a,FR-013} [COMPLETES FR-005] License-basis group in .../corpus/validate.py — VR-008, VR-023, VR-024, VR-028 (4 of 72)
-- [ ] T032 [US2] {FR-003,FR-008} [COMPLETES FR-008] REAL field-value group in .../corpus/validate.py — VR-019, VR-020, VR-021, VR-022 (4 of 72)
-- [ ] T033 [US2] {FR-002,FR-002a,FR-004,FR-008d} [COMPLETES FR-002] Policy-agreement and ledger group in .../corpus/validate.py — VR-025, VR-026, VR-062 (3 of 72)
-- [ ] T034 [US2] {FR-017} Add the corpus-validation step invoking corpus-validate to .github/workflows/verify.yml after:T025
+- [X] T025 [US2] {FR-015} Implement the validator core in src/model/src/model/corpus/validate.py — rule registry, all failures collected, non-zero exit — VR-056, VR-057, VR-066 (3 of 72)
+- [X] T026 [US2] {FR-015} [COMPLETES FR-015] Build the negative-corpus fixture harness in src/model/tests/test_corpus_validate.py — tmp_path builder plus an assert-fails-naming-rule helper
+- [X] T027 [US2] {FR-006a,FR-006b,FR-010,FR-014} Schema-conformance and field-set group in .../corpus/validate.py — VR-001…003, VR-014…017, VR-027, VR-058, VR-063 (10 of 72)
+- [X] T028 [US2] {FR-001a,FR-006,FR-014a,FR-017a,FR-018a} Location topology and file↔entry reconciliation group in .../corpus/validate.py — VR-004…007, 010, 011, 013, 059, 060, 064, 065 (11 of 72)
+- [X] T029 [US2] {FR-006,FR-018} Path containment, symlink prohibition, and case-collision group in .../corpus/validate.py — VR-009, VR-067, VR-068 (3 of 72) ← T012:resolve_within
+- [X] T030 [US2] {FR-007,FR-008a} [COMPLETES FR-007] Digest recomputation group in .../corpus/validate.py — VR-012 file bytes, VR-018 content hash equals upstream digest (2 of 72)
+- [X] T031 [US2] {FR-005,FR-011,FR-012,FR-012a,FR-013} [COMPLETES FR-005] License-basis group in .../corpus/validate.py — VR-008, VR-023, VR-024, VR-028 (4 of 72)
+- [X] T032 [US2] {FR-003,FR-008} [COMPLETES FR-008] REAL field-value group in .../corpus/validate.py — VR-019, VR-020, VR-021, VR-022 (4 of 72)
+- [X] T033 [US2] {FR-002,FR-002a,FR-004,FR-008d} [COMPLETES FR-002] Policy-agreement and ledger group in .../corpus/validate.py — VR-025, VR-026, VR-062 (3 of 72)
+- [X] T034 [US2] {FR-017} Add the corpus-validation step invoking corpus-validate to .github/workflows/verify.yml after:T025
 
 **Notes**: 40 of the 72 rules are discharged here, grouped by what they read rather than one task per rule. Rule totals: 3 + 10 + 11 + 3 + 2 + 4 + 4 + 3 = 40. The remaining 32 are Phase 5 (19) and Phase 6 (13). Two orderings are load-bearing: T028's containment and link tests use non-following stats throughout — a symlink to a regular file passes a link-following `is_file()` test exactly, which is why VR-067 exists separately — and T029 resolves the real path **before** comparing against the entry's own location directory, never after. T030's VR-018 is an internal-consistency check, not a provenance proof; its force is conditional on FR-008c and the residual is published. The validator never re-runs the generator: anything requiring regeneration lives in the test suite (Phases 5–6), because a validator that regenerated to validate could not tell a corpus defect from a generator defect.
 
@@ -149,6 +149,10 @@
 - [ ] T061 Confirm the coverage gate at the repository root and `model.corpus` measured alone, both at or above 80% (SC-026) after:T056
 - [ ] T062 Enumerate this epic's added distributions from src/model/uv.lock and confirm exact pins, artifact hashes, default public index, and redistributable licences (SC-027, SC-028)
 - [ ] T063 Sweep all 72 numbered validation rules for a failing-direction case naming the rule id (SC-025), across the eighteen rule-carrying tasks after:T055
+
+**Published miss — SC-001's document ceiling.** The corpus will total **51** documents against SC-001's stated 45–50. Cause: 26 long-lead UFGS sections were verified reachable and individually justified where the criterion required at least 20, and SC-010 floors the synthetic layer at 25. Discarding a legitimately retrieved public-domain section to reach a round ceiling would be optimising the number over the corpus, and the closed exclusion-cause enum has no cause that honestly describes it. **SC-001 is deliberately left unamended** — Principle VII forbids retroactively adjusting a target to match a result, so the ceiling stands and the overshoot is published against it. 51 remains inside the project's 30–60 envelope. T060 reports the count; QC publishes the miss with this cause.
+
+**Hand-off from T034.** The corpus-validation step in `verify.yml` currently invokes `corpus-validate --layer REAL`, because the synthetic layer does not exist until T056 and an unscoped run correctly fails VR-005 and VR-066 until then. **The `--layer REAL` flag must be removed as part of T056**, and T060's confirmation run must be unscoped. Leaving it would make the required check silently blind to the entire synthetic layer.
 
 **Notes**: T061's second half is the point — an already-covered package must not carry an uncovered new one across the aggregate threshold. T062 enumerates from the lockfile's own transitive closure, not from a hand-written list: `charset-normalizer`, `cryptography`, `rfc3339-validator`, and the non-GPL URI validator are examples of the review surface, not the closure. Neither T062 nor SC-027 asserts install-time artifact-hash verification; that is a project-level installer posture and a disclosed exposure. T063's eighteen rule-carrying tasks are T025, T027–T033 (40 rules), T042–T047 (19), T052–T055 (13).
 
