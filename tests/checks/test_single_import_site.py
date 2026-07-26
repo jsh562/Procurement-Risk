@@ -87,9 +87,7 @@ def test_vr_045_the_corpus_package_names_no_roster_path() -> None:
         for mention in mentions
         if mention.path != SRC_ROOT / "model" / "src" / "model" / "roster" / "reader.py"
     ]
-    assert not offenders, (
-        "VR-045: " + format_violation(ROSTER_FILENAME, mentions, REPO_ROOT)
-    )
+    assert not offenders, "VR-045: " + format_violation(ROSTER_FILENAME, mentions, REPO_ROOT)
 
 
 def test_vr_045_scan_reports_a_generator_that_opens_the_roster_itself(tmp_path: Path) -> None:
@@ -105,9 +103,7 @@ def test_vr_045_scan_reports_a_generator_that_opens_the_roster_itself(tmp_path: 
         "ROSTER = DATA / 'roster' / 'project-vendor-roster.json'\n", encoding="utf-8"
     )
     mentions = scan_source_root(tmp_path, ROSTER_FILENAME)
-    assert len(mentions) == 2, (
-        "VR-045: " + format_violation(ROSTER_FILENAME, mentions, tmp_path)
-    )
+    assert len(mentions) == 2, "VR-045: " + format_violation(ROSTER_FILENAME, mentions, tmp_path)
     assert generate in {mention.path for mention in mentions}, (
         "VR-045: the scan missed a second module naming the roster path"
     )

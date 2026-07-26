@@ -1,11 +1,25 @@
 name: verify
 
-# Both triggers, deliberately.
+# All three triggers, deliberately.
 #
 # `push` is what makes the architecture contracts real: a violation fails the
 # build rather than raising a review comment. This was originally deferred to a
 # later epic as a scope decision, then closed here once the analyze phase made
 # the cost visible — it is one line.
+#
+# `pull_request` (FR-034) makes the merge gate authoritative: a push run and a
+# pull-request run may cover the same head commit, but they are independent runs
+# scoped by ref, and the pull-request one is what judges the merge.
+#
+# `pull_request` and NOT `pull_request_target` (FR-034a(b)). The two are not
+# interchangeable spellings: `pull_request_target` runs the *base* ref's
+# workflow definition with the base repository's token and secret access while
+# checking out head content, which is a different execution surface from the one
+# FR-034a states. What runs here is the proposed head content under a
+# `contents: read` token with no secret in reach (FR-034a(a), (c)), so the
+# reachable consequence of a hostile head is bounded to a wrong verdict on its
+# own pull request. tests/checks/test_workflow_triggers.py asserts all three of
+# those properties against this file.
 #
 # `workflow_dispatch` remains because the violation-injection input below is
 # on-demand evidence, not something to run on every push.
@@ -22,6 +36,18 @@ on:
     paths-ignore:
       - "specs/**"
       - "README.md"
+  # Against the default branch, named explicitly rather than left to the
+  # `pull_request` default of "any base ref" — FR-034 states the base, and the
+  # committed trigger check reads this list to assert it.
+  #
+  # No `paths-ignore` here, unlike `push` above, and the asymmetry is the point.
+  # A skipped push run costs nothing; a pull-request run that is skipped by path
+  # filtering reports no status at all, and a required check with no status
+  # leaves the pull request pending forever rather than passing. The merge gate
+  # therefore runs on every pull request, including a specs-only one.
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       inject_violation:

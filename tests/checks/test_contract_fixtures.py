@@ -1,15 +1,43 @@
-"""TR-007 / SC-004: every contract has a committed negative fixture.
+"""TR-007 / SC-004 / FR-035: every contract has a committed negative fixture.
 
 A contract that has never been observed failing is an assertion about the
 build, not a property of it. Each test here plants a real violation and
 requires the contract to exit non-zero; the clean-tree run in
 test_layout/test_dependency_isolation is the corresponding positive control.
+
+**FR-035 — a pull request whose head violates an architecture contract reports a
+failing check naming the violated contract — is discharged at the bottom of this
+file**, by three assertions taken together rather than by any one of them:
+
+1. the set of contracts standing in for is derived from the three entries' own
+   manifests, so a contract added without a negative fixture fails here instead
+   of quietly going unevidenced;
+2. each fixture is executed and its output must *name the contract* — not merely
+   exit non-zero, and not merely name the offending module, which is what the
+   cases above already assert;
+3. the step that runs these tests is shown to be an unconditional step of a
+   workflow triggered by `pull_request`, which is what places the failing check
+   *inside the pull-request run*. Without that last link the evidence would rest
+   on a manual dispatch nobody is obliged to trigger — and the dispatch input
+   offers a payload for only two of the three contracts anyway.
 """
 
 from __future__ import annotations
 
+import configparser
+
+import pytest
+
 from tests.checks.helpers.contract_runner import FIXTURE_ROOT, run_contract
+from tests.checks.helpers.entries import PYTHON_ENTRIES, declared_contracts
 from tests.checks.helpers.source_scan import scan_source_root
+from tests.checks.helpers.workflow import (
+    admits_branch,
+    load_workflow,
+    steps_running,
+    triggers,
+    unconditional,
+)
 
 
 def test_allowlist_contract_breaks_on_a_second_import_site() -> None:
@@ -80,4 +108,99 @@ def test_vr_044_corpus_offline_contract_breaks_on_a_direct_provider_import() -> 
     assert not result.passed, "VR-044: a direct provider import did not break the contract"
     assert result.names("degrader"), (
         f"VR-044: failure did not name the direct provider import site:\n{result.output}"
+    )
+
+
+# --- FR-035: a violated contract is named, by a failing check in the PR run ----
+
+# Which fixture stands in for which real contract, keyed by the contract name as
+# the entry's own manifest declares it. The keys are checked against those
+# manifests below rather than trusted, so this map cannot drift into naming a
+# contract the repository no longer has, or omitting one it has gained.
+#
+# Three keys for four declarations: `api` and `model` each declare the
+# computation-boundary contract under the same name and with the same shape, and
+# one fixture stands in for both. The name is the unit FR-035 speaks about — a
+# failing check names the violated contract — so deduplicating by name is the
+# requirement's own granularity rather than a convenience.
+FIXTURE_FOR_CONTRACT = {
+    "Only the provider wrapper imports the model-provider client": "provider_import",
+    "Model-facing code does not reach the computation package": "computation_boundary",
+    "Corpus code does not reach the model provider": "corpus_offline",
+}
+
+# The step in verify.yml that executes this file.
+CHECKS_STEP = "pytest tests/checks"
+DEFAULT_BRANCH = "main"
+
+
+def _fixture_contract_names(fixture: str) -> list[str]:
+    """The contract names a fixture's own `.importlinter` declares."""
+    parser = configparser.ConfigParser()
+    parser.read(FIXTURE_ROOT / fixture / ".importlinter", encoding="utf-8")
+    return [
+        parser[section]["name"]
+        for section in parser.sections()
+        if section.startswith("importlinter:contract:")
+    ]
+
+
+def test_every_declared_contract_has_a_negative_fixture() -> None:
+    """The no-gap assertion. Derived from the manifests, so adding a fifth
+    contract to any entry fails this test until a fixture stands in for it."""
+    declared = {name for entry in PYTHON_ENTRIES for name in declared_contracts(entry)}
+    assert declared, "no import-linter contracts found in any entry manifest"
+    assert declared == set(FIXTURE_FOR_CONTRACT), (
+        "the contracts the entries declare and the contracts with negative fixtures "
+        f"differ.\n  unevidenced: {sorted(declared - set(FIXTURE_FOR_CONTRACT))}"
+        f"\n  stale map entries: {sorted(set(FIXTURE_FOR_CONTRACT) - declared)}"
+    )
+
+
+@pytest.mark.parametrize(("contract", "fixture"), sorted(FIXTURE_FOR_CONTRACT.items()))
+def test_the_fixture_declares_the_contract_it_stands_in_for(contract: str, fixture: str) -> None:
+    """A fixture whose contract is named differently from the real one is
+    evidence about the fixture, not about the contract. Asserted because the two
+    names drifted once already: the provider fixture said "Only the wrapper"
+    where gateway says "Only the provider wrapper"."""
+    assert contract in _fixture_contract_names(fixture), (
+        f"fixture {fixture!r} declares {_fixture_contract_names(fixture)}, not {contract!r}"
+    )
+
+
+@pytest.mark.parametrize(("contract", "fixture"), sorted(FIXTURE_FOR_CONTRACT.items()))
+def test_a_violated_contract_is_reported_by_name(contract: str, fixture: str) -> None:
+    """FR-035's substance. A non-zero exit alone tells a reviewer that something
+    broke; naming the contract is what tells them *which rule* their head
+    violates, which is the difference between a usable check and a red cross."""
+    result = run_contract(fixture)
+    assert not result.passed, f"{contract!r}: the negative fixture did not break the contract"
+    assert result.names(contract), (
+        f"the failing check did not name the violated contract {contract!r}:\n{result.output}"
+    )
+
+
+def test_the_fixtures_execute_inside_the_pull_request_run() -> None:
+    """The link that puts the failing check where FR-035 needs it.
+
+    Two properties, and both matter. The workflow must trigger on
+    `pull_request` against the default branch — otherwise these fixtures only
+    ever run against a pushed ref, and the merge gate is evidenced by something
+    other than the merge gate. And the step that runs them must be
+    unconditional: the dispatch-only injection step in this same workflow shows
+    how easily a step acquires an `if:` on `github.event_name`, and one placed
+    here would silently take the fixtures out of the pull-request run while
+    leaving them visibly present in the file.
+    """
+    document = load_workflow()
+    declared = triggers(document)
+    assert "pull_request" in declared and admits_branch(declared["pull_request"], DEFAULT_BRANCH), (
+        f"verify.yml does not run on pull requests against {DEFAULT_BRANCH!r}: {declared.keys()}"
+    )
+    running = steps_running(document, CHECKS_STEP)
+    assert running, f"no verify.yml step runs {CHECKS_STEP!r}; these fixtures execute nowhere in CI"
+    assert any(unconditional(step) for step in running), (
+        f"every step running {CHECKS_STEP!r} is gated by an `if:`, so the negative "
+        "fixtures may not execute in the pull-request run: "
+        f"{[step.get('if') for step in running]}"
     )

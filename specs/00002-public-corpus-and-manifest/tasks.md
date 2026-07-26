@@ -135,9 +135,9 @@
 
 ## Phase 7: US5 - Verify Pull Requests Automatically (Priority: P2)
 
-- [ ] T057 [US5] {FR-034,FR-034a} Add the `pull_request` trigger against the default branch to .github/workflows/verify.yml, keeping `permissions: contents: read`
-- [ ] T058 [US5] {FR-034,FR-034a} Assert the three trigger properties in tests/checks/test_workflow_triggers.py — pull_request declared, pull_request_target absent, contents: read after:T057
-- [ ] T059 [US5] {FR-035} Extend tests/checks/test_contract_fixtures.py so every contract's negative fixture reports a failing check inside the pull-request run, naming the contract
+- [X] T057 [US5] {FR-034,FR-034a} Add the `pull_request` trigger against the default branch to .github/workflows/verify.yml, keeping `permissions: contents: read`
+- [X] T058 [US5] {FR-034,FR-034a} Assert the three trigger properties in tests/checks/test_workflow_triggers.py — pull_request declared, pull_request_target absent, contents: read after:T057
+- [X] T059 [US5] {FR-035} Extend tests/checks/test_contract_fixtures.py so every contract's negative fixture reports a failing check inside the pull-request run, naming the contract
 
 **Notes**: SC-022's evidence is split three ways and only two halves are committable. T058 is the checkable half — a file assertion needing no run. T059 carries the failing-check half through fixtures that execute inside the pull-request run rather than under a manual dispatch nobody is obliged to trigger. The "a run happened" half is this epic's own pull-request run, recorded by URL in the QC report. `pull_request_target` is asserted **absent** deliberately: it runs the base ref's workflow with base-repository token and secret access while checking out head content, which is a different execution surface from the one FR-034a states.
 
@@ -145,10 +145,10 @@
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T060 Run corpus-validate over the complete committed corpus and confirm a green run reporting each rule's observed population size after:T056
-- [ ] T061 Confirm the coverage gate at the repository root and `model.corpus` measured alone, both at or above 80% (SC-026) after:T056
-- [ ] T062 Enumerate this epic's added distributions from src/model/uv.lock and confirm exact pins, artifact hashes, default public index, and redistributable licences (SC-027, SC-028)
-- [ ] T063 Sweep all 72 numbered validation rules for a failing-direction case naming the rule id (SC-025), across the eighteen rule-carrying tasks after:T055
+- [X] T060 Run corpus-validate over the complete committed corpus and confirm a green run reporting each rule's observed population size after:T056
+- [X] T061 Confirm the coverage gate at the repository root and `model.corpus` measured alone, both at or above 80% (SC-026) after:T056
+- [X] T062 Enumerate this epic's added distributions from src/model/uv.lock and confirm exact pins, artifact hashes, default public index, and redistributable licences (SC-027, SC-028)
+- [X] T063 Sweep all 72 numbered validation rules for a failing-direction case naming the rule id (SC-025), across the eighteen rule-carrying tasks after:T055
 
 **Published miss — SC-001's document ceiling.** The corpus will total **51** documents against SC-001's stated 45–50. Cause: 26 long-lead UFGS sections were verified reachable and individually justified where the criterion required at least 20, and SC-010 floors the synthetic layer at 25. Discarding a legitimately retrieved public-domain section to reach a round ceiling would be optimising the number over the corpus, and the closed exclusion-cause enum has no cause that honestly describes it. **SC-001 is deliberately left unamended** — Principle VII forbids retroactively adjusting a target to match a result, so the ceiling stands and the overshoot is published against it. 51 remains inside the project's 30–60 envelope. T060 reports the count; QC publishes the miss with this cause.
 
