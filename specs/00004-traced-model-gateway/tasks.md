@@ -80,10 +80,10 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 ## Phase 4: OBJ3 - Invocation Record with Recomputable Cost (Priority: P1) 🎯 MVP
 
 - [ ] T026 [OBJ3] {TR-070,TR-071,TR-072} Verify semconv 1.36.0 defines every convention-named attribute and record `otel_genai_semconv_version` in src/gateway/src/gateway/config.py after:T018
-- [ ] T027 [OBJ3] {TR-015,TR-081} Author Alembic revision 0100_price_table_version (mandatory snapshot_date and source_url, slug CHECK) in src/model/migrations/versions/
-- [ ] T028 [OBJ3] {TR-015,TR-046,TR-049} Author Alembic revision 0101_price_table_entry (composite PK, four NUMERIC(12,6) rates, restrictive FK) in src/model/migrations/versions/ after:T027
-- [ ] T029 [OBJ3] {TR-012,TR-013,TR-016,TR-031,TR-044,TR-046} Author Alembic revision 0102_llm_invocation (named CHECKs, both indexes, pin COMMENT) in src/model/migrations/versions/ after:T028
-- [ ] T030 [OBJ3] {TR-015,TR-081} [COMPLETES TR-015] Author Alembic revision 0103_seed_price_table (sourced version plus entries, ON CONFLICT DO NOTHING) in src/model/migrations/versions/ after:T029
+- [ ] T027 [OBJ3] {TR-015,TR-081} Author Alembic revision 0100_price_table_version (mandatory snapshot_date and source_url, slug CHECK) in src/model/src/model/schema/versions/
+- [ ] T028 [OBJ3] {TR-015,TR-046,TR-049} Author Alembic revision 0101_price_table_entry (composite PK, four NUMERIC(12,6) rates, restrictive FK) in src/model/src/model/schema/versions/ after:T027
+- [ ] T029 [OBJ3] {TR-012,TR-013,TR-016,TR-031,TR-044,TR-046} Author Alembic revision 0102_llm_invocation (named CHECKs, both indexes, pin COMMENT) in src/model/src/model/schema/versions/ after:T028
+- [ ] T030 [OBJ3] {TR-015,TR-081} [COMPLETES TR-015] Author Alembic revision 0103_seed_price_table (sourced version plus entries, ON CONFLICT DO NOTHING) in src/model/src/model/schema/versions/ after:T029
 - [ ] T031 [OBJ3] {TR-017} WITHDRAWN 2026-07-26 — ADR-0013 gives E003 the Alembic runner in src/model; E004 builds none. No work remains under this id
 - [ ] T032 [OBJ3] {TR-017,TR-050} Verify apply-from-empty and second-run-no-op for this epic's revisions against E003's runner in src/gateway/tests/test_migrations.py (VR-027) after:T030
 - [ ] T033 [P] [OBJ3] {TR-018,TR-051} Add the prefix-block, duplicate-prefix, and single-head check over E003's revision directory in tests/checks/test_migration_ranges.py (VR-028)

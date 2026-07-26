@@ -25,7 +25,7 @@ Most findings trace to one cause: the ADR-0013 reconciliation reached the requir
 | A-012 | Unresolved placeholder | MEDIUM | `spec.md` TR-034 L289 | "a stated default" — never stated. `plan.md` and `tasks.md` T018 both say 120 s; the spec does not. SC-020 tests against it | State 120 s in TR-034 |
 | A-013 | Unnamed controls | MEDIUM | `spec.md` TR-065 L319 | Two of four configuration keys the error message must name are placeholders ("the mode key", "the pinned price-table version identifier") while the other two are concrete. No check can assert on an unnamed key | Name both keys |
 | A-014 | Path inconsistency | MEDIUM | `plan.md` Requirement Coverage Map | Same migration artifact given both extensions: `0101_price_table_entry` as `.sql` (TR-015) and `.py` (TR-046/049); `0102_llm_invocation` as `.py` and `.sql`; `0103` likewise | Normalise to `.py` — Alembic revisions |
-| A-015 | Stale path form | MEDIUM | `plan.md` TR-013, TR-055, TR-069, TR-074 rows | Bare `migrations/` now reads gateway-local, a location ADR-0016 forbids for schema assets | Qualify as `src/model/migrations/versions/` |
+| A-015 | Stale path form | MEDIUM | `plan.md` TR-013, TR-055, TR-069, TR-074 rows | Bare `migrations/` now reads gateway-local, a location ADR-0016 forbids for schema assets | Qualify as `src/model/src/model/schema/versions/` |
 | A-016 | Principle VII form incomplete | MEDIUM | `plan.md` Instructions Check, Principle V row | The disclosed residual (a forbidden contract catches import edges only) carries scope decision and evidence but no reversal trigger and no production-scale alternative. Both sibling limitation rows carry all four | Add the two missing parts |
 | A-017 | Stale compliance row | MEDIUM | `plan.md` Data Provenance row L42 | Predates v1.2.0's per-layer provenance restatement. The fixture sidecar's fields match neither layer's required set, and the row asserts PASS without citing OI-5's deferral | Mark N/A with reason or apply the generated-layer field set; cross-reference OI-5 |
 | A-018 | Unaddressed amendment | MEDIUM | `plan.md` IP-002 | v1.2.1 Infrastructure admits console entry points for modeling-owned jobs; E004's revisions are now applied by one. IP-002 adds the `db` service but never says how the migration is invoked | Name the invocation mechanism |
@@ -98,7 +98,7 @@ Applied in the same run. All 30 findings actioned; 0 skipped.
 | 12 | A-012 | MEDIUM | `spec.md` | TR-034 deadline default stated as 120 seconds | Applied |
 | 13 | A-013 | MEDIUM | `spec.md` | TR-065 names `GATEWAY_MODE` and `GATEWAY_PRICE_TABLE_VERSION` | Applied |
 | 14 | A-014 | MEDIUM | `plan.md` | All six `.sql` migration references normalised to `.py` | Applied |
-| 15 | A-015 | MEDIUM | `plan.md` | Bare `migrations/` paths qualified to `src/model/migrations/versions/` | Applied |
+| 15 | A-015 | MEDIUM | `plan.md` | Bare `migrations/` paths qualified to `src/model/src/model/schema/versions/` | Applied |
 | 16 | A-016 | MEDIUM | `plan.md` | Principle V residual gains reversal trigger and production-scale alternative | Applied |
 | 17 | A-017 | MEDIUM | `plan.md` | Data Provenance row engages the v1.2.0 per-layer rule and cites OI-5 | Applied |
 | 18 | A-018 | MEDIUM | `plan.md` | IP-002 names the console-entry-point invocation mechanism | Applied |
