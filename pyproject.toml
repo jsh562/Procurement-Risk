@@ -32,10 +32,28 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-# The denominator is this epic's executable artifacts only. Configuration is
-# not coverable, and two of the four entries ship no runtime code yet, so a
-# repository-wide denominator would report a number that means nothing.
-source = ["tests/checks/helpers", "src/model/src/model/roster"]
+# Every Python package in the repository that ships executable runtime code.
+# Configuration is not coverable and `src/api` ships none yet -- three empty
+# `__init__.py` files -- so a literally repository-wide denominator would report
+# a number that means nothing.
+#
+# `src/gateway` was excluded here until E003's QC, under a comment claiming that
+# two of the four entries ship no runtime code. That was true of `src/api` and
+# false of `src/gateway`, which ships `provider.py` -- the single permitted
+# provider import site, the most load-bearing module in the repository -- with
+# five tests that CI already runs. It was measured by nothing, and the comment
+# asserting otherwise is what kept anyone from noticing. Adding it requires the
+# gateway test step to run under `coverage run` with its own COVERAGE_FILE, or
+# its statements land in the denominator with no hits; see the step in
+# `.github/workflows/verify.yml`. All entries pin coverage==7.15.2 because
+# `combine` rejects a data-file version mismatch.
+source = [
+    "tests/checks/helpers",
+    "src/model/src/model/roster",
+    "src/model/src/model/schema",
+    "src/model/src/model/corpus",
+    "src/gateway/src/gateway",
+]
 
 [tool.coverage.paths]
 # Each entry writes its own data file from its own working directory; these
@@ -43,6 +61,13 @@ source = ["tests/checks/helpers", "src/model/src/model/roster"]
 # double-counts.
 helpers = ["tests/checks/helpers", "*/tests/checks/helpers"]
 roster = ["src/model/src/model/roster", "*/src/model/roster"]
+schema = ["src/model/src/model/schema", "*/src/model/schema"]
+# Added with E002. It works today without this entry only because the model
+# step passes an explicit `--source` and the data file holds absolute paths, so
+# the mapping is never consulted -- an accident that ends the moment anyone
+# sets `relative_files` or the step loses its explicit scope.
+corpus = ["src/model/src/model/corpus", "*/src/model/corpus"]
+gateway = ["src/gateway/src/gateway", "*/src/gateway"]
 
 [tool.coverage.report]
 fail_under = 80

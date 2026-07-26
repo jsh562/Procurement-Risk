@@ -1,0 +1,500 @@
+{
+  "entries": [
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:d6c832882c538443deb4e640ed99f24928f81c4a3f09ab75a410f499cb7b026c",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 01 33 00 (2021-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-01-33-00.pdf",
+      "masterformat_section": "01 33 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:27Z",
+      "revision_date": "2021-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2001%2033%2000.pdf",
+      "upstream_digest": "sha256:d6c832882c538443deb4e640ed99f24928f81c4a3f09ab75a410f499cb7b026c"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:23c3b4da9a373e49aefb8685ec9a97343f34c68dcb95f1ddb566093f795ae414",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 21 23 (2025-05)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-21-23.pdf",
+      "masterformat_section": "23 21 23",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:57Z",
+      "revision_date": "2025-05",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2021%2023.pdf",
+      "upstream_digest": "sha256:23c3b4da9a373e49aefb8685ec9a97343f34c68dcb95f1ddb566093f795ae414"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:188c88ace21dacdfb9e45a461006b90bdfc93f2432acc1abeb8438c7497f305e",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 52 00 (2019-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-52-00.pdf",
+      "masterformat_section": "23 52 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:02Z",
+      "revision_date": "2019-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2052%2000.pdf",
+      "upstream_digest": "sha256:188c88ace21dacdfb9e45a461006b90bdfc93f2432acc1abeb8438c7497f305e"
+    },
+    {
+      "agency_variant": "NAVFAC",
+      "content_hash": "sha256:14d7df28eebfb85c755fbcb2898cdbf3ced46dc99583f78be106d6f905e5d610",
+      "issuing_body": "NAVFAC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 52 43.00 20 (2018-08)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-52-43-00-20.pdf",
+      "masterformat_section": "23 52 43",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:06Z",
+      "revision_date": "2018-08",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2052%2043.00%2020.pdf",
+      "upstream_digest": "sha256:14d7df28eebfb85c755fbcb2898cdbf3ced46dc99583f78be106d6f905e5d610"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:be94b88d1a2988d5c9245a039b75d24e178dd8c11c82e9f046302217cf4e5362",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 64 10 (2025-05)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-64-10.pdf",
+      "masterformat_section": "23 64 10",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:09Z",
+      "revision_date": "2025-05",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2064%2010.pdf",
+      "upstream_digest": "sha256:be94b88d1a2988d5c9245a039b75d24e178dd8c11c82e9f046302217cf4e5362"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:ac2a6ae26dfc83c326c3a688661caf8bb8c9d2b8eb867feb02293831218e0fc6",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 64 26 (2025-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-64-26.pdf",
+      "masterformat_section": "23 64 26",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:13Z",
+      "revision_date": "2025-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2064%2026.pdf",
+      "upstream_digest": "sha256:ac2a6ae26dfc83c326c3a688661caf8bb8c9d2b8eb867feb02293831218e0fc6"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:f86e7b12747d2d8de25362f02b87f90dfcc1d3b549531b86af8d5869a3068bf6",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 65 00 (2025-05)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-65-00.pdf",
+      "masterformat_section": "23 65 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:16Z",
+      "revision_date": "2025-05",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2065%2000.pdf",
+      "upstream_digest": "sha256:f86e7b12747d2d8de25362f02b87f90dfcc1d3b549531b86af8d5869a3068bf6"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:418f23f7d9977b74158f072df24100214a2fe0a479908414d74207d1f80b4839",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 72 00 (2024-05)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-72-00.pdf",
+      "masterformat_section": "23 72 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:20Z",
+      "revision_date": "2024-05",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2072%2000.pdf",
+      "upstream_digest": "sha256:418f23f7d9977b74158f072df24100214a2fe0a479908414d74207d1f80b4839"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:076438960b1c062b876ad300cf29c2061ddf59f8b910901e79b5adf2d03f96b6",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 23 81 23 (2020-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-23-81-23.pdf",
+      "masterformat_section": "23 81 23",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:10:23Z",
+      "revision_date": "2020-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2023%2081%2023.pdf",
+      "upstream_digest": "sha256:076438960b1c062b876ad300cf29c2061ddf59f8b910901e79b5adf2d03f96b6"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:d177ed5360890d57a74edff88be789a702d51a68a39961d493f89575a3096495",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 05 13 (2025-08)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-05-13.pdf",
+      "masterformat_section": "26 05 13",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:08:52Z",
+      "revision_date": "2025-08",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2005%2013.pdf",
+      "upstream_digest": "sha256:d177ed5360890d57a74edff88be789a702d51a68a39961d493f89575a3096495"
+    },
+    {
+      "agency_variant": "NAVFAC",
+      "content_hash": "sha256:83d90b4604fd69a073cff0e71086475f5e7b1ff3880f718ad7e9dd833b6729e0",
+      "issuing_body": "NAVFAC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 11 13.00 20 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-11-13-00-20.pdf",
+      "masterformat_section": "26 11 13",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:08:56Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2013.00%2020.pdf",
+      "upstream_digest": "sha256:83d90b4604fd69a073cff0e71086475f5e7b1ff3880f718ad7e9dd833b6729e0"
+    },
+    {
+      "agency_variant": "USACE",
+      "content_hash": "sha256:fb631a4fa44e63ff555e7572824b62a25cac1f42a5a9a7836156adcd3e8c64c6",
+      "issuing_body": "USACE",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 11 14.00 10 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-11-14-00-10.pdf",
+      "masterformat_section": "26 11 14",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:00Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2014.00%2010.pdf",
+      "upstream_digest": "sha256:fb631a4fa44e63ff555e7572824b62a25cac1f42a5a9a7836156adcd3e8c64c6"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:b9821b9e7147e8d3c1ffcab9385e6b055ef5a5243c0e33685c0b4679f53ea056",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 11 16 (2021-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-11-16.pdf",
+      "masterformat_section": "26 11 16",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:04Z",
+      "revision_date": "2021-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2011%2016.pdf",
+      "upstream_digest": "sha256:b9821b9e7147e8d3c1ffcab9385e6b055ef5a5243c0e33685c0b4679f53ea056"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:0bec1542371a99170cb09232176be8ac6cefbd5b6940cc9080d299bdca586014",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 12 19 (2024-05)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-12-19.pdf",
+      "masterformat_section": "26 12 19",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:08Z",
+      "revision_date": "2024-05",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2012%2019.pdf",
+      "upstream_digest": "sha256:0bec1542371a99170cb09232176be8ac6cefbd5b6940cc9080d299bdca586014"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:67d2a80595fc88b8767d6cc050911aaf8cbf7c8d1ee9a36e04e14d22920a1cfa",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 12 21 (2023-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-12-21.pdf",
+      "masterformat_section": "26 12 21",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:12Z",
+      "revision_date": "2023-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2012%2021.pdf",
+      "upstream_digest": "sha256:67d2a80595fc88b8767d6cc050911aaf8cbf7c8d1ee9a36e04e14d22920a1cfa"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:da625da9ed9a3d6c2dcac4172c209ba2c7476ff802a71f93f17e2f98d1a9d848",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 13 00 (2022-05)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-13-00.pdf",
+      "masterformat_section": "26 13 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:16Z",
+      "revision_date": "2022-05",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2000.pdf",
+      "upstream_digest": "sha256:da625da9ed9a3d6c2dcac4172c209ba2c7476ff802a71f93f17e2f98d1a9d848"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:cb22e97a1f49b65b38ebfdc4ca01ec85ad82996a9015749f771bcfc35ad03142",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 13 13 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-13-13.pdf",
+      "masterformat_section": "26 13 13",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:20Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2013.pdf",
+      "upstream_digest": "sha256:cb22e97a1f49b65b38ebfdc4ca01ec85ad82996a9015749f771bcfc35ad03142"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:999845f74a0187f0a5ba9d32eaaf328002de3d3f322d03260cdb0225869b0f1c",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 13 14 (2021-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-13-14.pdf",
+      "masterformat_section": "26 13 14",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:23Z",
+      "revision_date": "2021-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2013%2014.pdf",
+      "upstream_digest": "sha256:999845f74a0187f0a5ba9d32eaaf328002de3d3f322d03260cdb0225869b0f1c"
+    },
+    {
+      "agency_variant": "USACE",
+      "content_hash": "sha256:515b66fe605391ab3b3ee9e84ad06b3aa89e3c405c1a5c2679109b22818f88c4",
+      "issuing_body": "USACE",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 22 00.00 10 (2023-11)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-22-00-00-10.pdf",
+      "masterformat_section": "26 22 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:27Z",
+      "revision_date": "2023-11",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2022%2000.00%2010.pdf",
+      "upstream_digest": "sha256:515b66fe605391ab3b3ee9e84ad06b3aa89e3c405c1a5c2679109b22818f88c4"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:313ea35587da3606b0e232909173bed096a12e61c10344c1d1eea62f69d72fa4",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 23 00 (2024-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-23-00.pdf",
+      "masterformat_section": "26 23 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:30Z",
+      "revision_date": "2024-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2023%2000.pdf",
+      "upstream_digest": "sha256:313ea35587da3606b0e232909173bed096a12e61c10344c1d1eea62f69d72fa4"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:c24081ea30d071313df5ff37985c8a352607797d36fb2401677a8d8a25fc0261",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 24 13 (2021-08)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-24-13.pdf",
+      "masterformat_section": "26 24 13",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:33Z",
+      "revision_date": "2021-08",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2024%2013.pdf",
+      "upstream_digest": "sha256:c24081ea30d071313df5ff37985c8a352607797d36fb2401677a8d8a25fc0261"
+    },
+    {
+      "agency_variant": "USACE",
+      "content_hash": "sha256:20db14d20016f0580f59eb30711b43a6a858e0141b8d81544839b5d8fe7be18b",
+      "issuing_body": "USACE",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 28 00.00 10 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-28-00-00-10.pdf",
+      "masterformat_section": "26 28 00",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:37Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2028%2000.00%2010.pdf",
+      "upstream_digest": "sha256:20db14d20016f0580f59eb30711b43a6a858e0141b8d81544839b5d8fe7be18b"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:ff7dbe451b184cdfbbde8daffcc7c2426ac520a0414683d8c32fc47f80eb68a7",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 29 23 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-29-23.pdf",
+      "masterformat_section": "26 29 23",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:40Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2029%2023.pdf",
+      "upstream_digest": "sha256:ff7dbe451b184cdfbbde8daffcc7c2426ac520a0414683d8c32fc47f80eb68a7"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:2cda380a37f056a3ecf625aa496e0aba706cdca21369353fee77d506023badc1",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 32 15 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-32-15.pdf",
+      "masterformat_section": "26 32 15",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:46Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2032%2015.pdf",
+      "upstream_digest": "sha256:2cda380a37f056a3ecf625aa496e0aba706cdca21369353fee77d506023badc1"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:613873711866c3252471b5f19906fb9295a55a653cdeb2ebf4b979cf81b16bc2",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 33 53 (2025-08)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-33-53.pdf",
+      "masterformat_section": "26 33 53",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:50Z",
+      "revision_date": "2025-08",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2033%2053.pdf",
+      "upstream_digest": "sha256:613873711866c3252471b5f19906fb9295a55a653cdeb2ebf4b979cf81b16bc2"
+    },
+    {
+      "agency_variant": "UNIFIED",
+      "content_hash": "sha256:18b8e271da3e30ddc4a4d6b15fda1ffee2fbc75a98187ec5455222426c521512",
+      "issuing_body": "USACE / NAVFAC / AFCEC",
+      "layer": "REAL",
+      "license_basis": {
+        "basis_id": "us-gov-17usc105-ufgs",
+        "document_identifier": "UFGS 26 36 23 (2026-02)",
+        "point_of_use_check": "NO_COPYRIGHTED_EXCERPT_FOUND",
+        "statute": "17 U.S.C. §105(a)"
+      },
+      "location": "ufgs-26-36-23.pdf",
+      "masterformat_section": "26 36 23",
+      "retrieval_response_status": 200,
+      "retrieved_at": "2026-07-26T12:09:53Z",
+      "revision_date": "2026-02",
+      "source_location": "https://www.wbdg.org/FFC/DOD/UFGS/UFGS%2026%2036%2023.pdf",
+      "upstream_digest": "sha256:18b8e271da3e30ddc4a4d6b15fda1ffee2fbc75a98187ec5455222426c521512"
+    }
+  ],
+  "layer": "REAL",
+  "location_id": "real/ufgs"
+}

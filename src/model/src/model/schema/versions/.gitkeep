@@ -1,0 +1,2 @@
+# Alembic version scripts land here (alembic.ini version_locations).
+# Tracked so a fresh clone has the directory before migration 0001 exists.
