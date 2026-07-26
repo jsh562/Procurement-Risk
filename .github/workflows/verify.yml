@@ -63,13 +63,20 @@ jobs:
               printf 'from api.compute import nothing\n' > src/api/src/api/llm/_injected.py ;;
           esac
 
-      - name: Sync every entry against its own lockfile
+      - name: Sync every Python entry against its own lockfile
         run: |
           for entry in gateway api model; do
             uv sync --locked --directory "src/$entry"
           done
           uv sync
-          npm ci --prefix src/web
+
+      # Separate step with working-directory rather than `npm ci --prefix`:
+      # `npm ci` rejects --prefix outright with a usage error, which fails the
+      # step before any check runs and reads as a broken build rather than a
+      # broken command line.
+      - name: Sync the web boundary against its lockfile
+        working-directory: src/web
+        run: npm ci
 
       - name: Lock verification
         run: |
@@ -87,12 +94,14 @@ jobs:
           done
 
       - name: Lint and format check (web)
+        working-directory: src/web
         run: |
-          npm run lint --prefix src/web
-          npx --prefix src/web prettier --check src/web
+          npm run lint
+          npx prettier --check .
 
       - name: Type check (web)
-        run: npx --prefix src/web tsc --noEmit --project src/web/tsconfig.json
+        working-directory: src/web
+        run: npx tsc --noEmit
 
       - name: Architecture contracts
         run: |
@@ -108,7 +117,8 @@ jobs:
         run: uv run coverage run --source=src/model/roster -m pytest tests -q
 
       - name: Unit tests (web)
-        run: npm test --prefix src/web
+        working-directory: src/web
+        run: npm test
 
       - name: Build serving image
         run: docker build -f src/api/Dockerfile -t procurement-api:e001 src/
