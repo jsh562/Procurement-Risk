@@ -25,6 +25,8 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
+**Governing document**: `project-instructions.md` **v1.2.0** · audited 2026-07-26. Recording the audited version is what makes amendment drift detectable at the next gate, per the v1.2.0 Governance clause.
+
 | Gate | Status | Evidence |
 |------|--------|----------|
 | I. Traceable or It Does Not Ship | PASS | Citation and confidence `NOT NULL`; cited page carried into a composite FK so it cannot disagree with its chunk; document table gives every citation a named referent |
@@ -36,7 +38,8 @@
 | Technology Stack | PASS | PostgreSQL 16 + pgvector, single instance, matches the declared stack |
 | Source Code Layout (ENFORCE_SRC_ROOT) | PASS | All assets under `/src/model`; no fifth entry; entry-local tests stay entry-local (ADR-0013) |
 | Testing & Quality Policy | PASS | Two QC categories honoured — lint (Ruff, with `S` rules folded in) and coverage at 80% |
-| Data Provenance | PASS | Writes only migration-seeded reference data: field vocabulary and the constants row |
+| Data Provenance | PASS | Layer-dependent per v1.2.0: license basis and layer label mandatory on every document row; source, issuing body, and retrieval date required on `REAL` and **rejected** on `SYNTHETIC`; generator identity, seed, generation date, and fixture hashes required on `SYNTHETIC` and rejected on `REAL`. A fabricated issuing body is unrepresentable, not merely discouraged. Beyond that the epic writes only migration-seeded reference data |
+| Governance — amendment serialization | PASS | No registered document is amended from this branch. The two `specs/project-plan.md` corrections are recorded as AR-1 below and applied on `main`, per the v1.2.0 clause that a feature branch records the need and does not perform it |
 | Governance — registered docs win | PASS | Two project-wide decisions raised as ADR-0012 and ADR-0013 rather than AD rows. TR-052 edits a registered document, which is permitted here because that document is **internally self-inconsistent**: its E003 epic entry already lists ResolvedEntity and the posterior artifacts as E003 key entities while its Shared Data Entities rows credit E009/E007. TR-052 aligns the table to the epic entry — the registered document still wins, against itself |
 
 **Re-check after Phase 1**: PASS — see Compliance Check result reported with this plan.
@@ -48,16 +51,16 @@ C4Container
   Person(dev, "Developer")
   System_Boundary(e003, "Core Data Schema") {
     Container(alembic, "Alembic Chain", "Python", "Forward-only 0001-0099")
-    Container(migjob, "Migrate Job", "Compose jobs profile", "One-shot apply")
+    Container(migcli, "Migrate CLI", "console entry point", "uv run migrate")
     Container(schematests, "Schema Tests", "pytest", "Rejection and migration")
     ContainerDb(db, "Postgres", "pgvector + tsvector", "13 tables")
   }
   Container_Ext(model, "Model Entry", "Python", "Owns schema assets")
   Container_Ext(api, "API Entry", "FastAPI", "Reads over connection")
   Container_Ext(ci, "Verify Workflow", "GitHub Actions")
-  Rel(dev, migjob, "Invokes")
+  Rel(dev, migcli, "Invokes")
   Rel(model, alembic, "Owns")
-  Rel(migjob, alembic, "Runs")
+  Rel(migcli, alembic, "Runs")
   Rel(alembic, db, "Applies DDL, seeds")
   Rel(api, db, "Reads constants")
   Rel(schematests, db, "Asserts rejection")
@@ -120,7 +123,7 @@ N/A — no request path, no external service call, and no user-facing error stat
 | Spec Reference | System/Service | Technical Approach | Contract |
 |----------------|----------------|--------------------|----------|
 | IP-001 | E001 repository layout | Assets land in the existing `/src/model` entry; no new entry, so the four-entry check is untouched | `tests/checks/test_layout.py` |
-| IP-002 | E001 Compose `db` service | Consumed unchanged via `DATABASE_URL`; migration job added under the existing `jobs` profile | `tests/checks/test_orchestration.py` |
+| IP-002 | E001 Compose `db` service | Consumed unchanged via `DATABASE_URL`; **no Compose change at all** — migrations run as a console entry point per ADR-0011 | `tests/checks/test_orchestration.py` |
 | IP-003 | E001 frozen identifier formats | `PRJ-###`, `VND-###`, and `sha256:`+64hex enforced as named `CHECK` constraints | [data-model.md](data-model.md) |
 | IP-004 | E004 migration numbering | `0100`–`0199` reserved; prefix-range check fails a migration outside the owning block | `src/model/tests/schema/test_migration_chain.py` |
 | IP-005 | E005 procurement tables | `purchase_order_line` and `lifecycle_event` plus the roster-hash column | [data-model.md](data-model.md) |
@@ -154,7 +157,7 @@ N/A — no request path, no external service call, and no user-facing error stat
 | TR-004 | Migration naming | `src/model/src/model/schema/versions/0001_*.py` … | Prefix over revision id |
 | TR-005 | Chain check | `src/model/tests/schema/test_migration_chain.py` | Single head + prefix range |
 | TR-006 | Migration `0001` | `.../versions/0001_enable_extensions.py` | `CREATE EXTENSION` |
-| TR-007 | Compose | `docker-compose.yml` | `migrate` under `jobs` profile |
+| TR-007 | Console entry point | `src/model/pyproject.toml` | `[project.scripts] migrate`; ADR-0011 |
 | TR-008 | Entry layout | `src/model/pyproject.toml` | Only entry with DB client |
 | TR-009 | `chunk` | `.../versions/0004_chunk.py` | All structure metadata |
 | TR-010 | `chunk` tsvector | `.../versions/0004_chunk.py` | setweight A–D + GIN |
@@ -184,7 +187,7 @@ N/A — no request path, no external service call, and no user-facing error stat
 | TR-034 | `resolved_entity` | `.../versions/0010_resolved_entity.py` | P2 |
 | TR-035 | `resolved_entity_member` | `.../versions/0010_resolved_entity.py` | Uniqueness on each side |
 | TR-036 | Absence check | `src/model/tests/schema/test_table_ownership.py` | Six named tables absent |
-| TR-037 | Compose | `docker-compose.yml` | Existing services untouched |
+| TR-037 | Compose | `docker-compose.yml` | Unchanged entirely — no service added |
 | TR-038 | `chunk` tsvector | `.../versions/0004_chunk.py` | Named text-search configuration |
 | TR-039 | All migrations | `src/model/tests/schema/test_constraint_audit.py` | Range check ⇒ paired `NOT NULL` |
 | TR-040 | `line_posterior` | `.../versions/0008_forecast.py` | Byte serialization named on run |
@@ -199,7 +202,8 @@ N/A — no request path, no external service call, and no user-facing error stat
 | TR-049 | `forecast_run` | `.../versions/0008_forecast.py` | `as_of_date` `NOT NULL` |
 | TR-050 | ADR-0012 | `specs/adrs/0012-*.md` | Gates the chunk migration |
 | TR-051 | Constraint audit | `src/model/tests/schema/test_constraint_audit.py` | No deferred check or non-null |
-| TR-052 | Project-plan correction | `specs/project-plan.md` | Two Shared Data Entities rows |
+| TR-052 | Amendment request | `specs/00002-core-data-schema/plan.md` | Recorded, not performed (v1.2.0) |
+| TR-087 | `document` generator columns | `.../versions/0003_document.py` | SYNTHETIC-only, rejected on REAL |
 | TR-053 | Array semantics contract | [data-model.md](data-model.md) | Beyond-horizon answer is `1 - residual_tail_mass`; E010 reads it |
 | TR-054 | `extracted_value` | `.../versions/0006_extraction.py` | `double precision`, closed interval, no coarser scale |
 | TR-055 | `line_posterior` | `.../versions/0008_forecast.py` | Residual agrees with the survival tail within `1e-9` |
@@ -254,7 +258,6 @@ N/A — no request path, no external service call, and no user-facing error stat
 + src/model/src/model/schema/versions/0008_forecast.py
 + src/model/src/model/schema/versions/0009_provenance_privileges.py   revoke UPDATE/DELETE from the application role (P1, OBJ3)
 + src/model/src/model/schema/versions/0010_resolved_entity.py         P2 — last in the chain, so dropping P2 leaves every P1 objective complete
-+ src/model/Dockerfile                                                migration job image, built from context ./src/model — NOT from /src
 + src/model/src/model/schema/script.py.mako                           forward-only revision template whose downgrade() raises (TR-002, TR-004)
 + src/model/tests/schema/conftest.py                        DATABASE_URL fixture, savepoint rollback
 + src/model/tests/schema/test_migration_chain.py
@@ -267,20 +270,38 @@ N/A — no request path, no external service call, and no user-facing error stat
 + src/model/tests/schema/test_resolved_entity.py
 + src/model/tests/schema/test_table_ownership.py
 ~ src/model/pyproject.toml                                  + alembic, psycopg, sqlalchemy, pytest-alembic; Ruff S rules
-~ tests/checks/test_supply_chain.py                         admit src/model/Dockerfile's digest pin
-+ src/model/.dockerignore                                   scoped to the model build context only; src/.dockerignore is NOT touched
-~ docker-compose.yml                                        + migrate job under the jobs profile
 ~ .github/workflows/verify.yml                              + postgres service container for the model entry
 ~ pyproject.toml                                            (root) coverage source + paths gain the schema package
   specs/adrs/0012-embedding-model-and-vector-dimension.md   DONE — accepted 2026-07-25
   specs/adrs/0013-schema-ownership-in-the-modeling-entry.md DONE — accepted 2026-07-25
   specs/sad.md                                              DONE — catalog rows and baseline entries added
-~ specs/project-plan.md                                     Shared Data Entities corrections (TR-052)
+  specs/project-plan.md                                     NOT edited — amendment recorded, applied on main (v1.2.0)
 ```
 
 **Patterns to reuse**: the `src/<entry>/src/<pkg>/` layout and per-entry `pyproject.toml`; the roster reader's module shape in `src/model/src/model/roster/`; the `tests/checks/helpers/` style of small named helpers behind assertions.
-**Tests to extend**: `tests/checks/test_orchestration.py` (its `JOBS` set gains `migrate`); `tests/checks/test_supply_chain.py` if new pins need admitting.
+**Tests to extend**: none of E001's cross-entry checks change — the console entry point touches no Compose service, no build context, and no image pin, so orchestration, build-context, image-contents, and supply-chain all pass unmodified.
 **Naming conventions**: snake_case modules; tests as `test_*.py` inside the owning entry; Ruff line-length 100, target py312, select `E,F,I,UP,B,SIM` — add `S`.
+
+## Amendment Requests
+
+Recorded by this branch under TR-052 and SC-027. **Applied on `main`** via `.github/skills/amend-project/SKILL.md`. This branch performs none of them — v1.2.0 serializes amendments on the default branch.
+
+### AR-1 — `specs/project-plan.md`, Shared Data Entities table
+
+Two "Introduced by" cells are inconsistent with the same document's own E003 epic entry, which already lists these as E003 key entities:
+
+| Row | From | To |
+|---|---|---|
+| `ResolvedEntity` | `E009` | `E003 (schema), E009 (populated)` |
+| `PosteriorDraws / SurvivalArray` | `E007` | `E003 (schema), E007 (populated)` |
+
+Both "Consumed by" cells unchanged. The convention is the one the `Chunk` row already uses.
+
+### AR-2 — governance gap, Feature Workspace numbering
+
+Workspace prefix `00002` is held by both this epic (E003, `specs/00002-core-data-schema/`) and E002 (`specs/00002-public-corpus-and-manifest/`, referenced from ADR-0011's front matter). v1.2.0 added epic-start claiming for migration numbers and decision-record numbers but not for workspace numbers, and they have already collided under the same parallel-wave pressure that motivated the clause.
+
+Not actionable here — renaming a workspace mid-flight breaks every path in this plan and `tasks.md`. Recorded for a future amendment: *"Feature Workspace numbers are claimed at epic start, exactly as migration and decision-record numbers are."*
 
 ## Implementation Hints
 
@@ -288,5 +309,3 @@ N/A — no request path, no external service call, and no user-facing error stat
 - **[HINT-002]** Gotcha: a savepoint-rollback fixture never reaches a real `COMMIT`, so the deferrable closing-event constraint never fires and its test passes vacuously. Wrap the commit in the expectation, or issue `SET CONSTRAINTS ALL IMMEDIATE` to force the violation at a precise point.
 - **[HINT-003]** Constraint: `ON DELETE` on the closing-event FK must stay `NO ACTION` — PostgreSQL forbids `SET NULL` and `SET DEFAULT` against generated columns, and both referencing columns are generated `STORED`.
 - **[HINT-004]** Gotcha: assert constraint rejection on the psycopg error subclass plus the diagnostic's constraint name and SQLSTATE, never on message text — a generic integrity-error assertion passes when the wrong constraint fires.
-- **[HINT-005]** Order: adding `migrate` to Compose breaks `tests/checks/test_orchestration.py` until its `JOBS` frozenset gains the name; update the check in the same change, not afterwards.
-- **[HINT-006]** Constraint: the migration image MUST build from context `./src/model`, never from `/src`. `src/.dockerignore` is a shared allowlist admitting exactly `api` and `gateway`, and `src/api/Dockerfile` builds from that same context — admitting `model` there breaks two committed build-context contracts and relaxes an architectural constraint, which would require a superseding ADR. A `src/model/.dockerignore` scoped to the model context is the non-relaxing path.

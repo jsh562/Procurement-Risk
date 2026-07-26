@@ -92,15 +92,19 @@ Exactly one row, guaranteed structurally: the primary key is a boolean that a `C
 | `project_id` | `text` | NOT NULL | `ck_document__project_id_format CHECK (project_id ~ '^PRJ-[0-9]{3}$')` |
 | `title` | `text` | NOT NULL | `ck_document__title_present CHECK (btrim(title) <> '')` |
 | `source_kind` | `text` | NOT NULL | `ck_document__source_kind CHECK (source_kind IN ('REAL','SYNTHETIC'))` |
-| `source_ref` | `text` | NOT NULL | `ck_document__source_ref_present CHECK (btrim(source_ref) <> '')` |
-| `issuing_body` | `text` | NOT NULL | `ck_document__issuing_body_present CHECK (btrim(issuing_body) <> '')` |
+| `source_ref` | `text` | NULL | `ck_document__real_has_source_ref CHECK (source_kind <> 'REAL' OR btrim(source_ref) <> '')`; `ck_document__synthetic_has_no_source_ref CHECK (source_kind <> 'SYNTHETIC' OR source_ref IS NULL)` |
+| `issuing_body` | `text` | NULL | `ck_document__real_has_issuing_body CHECK (source_kind <> 'REAL' OR btrim(issuing_body) <> '')`; `ck_document__synthetic_has_no_issuing_body CHECK (source_kind <> 'SYNTHETIC' OR issuing_body IS NULL)` |
+| `generator_id` | `text` | NULL | `ck_document__synthetic_has_generator CHECK (source_kind <> 'SYNTHETIC' OR btrim(generator_id) <> '')`; `ck_document__real_has_no_generator CHECK (source_kind <> 'REAL' OR generator_id IS NULL)` |
+| `generation_seed` | `text` | NULL | `ck_document__synthetic_has_seed CHECK (source_kind <> 'SYNTHETIC' OR btrim(generation_seed) <> '')`; `ck_document__real_has_no_seed CHECK (source_kind <> 'REAL' OR generation_seed IS NULL)` |
+| `generated_at` | `date` | NULL | `ck_document__synthetic_has_generated_at CHECK (source_kind <> 'SYNTHETIC' OR generated_at IS NOT NULL)`; `ck_document__real_has_no_generated_at CHECK (source_kind <> 'REAL' OR generated_at IS NULL)` |
+| `fixture_hashes` | `text[]` | NULL | `ck_document__synthetic_has_fixture_hashes CHECK (source_kind <> 'SYNTHETIC' OR (array_length(fixture_hashes,1) >= 1 AND fn_all_sha256_prefixed(fixture_hashes)))`; `ck_document__real_has_no_fixture_hashes CHECK (source_kind <> 'REAL' OR fixture_hashes IS NULL)` — a `CHECK` admits no subquery, so element-wise format validation goes through an `IMMUTABLE` helper, as sortedness does |
 | `license_basis` | `text` | NOT NULL | `ck_document__license_basis_present CHECK (btrim(license_basis) <> '')` |
 | `retrieval_date` | `date` | NULL | `ck_document__real_has_retrieval_date CHECK (source_kind <> 'REAL' OR retrieval_date IS NOT NULL)` |
 | `roster_hash` | `text` | NULL | `ck_document__synthetic_has_roster_hash CHECK (source_kind <> 'SYNTHETIC' OR roster_hash ~ '^sha256:[0-9a-f]{64}$')` |
 | `loaded_at` | `timestamptz` | NOT NULL | DEFAULT `now()` |
 
 - `uq_document__id_type_project UNIQUE (document_id, document_type, project_id)` — the FK target that lets `chunk` carry `document_type` and `project_id` without either being able to disagree with its document.
-- The five provenance columns implement the project-instructions Data Provenance rule (source, issuing body, retrieval date, license basis, REAL/SYNTHETIC) at the storage boundary rather than in the manifest alone.
+- Provenance implements the project-instructions v1.2.0 Data Provenance rule **per layer** at the storage boundary rather than in the manifest alone.
 - **`document_id` format is declared here** (lowercase kebab slug) because TR-041 requires a declared format and E002's manifest key space is not yet frozen. E002/E006 must adopt it; recorded as an integration obligation under **Disclosed Gaps**.
 - **`project_id` is NOT NULL on every document**, including public reference standards, because SC-006 requires 100% of chunks to carry a project identifier and the chunk inherits it by composite FK. A standard referenced by several projects is loaded once per project.
 
@@ -401,6 +405,7 @@ All are `IMMUTABLE STRICT PARALLEL SAFE`, take arguments only, and perform no lo
 | `fn_is_sorted_ascending` | `(double precision[]) → boolean` | `true` when no element is strictly less than its predecessor (ties allowed). Numeric comparison only. |
 | `fn_is_non_increasing` | `(double precision[]) → boolean` | `true` when no element is strictly greater than its predecessor. |
 | `fn_all_within_unit_interval` | `(double precision[]) → boolean` | `true` when every element is in `[0, 1]`. |
+| `fn_all_sha256_prefixed` | `(text[]) → boolean` | `true` when every element matches `^sha256:[0-9a-f]{64}$`. Exists because a `CHECK` admits no subquery, so element-wise array validation needs an `IMMUTABLE` helper. Created in migration `0003`. |
 | `fn_is_legal_lifecycle_transition` | `(text, text) → boolean` | `true` when the ordered pair appears in the transition table under **State Machines**. Pure `VALUES` list, no table read. |
 
 **Restriction to record with the migration**: `CREATE OR REPLACE FUNCTION` on any of these does not re-validate existing rows. Changing one is therefore a two-step forward migration — new function under a new name, new check, drop the old — never an in-place replace.
@@ -692,7 +697,8 @@ Each gap above is a scope decision, not an oversight. The covering test makes it
 | TR-072 | `ck_line_posterior__survival_length` |
 | TR-073 | `fk_line_posterior__run_shape` + `uq_forecast_run__shape` (**Length enforcement chain**) |
 | TR-074 | `document.project_id` NOT NULL + `uq_document__id_type_project` |
-| TR-075 | `document.source_kind`, `.source_ref`, `.issuing_body`, `.license_basis`, `.retrieval_date` |
+| TR-075 | `document.source_kind`, `.license_basis` on every row; `.source_ref`, `.issuing_body`, `.retrieval_date` REAL-only; generator columns SYNTHETIC-only — each layer's fields rejected on the other |
+| TR-087 | `document.generator_id`, `.generation_seed`, `.generated_at`, `.fixture_hashes`, guarded by `ck_document__synthetic_has_*` / `ck_document__real_has_no_*`; `fn_all_sha256_prefixed` |
 | TR-076 | **Declared Constants → Direction of authority** |
 | TR-077 | `ck_document__id_format` + gap disclosure record G-9 |
 | TR-079 | Seeded Data — migrations `0002` and `0005`; `fk_extracted_value__field ON DELETE RESTRICT` |

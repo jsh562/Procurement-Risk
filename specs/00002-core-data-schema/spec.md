@@ -78,10 +78,10 @@ Establish the mechanism by which schema reaches the single Postgres instance: a 
 **Rationale**: The repository has no migration tooling, no database client dependency, and no schema. The execution plan makes migration-number collision the named integration risk for Wave 2 and requires the claim to be made at epic start. The architecture document fixes schema evolution as forward-only, which is a policy that has to be expressed in the tooling rather than left to authoring discipline.
 
 **Deliverables**:
-- Alembic configuration and a documented apply entry point, residing in `/src/model`, which also carries the database-client dependency and is the entry the migration job image builds from
+- Alembic configuration and a `[project.scripts]` console entry point, residing in `/src/model`, which also carries the database-client dependency; migrations are invoked through that entry's own environment, never from a container image (ADR-0011)
 - The initial migration enabling the `vector` extension
 - A recorded migration-number reservation: `0001`–`0099` owned by E003, `0100`–`0199` reserved for E004, carried as a filename prefix over Alembic's own revision identifiers
-- A one-shot migration job declared under the existing non-default Compose `jobs` profile
+- No Compose service and no container image — ADR-0011 rules both out for a modeling-owned job, and a context rooted at `src/model` could not resolve the `gateway` path dependency in any case
 - An apply-from-empty verification test executed against the Compose `db` service, plus a check asserting a single head revision and that every filename prefix falls inside the reserved block
 - A stated forward-only policy: no reverse operations, with the downgrade path raising rather than carrying an untested body
 - A single-row schema-constants table stating, once, the declared vector dimension, the survival-grid horizon in days, the anchor-date convention, the percentile convention, the per-run draw count, and the probability-sum tolerance — read over the connection by both Python boundaries so neither imports from the other
@@ -93,7 +93,7 @@ Establish the mechanism by which schema reaches the single Postgres instance: a 
 3. **Given** a migration whose filename prefix falls outside E003's reserved block, **When** the migration set is verified, **Then** verification fails and names the offending prefix.
 4. **Given** a migration set that resolves to more than one Alembic head revision, **When** it is verified, **Then** verification fails rather than applying an ambiguous order.
 5. **Given** the migration set, **When** it is inspected for reverse operations, **Then** none exist.
-6. **Given** ordinary `docker compose up`, **When** the stack starts, **Then** the migration job does not run and only the persistent services start.
+6. **Given** ordinary `docker compose up`, **When** the stack starts, **Then** only the persistent services start — and `docker-compose.yml` is unchanged by this epic, so `tests/checks/test_orchestration.py` passes without modification.
 7. **Given** a migration that fails partway through, **When** the database is inspected, **Then** the recorded revision matches the objects actually present, and re-applying the sequence advances from that revision without manual repair.
 8. **Given** the migrated database, **When** the schema-constants table is read, **Then** it holds exactly one row carrying the vector dimension, survival-grid horizon, anchor-date convention, percentile convention, draw count, and probability-sum tolerance, and no second row can be inserted.
 9. **Given** the verification tests this epic adds, **When** their locations are inspected, **Then** each test belonging to a single entry lives inside that entry, and only cross-entry verification lives at the repository root.
@@ -126,7 +126,9 @@ Define the chunk table so both retrieval arms operate against a single row set: 
 4. **Given** a vector whose dimension differs from the declared one, **When** insertion is attempted, **Then** the database rejects it.
 5. **Given** a chunk row, **When** it is read, **Then** the embedding model identity and revision that produced its vector are available on the row.
 6. **Given** an identical chunk inserted by two sessions configured with different default text-search settings, **When** their search columns are compared, **Then** the values are identical, demonstrating the column is built against an explicitly named configuration.
-7. **Given** a document row missing any of source, issuing body, retrieval date, license basis, or its REAL/SYNTHETIC label, **When** insertion is attempted, **Then** the database rejects it in each case.
+7. **Given** a document row missing its license basis or its REAL/SYNTHETIC layer label, **When** insertion is attempted, **Then** the database rejects it — both are mandatory on every layer.
+8. **Given** a `REAL` document row, **When** it is missing source, issuing body, or retrieval date, or carries any generator field, **Then** the database rejects it.
+9. **Given** a `SYNTHETIC` document row, **When** it is missing generator identity, seed, generation date, or fixture hashes, **or carries an issuing body, source reference, or retrieval date**, **Then** the database rejects it — a generated document cannot record retrieval provenance it does not have.
 
 ### Objective 3 - Provenance-Enforced Extraction Storage (Priority: P1)
 
@@ -273,7 +275,7 @@ Define the table representing a material identity confirmed across specification
 - **TR-004**: System MUST use Alembic as the migration tool and record E003's reserved block as `0001`–`0099`, reserving `0100`–`0199` for E004, carried as a migration filename prefix over Alembic's own revision identifiers.
 - **TR-005**: System MUST fail migration-set verification when a migration's filename prefix falls outside the owning epic's reserved block, or when the set resolves to more than one Alembic head revision.
 - **TR-006**: System MUST enable the `vector` extension as part of the migration sequence rather than as a manual setup step.
-- **TR-007**: System MUST declare the migration runner as a one-shot job under the existing non-default Compose profile so ordinary startup does not run it.
+- **TR-007**: System MUST expose the migration runner as a console entry point on the modeling entry, invoked through that entry's own environment, and MUST NOT package it as a container job (ADR-0011). Its determinism is bound by the entry's lockfile rather than by an image digest.
 - **TR-008**: System MUST place all schema and migration assets in `/src/model`, which alone declares the database client and Alembic, without adding a fifth `/src` entry and without either Python boundary declaring the other as a dependency.
 - **TR-009**: System MUST store each chunk with its document reference, project identifier, document type, specification section, page number, and ordinal position.
 - **TR-010**: System MUST provide a full-text search column with field weighting that ranks heading, part-number, and specification-section text above body prose.
@@ -303,8 +305,8 @@ Define the table representing a material identity confirmed across specification
 - **TR-034**: System MUST define the resolved-entity table with normalized manufacturer, normalized part number, agreement attributes, and membership references to contributing records.
 - **TR-035**: System MUST prevent a record from belonging to more than one resolved entity.
 - **TR-036**: System MUST create none of the following tables, which other epics own: model-invocation, response-fixture, and price-table-version (E004); candidate-pair and review-queue (E009); criticality-override (E017). The list is explicit so the requirement does not depend on an ownership predicate another document can invalidate.
-- **TR-052**: This epic MUST correct `specs/project-plan.md`'s Shared Data Entities rows before implementation closes, so ResolvedEntity and the posterior artifacts read `E003 (schema), E009 (populated)` and `E003 (schema), E007 (populated)` in the convention the Chunk row already uses.
-- **TR-037**: System MUST leave the existing Compose service definitions unchanged — the `db` service shape, image digest, host port, and credentials, and the existing job definitions — adding only the migration job under the existing non-default profile.
+- **TR-052**: This epic MUST **record the need to amend** — and MUST NOT itself perform — the correction to `specs/project-plan.md`'s Shared Data Entities rows, so ResolvedEntity and the posterior artifacts read `E003 (schema), E009 (populated)` and `E003 (schema), E007 (populated)`. Under v1.2.0 amendments serialize on the default branch and a feature branch records the need rather than performing it, so the edit itself is out of scope here and belongs to `.github/skills/amend-project/SKILL.md` run on `main` in the convention the Chunk row already uses.
+- **TR-037**: System MUST leave `docker-compose.yml` entirely unchanged — no service added, altered, or removed — since the migration runner is a console entry point rather than a container job. `tests/checks/test_orchestration.py`'s `JOBS` frozenset is therefore untouched. This is stronger than the original obligation, which permitted adding a job under the non-default profile.
 - **TR-038**: System MUST build the full-text search column against an explicitly named text-search configuration rather than a session-dependent default, so the column remains derivable and indexable.
 - **TR-039**: System MUST pair every range or domain constraint with a non-null constraint, because a range check is satisfied when its expression is null.
 - **TR-040**: System MUST compute each forecast artifact hash over an explicitly defined byte serialization of the array rather than over its text rendering.
@@ -341,7 +343,8 @@ Define the table representing a material identity confirmed across specification
 - **TR-072**: System MUST reject a survival array whose length differs from the horizon recorded on its run.
 - **TR-073**: System MUST enforce both array lengths by carrying the run's draw count and horizon into a composite foreign key from the artifact row to its run, so each length comparison is a single-row check, since PostgreSQL does not enforce a declared array size.
 - **TR-074**: System MUST scope every document row to exactly one project. The corpus manifest carries one entry per source-and-project pair, so the manifest key TR-046 keys on is already per-project and no synthesis is needed: a source referenced by several projects has several manifest entries, hence several keys and several document rows.
-- **TR-075**: System MUST record source, issuing body, retrieval date, license basis, and a REAL or SYNTHETIC label on every document row, so per-project duplication replicates the license basis with the row and no corpus location mixes licenses; a copyrighted reference standard is represented by its citation row alone, and loading body text for it remains E002's and E006's obligation rather than a constraint this schema carries.
+- **TR-075**: System MUST record the license basis and the REAL or SYNTHETIC layer label on every document row, and MUST make the remaining provenance layer-dependent: a `REAL` row records source, issuing body, and retrieval date and carries no generator fields; a `SYNTHETIC` row records generator identity, seed, generation date, and fixture content hashes and carries **no** retrieval provenance at all. Absence on the wrong layer MUST be enforced, not merely permitted — a fabricated issuing body is indistinguishable downstream from a verified one. Per-project duplication replicates the license basis with the row so no corpus location mixes licenses; a copyrighted reference standard is represented by its citation row alone, and loading body text for it remains E002's and E006's obligation rather than a constraint this schema carries.
+- **TR-087**: System MUST provide generator identity, seed, generation date, and fixture content hash columns on the document row, required together on a `SYNTHETIC` row and rejected on a `REAL` one, so a generated document can record the provenance it actually has.
 - **TR-076**: System MUST treat the migration DDL literal as authoritative over the published schema-constants row when the two disagree, so a drift failure is repaired by correcting the published row and never by altering the column the literal declared.
 - **TR-077**: System MUST have E002 and E006 adopt the `document_id` format this epic declares, accepted when every corpus manifest key matches that format and E006's loader test asserts it before any document row is written.
 - **TR-078**: System MUST make a later change to the `document_id` key space a forward migration that updates the document key in place, propagating to every chunk by cascade, leaving extracted-value citations untouched because they reference the chunk rather than the document, so no reload of loaded rows is required.
@@ -356,7 +359,7 @@ Define the table representing a material identity confirmed across specification
 
 ### Key Entities *(include for product or technical specs if feature involves data)*
 
-- **Document**: A source document from the corpus, keyed by its manifest identifier and defined here so every chunk's document reference has a real referent; populated by E006 from E002's manifest. Carries five mandatory provenance columns — source, issuing body, retrieval date, license basis, and a REAL or SYNTHETIC label — and is scoped to exactly one project.
+- **Document**: A source document from the corpus, keyed by its manifest identifier and defined here so every chunk's document reference has a real referent; populated by E006 from E002's manifest. Carries license basis and a REAL or SYNTHETIC layer label on every row, plus layer-dependent provenance: source, issuing body, and retrieval date when retrieved; generator identity, seed, generation date, and fixture hashes when generated. Each layer's fields are rejected on the other layer, so a generated document cannot carry retrieval provenance it does not have. Scoped to exactly one project.
 - **Chunk**: A structure-aligned passage of a document, carrying a foreign-key document reference, plus project, document type, specification section, page, and ordinal position, a field-weighted full-text representation, and a fixed-dimension dense vector with its embedding model identity and revision.
 - **FieldVocabulary**: The closed set of extraction field names, seeded by migration and referenced by foreign key, so the vocabulary grows by inserting a row rather than by altering a type.
 - **ExtractedValue**: A structured field read out of a chunk, naming its field through the vocabulary, carrying a mandatory page citation tied to the source chunk's page by composite foreign key and a mandatory per-field confidence, and holding its value as canonical text plus an optional typed numeric; may reference several chunks when synthesised across them.
@@ -391,7 +394,7 @@ Define the table representing a material identity confirmed across specification
 - `MIGRATION` — A forward-only Alembic sequence in `/src/model` with a reserved filename-prefix block, applying cleanly from empty and idempotent on re-application; the vehicle for every other signal in this epic.
 - `NEW-ENTITY` — Document, chunk, field vocabulary, extracted value, extraction failure, purchase-order line, lifecycle event, resolved entity, forecast run, the combined draw-and-survival artifact row, and the schema-constants row, with traceability invariants expressed as composite foreign keys and checks rather than application logic.
 - `NEW-CONFIG` — Database connection configuration consumed by the migration tooling, the schema-constants row (vector dimension, survival horizon, anchor-date and percentile conventions, draw count, probability-sum tolerance), and the recorded migration-block reservation.
-- `NEW-WORKER` — A one-shot migration job declared under the existing non-default Compose profile, building from `/src/model`, alongside the existing ingest and fit jobs.
+- `NEW-CONFIG` — A migration console entry point declared in `src/model/pyproject.toml` under `[project.scripts]`, invoked through the modeling entry's own environment (ADR-0011). No container job, no Compose service, no image digest.
 - `EXTERNAL-SERVICE` — None introduced; noted explicitly because the embedding-model decision record names a provider whose selection this epic gates but whose invocation belongs to E006.
 
 ## Success Criteria *(mandatory)*
@@ -400,7 +403,7 @@ Define the table representing a material identity confirmed across specification
 
 - **SC-001** [OBJ1]: The migration sequence applies from an empty database to the full schema in a single command with zero manual steps, and re-application changes nothing.
 - **SC-002** [OBJ1]: 100% of migrations in the sequence contain no reverse operation, and a migration numbered outside the reserved block fails verification.
-- **SC-003** [OBJ1]: Ordinary stack startup runs zero migration jobs, and E001's existing orchestration and layout checks continue to pass — extended to recognise the new migration job, with no existing service definition altered.
+- **SC-003** [OBJ1]: `docker-compose.yml` is byte-identical to its pre-epic state, E001's orchestration, layout, build-context, and supply-chain checks all pass **unmodified**, and migrations run instead through the modeling entry's console entry point.
 - **SC-004** [OBJ2]: A weighted full-text query ranks a heading match above an otherwise equivalent body-prose match on 100% of the weighting test cases.
 - **SC-005** [OBJ2]: Both an exact vector scan and an approximate index lookup execute against the chunk table with no schema difference between the two paths.
 - **SC-006** [OBJ2]: 100% of stored chunks carry a page number, a project identifier in the frozen format, an embedding model identity, and a vector of the declared dimension — measured over this epic's schema-test fixtures and, structurally, over every row the schema admits, since a chunk missing any of the four is not insertable. Measurement against loaded corpus data is E006's, not this epic's.
@@ -414,7 +417,7 @@ Define the table representing a material identity confirmed across specification
 - **SC-014** [OBJ5]: A line's draw array and survival array can only exist as a matched pair under one run; every attempt to write one without the other is rejected.
 - **SC-015** [OBJ5]: For every stored survival array, the array plus its recorded residual tail mass accounts for the full probability distribution within a stated floating-point tolerance rather than by exact equality.
 - **SC-016** [OBJ6]: A resolved entity spanning specification, submittal, and purchase-order members is fully recoverable, and a record cannot belong to two entities.
-- **SC-017** [OBJ1]: The migrated schema contains none of the six explicitly named other-epic tables, keeping Wave 2 table ownership disjoint, and `specs/project-plan.md`'s Shared Data Entities rows agree with what this epic actually defines.
+- **SC-017** [OBJ1]: The migrated schema contains none of the six explicitly named other-epic tables, keeping Wave 2 table ownership disjoint. The `specs/project-plan.md` discrepancy is carried as a recorded amendment request under SC-027, not as an edit this branch performs.
 - **SC-018** [OBJ2]: 100% of stored chunks carry a document reference resolving by foreign key to a row in the document table, so no citation terminates at a page number alone — measured over this epic's schema-test fixtures and, structurally, over every row the schema admits, since a chunk with an unresolvable document reference is not insertable. Measurement against loaded corpus data is E006's.
 - **SC-019** [OBJ1]: The schema-constants table holds exactly one row, its recorded vector dimension matches the dimension the chunk column was declared with, and only `/src/model` declares the database client and migration tooling.
 - **SC-020** [OBJ1]: An accepted decision record naming the embedding model exists in `specs/adrs/` before the chunk migration is authored, and the migration's declared dimension matches it.
@@ -424,7 +427,7 @@ Define the table representing a material identity confirmed across specification
 - **SC-024** [OBJ1]: Zero check or non-null constraints in the migrated schema are declared deferrable, and every two-statement invariant is carried by a deferrable foreign key or the single sanctioned fallback trigger.
 - **SC-025** [OBJ5]: Both arrays on an artifact row have their length enforced against the run row, so a wrong-length draw array or survival array is rejected at insert.
 - **SC-026** [OBJ2]: Both retrieval arms resolve to the same relation and the same vector column, differing only by a session-level planner setting, with the migrated object set identical before and after each query — a second table, a second vector column, or any DDL applied between the two arms fails the criterion.
-- **SC-027** [OBJ1]: `specs/project-plan.md`'s Shared Data Entities table reads exactly `E003 (schema), E009 (populated)` in the ResolvedEntity Introduced-by cell and exactly `E003 (schema), E007 (populated)` in the PosteriorDraws / SurvivalArray Introduced-by cell, with both Consumed-by cells unchanged; confirmed by the QC phase before the feature is treated as release-ready.
+- **SC-027** [OBJ1]: A recorded amendment request states the exact replacement text for both Shared Data Entities cells — `E003 (schema), E009 (populated)` for ResolvedEntity and `E003 (schema), E007 (populated)` for the posterior artifacts, both Consumed-by cells unchanged — so the amendment can be applied on `main` without re-deriving it. The criterion is met by the request existing and being precise, **not** by the default-branch file having changed; making `.qc-passed` depend on a branch edit v1.2.0 prohibits would deadlock the gate. QC confirms the request is present and precise.
 - **SC-028** [OBJ3]: 100% of attempts to `UPDATE` or `DELETE` an extracted-value or extraction-failure row as the application role are refused by the database, while the same operations succeed as the migration role — so append-only is a privilege fact rather than a caller convention.
 
 ## Glossary *(include when spec introduces 2+ domain-specific terms)*
@@ -474,7 +477,7 @@ Define the table representing a material identity confirmed across specification
 
 ## Compliance Check
 
-**Instructions Check** — `project-instructions.md` v1.1.3 · audited 2026-07-25 · **PASS** (no CRITICAL or blocking violations)
+**Instructions Check** — `project-instructions.md` **v1.2.0** · audited 2026-07-26 · **PASS** after remediating four CRITICAL findings (layer-dependent provenance, absent generator columns, containerized migration job, amendment performed on a feature branch) — see `analysis-report.md`. Prior record, superseded: v1.1.3 · 2026-07-25 · PASS (no CRITICAL or blocking violations)
 
 | Rule | Verdict |
 |------|---------|

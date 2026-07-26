@@ -32,11 +32,11 @@
 
 ## Brownfield Notes
 
-- **Existing flows touched**: `docker-compose.yml` (add `migrate` only — `db`, `api`, `web`, `ingest`, `fit` are frozen by TR-037), `tests/checks/test_orchestration.py`, `tests/checks/test_supply_chain.py`, `tests/checks/test_dependency_isolation.py`, `.github/workflows/verify.yml`, root `pyproject.toml`, `src/model/pyproject.toml`.
+- **Existing flows touched**: `.github/workflows/verify.yml`, root `pyproject.toml`, `src/model/pyproject.toml`. **`docker-compose.yml` is NOT touched** — migrations run as a console entry point (ADR-0011), so no Compose service is added and `tests/checks/test_supply_chain.py`, `tests/checks/test_dependency_isolation.py`, `.github/workflows/verify.yml`, root `pyproject.toml`, `src/model/pyproject.toml`.
 - **Migration ordering is a hard constraint**: the ten migrations form one linear Alembic chain, each with a single parent revision. None is `[P]` against another — parallel authoring produces multiple heads, which TR-005 fails the build on.
 - **Two migrations are deliberately multi-object and must not be split.** `0006` creates `extracted_value`, `extracted_value_contributing_chunk`, `extraction_failure`, and the provenance view together. `0007` creates `purchase_order_line` and `lifecycle_event` in one migration because the deferred closing foreign key is a cycle that cannot be split across revisions.
 - **ADR-0012 and ADR-0013 already exist and are Accepted.** No ADR authoring task is generated; TR-050 is satisfied by an existing artifact and carries a verification task only. `EMBEDDING_DIM = 384` is therefore already fixed.
-- **Regression focus**: E001's orchestration, layout, build-context, image-contents, and supply-chain checks must keep passing. `tests/checks/test_orchestration.py` breaks the moment `migrate` enters Compose, so both edits are one task (HINT-005).
+- **Regression focus**: E001's orchestration, layout, build-context, image-contents, and supply-chain checks must keep passing **unmodified** — the console entry point touches no Compose service, no build context, and no image pin.
 - **Test placement**: entry-local schema tests live in `.../tests/schema/`; only cross-entry checks live in root `tests/checks/` (TR-042 forbids the reverse).
 - **Documentation and semantic requirements**: much of TR-053 … TR-086 states reader-facing semantics, retention, hand-off obligations, or authority direction rather than new DDL. Those are mapped to verification or documentation tasks against `data-model.md` and are marked as such in the task description — no build work is invented for them.
 
@@ -60,19 +60,19 @@
 - [ ] T009 [OBJ1] {TR-033,TR-043,TR-047,TR-056,TR-079} Create .../versions/0002_schema_constants.py: singleton table, six constants, seed 384/365/4000/1e-9 → exports: schema_constants
 - [ ] T010 [P] [OBJ1] {TR-042} Create .../tests/schema/conftest.py: DATABASE_URL fixture, savepoint-rollback session, constraint-name assertion helper → exports: db_session, assert_rejects
 - [ ] T011 [OBJ1] {TR-001,TR-002,TR-003,TR-004,TR-005} Add .../tests/schema/test_migration_chain.py: single head, upgrade-from-empty, re-apply no-op, prefix range, no downgrade body
-- [ ] T012 [OBJ1] {TR-007} Add src/model/Dockerfile built from context ./src/model with its own src/model/.dockerignore — never widen src/.dockerignore — and its pin in test_supply_chain.py
-- [ ] T013 [OBJ1] {TR-007,TR-037} Add `migrate` to docker-compose.yml under the existing `jobs` profile and to the JOBS frozenset in tests/checks/test_orchestration.py in one change after:T012
+- [ ] T012 [OBJ1] {TR-007} Declare the `migrate` console entry point in src/model/pyproject.toml `[project.scripts]` targeting the Alembic runner, invoked as `uv run --directory src/model migrate` (ADR-0011) — no Dockerfile, no image, no Compose service
+- [ ] T013 [OBJ1] {TR-007,TR-037} Add a migrate step to .github/workflows/verify.yml using the existing `uv run --directory "src/$entry"` pattern, and assert docker-compose.yml is unchanged so E001's orchestration check passes unmodified after:T012
 
 ---
 
 ## Phase 3: OBJ2 - Retrievable Chunk Store (Priority: P1) 🎯 MVP
 
-- [ ] T014 [OBJ2] {TR-041,TR-046,TR-057,TR-074,TR-075,TR-078} Create .../versions/0003_document.py: id-format check, five provenance columns, one row per source-project after:T009 → exports: document
+- [ ] T014 [OBJ2] {TR-041,TR-046,TR-057,TR-074,TR-075,TR-078,TR-087} Create .../versions/0003_document.py: id-format check, layer-conditional provenance (REAL: source/issuing body/retrieval date; SYNTHETIC: generator id/seed/generated_at/fixture hashes, each rejected on the other layer), fn_all_sha256_prefixed, one row per source-project after:T009 → exports: document
 - [ ] T015 [OBJ2] {TR-009,TR-011,TR-012,TR-014,TR-058} Create .../versions/0004_chunk.py: chunk columns, vector(384), model id/revision, uq (chunk_id,page_number), fk_chunk__document → exports: chunk
 - [ ] T016 [OBJ2] {TR-010,TR-013,TR-038} Add to 0004_chunk.py the generated search_vector on 'pg_catalog.english' with A-D weights, its GIN index, and the HNSW cosine index ← T015:chunk
 - [ ] T017 [OBJ2] {TR-010,TR-038} Add .../tests/schema/test_chunk.py: heading match outranks body match, and two sessions with differing defaults build identical vectors ← T010:db_session
 - [ ] T018 [OBJ2] {TR-011,TR-012,TR-013} Extend test_chunk.py: exact scan and HNSW lookup on the same relation with no DDL between, per-row model identity, gap G-8 mismatch case
-- [ ] T019 [OBJ2] {TR-014,TR-041,TR-046,TR-074,TR-075,TR-077} Extend test_chunk.py: reject empty body, missing page, bad document ref, bad PRJ id; assert provenance columns and G-9's format
+- [ ] T019 [OBJ2] {TR-014,TR-041,TR-046,TR-074,TR-075,TR-077,TR-087} Extend test_chunk.py: reject empty body, missing page, bad document ref, bad PRJ id; assert a SYNTHETIC row carrying an issuing body is rejected and a REAL row missing one is rejected; G-9 format
 
 ---
 
@@ -132,7 +132,7 @@
 - [ ] T051 [P] {TR-039,TR-051,TR-063} Add .../tests/schema/test_constraint_audit.py: every range check paired with NOT NULL, zero deferrable checks, the declared defaults enumerated after:T048
 - [ ] T052 [P] {TR-036,TR-083} Add .../tests/schema/test_table_ownership.py: the six named other-epic tables absent, every created object present in data-model.md after:T048
 - [ ] T053 [P] {TR-008,TR-042} Extend tests/checks/test_dependency_isolation.py: only src/model may declare alembic/psycopg/SQLAlchemy; assert no entry-local schema test sits at the repo root
-- [ ] T054 [P] {TR-052} Correct specs/project-plan.md Shared Data Entities rows: ResolvedEntity to `E003 (schema), E009 (populated)`; posterior artifacts to `E003 (schema), E007 (populated)`
+- [ ] T054 [P] {TR-052} Verify plan.md's Amendment Requests section records AR-1 with exact replacement text for both Shared Data Entities cells — record only; v1.2.0 forbids this branch editing specs/project-plan.md
 
 ---
 
@@ -153,9 +153,9 @@ Phase 5 OBJ4 (T028-T034)  ── 0007
         ↓
 Phase 6 OBJ5 (T035-T044)  ── 0008
         ↓
-Phase 7 OBJ6 (T045-T047)  ── 0009   (P2)
+Phase 7 OBJ6 (T045-T047)  ── 0010   (P2, last in chain)
         ↓
-Phase 8 Polish (T048-T054) ── 0010 + whole-schema audits
+Phase 8 Polish (T048-T054) ── 0009 privileges + whole-schema audits
 ```
 
 **Rules in force**
@@ -164,11 +164,10 @@ Phase 8 Polish (T048-T054) ── 0010 + whole-schema audits
 - No Foundational phase exists. The two structures shared across objectives — the Alembic environment (T006) and the test fixtures (T010) — are OBJ1 deliverables in their own right (TR-001, TR-003, TR-042), so they are created in the earliest work item that needs them rather than lifted into a shared phase.
 - **The migration chain is strictly linear and is the spine of the phase graph.** Single-parent revisions in order: `0001` (T008) → `0002` (T009) → `0003` (T014) → `0004` (T015, T016) → `0005` (T020) → `0006` (T021, T022, T023) → `0007` (T029, T030, T031) → `0008` (T036-T039) → `0009` (T045, T046) → `0010` (T048). **No migration task is `[P]` against another.** Parallel authoring produces multiple Alembic heads, which TR-005 fails the build on.
 - **`0006` and `0007` are each one migration carrying several tasks.** T021, T022, and T023 all write `0006_extraction.py`; T029, T030, and T031 all write `0007_procurement.py`. Splitting `0007` is not an option — the closing foreign key is a cycle between line and event and cannot cross a revision boundary.
-- Cross-phase migration edges are carried explicitly: `after:T009` on T014, `after:T016` on T020, `after:T023` on T029, `after:T031` on T036, `after:T039` on T045, `after:T046` on T048.
+- Cross-phase migration edges are carried explicitly: `after:T009` on T014, `after:T016` on T020, `after:T023` on T029, `after:T031` on T036, `after:T039` on T048, `after:T048` on T045.
 - Within a phase: helper functions → migration → tests. Tests for a table group may start as soon as that group's migration lands; they are sequential only because each objective's tests share a single test file.
 - **Same-file chains are ordered even where no `after:` edge is written.** Tasks that add to one migration file (T021→T022→T023 on `0006`; T029→T030→T031 on `0007`; T036→T037→T038→T039 on `0008`; T045→T046 on `0010`) and every "Extend test_*.py" run must execute in listed order. None is `[P]`, so a scheduler honouring `[P]` alone will not reorder them — but do not infer independence from the absence of an edge.
-- **`src/.dockerignore` is never touched.** It is a shared allowlist admitting exactly `api` and `gateway`, and `src/api/Dockerfile` builds from that same `/src` context. Admitting `model` breaks `tests/checks/test_build_context.py` and relaxes an architectural constraint that would require a superseding ADR. The migration image builds from `./src/model` instead.
-- **T013 is deliberately one task, not two** (HINT-005). Adding `migrate` to `docker-compose.yml` breaks `tests/checks/test_orchestration.py` until its `JOBS` frozenset gains the name, so both edits must land together or the tree is red between them.
+- **No Compose change at all.** ADR-0011 requires a modeling-owned job to be a console entry point, and a context rooted at `src/model` could not resolve the `gateway = { path = "../gateway" }` dependency in any case. `docker-compose.yml`, `src/.dockerignore`, and `tests/checks/test_supply_chain.py` are all left alone, which removes the red-tree window the earlier Compose plan had.
 - **`0009_provenance_privileges.py` precedes the P2 migration, so no P1 obligation waits on P2.** TR-084 and TR-086 are OBJ3 (P1) obligations. The migration grants only against tables `0006` creates, so its position is free; it sits at `0009`, before OBJ6's `0010`, and T048 depends on T039 (the last P1 migration task) rather than on any P2 task. T048/T049 keep their Polish task IDs — IDs are never renumbered — but they are P1 work and are not droppable with P2. T049 evidences SC-028.
 - **The whole-schema audits (T050-T052) are in Polish because they read the migrated object set as a whole.** The constants-agreement test needs `0004`'s declared typmod, the constraint audit needs every constraint, and the ownership check needs the final object set. None can run before the chain is complete.
 - `[P]` batches: `{T002, T003, T004}` (three distinct config files; T002's dependency T001 is outside the batch), `{T005}`, `{T010}`, `{T044}`, and `{T050, T051, T052, T053, T054}` (five distinct files, no edges among them).
