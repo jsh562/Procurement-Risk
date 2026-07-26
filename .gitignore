@@ -31,6 +31,12 @@ next-env.d.ts
 # Local backup of pre-rewrite git history (created during history scrub)
 /.git.backup-pre-scrub/
 
+# Compose reads this automatically and it holds machine-specific host-port
+# overrides (PRC_DB_PORT and friends). Several checkouts of this repository can
+# share one machine, so the right value differs per working copy and must never
+# be committed.
+/.env
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
