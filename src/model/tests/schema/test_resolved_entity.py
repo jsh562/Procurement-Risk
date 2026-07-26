@@ -1102,7 +1102,7 @@ def test_one_normalized_identity_admits_only_one_entity(
 # --------------------------------------------------------------------------- #
 
 DATA_MODEL_PATH = (
-    Path(__file__).resolve().parents[4] / "specs" / "00002-core-data-schema" / "data-model.md"
+    Path(__file__).resolve().parents[4] / "specs" / "00003-core-data-schema" / "data-model.md"
 )
 
 

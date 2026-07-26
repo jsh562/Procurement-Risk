@@ -1,6 +1,6 @@
 # Implementation Plan: Core Data Schema
 
-**Branch**: `00002-core-data-schema` | **Date**: 2026-07-25 | **Spec**: [spec.md](spec.md)
+**Branch**: `00003-core-data-schema` | **Date**: 2026-07-25 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -202,7 +202,7 @@ N/A — no request path, no external service call, and no user-facing error stat
 | TR-049 | `forecast_run` | `.../versions/0008_forecast.py` | `as_of_date` `NOT NULL` |
 | TR-050 | ADR-0012 | `specs/adrs/0012-*.md` | Gates the chunk migration |
 | TR-051 | Constraint audit | `src/model/tests/schema/test_constraint_audit.py` | No deferred check or non-null |
-| TR-052 | Amendment request | `specs/00002-core-data-schema/plan.md` | Recorded, not performed (v1.2.0) |
+| TR-052 | Amendment request | `specs/00003-core-data-schema/plan.md` | Recorded, not performed (v1.2.0) |
 | TR-087 | `document` generator columns | `.../versions/0003_document.py` | SYNTHETIC-only, rejected on REAL |
 | TR-053 | Array semantics contract | [data-model.md](data-model.md) | Beyond-horizon answer is `1 - residual_tail_mass`; E010 reads it |
 | TR-054 | `extracted_value` | `.../versions/0006_extraction.py` | `double precision`, closed interval, no coarser scale |
@@ -303,13 +303,17 @@ Both "Consumed by" cells unchanged. The convention is the one the `Chunk` row al
 
 ### AR-2 — governance gap, Feature Workspace numbering
 
-Workspace prefix `00002` is held by both this epic (E003, `specs/00002-core-data-schema/`) and E002 (`specs/00002-public-corpus-and-manifest/`, referenced from ADR-0011's front matter). v1.2.0 added epic-start claiming for migration numbers and decision-record numbers but not for workspace numbers, and they have already collided under the same parallel-wave pressure that motivated the clause.
+Workspace prefix `00002` is held by both this epic (E003, `specs/00003-core-data-schema/`) and E002 (`specs/00002-public-corpus-and-manifest/`, referenced from ADR-0011's front matter). v1.2.0 added epic-start claiming for migration numbers and decision-record numbers but not for workspace numbers, and they have already collided under the same parallel-wave pressure that motivated the clause.
 
 Not actionable here — renaming a workspace mid-flight breaks every path in this plan and `tasks.md`. Recorded for a future amendment: *"Feature Workspace numbers are claimed at epic start, exactly as migration and decision-record numbers are."*
 
 **APPLIED** on `main` in `33026f0` as **v1.2.2**, with the clause extended to cover workspace numbers alongside decision-record and migration numbers, plus its ISO-dated changelog row.
 
-Two consequences recorded with it rather than left implicit. First, **E003 remains permanently non-compliant with the rule it asked for** — the `00002` collision cannot be undone, because the number is embedded in every path this epic's artifacts cite, and the amendment was written knowing that. Second, the bump **superseded v1.2.1, which both then-in-flight epics recorded as their audited version** (E002 and E004), so each carries a re-run obligation for its own next gate under the drift clause. That was disclosed in the commit rather than left for them to discover; discharging it is theirs, not this epic's.
+Two consequences recorded with it rather than left implicit. First, the bump **superseded v1.2.1, which both then-in-flight epics recorded as their audited version** (E002 and E004), so each carries a re-run obligation for its own next gate under the drift clause. That was disclosed in the commit rather than left for them to discover; discharging it is theirs, not this epic's.
+
+Second — and this one was stated wrongly here and had to be retracted. The original text read: *"E003 remains permanently non-compliant with the rule it asked for — the `00002` collision cannot be undone, because the number is embedded in every path this epic's artifacts cite."* **The collision was subsequently undone**: this workspace was renamed to `00003-core-data-schema`, bringing numbering one-to-one with epic numbers, and `project-instructions.md` v1.2.3 carries the correction.
+
+The claim was reasoning about a *mid-flight* rename — where the reference set keeps growing and live paths break under you — generalised to all cases without re-checking. For a completed epic the opposite holds: the references are finite and enumerable (51 across 16 files, including five test modules that read `data-model.md` through a hard-coded path), and the suite proves the rename landed. Completion makes it the cheap case, not the impossible one.
 
 ### AR-3 — `.github/skills/analyze-compliance/SKILL.md`, prior-report handling
 

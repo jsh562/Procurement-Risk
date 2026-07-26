@@ -5,7 +5,7 @@ date: 2026-07-26
 tags: [governance, process, artifacts, traceability, schema]
 supersedes: []
 superseded_by: ""
-related_artifacts: ["specs/00002-core-data-schema/spec.md", "specs/00002-core-data-schema/data-model.md", "specs/00002-core-data-schema/plan.md", "ADR-0013", "specs/sad.md", "E003", "E004", "E005", "E006", "E007", "E009", "E010"]
+related_artifacts: ["specs/00003-core-data-schema/spec.md", "specs/00003-core-data-schema/data-model.md", "specs/00003-core-data-schema/plan.md", "ADR-0013", "specs/sad.md", "E003", "E004", "E005", "E006", "E007", "E009", "E010"]
 deciders: ["Project owner", "Solution architect"]
 ---
 
@@ -15,13 +15,13 @@ deciders: ["Project owner", "Solution architect"]
 
 Accepted. Supersedes nothing — this record is additive and changes no earlier decision.
 
-It discharges **AR-4** in `specs/00002-core-data-schema/plan.md` § Amendment Requests, which recorded that the authority direction E003 adopted needs a decision record before it binds any epic beyond E003, and which could not be written from a feature branch.
+It discharges **AR-4** in `specs/00003-core-data-schema/plan.md` § Amendment Requests, which recorded that the authority direction E003 adopted needs a decision record before it binds any epic beyond E003, and which could not be written from a feature branch.
 
 ## Context
 
 The SDDP lifecycle is `Specify → Clarify → Plan → Checklist → Tasks → Analyze → Implement → QC`, and `AGENTS.md` calls that order strict. The authority direction normally follows it: `spec.md` states the obligations, and the Plan artifacts — `plan.md`, `data-model.md` — derive from them. A Plan artifact records *how*; it does not get to change *what*.
 
-E003 inverts that direction in four requirements — **TR-056, TR-065, TR-076, TR-083** in `specs/00002-core-data-schema/spec.md`. TR-083 is the clearest: it requires every table and column to be defined in `data-model.md`, makes that document normative, and forbids creating an object absent from it. The document takes the mandate at full width — its §Conventions opens by declaring every table, column, named constraint, index, seeded row, and state transition normative — and it is where the migration sequence and the per-table detail actually live. TR-065 is the same shape narrower: it requires the closing-event mechanism actually taken to be recorded in the document's invariant-to-mechanism map, so which rung of the fallback ladder governs is a Plan-artifact fact. TR-076 makes the migration DDL literal authoritative over the published `schema_constants` row. TR-056 puts the reversal trigger and production-scale alternative for three constants in the document's declared-constants scope-decision record.
+E003 inverts that direction in four requirements — **TR-056, TR-065, TR-076, TR-083** in `specs/00003-core-data-schema/spec.md`. TR-083 is the clearest: it requires every table and column to be defined in `data-model.md`, makes that document normative, and forbids creating an object absent from it. The document takes the mandate at full width — its §Conventions opens by declaring every table, column, named constraint, index, seeded row, and state transition normative — and it is where the migration sequence and the per-table detail actually live. TR-065 is the same shape narrower: it requires the closing-event mechanism actually taken to be recorded in the document's invariant-to-mechanism map, so which rung of the fallback ladder governs is a Plan-artifact fact. TR-076 makes the migration DDL literal authoritative over the published `schema_constants` row. TR-056 puts the reversal trigger and production-scale alternative for three constants in the document's declared-constants scope-decision record.
 
 So a Plan re-run can invalidate a Specify requirement. That is the inversion, and it was raised as analysis finding **A-012** (MEDIUM, "lifecycle inversion") against E003. It was deferred through five phases, examined against the delivered code after QC had already passed, and accepted there; the write-up is in `spec.md` § Compliance Check. A related finding, **A-010**, is the same inversion caught in a form that *was* corrected: TR-041 and TR-077 both referred to "the declared format" for `document_id` while no requirement declared it — the format existed only in `data-model.md` — and the fix was to declare it in TR-041. The difference between A-010 and A-012 is scope, not kind: one identifier's format lifts into a requirement cheaply, and thirteen tables of DDL detail does not.
 
@@ -120,14 +120,14 @@ Every one of those is a correction *toward* the delivered reality, with the reas
 - The lifecycle order is otherwise unchanged, and nothing here lets a Plan artifact *originate* an obligation. `data-model.md` is normative because a requirement said so, for the scope that requirement named; a fact it states outside that scope binds nobody.
 - The delegation is per-requirement, not global. A later epic that wants its own Plan artifact to be normative names it in its own requirement and meets the four conditions; this record sanctions the pattern, not any particular artifact.
 - ADR-0013's schema ownership and ADR-0016's driver clarification are untouched. This record is about which artifact states the schema, not about which entry owns it or which entry may connect to it.
-- A-012's own history is a process artifact worth keeping visible: the finding's definition was destroyed by a later analysis pass that renumbered to a B-series and overwrote the report in place, and had to be recovered with `git show 7138026:specs/00002-core-data-schema/analysis-report.md` while four artifacts — including a `.qc-passed` marker — still cited it by ID. `plan.md` records the rule change for that separately as AR-3; this record does not depend on it.
+- A-012's own history is a process artifact worth keeping visible: the finding's definition was destroyed by a later analysis pass that renumbered to a B-series and overwrote the report in place, and had to be recovered with `git show 7138026:specs/00003-core-data-schema/analysis-report.md` while four artifacts — including a `.qc-passed` marker — still cited it by ID. `plan.md` records the rule change for that separately as AR-3; this record does not depend on it.
 
 ## Links
 
-- [specs/00002-core-data-schema/spec.md](../00002-core-data-schema/spec.md) — TR-056, TR-065, TR-076, TR-083 are the four inverted requirements; § Compliance Check carries A-012's acceptance and its mitigation
-- [specs/00002-core-data-schema/data-model.md](../00002-core-data-schema/data-model.md) — the normative artifact, its §Conventions declaration, and the four labelled corrections with their PostgreSQL 16 evidence
-- [specs/00002-core-data-schema/plan.md](../00002-core-data-schema/plan.md) — **AR-4**, the amendment request this record discharges; AR-3 covers the analysis-report overwrite that lost A-012's definition
-- [specs/00002-core-data-schema/analysis-report.md](../00002-core-data-schema/analysis-report.md) — A-012 as raised and as closed, and A-010 as the same inversion corrected at a scope where lifting was cheap
+- [specs/00003-core-data-schema/spec.md](../00003-core-data-schema/spec.md) — TR-056, TR-065, TR-076, TR-083 are the four inverted requirements; § Compliance Check carries A-012's acceptance and its mitigation
+- [specs/00003-core-data-schema/data-model.md](../00003-core-data-schema/data-model.md) — the normative artifact, its §Conventions declaration, and the four labelled corrections with their PostgreSQL 16 evidence
+- [specs/00003-core-data-schema/plan.md](../00003-core-data-schema/plan.md) — **AR-4**, the amendment request this record discharges; AR-3 covers the analysis-report overwrite that lost A-012's definition
+- [specs/00003-core-data-schema/analysis-report.md](../00003-core-data-schema/analysis-report.md) — A-012 as raised and as closed, and A-010 as the same inversion corrected at a scope where lifting was cheap
 - `src/model/tests/schema/test_table_ownership.py` — the condition-4 enforcement for E003, and the file whose name-level matching is the disclosed limitation
 - `src/model/tests/schema/test_extraction.py` — asserts TR-081, TR-082, and TR-085 against the document, since no constraint can carry them
 - [ADR-0013](../adrs/0013-schema-ownership-in-the-modeling-entry.md) — puts the schema and its assets in `/src/model`; this record governs which artifact normatively states that schema

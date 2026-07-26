@@ -5,7 +5,7 @@ date: 2026-07-25
 tags: [retrieval, embeddings, schema, compute-envelope, reproducibility]
 supersedes: []
 superseded_by: ""
-related_artifacts: ["specs/prd.md", "CAP-003", "ADR-0002", "ADR-0005", "ADR-0006", "ADR-0013", "specs/00002-core-data-schema/spec.md", "E003", "E006", "E008", "E014"]
+related_artifacts: ["specs/prd.md", "CAP-003", "ADR-0002", "ADR-0005", "ADR-0006", "ADR-0013", "specs/00003-core-data-schema/spec.md", "E003", "E006", "E008", "E014"]
 deciders: ["Project owner", "Solution architect"]
 ---
 
@@ -149,7 +149,7 @@ The cost is honest and is accepted deliberately. The compact model gives up meas
 - [ADR-0005](0005-exact-vector-search-for-evaluation-approximate-for-serving.md) — requires the HNSW serving index whose 2000-dimension ceiling constrains this choice
 - [ADR-0006](0006-local-quantized-cross-encoder-reranker.md) — establishes the 400 MB request-time envelope this session shares, and the reproducibility standard applied here
 - [ADR-0013](0013-schema-ownership-in-the-modeling-entry.md) — publishes `EMBEDDING_DIM` through the `schema_constants` table
-- [specs/00002-core-data-schema/spec.md](../00002-core-data-schema/spec.md) — E003; TR-050, TR-012, TR-048, IP-013, OBJ1 VC11, SC-020
+- [specs/00003-core-data-schema/spec.md](../00003-core-data-schema/spec.md) — E003; TR-050, TR-012, TR-048, IP-013, OBJ1 VC11, SC-020
 - E006 — generates chunk embeddings with the model fixed here
 - E008 — retrieves against the vector space fixed here
 - E014 — publishes evaluation and ablation numbers measured on it

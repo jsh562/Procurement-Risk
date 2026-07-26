@@ -57,7 +57,7 @@ RejectionAsserter = Callable[[Session, type[psycopg.Error], str], AbstractContex
 
 #: `src/model/tests/schema/` -> repository root.
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DATA_MODEL_PATH = REPO_ROOT / "specs" / "00002-core-data-schema" / "data-model.md"
+DATA_MODEL_PATH = REPO_ROOT / "specs" / "00003-core-data-schema" / "data-model.md"
 
 #: The schema's single deferrable constraint (data-model.md §Conventions, TR-021).
 THE_ONE_DEFERRABLE_CONSTRAINT = "fk_purchase_order_line__closing_event"

@@ -1,5 +1,5 @@
 ---
-feature_branch: "00002-core-data-schema"
+feature_branch: "00003-core-data-schema"
 created: "2026-07-25"
 input: "e003"
 spec_type: "technical"
@@ -10,7 +10,7 @@ epic_sources: "{SAD:ADR-0002}{SAD:ADR-0004}{SAD:ADR-0008}"
 
 # Feature Specification: Core Data Schema
 
-**Feature Branch**: `00002-core-data-schema`
+**Feature Branch**: `00003-core-data-schema`
 **Created**: 2026-07-25
 **Status**: Clarified
 **Spec Type**: technical
@@ -515,7 +515,7 @@ The analysis also found that the checklist pass appended 33 requirements — TR-
 - **A-011 — non-obligations phrased as MUST. Closed by reclassification.** 11 rather than the 9 first counted. Each now carries a trailing note naming what it actually is and where its enforceable half sits, if any; see the preamble to Technical Requirements. No ID and no obligation changed.
 - **A-012 — lifecycle inversion. Accepted, with the mitigation named.** TR-056, TR-065, TR-076 and TR-083 make `data-model.md` — a Plan-phase artifact — normative over Specify-phase requirements, so in principle a Plan re-run can invalidate a spec requirement. This is a genuine inversion of the lifecycle order `AGENTS.md` calls strict, and it is accepted rather than corrected: the alternative is lifting thirteen tables of DDL detail into `spec.md`, which duplicates the normative source instead of removing the inversion. **The mitigation is already in practice** — `data-model.md` was amended four times during implementation (`fk_lifecycle_event__chain` to `MATCH SIMPLE`, two array-check NULL strengthenings, and the `0009` third table), and each amendment is labelled a correction carrying the PostgreSQL 16 evidence for why the declared form was wrong, adding no constraint name and no object. That is TR-083 working as designed. If this authority direction is to bind epics beyond E003 it needs an ADR, which must be authored on `main` — recorded as **AR-4** in `plan.md` § Amendment Requests, not applied from this branch.
 
-The finding text for A-012 was not recoverable from the working tree — the superseding analysis pass renumbered to a B-series and overwrote the report in place, leaving four IDs with three descriptions between them. It was recovered from `git show 7138026:specs/00002-core-data-schema/analysis-report.md`. Worth noting as a process defect in its own right: an undefined item had been sitting in a `.qc-passed` marker.
+The finding text for A-012 was not recoverable from the working tree — the superseding analysis pass renumbered to a B-series and overwrote the report in place, leaving four IDs with three descriptions between them. It was recovered from `git show 7138026:specs/00003-core-data-schema/analysis-report.md`. Worth noting as a process defect in its own right: an undefined item had been sitting in a `.qc-passed` marker.
 
 Carried into Plan: E004 must honour rather than re-negotiate the `0100`–`0199` migration block reserved for it here, and TR-052 requires `specs/project-plan.md`'s Shared Data Entities rows for ResolvedEntity and the posterior artifacts to be corrected to the `E003 (schema), E00N (populated)` convention the Chunk row already uses.
 

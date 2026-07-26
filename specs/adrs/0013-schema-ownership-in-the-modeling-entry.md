@@ -5,7 +5,7 @@ date: 2026-07-25
 tags: [layout, schema, migrations, data, governance]
 supersedes: []
 superseded_by: "ADR-0016"
-related_artifacts: ["ADR-0002", "ADR-0003", "ADR-0010", "ADR-0012", "specs/sad.md", "specs/00002-core-data-schema/spec.md", "E003", "E004", "E005", "E006", "E007"]
+related_artifacts: ["ADR-0002", "ADR-0003", "ADR-0010", "ADR-0012", "specs/sad.md", "specs/00003-core-data-schema/spec.md", "E003", "E004", "E005", "E006", "E007"]
 deciders: ["Project owner", "Solution architect"]
 ---
 
@@ -141,5 +141,5 @@ The accepted cost is that the vector dimension exists twice — once as a litera
 - [ADR-0010](0010-source-layout-with-a-shared-gateway-package.md) — the four-entry rule, the no-cross-boundary-dependency rule, and the gateway minimality consequence, all of which this decision leaves unamended
 - [ADR-0012](0012-embedding-model-and-vector-dimension.md) — fixes `EMBEDDING_DIM` at 384, the value published through `schema_constants` and duplicated as the DDL literal
 - [specs/sad.md](../sad.md) — Integration Strategy and Data Management sections
-- [specs/00002-core-data-schema/spec.md](../00002-core-data-schema/spec.md) — E003; TR-004, TR-005, TR-008, TR-043, TR-047, TR-048, IP-014, SC-019
+- [specs/00003-core-data-schema/spec.md](../00003-core-data-schema/spec.md) — E003; TR-004, TR-005, TR-008, TR-043, TR-047, TR-048, IP-014, SC-019
 - E004, E005, E006, E007 — later schema-touching epics that inherit this arrangement

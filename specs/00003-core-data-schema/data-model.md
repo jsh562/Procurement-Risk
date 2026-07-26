@@ -1,6 +1,6 @@
 # Data Model — Core Data Schema
 
-> Feature: `00002-core-data-schema` (E003) | Storage: **PostgreSQL 16 + `pgvector`**, single instance, schema `public` | Migrations: forward-only Alembic in `/src/model`, filename block `0001`–`0099`
+> Feature: `00003-core-data-schema` (E003) | Storage: **PostgreSQL 16 + `pgvector`**, single instance, schema `public` | Migrations: forward-only Alembic in `/src/model`, filename block `0001`–`0099`
 
 This epic **is** the schema. Every table, column, named constraint, index, seeded row, and state transition below is normative: the migrations are expected to reproduce these names verbatim, because later migrations, tests, and epics reference them by name.
 

@@ -1,15 +1,19 @@
 # QC Report: Core Data Schema
 
-**Feature**: `00002-core-data-schema` (E003) | **Date**: 2026-07-26 | **Run**: 2 (re-audit of run 1, verdict FAIL)
+**Feature**: `00003-core-data-schema` (E003) | **Date**: 2026-07-26 | **Run**: 2 (re-audit of run 1, verdict FAIL)
 **Governing document**: `project-instructions.md` **v1.2.0** — superseded since this run; **checked, no re-run required.** See below.
 **QC policy**: profile `standard` | required categories **linting, coverage** | coverage threshold **80**
-**Branch**: `00002-core-data-schema` | database: `kayademoprocurementrisk1-db-1`, host port 5434, chain at head `0010`
+**Branch**: `00003-core-data-schema` | database: `kayademoprocurementrisk1-db-1`, host port 5434, chain at head `0010`
 
 > **Version drift, checked and closed — recorded so the next reader does not have to re-derive it.** This run audited **v1.2.0**. Two amendments have landed since: **v1.2.1** and **v1.2.2**. Governance requires that *"a feature whose recorded compliance audit names a superseded version MUST re-run its compliance gate **before passing its next phase gate**,"* with the stated rationale that *"an amendment moves the ground under every epic **already in flight**."* E003 passed its last gate and is merged: it has no next gate and is not in flight, so the clause does not fire.
 >
 > That is procedure, and procedure alone would be a thin reason. The substance is independent of it: **v1.2.1** only *narrowed* "No second datastore" to "No second datastore of record", and a narrowed prohibition cannot create a new violation — it can only permit more. **v1.2.2** extends epic-start number claiming to Feature Workspace numbers; it is the amendment E003 itself requested as AR-2, it constrains how a *future* workspace number is allocated, and it makes no demand on delivered schema. Neither can change a verdict in this report.
 >
-> Disclosed rather than glossed: E003 **is** one of the two workspaces whose `00002` prefix collision motivated v1.2.2, and that collision is not retroactively fixable — a workspace number is embedded in every path this epic's artifacts cite. v1.2.2 says so explicitly. E003 is therefore permanently non-compliant with a rule it asked for, by construction, and the amendment was written knowing that. The other two epics in flight at the time (E002, E004) both recorded v1.2.1 and do carry the re-run obligation for their own gates; this note speaks only for E003.
+> E003 **was** one of the two workspaces whose `00002` prefix collision motivated v1.2.2. **It has since been resolved**: this workspace was renamed from `00002-core-data-schema` to `00003-core-data-schema`, and numbering is now one-to-one with epic numbers.
+>
+> An earlier revision of this note said the opposite — that the collision "is not retroactively fixable" and that E003 was "permanently non-compliant with a rule it asked for, by construction." **That was wrong**, and the error is worth recording because it is the same shape as several others this epic produced. The reasoning applied to renaming an epic *mid-flight*, where the reference set is still growing and live paths break underneath you, and was generalised to all cases without re-checking. A completed epic is the easy case: nothing is in flight, the references are finite and enumerable — 51 across 16 files, five of them test modules reading `data-model.md` through a hard-coded path — and a green suite proves the result. `project-instructions.md` v1.2.3 carries the same correction.
+>
+> The other two epics in flight at the time (E002, E004) both recorded v1.2.1 and carry the re-run obligation for their own gates; this note speaks only for E003.
 
 ## Overall Verdict: PASS
 
@@ -189,7 +193,7 @@ Five helpers, not four: `fn_all_sha256_prefixed` was added by the v1.2.0 reconci
 | Source Code Layout | PASS - four entries (`api`, `gateway`, `model`, `web`), no fifth; schema assets and their tests inside `src/model`; the one new root file, `tests/checks/helpers/root_checks.py`, reads the check tree itself and qualifies for the cross-entry exception |
 | **Testing & Quality Policy** | **PASS** - CI Requirements clause satisfied: lint clean, all executed tests passing, coverage 94% at or above 80, three architecture contracts KEPT. No deterministic computation module is introduced, so no test-first or property-test obligation is triggered; Hypothesis is used for the pure helpers regardless |
 | Data Provenance | PASS - layer-dependent per v1.2.0; only migration-seeded reference data is written |
-| Governance | PASS - amendment serialization: v1.2.0 was amended on `main` (`f2fc9de`); `git log main..HEAD` shows this branch carries only E003 artifacts and touches no registered document. Decision-record numbers monotonic (0011, 0012, 0013), claimed at epic start. Branch `00002-core-data-schema` matches `#####-feature-name` and resolves to the workspace. Compliance record names v1.2.0 audited 2026-07-26, so no re-run clause is triggered |
+| Governance | PASS - amendment serialization: v1.2.0 was amended on `main` (`f2fc9de`); `git log main..HEAD` shows this branch carries only E003 artifacts and touches no registered document. Decision-record numbers monotonic (0011, 0012, 0013), claimed at epic start. Branch `00003-core-data-schema` matches `#####-feature-name` and resolves to the workspace. Compliance record names v1.2.0 audited 2026-07-26, so no re-run clause is triggered |
 
 **Note on T059/T060, recorded rather than buried.** Both bug fixes amended a success criterion's text after it had been measured, which brushes against Principle VII's "targets MUST NOT be retroactively adjusted to match results". The judgement here is that both amendments narrow the claim while making the shortfall *more* visible, which is disclosure rather than evasion:
 

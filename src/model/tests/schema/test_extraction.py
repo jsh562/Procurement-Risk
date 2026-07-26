@@ -1906,7 +1906,7 @@ def test_confidence_is_stored_as_double_precision_with_no_coarser_scale(
 # names say so plainly, and none of them touches the database.
 
 DATA_MODEL_PATH = (
-    Path(__file__).resolve().parents[4] / "specs" / "00002-core-data-schema" / "data-model.md"
+    Path(__file__).resolve().parents[4] / "specs" / "00003-core-data-schema" / "data-model.md"
 )
 
 

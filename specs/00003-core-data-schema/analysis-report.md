@@ -1,13 +1,13 @@
 # Analysis Report: Core Data Schema
 
-**Feature**: `00002-core-data-schema` (E003) | **Date**: 2026-07-26 | **Mode**: Analysis, then remediation
+**Feature**: `00003-core-data-schema` (E003) | **Date**: 2026-07-26 | **Mode**: Analysis, then remediation
 **Governing document**: `project-instructions.md` **v1.2.0** — this run is the mandatory re-run required when a feature's recorded audit names a superseded version.
 
 Supersedes the 2026-07-25 report, which audited against v1.1.3. **Superseding its verdicts is not the same as deleting its findings** — see the restoration note below.
 
 ## Prior Pass — A-Series (2026-07-25, audited against v1.1.3)
 
-> **These 21 rows were deleted, not superseded, and are restored here from git.** The v1.2.0 pass renumbered its findings to a B-series and overwrote this file in place, leaving zero `A-` rows — while `spec.md`, `.qc-passed`, and this report's own Deferred section continued to cite **A-007, A-008, A-011 and A-012** by ID. Four references therefore pointed at nothing, and A-012's definition existed nowhere in the working tree; it was recovered with `git show 7138026:specs/00002-core-data-schema/analysis-report.md`.
+> **These 21 rows were deleted, not superseded, and are restored here from git.** The v1.2.0 pass renumbered its findings to a B-series and overwrote this file in place, leaving zero `A-` rows — while `spec.md`, `.qc-passed`, and this report's own Deferred section continued to cite **A-007, A-008, A-011 and A-012** by ID. Four references therefore pointed at nothing, and A-012's definition existed nowhere in the working tree; it was recovered with `git show 7138026:specs/00003-core-data-schema/analysis-report.md`.
 >
 > Replacing stale *verdicts* was correct — they audited a governing version that no longer applied. Deleting the *definitions* of items still open and cited elsewhere was not, and the cost was real: resolving A-012 required git archaeology to discover what it had said. Restored rather than left as a footnote so every cited ID resolves in the file that owns it.
 >
@@ -50,7 +50,7 @@ Supersedes the 2026-07-25 report, which audited against v1.1.3. **Superseding it
 | B-007 | Requirement inconsistency | MEDIUM | `spec.md:334` vs `102, 171, 240, 386, 424` | TR-065 defines a three-rung fallback ladder; five other locations describe two rungs and call the trigger "the single sanctioned fallback". The middle rung is unreachable as written | Drop the middle rung from TR-065 — no other location references it |
 | B-008 | Unverified premise | MEDIUM | `spec.md:343, 346` | TR-074's load-bearing premise is that E002's manifest carries one entry per source-and-project pair. TR-077 obliges E002/E006 to adopt the `document_id` *format* only. If E002 emits one entry per source, TR-074 is silently unsatisfiable | Extend TR-077 to cover manifest granularity |
 | B-009 | Convention breach | LOW | `plan.md:287-292` | Six Implementation Hints against a documented cap of five | Resolved as a side effect of B-003, which deletes HINT-005 and HINT-006 |
-| B-010 | Governance gap | LOW | `specs/00002-core-data-schema/` vs ADR-0011 front matter | Workspace prefix `00002` is held by both this epic (E003) and E002. v1.2.0 added epic-start claiming for migration and decision-record numbers but not for workspace numbers | Out of scope to resolve unilaterally — renaming mid-flight breaks every path. Record as an amendment request alongside B-004 |
+| B-010 | Governance gap | LOW | `specs/00003-core-data-schema/` vs ADR-0011 front matter | Workspace prefix `00002` is held by both this epic (E003) and E002. v1.2.0 added epic-start claiming for migration and decision-record numbers but not for workspace numbers | Out of scope to resolve unilaterally — renaming mid-flight breaks every path. Record as an amendment request alongside B-004 |
 | B-011 | Requirement quality | LOW | `spec.md:322` | TR-053 has no testable delta over TR-030 and TR-055, and no VC or SC of its own | Fold or accept as documentation |
 
 ### Deferred by explicit decision — third consecutive appearance
