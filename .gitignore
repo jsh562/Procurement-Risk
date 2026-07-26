@@ -11,21 +11,22 @@ node_modules/
 .next/
 next-env.d.ts
 
-# SDD Pilot tooling (kept locally, not tracked)
+# Agent tooling — kept local. The workflow that produced this repository is not
+# part of what it delivers, so the skills, subagent definitions, and the
+# agent-context files stay untracked.
 /.claude/
 .claudeignore
 /.github/agents/
 /.github/instructions/
 /.github/skills/
 /.github/sddp-config.md
-
-# SDD agent-context / governance docs
 /AGENTS.md
 /CLAUDE.md
-/project-instructions.md
 
-# SDD specs / artifacts
-/specs/
+# `specs/` and `project-instructions.md` are deliberately tracked. The
+# specification, plan, ADRs, checklists, and analysis report record why this
+# scaffold is shaped the way it is — which is most of what makes the repository
+# worth reading. Do not re-add them here.
 
 # Local backup of pre-rewrite git history (created during history scrub)
 /.git.backup-pre-scrub/
