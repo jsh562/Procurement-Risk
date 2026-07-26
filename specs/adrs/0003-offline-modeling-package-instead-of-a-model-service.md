@@ -1,10 +1,10 @@
 ---
 adr_id: ADR-0003
-status: accepted
+status: superseded
 date: 2026-07-25
 tags: [modeling, boundaries, reproducibility]
 supersedes: []
-superseded_by: ""
+superseded_by: "ADR-0011"
 related_artifacts: ["specs/prd.md", "CAP-001", "CAP-005", "CAP-009"]
 deciders: ["Project owner", "Solution architect"]
 ---
@@ -13,7 +13,7 @@ deciders: ["Project owner", "Solution architect"]
 
 ## Status
 
-Accepted.
+Superseded by [ADR-0011](../adrs/0011-model-owned-one-shot-jobs-invoked-as-console-entry-points.md), on the invocation clause only. The offline-package decision below stands: the modeling boundary is a package of discrete commands, never a service; no posterior is sampled at request time; the serving image never installs the modeling stack; and the contract to the serving boundary is the database. ADR-0011 replaces only "invoked as one-shot container jobs under a non-default profile" with invocation as console entry points through the modeling entry's own environment.
 
 ## Context
 
