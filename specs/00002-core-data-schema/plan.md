@@ -303,6 +303,18 @@ Workspace prefix `00002` is held by both this epic (E003, `specs/00002-core-data
 
 Not actionable here — renaming a workspace mid-flight breaks every path in this plan and `tasks.md`. Recorded for a future amendment: *"Feature Workspace numbers are claimed at epic start, exactly as migration and decision-record numbers are."*
 
+### AR-3 — `.github/skills/analyze-compliance/SKILL.md`, prior-report handling
+
+The skill says only *"Write the complete analysis report to `FEATURE_DIR/analysis-report.md`"* (line 108) and says nothing about the report already there. Following it literally destroyed information in this epic: the v1.2.0 pass renumbered its findings to a B-series and overwrote all 21 `A-###` rows, while `spec.md`, `.qc-passed` and the report's own Deferred section still cited A-007, A-008, A-011 and A-012 by ID. Four references pointed at nothing and A-012's definition survived only in git history, from which it was recovered.
+
+Recorded for a future amendment: *"When an analysis pass renumbers its finding series, the prior report is archived as `analysis-report-<date>.md` rather than overwritten, whenever any of its finding IDs is cited outside the report. Superseding a verdict does not license deleting the definition of an item still open."*
+
+Nothing in this branch can carry the fix — the skill is project-level, and v1.2.0 serializes amendments on the default branch. The A-rows themselves have been restored into `analysis-report.md` here, which repairs the damage without touching the rule that allowed it.
+
+### AR-4 — an ADR for artifact authority direction (analysis finding A-012)
+
+TR-056, TR-065, TR-076 and TR-083 make `data-model.md`, a Plan-phase artifact, normative over Specify-phase requirements. Accepted for E003 with its mitigation recorded in `spec.md` § Compliance Check, but the authority direction is a project-wide architectural question and binding it beyond this epic needs a decision record. ADRs may not be authored from a feature branch, so this is recorded rather than written: *"A Plan-phase artifact may be declared normative over a Specify-phase requirement, under stated conditions and with amendments labelled as corrections carrying their evidence."*
+
 ## Implementation Hints
 
 - **[HINT-001]** Order: ADR-0012 has landed and fixes `EMBEDDING_DIM = 384`, so `0004_chunk.py` declares `vector(384)` and `0002_schema_constants.py` publishes the same number — TR-048 asserts the two agree. The ADR names a model *class* but no pinned revision hash; pin the concrete repository revision before embeddings are generated, and record it per chunk.
