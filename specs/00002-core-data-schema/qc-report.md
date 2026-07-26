@@ -24,6 +24,8 @@ An earlier revision of this report held the verdict at "PASS on both required ca
 
 The 455 is up from run 1's 425: +4 from T057 and T058, +26 from T066. The denominator grew from 526 statements to 535 because T065 added `src/gateway` to it, and the percentage held at 94%.
 
+> **455 is this run's figure and is left as measured.** Post-QC remediation of analysis findings A-007/A-008/A-011/A-012 (tasks T067-T075, see `tasks.md` § Phase: Post-QC Remediation) subsequently added 8 more tests, taking the model suite to **463 passed, 0 skipped** with the gate still at 94% and exit 0. That work is deliberately **not** folded into the numbers above: those were measured by this QC run, and rewriting them to a later total would claim the run verified something it never saw. The later figure is recorded here so a reader who runs the suite today and counts 463 knows why it differs.
+
 Both required categories are green, measured end to end from `.github/workflows/verify.yml`:
 
 | Required category | Measurement | Result |
@@ -270,7 +272,13 @@ Not required; `manual-test.md` not generated.
 
 No database incident this run. The database stayed healthy throughout and stayed at head `0010`; the `0 skipped` validity check was met on every full-suite run - 429 mid-run and **455 passed, 0 skipped** on the final one, with `document` left empty and all its constraints verified intact after T066's negative controls. Scratch artefacts created during the audit (`.coverage.t056`, two ruff probe files) were removed; `git status` matches its pre-audit state apart from this report and the `tasks.md` additions.
 
-**Operational note, still standing**: `tests/checks/test_orchestration.py` is not safe to run from two checkouts of this repository on one host - it binds 5434 and tears down the volume with `-v`.
+**Operational note — half of this was fixed on `main` after the run, half was not.** The original note read: *"`tests/checks/test_orchestration.py` is not safe to run from two checkouts of this repository on one host — it binds 5434 and tears down the volume with `-v`."*
+
+`main` commit `83df9b3` addressed the **cross-checkout** half. `docker-compose.yml` now publishes `${PRC_DB_PORT:-5434}`, `tests/checks/helpers/ports.py` resolves a substitute port when the default is held, and the run warns loudly when it binds one so a green result cannot silently claim evidence for the committed topology. A sibling checkout no longer collides.
+
+The **local** half stands: teardown is still `_compose("down", "-v", …)` (`test_orchestration.py:168`), and Compose scopes that to this checkout's own project, so running the file still destroys this checkout's `db-data` volume and the applied migration chain. It therefore remains excluded from local QC runs for the reason that actually cost this epic a re-run, and OBJ1 VC6's second half is still evidenced structurally rather than by execution. CI is unaffected — it runs all of `tests/checks` against a fresh service container with nothing to lose.
+
+Measured after merging `main` into this branch: root cross-entry rises from **75 to 89** passing (`test_ports.py` adds 14), the coverage denominator from 535 to **607** statements as `helpers/ports.py` enters it at 89%, and the gate holds at **93%**, exit 0.
 
 **Second sibling-checkout defect, found while closing T065 and worth more attention than the task that exposed it.** Two of this checkout's three Python entry virtualenvs had their own package pointing at the sibling checkout `S:\claudecode\KayaDemoProcurementRisk` (no trailing `1`):
 

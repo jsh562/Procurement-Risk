@@ -19,6 +19,12 @@ Everything here is migration `0008`. Four groups, one per task:
   Neither array insertable without the other; the digest taken over bytes in a
   named serialization; and the survival curve and every percentile derived from
   the draws.
+* **T036 / T037 -- two deliberate absences (TR-062, TR-080).** No per-line link
+  from a posterior row back to the extracted values or lifecycle events its fit
+  consumed, and no maximum permitted age on a run. Both are design decisions
+  stating that something is *not* here, so neither has a rejection to exercise;
+  each is read out of the catalogue with its requirement's positive half asserted
+  alongside, so an absence over an empty table cannot pass for evidence.
 
 **Two mechanisms enforce array length, and they are not interchangeable.** A row
 declares `draw_count` and `horizon_days`, and both are checked twice over:
@@ -1860,3 +1866,255 @@ def test_a_percentile_is_a_subscript_into_the_canonical_draws(db_session: Sessio
             f"the p={probability} percentile must be draws"
             f"[{math.ceil(probability * DECLARED_DRAW_COUNT)}] = {expected}, got {actual}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# T036 / T037 -- two deliberate absences (TR-062, TR-080)
+# --------------------------------------------------------------------------- #
+#
+# Both requirements state that something is *not* in the schema, and `tasks.md`
+# assigns each to its migration task as "column presence and deliberate absence".
+# Neither can be exercised by a rejection: there is no row to refuse and no error
+# to catch, so the catalogue is the only witness. The precedent is
+# `test_extraction.py`'s TR-082 assertion, which reads `pg_attribute` to show
+# `extracted_value` carries no agent column.
+#
+# The reason to assert an absence at all is that "by design" and "not yet" look
+# identical in a schema. E010 owns read-time risk and E006 owns ingestion runs;
+# each will arrive holding a reason to add exactly the object forbidden here. A
+# failing test is how that epic finds out it is changing a decision rather than
+# filling a hole -- which is the whole difference between propagating a design and
+# quietly reversing one.
+#
+# Each test asserts the requirement's *positive* half in the same breath, so
+# neither can pass against a table that had lost the provenance or the anchor
+# altogether -- an absence read off a catalogue that returned nothing is vacuous,
+# and vacuously true is exactly how an absence assertion fails silently. Both
+# tests were verified by adding the forbidden object with real DDL inside the
+# rolled-back session and watching them fail, and by dropping the positive half
+# and watching them fail for the other reason.
+
+#: `line_posterior`'s only outbound references: the run whose shape it declares,
+#: and the line it forecasts. A closed set rather than a blocklist, following
+#: `test_extraction.py`'s TR-045 assertion -- naming what is permitted keeps
+#: holding as later migrations add tables, where a list of forbidden targets has
+#: to be extended each time one appears.
+PERMITTED_POSTERIOR_FOREIGN_KEY_TARGETS = frozenset({"forecast_run", "purchase_order_line"})
+
+#: The two relations that hold a forecast artifact. A lineage table is a relation
+#: referencing one of these *and* one of the inputs below.
+FORECAST_RELATIONS = frozenset({"forecast_run", "line_posterior"})
+
+#: The inputs TR-062 names -- "the extracted values or lifecycle events the fit
+#: consumed" -- as the relations that hold them. Deliberately not widened to
+#: `chunk` or `document`: those are the citation chain behind an extracted value,
+#: and forbidding a reference to them would be a stronger rule than TR-062 states.
+CONSUMED_INPUT_RELATIONS = frozenset(
+    {
+        "extracted_value",
+        "extracted_value_contributing_chunk",
+        "extraction_failure",
+        "lifecycle_event",
+    }
+)
+
+#: TR-062's run-granularity provenance, which is what stands in for row-level
+#: lineage: the code revision, the input data hash, and the sampling seeds.
+#: Asserted present alongside the absence, so the test cannot pass against a run
+#: table that records no provenance at all -- at which point "no per-line link"
+#: would be true and worthless.
+RUN_GRANULARITY_PROVENANCE: tuple[str, ...] = ("code_commit", "input_data_hash", "seed_entropy")
+
+FOREIGN_KEY_EDGES = text(
+    """
+    SELECT con.conrelid::regclass::text AS referencing,
+           con.confrelid::regclass::text AS referenced
+    FROM pg_constraint AS con
+    JOIN pg_namespace AS ns ON ns.oid = con.connamespace
+    WHERE con.contype = 'f' AND ns.nspname = 'public'
+    """
+)
+
+COLUMNS_OF = text(
+    """
+    SELECT attname
+    FROM pg_attribute
+    WHERE attrelid = to_regclass('public.' || :table_name)
+      AND attnum > 0
+      AND NOT attisdropped
+    ORDER BY attnum
+    """
+)
+
+
+def test_tr062_carries_provenance_per_run_with_no_per_line_link_to_the_inputs(
+    db_session: Session,
+) -> None:
+    """TR-062: run-granularity provenance, and **no** row-level lineage -- by design.
+
+    The deliberate absence, verified: nothing in the schema links a `line_posterior`
+    row back to the extracted values or lifecycle events its fit consumed. Two
+    assertions, because there are two shapes the link could take -- a foreign key
+    out of `line_posterior` itself, and a separate lineage table joining the two
+    sides -- and closing only the first would leave the second the obvious way to
+    add it.
+
+    Reproduction is therefore **by re-running the recorded run**, which is what the
+    three run-level columns asserted present here make possible: the code revision,
+    the input data hash, and the seed entropy pin the inputs collectively rather
+    than per row. That is a weaker claim than row-level lineage and it is the one
+    the epic chose; `data-model.md` records the reversal trigger as "a published
+    figure that cannot be resolved to its inputs from the run row alone adds a
+    per-line input manifest".
+
+    **What a later epic would break by adding one.** A per-line manifest is a
+    second, finer answer to "where did this number come from", and the run row
+    would stop being the whole answer while still looking like it. Two granularities
+    of the same fact is the failure Principle I is about -- a reader cannot tell
+    which one a given row was written under, and a row present in one and absent
+    from the other is unattributable in both directions. It would also make the
+    artifact's reproducibility depend on rows the fit does not read, so a lineage
+    row lost or never written would leave a forecast that still validates and no
+    longer reproduces. If that manifest is genuinely needed, this test fails and
+    TR-062 is amended first -- that failure is the notification, not an obstacle.
+    """
+    edges = db_session.execute(FOREIGN_KEY_EDGES).all()
+
+    assert edges, (
+        "pg_constraint reported no foreign keys in the public schema at all, so both "
+        "absence assertions below would be about an empty set"
+    )
+
+    columns = [
+        row.attname for row in db_session.execute(COLUMNS_OF, {"table_name": "forecast_run"})
+    ]
+    missing = [column for column in RUN_GRANULARITY_PROVENANCE if column not in columns]
+    assert not missing, (
+        f"TR-062 carries provenance at run granularity, so `forecast_run` must record the "
+        f"code revision, the input data hash, and the sampling seeds. Absent: {missing}. "
+        f"With these gone the absence of per-line lineage would be true and useless -- "
+        f"nothing would pin the inputs at any granularity"
+    )
+
+    posterior_targets = {row.referenced for row in edges if row.referencing == "line_posterior"}
+    assert posterior_targets == set(PERMITTED_POSTERIOR_FOREIGN_KEY_TARGETS), (
+        f"`line_posterior`'s only outbound references are its run and its line. Expected "
+        f"{sorted(PERMITTED_POSTERIOR_FOREIGN_KEY_TARGETS)}, got {sorted(posterior_targets)}. "
+        f"A reference to an extraction or lifecycle relation would be the per-line link "
+        f"TR-062 declares absent"
+    )
+
+    referenced_by: dict[str, set[str]] = {}
+    for row in edges:
+        referenced_by.setdefault(row.referencing, set()).add(row.referenced)
+    lineage_tables = sorted(
+        relation
+        for relation, targets in referenced_by.items()
+        if targets & FORECAST_RELATIONS and targets & CONSUMED_INPUT_RELATIONS
+    )
+    assert not lineage_tables, (
+        f"{lineage_tables} reference both a forecast relation "
+        f"({sorted(FORECAST_RELATIONS)}) and one of the inputs a fit consumed "
+        f"({sorted(CONSUMED_INPUT_RELATIONS)}), which is what a per-line lineage table is. "
+        f"TR-062 records reproduction as re-running the recorded run instead; adding this "
+        f"means amending the requirement, not extending this list"
+    )
+
+
+#: Column-name fragments that would mean a maximum permitted age had been recorded
+#: on the run. Substring matching, as `test_extraction.py`'s TR-082 assertion does,
+#: so `max_age_days`, `stale_after`, `expires_at`, and `freshness_ttl` are all
+#: caught rather than only the one spelling someone thought of. None of
+#: `forecast_run`'s nineteen delivered columns contains any of them.
+MAXIMUM_AGE_COLUMN_MARKERS = ("age", "stale", "expir", "ttl", "freshness", "max_", "deadline")
+
+#: The seventh column would be the seventh constant. `schema_constants` publishes
+#: six values plus its `singleton` key and nothing else, and TR-080's clarification
+#: names precisely this as where a staleness threshold *would* go: "if a second
+#: consumer needs the same threshold, it becomes a seventh published schema
+#: constant rather than two copies". So a closed set is the honest assertion here
+#: rather than a marker scan -- the table is small, fixed, and normative.
+PUBLISHED_CONSTANT_COLUMNS = frozenset(
+    {
+        "singleton",
+        "vector_dimension",
+        "survival_horizon_days",
+        "draw_count",
+        "probability_sum_tolerance",
+        "anchor_date_convention",
+        "percentile_convention",
+    }
+)
+
+
+def test_tr080_imposes_no_maximum_age_on_a_run_and_exposes_the_anchor_instead(
+    db_session: Session,
+) -> None:
+    """TR-080: no maximum permitted age exists -- by design -- and the anchor is exposed.
+
+    The deliberate absence, verified in the two places the threshold could live: as
+    a seventh published constant, and as a column on the run. Both come back
+    clean, and the *positive* half is asserted with them -- `as_of_date` is
+    present, which is what lets a reader compute the artifact's age itself.
+    Together those are the whole requirement: the age is computable and no
+    threshold on it is imposed here.
+
+    Not an oversight, and the spec says so in the clarification TR-080 came from:
+    "No maximum age is imposed by this epic. The run's as-of anchor date is exposed
+    so a reader computes the artifact's age itself; the threshold and its interface
+    treatment belong to E010, which owns read-time risk." The alternative
+    considered and rejected was a `max_forecast_age_days` constant now, which would
+    fix a product threshold before the read surface that uses it exists.
+
+    **What a later epic would break by adding one.** A threshold in the schema is a
+    threshold every consumer inherits silently. Two things go wrong at once. The
+    schema would begin refusing or relabelling artifacts on a product judgement --
+    "too old to use" is a decision about what a reader should be shown, and
+    Principle II keeps that at the interface where the interval is published, not
+    at the storage boundary where it becomes invisible. And the number would be
+    fixed before E010 exists to say what it should be, so the first genuine
+    requirement for it would arrive against a value already in production and
+    already relied on. Note what is *not* claimed: the schema does not stop a
+    consumer treating an old run as unusable. It declines to decide for them, and
+    `v_active_forecast_run` returning zero rows -- never the newest run -- is what
+    keeps "no current forecast" distinguishable from "current but old" (TR-027).
+    """
+    constant_columns = {
+        row.attname for row in db_session.execute(COLUMNS_OF, {"table_name": "schema_constants"})
+    }
+
+    assert constant_columns == set(PUBLISHED_CONSTANT_COLUMNS), (
+        f"`schema_constants` publishes six constants and its singleton key. Expected "
+        f"{sorted(PUBLISHED_CONSTANT_COLUMNS)}, got {sorted(constant_columns)}. A seventh "
+        f"column is where TR-080's staleness threshold would appear, and TR-080 imposes no "
+        f"maximum age -- E010 owns that decision (data-model.md §Declared Constants is "
+        f"normative for this list, so a legitimate seventh constant is recorded there first)"
+    )
+
+    run_columns = [
+        row.attname for row in db_session.execute(COLUMNS_OF, {"table_name": "forecast_run"})
+    ]
+
+    assert run_columns, (
+        "pg_attribute reported no columns for forecast_run, so the marker scan below would "
+        "pass over nothing"
+    )
+    offenders = sorted(
+        column
+        for column in run_columns
+        for marker in MAXIMUM_AGE_COLUMN_MARKERS
+        if marker in column.lower()
+    )
+    assert not offenders, (
+        f"TR-080 imposes no maximum permitted age on a forecast run, so `forecast_run` "
+        f"carries no age, staleness, or expiry column by design. Found {offenders}. The "
+        f"threshold and its interface treatment belong to E010; putting it here would fix a "
+        f"product judgement at the storage boundary, where no reader can see or override it"
+    )
+
+    assert ANCHOR_DATE_FIELD in run_columns, (
+        f"TR-080's positive half is that the run's as-of anchor date is *exposed*, so a "
+        f"reader computes the artifact's age itself. Without `{ANCHOR_DATE_FIELD}` the "
+        f"absence of a maximum age would leave the age uncomputable rather than the reader's "
+        f"to decide. Columns are {run_columns}"
+    )
