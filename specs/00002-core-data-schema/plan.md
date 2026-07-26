@@ -34,7 +34,7 @@
 | III. Precision Over Recall | PASS | Failed extraction recorded as absence, never a partial row; a record cannot join two resolved entities |
 | V. Model Extracts, Code Computes | PASS | No model-provider surface; provenance is a storage fact; risk arithmetic deferred to E010 |
 | VI / VIII | N/A | No evaluation sets or baselines in scope |
-| VII. Publish the Miss | PASS | AD-005's three fixed constants and all ten disclosed gaps each carry evidence, a reversal trigger, and a production-scale alternative in `data-model.md`'s scope-decision and gap-disclosure records |
+| VII. Publish the Miss | PASS | AD-005's three fixed constants and all eleven disclosed gaps (G-1 … G-11) each carry evidence, a reversal trigger, and a production-scale alternative in `data-model.md`'s scope-decision and gap-disclosure records. The count was ten when this row was written; G-11 was disclosed during implementation, when TR-084's privilege claim turned out to be inert against a single superuser role, and this verdict is restated against eleven rather than left standing on the count it was reached with |
 | Technology Stack | PASS | PostgreSQL 16 + pgvector, single instance, matches the declared stack |
 | Source Code Layout (ENFORCE_SRC_ROOT) | PASS | All assets under `/src/model`; no fifth entry; entry-local tests stay entry-local (ADR-0013) |
 | Testing & Quality Policy | PASS | Two QC categories honoured — lint (Ruff, with `S` rules folded in) and coverage at 80% |
@@ -99,7 +99,7 @@ Feature-local tradeoffs only. Project-wide decisions are recorded as standalone 
 | `forecast_run` | `run_id` PK; UK `(run_id, draw_count, horizon_days)`; partial unique on `is_active` | 1:N `line_posterior` CASCADE | Nine reproducibility fields `NOT NULL`, plus `as_of_date`, `horizon_days`, artifact schema version, byte-serialization name (TR-026, TR-027, TR-032, TR-040, TR-049) |
 | `line_posterior` | PK `(run_id, po_line_id)` | N:1 `forecast_run` via `(run_id, draw_count, horizon_days)`; N:1 `purchase_order_line` | **One row holds both arrays**, so the pair cannot half-exist. Sorted draws, day-grid survival, explicit residual tail mass, 32-byte digest. Both lengths enforced against the run row (TR-028–TR-031, SC-025) |
 
-**Detail**: [data-model.md](data-model.md) — 13 tables, 4 immutable helpers, 3 views, 10 migration prefixes, an invariant→mechanism map, and 10 disclosed gaps.
+**Detail**: [data-model.md](data-model.md) — 13 tables, 5 immutable helpers, 3 views, 10 migration prefixes, an invariant→mechanism map, and 11 disclosed gaps.
 
 ## API Surface Summary
 

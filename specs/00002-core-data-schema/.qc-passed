@@ -1,0 +1,19 @@
+E003 Core Data Schema — QC PASSED, run 2, 2026-07-26.
+Governing document: project-instructions.md v1.2.0.
+
+Required categories (profile `standard`):
+  linting  — ruff check + format clean at 4 roots; 3 import contracts kept, 0 broken; 3 locks consistent
+  coverage — 94% (535 statements, 28 missed) against threshold 80, exit 0, Combined 3 files
+
+Tests: 455 model (0 skipped), 5 gateway, 75 root cross-entry.
+Objectives 6/6; 47/47 validation criteria; 28/28 success criteria.
+Bug tasks T055-T066 all closed and re-measured. tasks.md 66/66 [X].
+
+Not measured here, recorded rather than implied:
+  - tests/checks/test_orchestration.py (8 tests) was not run — its teardown runs
+    `docker compose down -v` and destroys the database volume. OBJ1 VC6 is
+    evidenced structurally instead. CI runs all 83.
+  - 11 gaps G-1..G-11 are disclosed in data-model.md under Principle VII, not fixed.
+    SC-028 holds against role `procurement_app`, not the connecting superuser (G-11).
+  - Analysis findings A-007/A-008/A-011/A-012 (duplicate requirement clusters,
+    ~24 requirements without acceptance coverage) remain deferred by user decision.

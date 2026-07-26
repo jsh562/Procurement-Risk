@@ -8,12 +8,24 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.18.5",
     "arviz>=1.2.0",
     "gateway",
     "numpy>=2.4.6",
     "pandas>=3.0.5",
+    "psycopg[binary]>=3.3.4",
     "pymc>=6.2.0",
+    "sqlalchemy>=2.0.51",
 ]
+
+# TR-007 / ADR-0011: the migration runner is a console entry point invoked
+# through this entry's own environment -- `uv run --directory src/model migrate`
+# -- and is deliberately not packaged as a container job. A context rooted at
+# src/model could not resolve the `gateway` path dependency below in any case,
+# and widening it to ./src would mean admitting the modeling boundary into the
+# serving build context. docker-compose.yml is untouched (TR-037).
+[project.scripts]
+migrate = "model.schema.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
@@ -28,6 +40,7 @@ dev = [
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
     "pytest>=9.1.1",
+    "pytest-alembic>=0.12.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.0",
 ]
@@ -37,7 +50,12 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+
+# AD-003: security QC lives inside the lint category, not a third category.
+# `assert` is the test framework's assertion mechanism, so S101 is noise there.
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

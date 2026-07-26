@@ -15,7 +15,7 @@ This epic **is** the schema. Every table, column, named constraint, index, seede
 | Timestamps | `timestamptz`, never `timestamp`. Calendar anchors are `date`. |
 | Money / measured quantities | `numeric`. Probabilities and posterior draws are `double precision` (array arithmetic). |
 | Text-search configuration | Always the two-argument form with the literal `'pg_catalog.english'`. The one-argument form is not `IMMUTABLE` and is rejected in generated columns (TR-038, OBJ2 VC6). |
-| Composite FKs | Declared `MATCH FULL` unless a deliberate all-null case is documented, per the research warning about partial-match semantics silently skipping the check. |
+| Composite FKs | Declared `MATCH FULL` unless a deliberate all-null or partially-null case is documented, per the research warning about partial-match semantics silently skipping the check. One exception exists, `fk_lifecycle_event__chain`, declared `MATCH SIMPLE` because `MATCH FULL` refuses a partially-null referencing row outright and would make every line's opening event unrepresentable — recorded in full under §`lifecycle_event`. |
 | Deferrability | Exactly one constraint in the schema is deferrable: `fk_purchase_order_line__closing_event`. No `CHECK` or `NOT NULL` is deferred — PostgreSQL does not permit it (TR-051). |
 
 ## Declared Constants
@@ -52,7 +52,7 @@ The compact artifact. Detail sections follow; downstream agents that read only t
 | Entity | Attributes (name: type, constraints) | Relationships | State Transitions |
 |--------|--------------------------------------|---------------|-------------------|
 | **schema_constants** | `singleton: boolean` PK `CHECK(singleton)`; `vector_dimension: int` NOT NULL `CHECK(>0)`; `survival_horizon_days: int` NOT NULL `CHECK(>0)`; `draw_count: int` NOT NULL `CHECK(>0)`; `probability_sum_tolerance: double precision` NOT NULL `CHECK(>0 AND <1)`; `anchor_date_convention: text` NOT NULL `CHECK(='run_as_of_date')`; `percentile_convention: text` NOT NULL `CHECK(='nearest_rank_one_based_no_interpolation')` | none — read by `/src/api` and `/src/model` over the connection | — (seeded once by migration `0002`; second insert impossible) |
-| **document** | `document_id: text` PK `CHECK(~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND length 3..128)`; `document_type: text` NOT NULL `CHECK(IN 7 values)`; `project_id: text` NOT NULL `CHECK(~ '^PRJ-[0-9]{3}$')`; `title: text` NOT NULL non-empty; `source_kind: text` NOT NULL `CHECK(IN ('REAL','SYNTHETIC'))`; `source_ref: text` NOT NULL; `issuing_body: text` NOT NULL; `license_basis: text` NOT NULL; `retrieval_date: date` NULL; `roster_hash: text` NULL `CHECK(~ '^sha256:[0-9a-f]{64}$')`; `loaded_at: timestamptz` NOT NULL DEFAULT `now()` | has_many: `chunk` | — |
+| **document** | `document_id: text` PK `CHECK(~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND length 3..128)`; `document_type: text` NOT NULL `CHECK(IN 7 values)`; `project_id: text` NOT NULL `CHECK(~ '^PRJ-[0-9]{3}$')`; `title: text` NOT NULL non-empty; `source_kind: text` NOT NULL `CHECK(IN ('REAL','SYNTHETIC'))`; `license_basis: text` NOT NULL non-empty; **layer-conditional, each required on its own layer and rejected on the other** — `source_ref: text` NULL, `issuing_body: text` NULL, `retrieval_date: date` NULL (`REAL` only) and `generator_id: text` NULL, `generation_seed: text` NULL, `generated_at: date` NULL, `fixture_hashes: text[]` NULL (`SYNTHETIC` only, every element `~ '^sha256:[0-9a-f]{64}$'` via `fn_all_sha256_prefixed`); `roster_hash: text` NULL `CHECK(SYNTHETIC ⇒ ~ '^sha256:[0-9a-f]{64}$')`; `loaded_at: timestamptz` NOT NULL DEFAULT `now()`; UNIQUE `(document_id, document_type, project_id)` | has_many: `chunk` | — |
 | **chunk** | `chunk_id: uuid` PK; `document_id: text` NOT NULL; `document_type: text` NOT NULL; `project_id: text` NOT NULL `CHECK(~ '^PRJ-[0-9]{3}$')`; `page_number: int` NOT NULL `CHECK(>=1)`; `ordinal: int` NOT NULL `CHECK(>=0)`; `spec_section: text` NULL; `heading: text` NULL; `part_numbers: text` NULL; `body_text: text` NOT NULL `CHECK(btrim<>'')`; `search_vector: tsvector` GENERATED STORED, weighted A/B/C/D; `embedding: vector(EMBEDDING_DIM)` NOT NULL; `embedding_model_id: text` NOT NULL; `embedding_model_revision: text` NOT NULL; UNIQUE `(chunk_id, page_number)`; UNIQUE `(document_id, ordinal)` | belongs_to: `document` via composite FK `(document_id, document_type, project_id)`; has_many: `extracted_value`, `extraction_failure`, `extracted_value_contributing_chunk` | — |
 | **field_vocabulary** | `field_name: text` PK `CHECK(~ '^[a-z][a-z0-9_]{2,63}$')`; `value_kind: text` NOT NULL `CHECK(IN ('text','number','date'))`; `label: text` NOT NULL non-empty; `description: text` NOT NULL non-empty; `retired_at: date` NULL; UNIQUE `(field_name, value_kind)` | referenced_by: `extracted_value`, `extraction_failure` | — (22 rows seeded by migration `0005`; grows by INSERT, never by type change) |
 | **extracted_value** | `extracted_value_id: uuid` PK; `source_chunk_id: uuid` **NOT NULL**; `cited_page: int` **NOT NULL** `CHECK(>=1)`; `field_name: text` NOT NULL; `value_kind: text` NOT NULL; `value_text: text` NOT NULL `CHECK(btrim<>'')`; `value_number: numeric` NULL; `confidence: double precision` **NOT NULL** `CHECK(>=0 AND <=1)`; `provenance_kind: text` NOT NULL `CHECK(IN ('single_chunk','multi_chunk'))`; `source_chunk_count: smallint` NOT NULL `CHECK(>=1)`; `extracted_at: timestamptz` NOT NULL; UNIQUE `(extracted_value_id, source_chunk_count)` | belongs_to: `chunk` via composite FK `(source_chunk_id, cited_page)`; belongs_to: `field_vocabulary` via composite FK `(field_name, value_kind)`; has_many: `extracted_value_contributing_chunk`; **no FK to `purchase_order_line`** (TR-045, SC-023) | — |
@@ -90,21 +90,22 @@ Exactly one row, guaranteed structurally: the primary key is a boolean that a `C
 | `document_id` | `text` | NOT NULL | `pk_document` PRIMARY KEY; `ck_document__id_format CHECK (document_id ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND char_length(document_id) BETWEEN 3 AND 128)` |
 | `document_type` | `text` | NOT NULL | `ck_document__type CHECK (document_type IN ('specification','submittal','purchase_order','rfi','transmittal','drawing','reference_standard'))` |
 | `project_id` | `text` | NOT NULL | `ck_document__project_id_format CHECK (project_id ~ '^PRJ-[0-9]{3}$')` |
-| `title` | `text` | NOT NULL | `ck_document__title_present CHECK (btrim(title) <> '')` |
+| `title` | `text` | NOT NULL | `ck_document__title_present CHECK (btrim(title, E' \t\n\r\f\u000B') <> '')` |
 | `source_kind` | `text` | NOT NULL | `ck_document__source_kind CHECK (source_kind IN ('REAL','SYNTHETIC'))` |
-| `source_ref` | `text` | NULL | `ck_document__real_has_source_ref CHECK (source_kind <> 'REAL' OR btrim(source_ref) <> '')`; `ck_document__synthetic_has_no_source_ref CHECK (source_kind <> 'SYNTHETIC' OR source_ref IS NULL)` |
-| `issuing_body` | `text` | NULL | `ck_document__real_has_issuing_body CHECK (source_kind <> 'REAL' OR btrim(issuing_body) <> '')`; `ck_document__synthetic_has_no_issuing_body CHECK (source_kind <> 'SYNTHETIC' OR issuing_body IS NULL)` |
-| `generator_id` | `text` | NULL | `ck_document__synthetic_has_generator CHECK (source_kind <> 'SYNTHETIC' OR btrim(generator_id) <> '')`; `ck_document__real_has_no_generator CHECK (source_kind <> 'REAL' OR generator_id IS NULL)` |
-| `generation_seed` | `text` | NULL | `ck_document__synthetic_has_seed CHECK (source_kind <> 'SYNTHETIC' OR btrim(generation_seed) <> '')`; `ck_document__real_has_no_seed CHECK (source_kind <> 'REAL' OR generation_seed IS NULL)` |
+| `source_ref` | `text` | NULL | `ck_document__real_has_source_ref CHECK (source_kind <> 'REAL' OR btrim(coalesce(source_ref, '')) <> '')`; `ck_document__synthetic_has_no_source_ref CHECK (source_kind <> 'SYNTHETIC' OR source_ref IS NULL)` |
+| `issuing_body` | `text` | NULL | `ck_document__real_has_issuing_body CHECK (source_kind <> 'REAL' OR btrim(coalesce(issuing_body, '')) <> '')`; `ck_document__synthetic_has_no_issuing_body CHECK (source_kind <> 'SYNTHETIC' OR issuing_body IS NULL)` |
+| `generator_id` | `text` | NULL | `ck_document__synthetic_has_generator CHECK (source_kind <> 'SYNTHETIC' OR btrim(coalesce(generator_id, '')) <> '')`; `ck_document__real_has_no_generator CHECK (source_kind <> 'REAL' OR generator_id IS NULL)` |
+| `generation_seed` | `text` | NULL | `ck_document__synthetic_has_seed CHECK (source_kind <> 'SYNTHETIC' OR btrim(coalesce(generation_seed, '')) <> '')`; `ck_document__real_has_no_seed CHECK (source_kind <> 'REAL' OR generation_seed IS NULL)` |
 | `generated_at` | `date` | NULL | `ck_document__synthetic_has_generated_at CHECK (source_kind <> 'SYNTHETIC' OR generated_at IS NOT NULL)`; `ck_document__real_has_no_generated_at CHECK (source_kind <> 'REAL' OR generated_at IS NULL)` |
-| `fixture_hashes` | `text[]` | NULL | `ck_document__synthetic_has_fixture_hashes CHECK (source_kind <> 'SYNTHETIC' OR (array_length(fixture_hashes,1) >= 1 AND fn_all_sha256_prefixed(fixture_hashes)))`; `ck_document__real_has_no_fixture_hashes CHECK (source_kind <> 'REAL' OR fixture_hashes IS NULL)` — a `CHECK` admits no subquery, so element-wise format validation goes through an `IMMUTABLE` helper, as sortedness does |
-| `license_basis` | `text` | NOT NULL | `ck_document__license_basis_present CHECK (btrim(license_basis) <> '')` |
-| `retrieval_date` | `date` | NULL | `ck_document__real_has_retrieval_date CHECK (source_kind <> 'REAL' OR retrieval_date IS NOT NULL)` |
-| `roster_hash` | `text` | NULL | `ck_document__synthetic_has_roster_hash CHECK (source_kind <> 'SYNTHETIC' OR roster_hash ~ '^sha256:[0-9a-f]{64}$')` |
+| `fixture_hashes` | `text[]` | NULL | `ck_document__synthetic_has_fixture_hashes CHECK (source_kind <> 'SYNTHETIC' OR (coalesce(array_length(fixture_hashes,1), 0) >= 1 AND fn_all_sha256_prefixed(fixture_hashes)))`; `ck_document__real_has_no_fixture_hashes CHECK (source_kind <> 'REAL' OR fixture_hashes IS NULL)` — a `CHECK` admits no subquery, so element-wise format validation goes through an `IMMUTABLE` helper, as sortedness does |
+| `license_basis` | `text` | NOT NULL | `ck_document__license_basis_present CHECK (btrim(license_basis, E' \t\n\r\f\u000B') <> '')` |
+| `retrieval_date` | `date` | NULL | `ck_document__real_has_retrieval_date CHECK (source_kind <> 'REAL' OR retrieval_date IS NOT NULL)`; `ck_document__synthetic_has_no_retrieval_date CHECK (source_kind <> 'SYNTHETIC' OR retrieval_date IS NULL)` |
+| `roster_hash` | `text` | NULL | `ck_document__synthetic_has_roster_hash CHECK (source_kind <> 'SYNTHETIC' OR coalesce(roster_hash, '') ~ '^sha256:[0-9a-f]{64}$')`; `ck_document__real_has_no_roster_hash CHECK (source_kind <> 'REAL' OR roster_hash IS NULL)` — generation provenance, so it is a pair like every other field in that group: a retrieved document was not generated from a roster, and is refused one for the same reason it is refused a `generator_id` |
 | `loaded_at` | `timestamptz` | NOT NULL | DEFAULT `now()` |
 
 - `uq_document__id_type_project UNIQUE (document_id, document_type, project_id)` — the FK target that lets `chunk` carry `document_type` and `project_id` without either being able to disagree with its document.
-- Provenance implements the project-instructions v1.2.0 Data Provenance rule **per layer** at the storage boundary rather than in the manifest alone.
+- Provenance implements the project-instructions v1.2.0 Data Provenance rule **per layer** at the storage boundary rather than in the manifest alone. Every field is covered in **both** directions — one check requiring it on its own layer, one rejecting it on the other — because TR-075 requires absence on the wrong layer to be *enforced*, not merely permitted. `retrieval_date` is retrieval provenance, so `ck_document__synthetic_has_no_retrieval_date` is part of that set; `roster_hash` is generation provenance, so `ck_document__real_has_no_roster_hash` is too.
+- **Every presence check reads `coalesce(col, '')`, never the bare column.** A `CHECK` rejects a row only when its expression evaluates to *false*, and `btrim(NULL, E' \t\n\r\f\u000B') <> ''` is NULL — so `source_kind <> 'REAL' OR btrim(source_ref, E' \t\n\r\f\u000B') <> ''` yields `false OR NULL` = NULL on a `REAL` row with no source reference and **accepts** it, which is the one row the check exists to catch. The same applies to `NULL ~ pattern` (`roster_hash`) and to `array_length('{}'::text[], 1)`, which is NULL rather than 0. Mapping absent to blank makes the comparison a definite false. Checks already phrased `IS NOT NULL` need no wrapper.
 - **`document_id` format is declared here** (lowercase kebab slug) because TR-041 requires a declared format and E002's manifest key space is not yet frozen. E002/E006 must adopt it; recorded as an integration obligation under **Disclosed Gaps**.
 - **`project_id` is NOT NULL on every document**, including public reference standards, because SC-006 requires 100% of chunks to carry a project identifier and the chunk inherits it by composite FK. A standard referenced by several projects is loaded once per project.
 
@@ -121,11 +122,11 @@ Exactly one row, guaranteed structurally: the primary key is a boolean that a `C
 | `spec_section` | `text` | NULL | none — deliberately uncontrolled; not every document type has one |
 | `heading` | `text` | NULL | none |
 | `part_numbers` | `text` | NULL | none |
-| `body_text` | `text` | NOT NULL | `ck_chunk__body_text_present CHECK (btrim(body_text) <> '')` — the "no searchable text" rejection |
+| `body_text` | `text` | NOT NULL | `ck_chunk__body_text_present CHECK (btrim(body_text, E' \t\n\r\f\u000B') <> '')` — the "no searchable text" rejection |
 | `search_vector` | `tsvector` | GENERATED ALWAYS … STORED | expression below |
 | `embedding` | `vector(EMBEDDING_DIM)` | NOT NULL | dimension enforced by the type, not by a check (TR-011) |
-| `embedding_model_id` | `text` | NOT NULL | `ck_chunk__embedding_model_id_present CHECK (btrim(embedding_model_id) <> '')` |
-| `embedding_model_revision` | `text` | NOT NULL | `ck_chunk__embedding_model_revision_present CHECK (btrim(embedding_model_revision) <> '')` |
+| `embedding_model_id` | `text` | NOT NULL | `ck_chunk__embedding_model_id_present CHECK (btrim(embedding_model_id, E' \t\n\r\f\u000B') <> '')` |
+| `embedding_model_revision` | `text` | NOT NULL | `ck_chunk__embedding_model_revision_present CHECK (btrim(embedding_model_revision, E' \t\n\r\f\u000B') <> '')` |
 | `created_at` | `timestamptz` | NOT NULL | DEFAULT `now()` |
 
 Generated search vector (TR-010, TR-038, OBJ2 VC1, OBJ2 VC6):
@@ -159,8 +160,8 @@ Constraints and indexes:
 |--------|------|------|-----------|
 | `field_name` | `text` | NOT NULL | `pk_field_vocabulary` PRIMARY KEY; `ck_field_vocabulary__name_format CHECK (field_name ~ '^[a-z][a-z0-9_]{2,63}$')` |
 | `value_kind` | `text` | NOT NULL | `ck_field_vocabulary__value_kind CHECK (value_kind IN ('text','number','date'))` |
-| `label` | `text` | NOT NULL | `ck_field_vocabulary__label_present CHECK (btrim(label) <> '')` |
-| `description` | `text` | NOT NULL | `ck_field_vocabulary__description_present CHECK (btrim(description) <> '')` |
+| `label` | `text` | NOT NULL | `ck_field_vocabulary__label_present CHECK (btrim(label, E' \t\n\r\f\u000B') <> '')` |
+| `description` | `text` | NOT NULL | `ck_field_vocabulary__description_present CHECK (btrim(description, E' \t\n\r\f\u000B') <> '')` |
 | `retired_at` | `date` | NULL | none — advisory; see Disclosed Gaps |
 
 - `uq_field_vocabulary__name_kind UNIQUE (field_name, value_kind)` — the FK target that lets `extracted_value` carry `value_kind` and reduce "the typed numeric column is populated exactly for numeric fields" to a single-row check.
@@ -175,7 +176,7 @@ Constraints and indexes:
 | `cited_page` | `integer` | **NOT NULL** | `ck_extracted_value__cited_page_positive CHECK (cited_page >= 1)`; part of `fk_extracted_value__chunk_page` (TR-015) |
 | `field_name` | `text` | NOT NULL | part of `fk_extracted_value__field` |
 | `value_kind` | `text` | NOT NULL | part of `fk_extracted_value__field` |
-| `value_text` | `text` | NOT NULL | `ck_extracted_value__value_text_present CHECK (btrim(value_text) <> '')` |
+| `value_text` | `text` | NOT NULL | `ck_extracted_value__value_text_present CHECK (btrim(value_text, E' \t\n\r\f\u000B') <> '')` |
 | `value_number` | `numeric` | NULL | `ck_extracted_value__numeric_iff_number_kind CHECK ((value_kind = 'number') = (value_number IS NOT NULL))` |
 | `confidence` | `double precision` | **NOT NULL** | `ck_extracted_value__confidence_range CHECK (confidence >= 0.0 AND confidence <= 1.0)` — inclusive both ends (TR-016) |
 | `provenance_kind` | `text` | NOT NULL | `ck_extracted_value__provenance_kind CHECK (provenance_kind IN ('single_chunk','multi_chunk'))` |
@@ -232,11 +233,19 @@ v_extracted_value_provenance:
 | `field_name` | `text` | NOT NULL | `fk_extraction_failure__field FOREIGN KEY (field_name) REFERENCES field_vocabulary (field_name)` |
 | `outcome` | `text` | NOT NULL | `ck_extraction_failure__outcome CHECK (outcome IN ('no_value_found','unparseable_value','type_coercion_failed','schema_violation','missing_citation','confidence_below_threshold','repair_budget_exhausted'))` |
 | `repair_attempt_count` | `smallint` | NOT NULL | `ck_extraction_failure__repair_count_non_negative CHECK (repair_attempt_count >= 0)` — the repair *budget* is E006's policy, not a schema bound |
-| `detail` | `text` | NOT NULL | `ck_extraction_failure__detail_present CHECK (btrim(detail) <> '')` |
+| `detail` | `text` | NOT NULL | `ck_extraction_failure__detail_present CHECK (btrim(detail, E' \t\n\r\f\u000B') <> '')` |
 | `failed_at` | `timestamptz` | NOT NULL | DEFAULT `now()` |
 
 - `ix_extraction_failure__chunk_field (source_chunk_id, field_name)`.
 - "No partial value row exists" is half structural and half tested: `extracted_value.value_text` is NOT NULL and non-empty, so a value row with nothing in it is unrepresentable. The remaining half — that the writer chose exactly one of the two tables — is a test (Disclosed Gaps).
+
+### Reader-facing semantics of the provenance tables — TR-081, TR-082, TR-085
+
+Three requirements over `extracted_value` and `extraction_failure` constrain what a reader may conclude, not what the database accepts. No constraint can carry any of them, so they are recorded here, where TR-083 makes them normative. Asserted against this document by `src/model/tests/schema/test_extraction.py`; no schema assertion is invented for them.
+
+- **TR-081 — confidence is a self-reported score, never a calibrated probability.** `extracted_value.confidence` is a score the extracting agent asserted about its own output, at the time recorded in `extracted_at`. No reader may interpret it as a frequency, and no reader may compare it across fields as one. The schema carries the type and the closed interval; it cannot carry calibration, and nothing here claims it does.
+- **TR-082 — agent identity is recorded at ingestion-run granularity, not on the value row.** E006's ingestion run names the agent that wrote a citation. `extracted_at` is therefore the only per-row temporal fact on `extracted_value`, and the absence of an agent column is by design rather than an omission — adding one would put the same fact at two granularities with nothing to say which a given row was written under.
+- **TR-085 — every provenance row is retained for the life of the database.** Retention policy is out of scope and the full dataset is regenerable from the repository and its jobs, so no row expires or is pruned. `RESTRICT` on every citation edge, plus migration `0009` revoking `UPDATE` and `DELETE` from the application role (TR-084), means no deletion path is declared for these three tables at all.
 
 ### `purchase_order_line` — TR-020 … TR-025
 
@@ -245,14 +254,14 @@ v_extracted_value_provenance:
 | `po_line_id` | `uuid` | NOT NULL | `pk_purchase_order_line` PRIMARY KEY |
 | `project_id` | `text` | NOT NULL | `ck_pol__project_id_format CHECK (project_id ~ '^PRJ-[0-9]{3}$')` |
 | `vendor_id` | `text` | NOT NULL | `ck_pol__vendor_id_format CHECK (vendor_id ~ '^VND-[0-9]{3}$')` |
-| `po_number` | `text` | NOT NULL | `ck_pol__po_number_present CHECK (btrim(po_number) <> '')` |
+| `po_number` | `text` | NOT NULL | `ck_pol__po_number_present CHECK (btrim(po_number, E' \t\n\r\f\u000B') <> '')` |
 | `line_number` | `integer` | NOT NULL | `ck_pol__line_number_positive CHECK (line_number >= 1)` |
-| `material_category` | `text` | NOT NULL | `ck_pol__material_category_present CHECK (btrim(material_category) <> '')` |
-| `description` | `text` | NOT NULL | `ck_pol__description_present CHECK (btrim(description) <> '')` |
-| `manufacturer` | `text` | NOT NULL | `ck_pol__manufacturer_present CHECK (btrim(manufacturer) <> '')` |
-| `part_number` | `text` | NOT NULL | `ck_pol__part_number_present CHECK (btrim(part_number) <> '')` |
+| `material_category` | `text` | NOT NULL | `ck_pol__material_category_present CHECK (btrim(material_category, E' \t\n\r\f\u000B') <> '')` |
+| `description` | `text` | NOT NULL | `ck_pol__description_present CHECK (btrim(description, E' \t\n\r\f\u000B') <> '')` |
+| `manufacturer` | `text` | NOT NULL | `ck_pol__manufacturer_present CHECK (btrim(manufacturer, E' \t\n\r\f\u000B') <> '')` |
+| `part_number` | `text` | NOT NULL | `ck_pol__part_number_present CHECK (btrim(part_number, E' \t\n\r\f\u000B') <> '')` |
 | `quantity` | `numeric` | NOT NULL | `ck_pol__quantity_positive CHECK (quantity > 0)` |
-| `unit_of_measure` | `text` | NOT NULL | `ck_pol__uom_present CHECK (btrim(unit_of_measure) <> '')` |
+| `unit_of_measure` | `text` | NOT NULL | `ck_pol__uom_present CHECK (btrim(unit_of_measure, E' \t\n\r\f\u000B') <> '')` |
 | `order_date` | `date` | NOT NULL | — |
 | `need_by_date` | `date` | NOT NULL | `ck_pol__need_by_not_before_order CHECK (need_by_date >= order_date)` (TR-023, OBJ4 VC1) |
 | `criticality` | `smallint` | NOT NULL | `ck_pol__criticality_band CHECK (criticality BETWEEN 1 AND 5)` — ordinal band, **5 = most critical** |
@@ -276,6 +285,13 @@ v_extracted_value_provenance:
 
 **Two verification items for implementation.** (1) PostgreSQL forbids `ON DELETE SET NULL` / `SET DEFAULT` against generated columns; `NO ACTION` is declared for exactly that reason and must not be changed. (2) If a generated column proves unusable as an FK referencing column in PG 16, the fallback is two plain nullable columns with `ck_pol__closing_terminal_true CHECK (closing_event_terminal)` and `ck_pol__closing_triple_null_together CHECK (num_nonnulls(closing_event_id, closing_event_po_line_id, closing_event_terminal) IN (0, 3))`. That fallback introduces a check on a nullable column and must then be registered in the **Nullable-Column Checks** table below. The **named fallback of last resort** remains a `CONSTRAINT TRIGGER … DEFERRABLE INITIALLY DEFERRED` named `ctr_purchase_order_line__closed_has_terminal_event` (spec Risk, TR-021) — accepted only if both declarative shapes fail, with its cost recorded: per-row firing, non-replaceable in place, and a data-only restore with triggers disabled loads straight past it.
 
+**Both verification items resolved — outcome recorded (TR-065, migration `0007`).** The shape taken is **rung 1, the generated-column deferrable foreign key, exactly as specified above. No fallback was needed and neither lower rung was taken**, so `ck_pol__closing_terminal_true` and `ck_pol__closing_triple_null_together` do not exist, the **Nullable-Column Checks** table gains no new row, and the schema still contains **zero triggers**.
+
+| Item | Result, verified against PostgreSQL 16 with pgvector |
+|------|------------------------------------------------------|
+| (1) `ON DELETE` must stay `NO ACTION` | **Confirmed, and now evidenced.** Re-declaring the same FK with `ON DELETE SET NULL` is rejected at DDL time: `invalid ON DELETE action for foreign key constraint containing generated column`, SQLSTATE **42601**. `pg_constraint` reports the delivered constraint as `confdeltype = 'a'`, `confupdtype = 'a'` (both `NO ACTION`), `confmatchtype = 'f'` (`MATCH FULL`), `condeferrable = true`, `condeferred = true`. This is not a preference a later revision may tidy up — the generated-column shape and `NO ACTION` come as a pair. |
+| (2) Are generated columns usable as FK referencing columns in PG 16? | **Yes.** The `ALTER TABLE … ADD CONSTRAINT` succeeds, an open line's all-null triple is accepted with no referent under `MATCH FULL`, and a closed line naming a nonexistent terminal event is **accepted mid-transaction** and then rejected by `SET CONSTRAINTS ALL IMMEDIATE` with `ForeignKeyViolation` (SQLSTATE 23503) naming `fk_purchase_order_line__closing_event`. Both halves matter: the first is the deferral, the second the enforcement. Also verified rejected at the forced check — a pointer at a non-terminal (`shipped`) event, and one line pointing at another line's terminal event. |
+
 ### `lifecycle_event` — TR-021, TR-022
 
 | Column | Type | Null | Constraint |
@@ -295,11 +311,17 @@ v_extracted_value_provenance:
 | `uq_lifecycle_event__line_sequence` | `UNIQUE (po_line_id, sequence_no)` | One event per position; rework loops repeat *states*, not positions (TR-022, OBJ4 VC3). |
 | `uq_lifecycle_event__line_sequence_state` | `UNIQUE (po_line_id, sequence_no, to_state)` | Target of the chain FK. |
 | `uq_lifecycle_event__id_line_terminal` | `UNIQUE (event_id, po_line_id, is_terminal)` | Target of the closing FK — this is where the terminal flag gets carried into the referenced key. |
-| `fk_lifecycle_event__chain` | `FOREIGN KEY (po_line_id, prev_sequence_no, from_state) REFERENCES lifecycle_event (po_line_id, sequence_no, to_state) MATCH FULL ON DELETE RESTRICT ON UPDATE RESTRICT` | Self-referencing composite FK: `from_state` must be the `to_state` of the immediately preceding event **on the same line**. Makes a broken or forged history unrepresentable. |
+| `fk_lifecycle_event__chain` | `FOREIGN KEY (po_line_id, prev_sequence_no, from_state) REFERENCES lifecycle_event (po_line_id, sequence_no, to_state) MATCH SIMPLE ON DELETE RESTRICT ON UPDATE RESTRICT` | Self-referencing composite FK: `from_state` must be the `to_state` of the immediately preceding event **on the same line**. Makes a broken or forged history unrepresentable. **`MATCH SIMPLE`, corrected from `MATCH FULL` during implementation of `0007`** — see the note below. |
 | `ix_lifecycle_event__line_occurred` | `(po_line_id, occurred_at)` | Per-line event retrieval in time order. |
 | `ix_lifecycle_event__terminal` | `(po_line_id) WHERE is_terminal` | Terminal-event lookup for closure. |
 
 **Cost of `fk_lifecycle_event__chain`**: it is not deferrable, so a line's events must be inserted in ascending `sequence_no` and deleted in descending order. That is a reasonable demand on a generator (E005) and buys a fully declarative event chain. If E005 needs unordered bulk load, this is the one constraint to drop — dropping it costs the chain guarantee and nothing else.
+
+**Match type of `fk_lifecycle_event__chain` — corrected to `MATCH SIMPLE` (implementation of `0007`).** This document previously declared `MATCH FULL`, which makes **the opening event unrepresentable, and with it every line's entire history**. On a sequence-1 event `prev_sequence_no` is NULL (generated) and `from_state` is NULL (forced by `ck_lifecycle_event__first_has_no_predecessor`), while `po_line_id` is NOT NULL — so the referencing triple is *partially* null. `MATCH FULL` permits all-null and requires all-matching and **rejects everything between**: it does not skip a partially-null row, it refuses it. Verified against PostgreSQL 16 — under `MATCH FULL` the sequence-1 insert is rejected with `ForeignKeyViolation` naming this constraint (SQLSTATE 23503); under `MATCH SIMPLE` it is accepted, the chained sequence-2 event is accepted, and a forged `from_state` at sequence 3 is still rejected by this constraint.
+
+The partial-match skip the §Conventions rule warns about is confined here **by a constraint, not by argument**: `po_line_id` is NOT NULL, `prev_sequence_no` is generated and null iff `sequence_no = 1`, and `from_state` is null iff `sequence_no = 1` by the immediate biconditional `ck_lifecycle_event__first_has_no_predecessor`. The null pattern is therefore a function of `sequence_no` alone, a writer cannot produce a null `from_state` at any later position, and the skipped rows are exactly those for which "the previous event" does not exist — where `ck_lifecycle_event__first_is_submitted` closes what the FK cannot see.
+
+The named strengthening, if that biconditional is ever relaxed: add a third generated column `prev_po_line_id GENERATED ALWAYS AS (CASE WHEN sequence_no = 1 THEN NULL ELSE po_line_id END) STORED` and restore `MATCH FULL`, making the triple all-null together the way `fk_purchase_order_line__closing_event`'s triple already is. Not taken now — it adds a column to guard against the removal of a constraint in the same table.
 
 ### `resolved_entity` / `resolved_entity_member` — TR-034, TR-035 (P2)
 
@@ -308,14 +330,16 @@ v_extracted_value_provenance:
 | Column | Type | Null | Constraint |
 |--------|------|------|-----------|
 | `resolved_entity_id` | `uuid` | NOT NULL | `pk_resolved_entity` PRIMARY KEY |
-| `normalized_manufacturer` | `text` | NOT NULL | `ck_resolved_entity__manufacturer_normalized CHECK (normalized_manufacturer = lower(normalized_manufacturer) AND btrim(normalized_manufacturer) <> '')` |
-| `normalized_part_number` | `text` | NOT NULL | `ck_resolved_entity__part_number_normalized CHECK (normalized_part_number = lower(normalized_part_number) AND btrim(normalized_part_number) <> '')` |
-| `agreement_attribute_names` | `text[]` | NOT NULL | `ck_resolved_entity__agreement_non_empty CHECK (cardinality(agreement_attribute_names) >= 1)` |
+| `normalized_manufacturer` | `text` | NOT NULL | `ck_resolved_entity__manufacturer_normalized CHECK (normalized_manufacturer = lower(normalized_manufacturer) AND btrim(normalized_manufacturer, E' \t\n\r\f\u000B') <> '')` |
+| `normalized_part_number` | `text` | NOT NULL | `ck_resolved_entity__part_number_normalized CHECK (normalized_part_number = lower(normalized_part_number) AND btrim(normalized_part_number, E' \t\n\r\f\u000B') <> '')` |
+| `agreement_attribute_names` | `text[]` | NOT NULL | `ck_resolved_entity__agreement_non_empty CHECK (cardinality(agreement_attribute_names) >= 1 AND array_position(agreement_attribute_names, NULL) IS NULL AND btrim(array_to_string(agreement_attribute_names, ''), E' \t\n\r\f\u000B') <> '')` — **strengthened against null and blank elements during implementation of `0010`**; see the note below |
 | `created_at` | `timestamptz` | NOT NULL | DEFAULT `now()` |
 
 - `uq_resolved_entity__normalized_identity UNIQUE (normalized_manufacturer, normalized_part_number)`.
 - `lower()` is used rather than a collation-dependent normalization because a `CHECK` must stay true across OS and ICU upgrades; existing rows are never rechecked (research: *Cross-table and cross-row invariants*).
 - `agreement_attribute_names` elements are field-vocabulary terms, but PostgreSQL has no array-element foreign key — see **Disclosed Gaps**.
+
+**Agreement-attribute check strengthened against element nulls — corrected above and recorded here (TR-083, implementation of `0010`).** The declared form is right about the empty array: `cardinality('{}')` is `0`, where the natural-looking `array_length(agreement_attribute_names, 1) >= 1` would have been NULL and the `CHECK` would have *accepted* an entity agreeing on nothing — the same trap `0008` records against `ck_line_posterior__draws_length`. It was wrong one subscript deeper: `cardinality(ARRAY[NULL]::text[])` is `1`, so an array holding a single NULL passed, as did `ARRAY['']`. Both are an entity declaring one agreement attribute that names nothing. Verified against PostgreSQL 16 by inserting each row the declared form would have taken. The strengthening adds no constraint name — it extends a check already declared, so the object inventory T052 audits is unchanged. What it does **not** close is a blank element *alongside* a real one (`ARRAY['manufacturer', '']`): refusing that needs a per-element scan, which a `CHECK` cannot do without a helper function, and a new function would be an object absent from this document. Such an element names no vocabulary term, which is the runtime consequence **G-6** already discloses.
 
 `resolved_entity_member`:
 
@@ -347,7 +371,7 @@ v_extracted_value_provenance:
 | `artifact_hash` | `bytea` | NOT NULL | `ck_forecast_run__artifact_hash_length CHECK (octet_length(artifact_hash) = 32)` |
 | `draw_serialization` | `text` | NOT NULL | `ck_forecast_run__draw_serialization CHECK (draw_serialization = 'float64-le-c-contiguous')` — TR-040, OBJ5 VC8: the digest is taken over bytes, never over a text rendering |
 | `artifact_schema_version` | `integer` | NOT NULL | `ck_forecast_run__schema_version_positive CHECK (artifact_schema_version >= 1)` — TR-032, OBJ5 VC6 |
-| `model_version` | `text` | NOT NULL | `ck_forecast_run__model_version_present CHECK (btrim(model_version) <> '')` |
+| `model_version` | `text` | NOT NULL | `ck_forecast_run__model_version_present CHECK (btrim(model_version, E' \t\n\r\f\u000B') <> '')` |
 | `as_of_date` | `date` | NOT NULL | TR-049, OBJ5 VC9 — the single anchor for every line's grid in this run |
 | `horizon_days` | `integer` | NOT NULL | `ck_forecast_run__horizon_positive CHECK (horizon_days > 0)` — STF-008: recorded here so the survival array's length is enforceable |
 | `wall_clock_seconds` | `double precision` | NOT NULL | `ck_forecast_run__wall_clock_non_negative CHECK (wall_clock_seconds >= 0)` |
@@ -373,8 +397,8 @@ One row per line per run, holding **both** arrays (TR-031, SC-014). Names `Poste
 | `po_line_id` | `uuid` | NOT NULL | part of PK; `fk_line_posterior__line FOREIGN KEY … REFERENCES purchase_order_line (po_line_id) ON DELETE RESTRICT` |
 | `draw_count` | `integer` | NOT NULL | part of `fk_line_posterior__run_shape` |
 | `horizon_days` | `integer` | NOT NULL | part of `fk_line_posterior__run_shape` |
-| `draws` | `double precision[]` | NOT NULL | `ck_line_posterior__draws_1d CHECK (array_ndims(draws) = 1)`; `ck_line_posterior__draws_length CHECK (array_length(draws, 1) = draw_count)`; `ck_line_posterior__draws_sorted CHECK (fn_is_sorted_ascending(draws))`; `ck_line_posterior__draws_non_negative CHECK (draws[1] >= 0.0)` |
-| `survival` | `double precision[]` | NOT NULL | `ck_line_posterior__survival_1d CHECK (array_ndims(survival) = 1)`; `ck_line_posterior__survival_length CHECK (array_length(survival, 1) = horizon_days)`; `ck_line_posterior__survival_monotone CHECK (fn_is_non_increasing(survival))`; `ck_line_posterior__survival_unit_interval CHECK (fn_all_within_unit_interval(survival))` |
+| `draws` | `double precision[]` | NOT NULL | `ck_line_posterior__draws_1d CHECK (array_ndims(draws) = 1 AND array_lower(draws, 1) = 1)`; `ck_line_posterior__draws_length CHECK (coalesce(array_length(draws, 1), 0) = draw_count)`; `ck_line_posterior__draws_sorted CHECK (fn_is_sorted_ascending(draws))`; `ck_line_posterior__draws_non_negative CHECK (draws[1] >= 0.0)` |
+| `survival` | `double precision[]` | NOT NULL | `ck_line_posterior__survival_1d CHECK (array_ndims(survival) = 1 AND array_lower(survival, 1) = 1)`; `ck_line_posterior__survival_length CHECK (coalesce(array_length(survival, 1), 0) = horizon_days)`; `ck_line_posterior__survival_monotone CHECK (fn_is_non_increasing(survival))`; `ck_line_posterior__survival_unit_interval CHECK (fn_all_within_unit_interval(survival))` |
 | `residual_tail_mass` | `double precision` | NOT NULL | `ck_line_posterior__residual_range CHECK (residual_tail_mass >= 0.0 AND residual_tail_mass <= 1.0)`; `ck_line_posterior__residual_matches_grid_tail CHECK (abs(survival[horizon_days] - residual_tail_mass) <= 1e-9)` |
 | `draw_digest` | `bytea` | NOT NULL | `ck_line_posterior__draw_digest_length CHECK (octet_length(draw_digest) = 32)` |
 
@@ -395,6 +419,13 @@ One row per line per run, holding **both** arrays (TR-031, SC-014). Names `Poste
 | Percentile `p` (0 < p ≤ 1) | `draws[ceil(p * draw_count)]` — nearest rank, one-based, no interpolation (TR-033, OBJ5 VC10). |
 
 **Length enforcement chain (SC-025)**: the composite FK proves `draw_count` and `horizon_days` on the artifact row are the run's own values; the two single-row `array_length` checks then prove each array matches. Neither check reads another row, so nothing here depends on a trigger and nothing breaks under dump-and-restore.
+
+**Two array checks strengthened against NULL — corrected above and recorded here (TR-083, implementation of `0008`).** Both were previously declared in a form that PostgreSQL evaluates to NULL on the very input the check exists to refuse, and a `CHECK` rejects only on *false*, so both **accepted** that input. Each was verified by inserting the row the declared form would have taken, and each strengthens an existing check rather than adding one — the constraint names and the object inventory are unchanged.
+
+| Check | Declared | Delivered | Why |
+|-------|----------|-----------|-----|
+| `ck_line_posterior__draws_length`, `ck_line_posterior__survival_length` | `array_length(…, 1) = N` | `coalesce(array_length(…, 1), 0) = N` | `array_length('{}', 1)` is **NULL, not 0** — an empty array has no dimensions — so the declared form is NULL on `'{}'` and admits an artifact row with no draws at all. `ck_forecast_run__draw_count_positive` and `ck_forecast_run__horizon_positive` keep the substituted 0 from ever matching. |
+| `ck_line_posterior__draws_1d`, `ck_line_posterior__survival_1d` | `array_ndims(…) = 1` | `array_ndims(…) = 1 AND array_lower(…, 1) = 1` | PostgreSQL array subscripts need not start at 1, and both read conventions above subscript directly — `draws[ceil(p * draw_count)]` and `survival[horizon_days]`. A legal lower-bound-0 array of the declared length puts the last element out of subscript reach, so `survival[horizon_days]` is NULL, so `ck_line_posterior__residual_matches_grid_tail` is NULL and satisfied. |
 
 ## Immutable Helper Functions
 
@@ -428,7 +459,7 @@ The audit surface for OBJ1 VC12, SC-024, and TR-051. Every non-trivial invariant
 | 10 | An event's terminal flag cannot be forged | `ck_lifecycle_event__terminal_iff_delivered` | single-row CHECK |
 | 11 | An event's `from_state` is the previous event's `to_state`, same line | `fk_lifecycle_event__chain` | self-referencing composite FK |
 | 12 | Only legal state transitions exist | `ck_lifecycle_event__legal_transition` via `fn_is_legal_lifecycle_transition` | IMMUTABLE-function CHECK |
-| 13 | **A closed line has a terminal delivery event** | `fk_purchase_order_line__closing_event`, `DEFERRABLE INITIALLY DEFERRED`, terminal flag carried into the referenced key | **the one deferred FK** |
+| 13 | **A closed line has a terminal delivery event** | `fk_purchase_order_line__closing_event`, `DEFERRABLE INITIALLY DEFERRED`, terminal flag carried into the referenced key. **Shape achieved: rung 1 — the generated-column deferrable FK, exactly as specified, with no fallback taken** (TR-065, recorded by migration `0007`) | **the one deferred FK** |
 | 14 | An open line is right-censored (no delivery event) | `ck_pol__closed_iff_closing_event` + `ck_pol__closed_iff_delivered` | single-row CHECKs |
 | 15 | Need-by not before order date | `ck_pol__need_by_not_before_order` | single-row CHECK |
 | 16 | Frozen identifier and roster-hash formats | regex CHECKs on NOT NULL columns | CHECK paired with NOT NULL |
@@ -440,19 +471,26 @@ The audit surface for OBJ1 VC12, SC-024, and TR-051. Every non-trivial invariant
 | 22 | Array + residual account for the full distribution | `ck_line_posterior__residual_matches_grid_tail` | single-row CHECK |
 | 23 | A record belongs to at most one resolved entity | `uq_rem__extracted_value`, `uq_rem__po_line` (`NULLS DISTINCT`) | UNIQUE |
 | 24 | Exactly one row in `schema_constants` | boolean PK + `ck_schema_constants__singleton` | PK + CHECK |
+| 25 | **A document carries exactly the provenance its layer has** — retrieval fields on `REAL`, generation fields on `SYNTHETIC`, each rejected on the other layer | seven `ck_document__real_*` / `ck_document__synthetic_*` pairs keyed on the NOT NULL closed-set `source_kind`, with `fn_all_sha256_prefixed` for the array | paired single-row CHECKs + IMMUTABLE-function CHECK |
 
 ### Range / Domain Checks and Their Paired NOT NULL (TR-039, OBJ3 VC6, SC-024)
 
 Every `CHECK` that constrains a **single column's value domain** sits on a `NOT NULL` column, so none can be silently satisfied by a null:
 
-`schema_constants.vector_dimension`, `.survival_horizon_days`, `.draw_count`, `.probability_sum_tolerance`, `.anchor_date_convention`, `.percentile_convention`; `document.document_id`, `.document_type`, `.project_id`, `.title`, `.source_kind`, `.source_ref`, `.issuing_body`, `.license_basis`; `chunk.project_id`, `.page_number`, `.ordinal`, `.body_text`, `.embedding_model_id`, `.embedding_model_revision`; `field_vocabulary.field_name`, `.value_kind`, `.label`, `.description`; `extracted_value.cited_page`, `.value_text`, `.confidence`, `.provenance_kind`, `.source_chunk_count`; `extracted_value_contributing_chunk.contributor_ordinal`, `.page_number`; `extraction_failure.attempted_page`, `.outcome`, `.repair_attempt_count`, `.detail`; `purchase_order_line.project_id`, `.vendor_id`, `.po_number`, `.line_number`, `.material_category`, `.description`, `.manufacturer`, `.part_number`, `.quantity`, `.unit_of_measure`, `.criticality`, `.lifecycle_state`, `.roster_hash`; `lifecycle_event.sequence_no`, `.to_state`; `resolved_entity.normalized_manufacturer`, `.normalized_part_number`, `.agreement_attribute_names`; `resolved_entity_member.member_kind`; `forecast_run.code_commit`, `.input_data_hash`, `.seed_entropy`, `.chain_count`, `.draw_count`, `.tuning_count`, `.library_versions`, `.artifact_hash`, `.draw_serialization`, `.artifact_schema_version`, `.model_version`, `.horizon_days`, `.wall_clock_seconds`, `.roster_hash`; `line_posterior.draws`, `.survival`, `.residual_tail_mass`, `.draw_digest`.
+`schema_constants.vector_dimension`, `.survival_horizon_days`, `.draw_count`, `.probability_sum_tolerance`, `.anchor_date_convention`, `.percentile_convention`; `document.document_id`, `.document_type`, `.project_id`, `.title`, `.source_kind`, `.license_basis`; `chunk.project_id`, `.page_number`, `.ordinal`, `.body_text`, `.embedding_model_id`, `.embedding_model_revision`; `field_vocabulary.field_name`, `.value_kind`, `.label`, `.description`; `extracted_value.cited_page`, `.value_text`, `.confidence`, `.provenance_kind`, `.source_chunk_count`; `extracted_value_contributing_chunk.contributor_ordinal`, `.page_number`; `extraction_failure.attempted_page`, `.outcome`, `.repair_attempt_count`, `.detail`; `purchase_order_line.project_id`, `.vendor_id`, `.po_number`, `.line_number`, `.material_category`, `.description`, `.manufacturer`, `.part_number`, `.quantity`, `.unit_of_measure`, `.criticality`, `.lifecycle_state`, `.roster_hash`; `lifecycle_event.sequence_no`, `.to_state`; `resolved_entity.normalized_manufacturer`, `.normalized_part_number`, `.agreement_attribute_names`; `resolved_entity_member.member_kind`; `forecast_run.code_commit`, `.input_data_hash`, `.seed_entropy`, `.chain_count`, `.draw_count`, `.tuning_count`, `.library_versions`, `.artifact_hash`, `.draw_serialization`, `.artifact_schema_version`, `.model_version`, `.horizon_days`, `.wall_clock_seconds`, `.roster_hash`; `line_posterior.draws`, `.survival`, `.residual_tail_mass`, `.draw_digest`.
 
 **Nullable-column checks** — the complete list. None is a domain check; each is a biconditional or conditional whose null branch is separately closed, so it cannot pass vacuously:
 
 | Check | Nullable column | Why the null case is closed |
 |-------|-----------------|-----------------------------|
-| `ck_document__real_has_retrieval_date` | `retrieval_date` | Conditional on `source_kind`, which is NOT NULL and closed-set. NULL is permitted only for `SYNTHETIC`, deliberately. |
-| `ck_document__synthetic_has_roster_hash` | `roster_hash` | Same shape, other branch. |
+| `ck_document__real_has_source_ref`, `ck_document__synthetic_has_no_source_ref` | `source_ref` | A pair conditional on `source_kind`, which is NOT NULL and closed-set, so exactly one branch is active per row and neither layer leaves the column unchecked. Presence is `btrim(coalesce(...)) <> ''`, so the null case is a definite false rather than NULL. |
+| `ck_document__real_has_issuing_body`, `ck_document__synthetic_has_no_issuing_body` | `issuing_body` | Same shape. This is the pair that makes a fabricated issuing body unrepresentable. |
+| `ck_document__real_has_retrieval_date`, `ck_document__synthetic_has_no_retrieval_date` | `retrieval_date` | Same shape, phrased `IS NOT NULL` / `IS NULL`. |
+| `ck_document__synthetic_has_generator`, `ck_document__real_has_no_generator` | `generator_id` | Same shape, other layer. |
+| `ck_document__synthetic_has_seed`, `ck_document__real_has_no_seed` | `generation_seed` | Same shape, other layer. |
+| `ck_document__synthetic_has_generated_at`, `ck_document__real_has_no_generated_at` | `generated_at` | Same shape, other layer. |
+| `ck_document__synthetic_has_fixture_hashes`, `ck_document__real_has_no_fixture_hashes` | `fixture_hashes` | Same shape. `coalesce(array_length(...), 0) >= 1` closes both NULL and the empty array, whose `array_length` is also NULL. |
+| `ck_document__synthetic_has_roster_hash`, `ck_document__real_has_no_roster_hash` | `roster_hash` | Same shape as the generation-provenance pairs above, which is what this field is: required and well-formed on `SYNTHETIC`, rejected on `REAL`, where there is no roster to hash. Presence is `coalesce(roster_hash, '') ~ pattern`, so the null case is a definite false rather than NULL. |
 | `ck_extracted_value__numeric_iff_number_kind` | `value_number` | Biconditional against NOT NULL `value_kind`. |
 | `ck_lifecycle_event__first_has_no_predecessor` | `from_state` | Biconditional against NOT NULL `sequence_no`. |
 | `ck_lifecycle_event__first_is_submitted` | `from_state` | The `from_state IS NULL` branch forces `to_state = 'submitted'`. |
@@ -558,10 +596,12 @@ Filename prefixes `0001`–`0099` are E003's reserved block; `0100`–`0199` is 
 | `0006` | `extracted_value`, `extracted_value_contributing_chunk`, `extraction_failure`, `v_extracted_value_provenance` | After `0004` and `0005` |
 | `0007` | `fn_is_legal_lifecycle_transition`, `purchase_order_line`, `lifecycle_event`, the deferred closing FK, `v_purchase_order_line_current_state` | Line and event must be created in one migration — the FK cycle cannot be split |
 | `0008` | `fn_is_sorted_ascending`, `fn_is_non_increasing`, `fn_all_within_unit_interval`, `forecast_run`, `line_posterior`, `v_active_forecast_run` | After `0007` |
-| `0009` | Revoke `UPDATE` and `DELETE` on `extracted_value` and `extraction_failure` from the application role; retain them for the migration role | TR-084, TR-086, SC-028 — append-only becomes a privilege fact rather than caller discipline. Grants against tables `0006` creates, so it could sit anywhere after `0006`; placed before the P2 migration so no P1 obligation depends on P2 work having landed |
-| `0010` | `resolved_entity`, `resolved_entity_member` (P2) | After `0006` and `0007`. Last in the chain by design: P2 is droppable, and every P1 objective completes at `0009` |
+| `0009` | Revoke `UPDATE` and `DELETE` on `extracted_value`, `extracted_value_contributing_chunk` and `extraction_failure` from the application role; retain them for the migration role | TR-084, TR-086, SC-028 — append-only becomes a privilege fact rather than caller discipline. Grants against tables `0006` creates, so it could sit anywhere after `0006`; placed before the P2 migration so no P1 obligation depends on P2 work having landed. **The contributor table is the third named table and was added during implementation**: with it left mutable, a citation set can be truncated without a statement touching either other table, which reaches G-1's runtime shape by privilege. `ALTER DEFAULT PRIVILEGES` is deliberately not used, so every later revision grants to `procurement_app` explicitly or the role cannot touch its tables — `0010` does |
+| `0010` | `resolved_entity`, `resolved_entity_member`, `ix_rem__entity`, and an explicit `GRANT SELECT, INSERT, UPDATE, DELETE` on both to `procurement_app` (P2) | After `0006` and `0007`. Last in the chain by design: P2 is droppable, and every P1 objective completes at `0009`. The grants are explicit because `0009` declined `ALTER DEFAULT PRIVILEGES` — without them the application role could not read either table. All four verbs, and nothing revoked afterwards: a resolved entity is a revisable judgement about identity, not a provenance row |
 
-Verification the epic ships: apply-from-empty against the Compose `db` service; re-apply-at-head is a no-op; `alembic heads` returns exactly one; every filename prefix falls in `0001`–`0099`; no `downgrade()` carries a body; the migrated object set contains none of the six other-epic tables (TR-036, SC-017).
+**One object in the migrated set is not created by any migration above**: `alembic_version`, a single-column table Alembic itself creates on first upgrade to record which revisions have been applied, together with its primary key `alembic_version_pkc`. It is recorded here because TR-083 admits no undocumented object in the schema, and because it is not incidental — it is the mechanism that makes re-application a no-op (TR-003) and it is the only object in the schema no revision in this chain owns. Nothing reads or writes it but Alembic; no epic may reference it.
+
+Verification the epic ships: apply-from-empty against the Compose `db` service; re-apply-at-head is a no-op; `alembic heads` returns exactly one; every filename prefix falls in `0001`–`0099`; no `downgrade()` carries a body; the migrated object set contains none of the six other-epic tables (TR-036, SC-017); and every object the chain leaves behind is named in this document (TR-083, asserted by `src/model/tests/schema/test_table_ownership.py`).
 
 ## Referential Actions
 
@@ -601,6 +641,7 @@ Enforcement this schema does **not** carry, recorded as uncovered rather than cl
 | G-8 | Chunk vectors sharing one embedding model across the corpus | Cross-row agreement on `embedding_model_id` / `embedding_model_revision`; recorded per chunk so retrieval can **refuse to serve** on a mismatch rather than silently mixing spaces (OBJ2 VC5) | Test; E008 refusal logic |
 | G-9 | `document_id` format agreement with E002's manifest key space | E002 has not frozen it; E003 declares the format under TR-041 and E002/E006 must adopt it | **Integration obligation on IP-012** — raise in the plan; test asserts every loaded manifest key matches |
 | G-10 | Reader-side rejection of an unrecognised `artifact_schema_version` | The schema can expose the version; it cannot make a reader check it | Test in E010's reader (research: *Versioned artifact contract*) |
+| G-11 | TR-084's `UPDATE`/`DELETE` revoke **binding the connection the application actually opens** | The database carries the revoke and migration `0009` applies it — to `procurement_app`, a non-superuser role that revision creates. What it cannot carry is who connects: the deployment declares exactly one role, `procurement`, it is a SUPERUSER, and a superuser bypasses every privilege check, so revoking from it would be catalogued and inert. `docker-compose.yml` is frozen by TR-037 and `DATABASE_URL` by E001, so neither the role set nor the connection string is this epic's to change | Tests in `test_extraction.py` (T049): all **six** refusals — `UPDATE` and `DELETE` on each of `extracted_value`, `extracted_value_contributing_chunk` and `extraction_failure` — under `SET LOCAL ROLE procurement_app`, which drops superuser status, asserted rather than assumed; plus `INSERT`/`SELECT` shown still to work on all three, the revoke read back out of `information_schema.role_table_grants` and `has_table_privilege`, the migration role shown to retain both verbs (TR-086), and no dependent view auto-updatable around the revoke |
 
 ### Gap disclosure record (TR-063, Principle VII)
 
@@ -618,6 +659,7 @@ Each gap above is a scope decision, not an oversight. The covering test makes it
 | G-8 | Build-time test failure. At runtime a corpus can hold two vector spaces; retrieval refuses to serve on a detected mismatch rather than returning distances computed across both | Chunks with disagreeing `embedding_model_id` or `embedding_model_revision` are found in one corpus | Model identity and revision promoted to a one-row corpus table and carried into the chunk by composite foreign key, making a second space unrepresentable |
 | G-9 | Build-time test failure in E006's loader. At runtime a manifest key outside the declared format is rejected by `ck_document__id_format`, so the load fails rather than storing an unresolvable citation | E002 freezes a key space that does not match `^[a-z0-9]+(-[a-z0-9]+)*$` at 3–128 characters | Forward migration updating `document_id` in place, cascading to `chunk.document_id` through `ON UPDATE CASCADE`; extracted-value citations reference `chunk_id` and are untouched, so no reload of loaded rows is required (TR-078) |
 | G-10 | Build-time test failure in E010's reader. At runtime an unrecognised version must make the reader report no usable forecast rather than read array offsets under an assumed layout (TR-064) | A reader is found reading arrays under a version it does not recognise | Reader-side version gate promoted to a shared contract test run against every consumer of the artifact, not only E010 |
+| G-11 | Build-time test failure if the revoke is undone. At runtime the guarantee is **latent, not active**: the six refusals are facts about `procurement_app`, and the deployed process connects as the superuser `procurement`, which bypasses them. So today TR-084 is enforced against the role the application is *intended* to use and not against the one it *does* use, and an in-place edit of a stored citation, page, confidence, or outcome — or a deletion of contributor rows that silently truncates a citation set — remains possible for the connecting role exactly as it was before `0009`. Nothing degrades silently — the privilege fact is real and asserted, and only its reach is short. TR-084 must not be reported as fully enforced in the deployed configuration | The application's connection role changes: `DATABASE_URL` names a non-superuser, or `docker-compose.yml` is unfrozen and provisions one. At that point the revoke becomes operative with no schema change — the follow-on migration grants `procurement_app` `LOGIN` and nothing else moves. The reversal also fires the other way: if `procurement` ever loses SUPERUSER, `test_set_local_role_genuinely_drops_superuser_status` fails and points here | Role separation at provisioning — the application connects as `procurement_app` with its own credential, `procurement` is reserved for migrations, and the superuser is used for neither. That is the arrangement `0009` is written against, which is why its grants are authored now rather than deferred to the epic that changes the connection: the schema-side half is done and reviewable, and what remains is one line of deployment configuration outside this epic's boundary |
 
 ## Scale Assumptions
 
@@ -663,7 +705,7 @@ Each gap above is a scope decision, not an oversight. The covering test makes it
 | TR-034 | `resolved_entity`, `resolved_entity_member` |
 | TR-035 | `uq_rem__extracted_value`, `uq_rem__po_line` |
 | TR-036 | Object set above contains no model-invocation, response-fixture, price-table-version, candidate-pair, review-queue, or criticality-override table |
-| TR-037 | No Compose change implied; the migration job builds from `/src/model` under the existing `jobs` profile |
+| TR-037 | `docker-compose.yml` unchanged entirely — no service added. Migrations run as the `migrate` console entry point on the modeling entry (ADR-0011); there is no migration job, no image, and no build context |
 | TR-039 | **Range / Domain Checks and Their Paired NOT NULL** + **Nullable-Column Checks** |
 | TR-040 | `forecast_run.draw_serialization`, `artifact_hash bytea`, `line_posterior.draw_digest bytea` |
 | TR-041, TR-046 | `document` table, `ck_document__id_format`, `fk_chunk__document` |
@@ -697,15 +739,15 @@ Each gap above is a scope decision, not an oversight. The covering test makes it
 | TR-072 | `ck_line_posterior__survival_length` |
 | TR-073 | `fk_line_posterior__run_shape` + `uq_forecast_run__shape` (**Length enforcement chain**) |
 | TR-074 | `document.project_id` NOT NULL + `uq_document__id_type_project` |
-| TR-075 | `document.source_kind`, `.license_basis` on every row; `.source_ref`, `.issuing_body`, `.retrieval_date` REAL-only; generator columns SYNTHETIC-only — each layer's fields rejected on the other |
-| TR-087 | `document.generator_id`, `.generation_seed`, `.generated_at`, `.fixture_hashes`, guarded by `ck_document__synthetic_has_*` / `ck_document__real_has_no_*`; `fn_all_sha256_prefixed` |
+| TR-075 | `document.source_kind`, `.license_basis` on every row; `.source_ref`, `.issuing_body`, `.retrieval_date` REAL-only; generator columns and `.roster_hash` SYNTHETIC-only — each layer's fields rejected on the other |
+| TR-087 | `document.generator_id`, `.generation_seed`, `.generated_at`, `.fixture_hashes`, `.roster_hash`, guarded by `ck_document__synthetic_has_*` / `ck_document__real_has_no_*`; `fn_all_sha256_prefixed` |
 | TR-076 | **Declared Constants → Direction of authority** |
 | TR-077 | `ck_document__id_format` + gap disclosure record G-9 |
 | TR-079 | Seeded Data — migrations `0002` and `0005`; `fk_extracted_value__field ON DELETE RESTRICT` |
 | TR-080 | `forecast_run.as_of_date`; no age column by design |
 | TR-082 | `extracted_value.extracted_at` as the only per-row temporal fact; no agent column by design |
 | TR-083 | This document — every table, column, constraint, index, and seeded row above is normative |
-| TR-084, TR-085 | **Referential Actions** — `RESTRICT` on every citation edge; no delete or update path declared for provenance rows |
+| TR-084, TR-085 | **Referential Actions** — `RESTRICT` on every citation edge; no delete or update path declared for provenance rows. Migration `0009` revokes `UPDATE` and `DELETE` from `procurement_app` on **all three** provenance tables — `extracted_value`, `extracted_value_contributing_chunk`, `extraction_failure` — leaving `SELECT` and `INSERT`; the migration role retains both verbs (TR-086). Reach disclosed as **G-11** |
 
 <details><summary>ER Diagram (visual reference)</summary>
 
