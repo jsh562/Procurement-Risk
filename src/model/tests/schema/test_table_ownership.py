@@ -6,8 +6,8 @@ sits at the end of the chain. Both are boundary claims -- they are about what is
 inside any one table's test file.
 
 * **TR-036 / SC-017 -- six named tables belong to other epics and must not
-  appear here.** E003 owns the core schema; E004 owns model invocation and its
-  fixtures and the price table, E009 owns candidate pairing and the review
+  appear here.** E003 owns the core schema; E004 owns the invocation record and
+  the two price tables, E009 owns candidate pairing and the review
   queue, E017 owns criticality overrides. Each is asserted **by name**, not by
   an ownership predicate. A predicate ("no table outside the documented set")
   would be a weaker claim wearing a stronger one's clothes: it fails only once
@@ -60,9 +60,9 @@ DATA_MODEL_PATH = REPO_ROOT / "specs" / "00003-core-data-schema" / "data-model.m
 #: TR-036 / SC-017. Named, with the epic each belongs to, because the point of
 #: the requirement is the ownership boundary and not merely a count of tables.
 OTHER_EPIC_TABLES: dict[str, str] = {
-    "model_invocation": "E004 — model invocation records",
-    "response_fixture": "E004 — recorded provider responses",
+    "llm_invocation": "E004 — model invocation records",
     "price_table_version": "E004 — provider price table versions",
+    "price_table_entry": "E004 — dated rates within a price table version",
     "candidate_pair": "E009 — entity-resolution candidates awaiting adjudication",
     "review_queue": "E009 — pairs routed to human review",
     "criticality_override": "E017 — per-line criticality overrides",
