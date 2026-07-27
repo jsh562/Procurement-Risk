@@ -59,8 +59,10 @@ class TestTheComplementFailsAllFourClauses:
             )
             assert not (integral_in_range and line.unit_of_measure == OVERLAP_UNIT)
 
-    def test_the_complement_fails_the_catalog_clauses_too(self) -> None:
+    def test_the_complement_fails_the_catalog_clauses_by_category_mismatch(self) -> None:
+        """Not by absence — both fields are present, as NOT NULL requires."""
         for line in _mixed(0, 200):
+            assert line.manufacturer and line.part_number
             assert not is_catalog_overlapping(line)
 
 

@@ -79,10 +79,29 @@ class EquipmentError(ValueError):
 class LineEquipment:
     material_category: str
     description: str
-    manufacturer: str | None
-    part_number: str | None
+    manufacturer: str
+    part_number: str
     quantity: Decimal
     unit_of_measure: str
+
+
+def _mismatched_key(generator: np.random.Generator, material_category: str) -> str:
+    """A catalog key that does **not** list `material_category`.
+
+    Chosen from the catalog rather than invented, so FR-037 holds on every line.
+    Refuses if every manufacturer makes this category: the complement would then
+    be indistinguishable from the overlapping population on clauses 5–6, and a
+    share that cannot fall below its floor is not a measurement.
+    """
+    making = set(manufacturers_for_category(material_category))
+    candidates = tuple(key for key in sorted(MANUFACTURERS) if key not in making)
+    if not candidates:
+        raise EquipmentError(
+            f"every manufacturer in the catalog makes {material_category!r}, so no "
+            f"category-mismatched entry exists and the catalog-overlap share could not "
+            f"fall below its floor for this category"
+        )
+    return candidates[int(generator.integers(0, len(candidates)))]
 
 
 def _title_case(category: str) -> str:
@@ -127,8 +146,20 @@ def draw_equipment(
         # Outside clause 3 on both legs: a non-integer quantity or a non-EA unit.
         quantity = (Decimal(int(generator.integers(70, 4800))) / 10).quantize(Decimal("0.1"))
         unit = UNITS_OF_MEASURE[1 + int(generator.integers(0, len(UNITS_OF_MEASURE) - 1))]
-        manufacturer = None
-        part_number = None
+
+        # **The complement still carries both fields.** They are drawn from the
+        # catalog — FR-037 admits no exception — but from an entry that does
+        # *not* make this category, so clause 5 fails and the catalog-overlap
+        # share stays falsifiable.
+        #
+        # Leaving them NULL would be simpler and is what an earlier draft of
+        # `data-model.md` said to do. It is not available: the delivered schema
+        # declares `manufacturer` and `part_number` NOT NULL, and DV-004 requires
+        # all six descriptive fields present and non-blank. A complement of NULLs
+        # would have been refused at load, after the artifact was committed.
+        key = _mismatched_key(generator, material_category)
+        manufacturer = MANUFACTURERS[key].canonical_name
+        part_number = format_part_number(key, int(generator.integers(0, 100_000)))
 
     return LineEquipment(material_category, description, manufacturer, part_number, quantity, unit)
 

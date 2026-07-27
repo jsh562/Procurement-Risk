@@ -120,19 +120,19 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 **Independent test**: load the committed fixture into an empty migrated database, load it again, and confirm both row counts and row contents are unchanged. **No task in this phase is `[P]`** — every integration task drives the one live PostgreSQL on `${PRC_DB_PORT:-5434}`, and the file-level `[P]` rule does not model a shared resource.
 
-- [ ] T038 [US2] {FR-023,FR-027} Implement the load pre-flight in PKG/load.py — one `REPEATABLE READ` txn, `SET LOCAL TimeZone='UTC'`, both digests rechecked, `COPY` into `TEMP` staging after:T037
-- [ ] T039 [US2] {FR-002,FR-023,FR-029} Compute the load-derived values in PKG/load.py — both `uuid5` keys, the five derived fields, `note` NULL, `roster_hash` from the envelope ← T005:NS_E005
-- [ ] T040 [US2] {FR-025,FR-026,FR-030} Reconcile with `EXCEPT ALL` both ways over the 17-field line and 6-field event projection in PKG/load.py — skip, refuse-divergence, refuse-superset after:T039
-- [ ] T041 [US2] {FR-023,FR-024,FR-029} Insert lines first, then events ascending by `(po_line_id, sequence_no)`, naming no `GENERATED`/`DEFAULT` column, then commit, in PKG/load.py after:T040
-- [ ] T042 [US2] {FR-026} Wire the `procurement-load` entry — non-zero exits naming the diverging or extra keys, plus the rowcount concurrency guard — in PKG/load.py after:T041 → exports: main()
-- [ ] T043 [US2] {FR-023} SC-008 — load into an empty migrated database, every delivered constraint enforced, none disabled (DV-004, DV-005, DV-007 at load) — TST/test_load_integration.py after:T042
-- [ ] T044 [US2] {FR-025} SC-009 — a reload changes no count and no content over the stated projection, `created_at` excluded (DV-022) — TST/test_load_idempotency.py after:T042
-- [ ] T045 [US2] {FR-026} Prove `EXCEPT`'s not-distinct NULL semantics over `closing_event_id`, `from_state` and `note`, both directions — TST/test_load_null_semantics.py after:T042
-- [ ] T046 [US2] {FR-029} [COMPLETES FR-029] SC-011 — terminal lines closed and naming their event, others open and indexed, invariant holding at commit — TST/test_load_closure.py after:T042
-- [ ] T047 [US2] {FR-024} SC-030 — events insert in ascending `sequence_no`, the non-deferrable chain FK satisfied at every statement, not only at commit — TST/test_load_ordering.py after:T042
-- [ ] T048 [US2] {FR-023} [COMPLETES FR-023] SC-031 — one project and vendor per PO, `occurred_at` increasing, no instant past as-of (DV-003, DV-008) — TST/test_load_cross_row.py after:T042
-- [ ] T049 [US2] {FR-026,FR-030} [COMPLETES FR-026] **NC-9** — both refusals leave the database unchanged, no row inserted first (DV-027) — TST/test_load_refusal_controls.py after:T042
-- [ ] T050 [US2] {FR-027} **NC-4** integration half — a mutated roster and a mutated category map each refuse the load naming that input (DV-016) — TST/test_load_input_drift.py after:T042
+- [X] T038 [US2] {FR-023,FR-027} Implement the load pre-flight in PKG/load.py — one `REPEATABLE READ` txn, `SET LOCAL TimeZone='UTC'`, both digests rechecked, `COPY` into `TEMP` staging after:T037
+- [X] T039 [US2] {FR-002,FR-023,FR-029} Compute the load-derived values in PKG/load.py — both `uuid5` keys, the five derived fields, `note` NULL, `roster_hash` from the envelope ← T005:NS_E005
+- [X] T040 [US2] {FR-025,FR-026,FR-030} Reconcile with `EXCEPT ALL` both ways over the 17-field line and 6-field event projection in PKG/load.py — skip, refuse-divergence, refuse-superset after:T039
+- [X] T041 [US2] {FR-023,FR-024,FR-029} Insert lines first, then events ascending by `(po_line_id, sequence_no)`, naming no `GENERATED`/`DEFAULT` column, then commit, in PKG/load.py after:T040
+- [X] T042 [US2] {FR-026} Wire the `procurement-load` entry — non-zero exits naming the diverging or extra keys, plus the rowcount concurrency guard — in PKG/load.py after:T041 → exports: main()
+- [X] T043 [US2] {FR-023} SC-008 — load into an empty migrated database, every delivered constraint enforced, none disabled (DV-004, DV-005, DV-007 at load) — TST/test_load_integration.py after:T042
+- [X] T044 [US2] {FR-025} SC-009 — a reload changes no count and no content over the stated projection, `created_at` excluded (DV-022) — TST/test_load_idempotency.py after:T042
+- [X] T045 [US2] {FR-026} Prove `EXCEPT`'s not-distinct NULL semantics over `closing_event_id`, `from_state` and `note`, both directions — TST/test_load_null_semantics.py after:T042
+- [X] T046 [US2] {FR-029} [COMPLETES FR-029] SC-011 — terminal lines closed and naming their event, others open and indexed, invariant holding at commit — TST/test_load_closure.py after:T042
+- [X] T047 [US2] {FR-024} SC-030 — events insert in ascending `sequence_no`, the non-deferrable chain FK satisfied at every statement, not only at commit — TST/test_load_ordering.py after:T042
+- [X] T048 [US2] {FR-023} [COMPLETES FR-023] SC-031 — one project and vendor per PO, `occurred_at` increasing, no instant past as-of (DV-003, DV-008) — TST/test_load_cross_row.py after:T042
+- [X] T049 [US2] {FR-026,FR-030} [COMPLETES FR-026] **NC-9** — both refusals leave the database unchanged, no row inserted first (DV-027) — TST/test_load_refusal_controls.py after:T042
+- [X] T050 [US2] {FR-027} **NC-4** integration half — a mutated roster and a mutated category map each refuse the load naming that input (DV-016) — TST/test_load_input_drift.py after:T042
 
 ---
 

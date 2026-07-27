@@ -75,10 +75,17 @@ class TestCatalogDraw:
         for line in _draw(True):
             assert PART_NUMBER_PATTERN.match(line.part_number)
 
-    def test_the_complement_leaves_both_fields_null(self) -> None:
+    def test_the_complement_still_carries_both_fields(self) -> None:
+        """NOT NULL in the delivered schema, and DV-004 requires all six present.
+        The complement fails clause 5 by category mismatch, not by absence."""
         for line in _draw(False):
-            assert line.manufacturer is None
-            assert line.part_number is None
+            assert line.manufacturer
+            assert line.part_number
+
+    def test_the_complement_s_manufacturer_does_not_make_its_category(self) -> None:
+        for line in _draw(False):
+            key = next(k for k, e in MANUFACTURERS.items() if e.canonical_name == line.manufacturer)
+            assert line.material_category not in MANUFACTURERS[key].categories
 
     def test_no_catalog_content_is_restated_in_source(self) -> None:
         """The catalog is read, so a canonical name must not appear as a literal.

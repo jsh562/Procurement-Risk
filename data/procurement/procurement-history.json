@@ -2681,7 +2681,7 @@
       "vendor_id": "VND-001"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Heating Boiler (Tag 402-18)",
       "events": [
         {
@@ -2738,7 +2738,7 @@
       "vendor_id": "VND-001"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Heating Boiler (Tag 301-32)",
       "events": [
         {
@@ -4126,7 +4126,7 @@
       "vendor_id": "VND-005"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Water Chiller (Tag 303-26)",
       "events": [
         {
@@ -5553,7 +5553,7 @@
       "vendor_id": "VND-003"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Water Chiller (Tag 301-18)",
       "events": [
         {
@@ -7571,26 +7571,73 @@
       "vendor_id": "VND-004"
     },
     {
-      "criticality": 3,
+      "criticality": 5,
       "description": "Primary Unit Substation — replacement module",
       "events": [
         {
-          "occurred_at": "2025-11-14T00:00:00Z",
+          "occurred_at": "2025-09-04T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-11-18T00:00:00Z",
+          "occurred_at": "2025-09-07T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-11-23T00:00:00Z",
+          "occurred_at": "2025-10-01T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-12-03T00:00:00Z",
+          "occurred_at": "2025-10-02T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-10-22T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-02T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Halvard Climate",
+      "material_category": "PRIMARY_UNIT_SUBSTATION",
+      "need_by_date": "2025-11-26",
+      "order_date": "2025-09-04",
+      "part_number": "HVD-59581",
+      "po_number": "PO-004-0015",
+      "project_id": "PRJ-004",
+      "quantity": "269.7",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-004"
+    },
+    {
+      "criticality": 2,
+      "description": "Pad Mounted Transformer — spare unit",
+      "events": [
+        {
+          "occurred_at": "2025-10-29T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-11-01T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-03T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-11-07T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
@@ -7605,59 +7652,12 @@
           "to_state": "delivered"
         }
       ],
-      "line_number": 2,
-      "manufacturer": null,
-      "material_category": "PRIMARY_UNIT_SUBSTATION",
-      "need_by_date": "2026-02-18",
-      "order_date": "2025-11-14",
-      "part_number": null,
-      "po_number": "PO-004-0015",
-      "project_id": "PRJ-004",
-      "quantity": "269.7",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-004"
-    },
-    {
-      "criticality": 3,
-      "description": "Pad Mounted Transformer — spare unit",
-      "events": [
-        {
-          "occurred_at": "2025-10-03T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-10-11T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-10-17T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-10-18T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-11-08T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-11-18T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
       "line_number": 3,
-      "manufacturer": null,
+      "manufacturer": "Emberdyne Controls",
       "material_category": "PAD_MOUNTED_TRANSFORMER",
-      "need_by_date": "2025-12-17",
-      "order_date": "2025-10-03",
-      "part_number": null,
+      "need_by_date": "2026-01-17",
+      "order_date": "2025-10-29",
+      "part_number": "EMD-42772",
       "po_number": "PO-004-0015",
       "project_id": "PRJ-004",
       "quantity": "245.5",
@@ -7665,46 +7665,46 @@
       "vendor_id": "VND-004"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Generator Assembly — site standby",
       "events": [
         {
-          "occurred_at": "2025-10-04T00:00:00Z",
+          "occurred_at": "2025-09-26T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-10-08T00:00:00Z",
+          "occurred_at": "2025-10-01T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-10-16T00:00:00Z",
+          "occurred_at": "2025-10-24T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-10-25T00:00:00Z",
+          "occurred_at": "2025-10-26T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-11-06T00:00:00Z",
+          "occurred_at": "2025-11-13T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-11-12T00:00:00Z",
+          "occurred_at": "2025-12-01T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Halvard Climate",
       "material_category": "GENERATOR_ASSEMBLY",
-      "need_by_date": "2026-01-13",
-      "order_date": "2025-10-04",
-      "part_number": null,
+      "need_by_date": "2025-12-24",
+      "order_date": "2025-09-26",
+      "part_number": "HVD-52605",
       "po_number": "PO-004-0016",
       "project_id": "PRJ-004",
       "quantity": "129.2",
@@ -7712,46 +7712,46 @@
       "vendor_id": "VND-004"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Primary Unit Substation — phase two allowance",
       "events": [
         {
-          "occurred_at": "2025-06-16T00:00:00Z",
+          "occurred_at": "2025-11-10T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-06-25T00:00:00Z",
+          "occurred_at": "2025-11-13T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-07-01T00:00:00Z",
+          "occurred_at": "2025-11-23T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-07-05T00:00:00Z",
+          "occurred_at": "2025-11-27T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-07-28T00:00:00Z",
+          "occurred_at": "2025-12-01T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-07-29T00:00:00Z",
+          "occurred_at": "2025-12-21T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Ashvale Industrial",
       "material_category": "PRIMARY_UNIT_SUBSTATION",
-      "need_by_date": "2025-09-28",
-      "order_date": "2025-06-16",
-      "part_number": null,
+      "need_by_date": "2026-02-07",
+      "order_date": "2025-11-10",
+      "part_number": "ASH-58794",
       "po_number": "PO-004-0017",
       "project_id": "PRJ-004",
       "quantity": "159.8",
@@ -7759,16 +7759,16 @@
       "vendor_id": "VND-005"
     },
     {
-      "criticality": 3,
+      "criticality": 4,
       "description": "Static Uninterruptible Power Supply — site standby",
       "events": [
         {
-          "occurred_at": "2025-10-24T00:00:00Z",
+          "occurred_at": "2025-10-29T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-11-01T00:00:00Z",
+          "occurred_at": "2025-10-31T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
@@ -7778,12 +7778,12 @@
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-11-07T00:00:00Z",
+          "occurred_at": "2025-11-09T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-11-30T00:00:00Z",
+          "occurred_at": "2025-12-02T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
@@ -7794,11 +7794,11 @@
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Pyrelan Thermal",
       "material_category": "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY",
-      "need_by_date": "2026-01-07",
-      "order_date": "2025-10-24",
-      "part_number": null,
+      "need_by_date": "2026-01-05",
+      "order_date": "2025-10-29",
+      "part_number": "PYR-27703",
       "po_number": "PO-004-0018",
       "project_id": "PRJ-004",
       "quantity": "31.7",
@@ -7806,46 +7806,46 @@
       "vendor_id": "VND-005"
     },
     {
-      "criticality": 5,
+      "criticality": 3,
       "description": "Medium Voltage Switchgear — phase two allowance",
       "events": [
         {
-          "occurred_at": "2025-06-18T00:00:00Z",
+          "occurred_at": "2025-09-10T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-07-06T00:00:00Z",
+          "occurred_at": "2025-09-23T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-07-27T00:00:00Z",
+          "occurred_at": "2025-09-28T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-07-29T00:00:00Z",
+          "occurred_at": "2025-10-03T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-08-29T00:00:00Z",
+          "occurred_at": "2025-12-20T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-09-22T00:00:00Z",
+          "occurred_at": "2025-12-22T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 2,
-      "manufacturer": null,
+      "manufacturer": "Ashvale Industrial",
       "material_category": "MEDIUM_VOLTAGE_SWITCHGEAR",
-      "need_by_date": "2025-09-07",
-      "order_date": "2025-06-18",
-      "part_number": null,
+      "need_by_date": "2025-12-19",
+      "order_date": "2025-09-10",
+      "part_number": "ASH-64715",
       "po_number": "PO-004-0018",
       "project_id": "PRJ-004",
       "quantity": "306.0",
@@ -7857,42 +7857,42 @@
       "description": "Secondary Unit Substation — replacement module",
       "events": [
         {
-          "occurred_at": "2025-10-24T00:00:00Z",
+          "occurred_at": "2025-06-23T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-10-27T00:00:00Z",
+          "occurred_at": "2025-06-25T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-10-30T00:00:00Z",
+          "occurred_at": "2025-06-27T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-10-31T00:00:00Z",
+          "occurred_at": "2025-07-02T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-12-01T00:00:00Z",
+          "occurred_at": "2025-08-24T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-12-17T00:00:00Z",
+          "occurred_at": "2025-08-29T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Halvard Climate",
       "material_category": "SECONDARY_UNIT_SUBSTATION",
-      "need_by_date": "2026-01-24",
-      "order_date": "2025-10-24",
-      "part_number": null,
+      "need_by_date": "2025-09-26",
+      "order_date": "2025-06-23",
+      "part_number": "HVD-94635",
       "po_number": "PO-004-0019",
       "project_id": "PRJ-004",
       "quantity": "204.9",
@@ -7904,42 +7904,42 @@
       "description": "Secondary Unit Substation — replacement module",
       "events": [
         {
-          "occurred_at": "2025-10-18T00:00:00Z",
+          "occurred_at": "2025-09-03T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-10-21T00:00:00Z",
+          "occurred_at": "2025-09-08T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-10-30T00:00:00Z",
+          "occurred_at": "2025-09-19T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-11-04T00:00:00Z",
+          "occurred_at": "2025-09-30T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-01-04T00:00:00Z",
+          "occurred_at": "2025-10-09T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2026-01-07T00:00:00Z",
+          "occurred_at": "2025-10-15T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Halvard Climate",
       "material_category": "SECONDARY_UNIT_SUBSTATION",
-      "need_by_date": "2026-01-20",
-      "order_date": "2025-10-18",
-      "part_number": null,
+      "need_by_date": "2025-12-09",
+      "order_date": "2025-09-03",
+      "part_number": "HVD-33558",
       "po_number": "PO-004-0020",
       "project_id": "PRJ-004",
       "quantity": "187.9",
@@ -7951,27 +7951,74 @@
       "description": "Heating Boiler — phase two allowance",
       "events": [
         {
-          "occurred_at": "2025-08-04T00:00:00Z",
+          "occurred_at": "2025-09-05T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-08-09T00:00:00Z",
+          "occurred_at": "2025-09-11T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-08-19T00:00:00Z",
+          "occurred_at": "2025-09-15T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-08-21T00:00:00Z",
+          "occurred_at": "2025-09-19T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-09-13T00:00:00Z",
+          "occurred_at": "2025-09-30T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-10-06T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Brackenlowe Power Systems",
+      "material_category": "HEATING_BOILER",
+      "need_by_date": "2025-12-07",
+      "order_date": "2025-09-05",
+      "part_number": "BKL-07083",
+      "po_number": "PO-004-0021",
+      "project_id": "PRJ-004",
+      "quantity": "120.3",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-006"
+    },
+    {
+      "criticality": 2,
+      "description": "Circuit Protective Device — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-07-22T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-07-27T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-08-07T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-08-18T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-09-01T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
@@ -7982,58 +8029,11 @@
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
-      "material_category": "HEATING_BOILER",
-      "need_by_date": "2025-11-07",
-      "order_date": "2025-08-04",
-      "part_number": null,
-      "po_number": "PO-004-0021",
-      "project_id": "PRJ-004",
-      "quantity": "120.3",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-006"
-    },
-    {
-      "criticality": 1,
-      "description": "Circuit Protective Device — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-07-11T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-14T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-07-22T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-07-26T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-09-26T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-09-30T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Ashvale Industrial",
       "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
-      "need_by_date": "2025-09-11",
-      "order_date": "2025-07-11",
-      "part_number": null,
+      "need_by_date": "2025-09-13",
+      "order_date": "2025-07-22",
+      "part_number": "ASH-91760",
       "po_number": "PO-004-0022",
       "project_id": "PRJ-004",
       "quantity": "419.4",
@@ -8041,800 +8041,16 @@
       "vendor_id": "VND-007"
     },
     {
-      "criticality": 5,
+      "criticality": 3,
       "description": "Water Chiller — site standby",
       "events": [
         {
-          "occurred_at": "2025-11-01T00:00:00Z",
+          "occurred_at": "2025-11-23T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-11-10T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-11-16T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-11-20T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-12-11T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-01-06T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "WATER_CHILLER",
-      "need_by_date": "2026-01-26",
-      "order_date": "2025-11-01",
-      "part_number": null,
-      "po_number": "PO-004-0023",
-      "project_id": "PRJ-004",
-      "quantity": "439.5",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-007"
-    },
-    {
-      "criticality": 4,
-      "description": "Low Voltage Switchgear — commissioning spare",
-      "events": [
-        {
-          "occurred_at": "2025-11-09T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-11-15T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-11-18T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-11-20T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
         },
         {
           "occurred_at": "2025-11-30T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-12-03T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 2,
-      "manufacturer": null,
-      "material_category": "LOW_VOLTAGE_SWITCHGEAR",
-      "need_by_date": "2026-01-24",
-      "order_date": "2025-11-09",
-      "part_number": null,
-      "po_number": "PO-004-0023",
-      "project_id": "PRJ-004",
-      "quantity": "63.8",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-007"
-    },
-    {
-      "criticality": 4,
-      "description": "Generator Assembly — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-08-29T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-09-03T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-11-08T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-11-10T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-01-18T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-01-25T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "GENERATOR_ASSEMBLY",
-      "need_by_date": "2025-12-07",
-      "order_date": "2025-08-29",
-      "part_number": null,
-      "po_number": "PO-004-0024",
-      "project_id": "PRJ-004",
-      "quantity": "95.4",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-008"
-    },
-    {
-      "criticality": 1,
-      "description": "Circuit Protective Device — commissioning spare",
-      "events": [
-        {
-          "occurred_at": "2025-10-30T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-11-01T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-11-06T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-11-11T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-11-15T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-11-26T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
-      "need_by_date": "2025-12-28",
-      "order_date": "2025-10-30",
-      "part_number": null,
-      "po_number": "PO-004-0025",
-      "project_id": "PRJ-004",
-      "quantity": "290.1",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-008"
-    },
-    {
-      "criticality": 4,
-      "description": "Energy Recovery Unit — spare unit",
-      "events": [
-        {
-          "occurred_at": "2026-01-02T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2026-01-18T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2026-01-31T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-02-18T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-03-17T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        }
-      ],
-      "line_number": 2,
-      "manufacturer": null,
-      "material_category": "ENERGY_RECOVERY_UNIT",
-      "need_by_date": "2026-03-15",
-      "order_date": "2026-01-02",
-      "part_number": null,
-      "po_number": "PO-004-0025",
-      "project_id": "PRJ-004",
-      "quantity": "180.1",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-008"
-    },
-    {
-      "criticality": 4,
-      "description": "Water Chiller — replacement module",
-      "events": [
-        {
-          "occurred_at": "2026-02-04T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2026-02-20T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2026-02-26T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-03-03T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "WATER_CHILLER",
-      "need_by_date": "2026-05-18",
-      "order_date": "2026-02-04",
-      "part_number": null,
-      "po_number": "PO-004-0026",
-      "project_id": "PRJ-004",
-      "quantity": "428.4",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-009"
-    },
-    {
-      "criticality": 5,
-      "description": "Water Chiller — phase two allowance",
-      "events": [
-        {
-          "occurred_at": "2026-01-20T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2026-02-02T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2026-02-09T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-02-16T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-03-04T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-03-09T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "WATER_CHILLER",
-      "need_by_date": "2026-04-21",
-      "order_date": "2026-01-20",
-      "part_number": null,
-      "po_number": "PO-004-0027",
-      "project_id": "PRJ-004",
-      "quantity": "333.1",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-009"
-    },
-    {
-      "criticality": 3,
-      "description": "Low Voltage Transformer — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-07-28T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-29T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-08-18T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-08-20T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-08-29T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-09-04T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "LOW_VOLTAGE_TRANSFORMER",
-      "need_by_date": "2025-09-18",
-      "order_date": "2025-07-28",
-      "part_number": null,
-      "po_number": "PO-004-0028",
-      "project_id": "PRJ-004",
-      "quantity": "48.3",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-010"
-    },
-    {
-      "criticality": 4,
-      "description": "Medium Voltage Switchgear — spare unit",
-      "events": [
-        {
-          "occurred_at": "2025-12-30T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2026-01-01T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2026-01-11T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-01-16T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-02-03T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-03-01T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "MEDIUM_VOLTAGE_SWITCHGEAR",
-      "need_by_date": "2026-04-19",
-      "order_date": "2025-12-30",
-      "part_number": null,
-      "po_number": "PO-004-0029",
-      "project_id": "PRJ-004",
-      "quantity": "26.9",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-011"
-    },
-    {
-      "criticality": 4,
-      "description": "Water Chiller — commissioning spare",
-      "events": [
-        {
-          "occurred_at": "2025-07-11T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-15T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-07-24T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-07-29T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-10-12T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-10-20T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "WATER_CHILLER",
-      "need_by_date": "2025-10-30",
-      "order_date": "2025-07-11",
-      "part_number": null,
-      "po_number": "PO-004-0030",
-      "project_id": "PRJ-004",
-      "quantity": "432.2",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-011"
-    },
-    {
-      "criticality": 1,
-      "description": "Circuit Protective Device — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-09-17T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-09-20T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-09-26T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-10-06T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-10-15T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-10-22T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
-      "need_by_date": "2025-11-27",
-      "order_date": "2025-09-17",
-      "part_number": null,
-      "po_number": "PO-004-0031",
-      "project_id": "PRJ-004",
-      "quantity": "459.4",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-012"
-    },
-    {
-      "criticality": 4,
-      "description": "Switchboard — spare unit",
-      "events": [
-        {
-          "occurred_at": "2025-07-04T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-12T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-08-14T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-08-19T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-08-28T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-08-30T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "SWITCHBOARD",
-      "need_by_date": "2025-09-04",
-      "order_date": "2025-07-04",
-      "part_number": null,
-      "po_number": "PO-005-0001",
-      "project_id": "PRJ-005",
-      "quantity": "50.3",
-      "unit_of_measure": "LF",
-      "vendor_id": "VND-001"
-    },
-    {
-      "criticality": 4,
-      "description": "Water Chiller — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-12-09T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-12-11T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-12-27T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-12-30T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-02-01T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-02-07T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "WATER_CHILLER",
-      "need_by_date": "2026-02-23",
-      "order_date": "2025-12-09",
-      "part_number": null,
-      "po_number": "PO-005-0002",
-      "project_id": "PRJ-005",
-      "quantity": "316.6",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-001"
-    },
-    {
-      "criticality": 3,
-      "description": "Computer Room Air Conditioner — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-07-26T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-30T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-08-08T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-08-09T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-08-20T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-08-27T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 2,
-      "manufacturer": null,
-      "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
-      "need_by_date": "2025-09-29",
-      "order_date": "2025-07-26",
-      "part_number": null,
-      "po_number": "PO-005-0002",
-      "project_id": "PRJ-005",
-      "quantity": "119.8",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-001"
-    },
-    {
-      "criticality": 2,
-      "description": "Circuit Protective Device — commissioning spare",
-      "events": [
-        {
-          "occurred_at": "2025-07-06T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-15T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-07-17T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-07-20T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-08-20T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-08-21T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
-      "need_by_date": "2025-08-18",
-      "order_date": "2025-07-06",
-      "part_number": null,
-      "po_number": "PO-005-0003",
-      "project_id": "PRJ-005",
-      "quantity": "268.5",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-001"
-    },
-    {
-      "criticality": 3,
-      "description": "Static Uninterruptible Power Supply — spare unit",
-      "events": [
-        {
-          "occurred_at": "2025-08-18T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-08-19T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-08-31T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-09-07T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-09-12T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-09-17T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY",
-      "need_by_date": "2025-10-23",
-      "order_date": "2025-08-18",
-      "part_number": null,
-      "po_number": "PO-005-0004",
-      "project_id": "PRJ-005",
-      "quantity": "390.5",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-001"
-    },
-    {
-      "criticality": 3,
-      "description": "Computer Room Air Conditioner — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-10-01T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-10-05T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-10-08T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-10-13T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-11-05T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-11-13T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 2,
-      "manufacturer": null,
-      "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
-      "need_by_date": "2025-12-03",
-      "order_date": "2025-10-01",
-      "part_number": null,
-      "po_number": "PO-005-0004",
-      "project_id": "PRJ-005",
-      "quantity": "345.7",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-001"
-    },
-    {
-      "criticality": 2,
-      "description": "Medium Voltage Cable — spare unit",
-      "events": [
-        {
-          "occurred_at": "2025-12-08T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-12-13T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
@@ -8849,519 +8065,49 @@
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-01-04T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-01-06T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "MEDIUM_VOLTAGE_CABLE",
-      "need_by_date": "2026-01-23",
-      "order_date": "2025-12-08",
-      "part_number": null,
-      "po_number": "PO-005-0005",
-      "project_id": "PRJ-005",
-      "quantity": "459.9",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-002"
-    },
-    {
-      "criticality": 4,
-      "description": "Cooling Tower — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-07-11T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-07-17T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-08-02T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-08-10T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-09-09T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-09-14T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "COOLING_TOWER",
-      "need_by_date": "2025-10-03",
-      "order_date": "2025-07-11",
-      "part_number": null,
-      "po_number": "PO-005-0006",
-      "project_id": "PRJ-005",
-      "quantity": "161.1",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-002"
-    },
-    {
-      "criticality": 3,
-      "description": "Low Voltage Transformer — phase two allowance",
-      "events": [
-        {
-          "occurred_at": "2025-08-25T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-08-27T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-09-06T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-09-08T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-09-20T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-09-23T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "LOW_VOLTAGE_TRANSFORMER",
-      "need_by_date": "2025-10-07",
-      "order_date": "2025-08-25",
-      "part_number": null,
-      "po_number": "PO-005-0007",
-      "project_id": "PRJ-005",
-      "quantity": "25.9",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-002"
-    },
-    {
-      "criticality": 5,
-      "description": "Water Chiller — commissioning spare",
-      "events": [
-        {
-          "occurred_at": "2025-12-05T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-12-09T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-12-27T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-01-01T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-01-06T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
           "occurred_at": "2026-01-12T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-18T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
-      "line_number": 2,
-      "manufacturer": null,
+      "line_number": 1,
+      "manufacturer": "Norhelm Transformer Works",
       "material_category": "WATER_CHILLER",
-      "need_by_date": "2026-02-16",
-      "order_date": "2025-12-05",
-      "part_number": null,
-      "po_number": "PO-005-0007",
-      "project_id": "PRJ-005",
-      "quantity": "8.0",
-      "unit_of_measure": "LF",
-      "vendor_id": "VND-002"
+      "need_by_date": "2026-03-16",
+      "order_date": "2025-11-23",
+      "part_number": "NRH-69691",
+      "po_number": "PO-004-0023",
+      "project_id": "PRJ-004",
+      "quantity": "439.5",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-007"
     },
     {
       "criticality": 4,
-      "description": "Generator Assembly — spare unit",
+      "description": "Low Voltage Switchgear — commissioning spare",
       "events": [
         {
-          "occurred_at": "2026-01-05T00:00:00Z",
+          "occurred_at": "2026-02-08T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-01-08T00:00:00Z",
+          "occurred_at": "2026-02-10T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-01-12T00:00:00Z",
+          "occurred_at": "2026-02-15T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-01-19T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-01-28T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-03-01T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "GENERATOR_ASSEMBLY",
-      "need_by_date": "2026-03-28",
-      "order_date": "2026-01-05",
-      "part_number": null,
-      "po_number": "PO-005-0008",
-      "project_id": "PRJ-005",
-      "quantity": "146.9",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-002"
-    },
-    {
-      "criticality": 3,
-      "description": "Energy Recovery Unit — commissioning spare",
-      "events": [
-        {
-          "occurred_at": "2026-01-20T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2026-01-25T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2026-01-26T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-01-27T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-02-13T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-02-22T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "ENERGY_RECOVERY_UNIT",
-      "need_by_date": "2026-04-02",
-      "order_date": "2026-01-20",
-      "part_number": null,
-      "po_number": "PO-005-0009",
-      "project_id": "PRJ-005",
-      "quantity": "147.8",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-003"
-    },
-    {
-      "criticality": 3,
-      "description": "Generator Assembly — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-09-24T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-10-05T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-10-10T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-10-13T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-10-27T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-10-30T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "GENERATOR_ASSEMBLY",
-      "need_by_date": "2025-12-28",
-      "order_date": "2025-09-24",
-      "part_number": null,
-      "po_number": "PO-005-0010",
-      "project_id": "PRJ-005",
-      "quantity": "134.9",
-      "unit_of_measure": "LOT",
-      "vendor_id": "VND-003"
-    },
-    {
-      "criticality": 2,
-      "description": "Medium Voltage Cable — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-08-19T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-08-23T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-08-29T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-08-30T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-09-07T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-09-10T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "MEDIUM_VOLTAGE_CABLE",
-      "need_by_date": "2025-10-06",
-      "order_date": "2025-08-19",
-      "part_number": null,
-      "po_number": "PO-005-0011",
-      "project_id": "PRJ-005",
-      "quantity": "95.0",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-003"
-    },
-    {
-      "criticality": 5,
-      "description": "Primary Unit Substation — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-11-22T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-11-23T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-11-25T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-11-28T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-02-03T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-02-11T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "PRIMARY_UNIT_SUBSTATION",
-      "need_by_date": "2026-02-12",
-      "order_date": "2025-11-22",
-      "part_number": null,
-      "po_number": "PO-005-0012",
-      "project_id": "PRJ-005",
-      "quantity": "274.0",
-      "unit_of_measure": "SET",
-      "vendor_id": "VND-003"
-    },
-    {
-      "criticality": 1,
-      "description": "Medium Voltage Cable — replacement module",
-      "events": [
-        {
-          "occurred_at": "2026-01-24T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2026-01-27T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
         },
         {
           "occurred_at": "2026-02-17T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2026-02-25T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-03-26T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-03-31T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 2,
-      "manufacturer": null,
-      "material_category": "MEDIUM_VOLTAGE_CABLE",
-      "need_by_date": "2026-03-16",
-      "order_date": "2026-01-24",
-      "part_number": null,
-      "po_number": "PO-005-0012",
-      "project_id": "PRJ-005",
-      "quantity": "38.5",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-003"
-    },
-    {
-      "criticality": 4,
-      "description": "Medium Voltage Switchgear — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-08-23T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-08-28T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-09-19T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-09-21T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-11-19T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-12-03T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "MEDIUM_VOLTAGE_SWITCHGEAR",
-      "need_by_date": "2025-11-20",
-      "order_date": "2025-08-23",
-      "part_number": null,
-      "po_number": "PO-005-0013",
-      "project_id": "PRJ-005",
-      "quantity": "166.9",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-004"
-    },
-    {
-      "criticality": 1,
-      "description": "Medium Voltage Cable — replacement module",
-      "events": [
-        {
-          "occurred_at": "2025-11-15T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-11-26T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-12-18T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-12-23T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
@@ -9371,34 +8117,447 @@
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2026-02-28T00:00:00Z",
+          "occurred_at": "2026-03-02T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Norhelm Transformer Works",
+      "material_category": "LOW_VOLTAGE_SWITCHGEAR",
+      "need_by_date": "2026-04-19",
+      "order_date": "2026-02-08",
+      "part_number": "NRH-96287",
+      "po_number": "PO-004-0023",
+      "project_id": "PRJ-004",
+      "quantity": "63.8",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-007"
+    },
+    {
+      "criticality": 4,
+      "description": "Generator Assembly — site standby",
+      "events": [
+        {
+          "occurred_at": "2025-08-16T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-09-25T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-09-29T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-10-11T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-05T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-12T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
-      "material_category": "MEDIUM_VOLTAGE_CABLE",
-      "need_by_date": "2026-01-08",
-      "order_date": "2025-11-15",
-      "part_number": null,
-      "po_number": "PO-005-0014",
-      "project_id": "PRJ-005",
-      "quantity": "340.6",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-004"
+      "manufacturer": "Emberdyne Controls",
+      "material_category": "GENERATOR_ASSEMBLY",
+      "need_by_date": "2025-11-27",
+      "order_date": "2025-08-16",
+      "part_number": "EMD-14836",
+      "po_number": "PO-004-0024",
+      "project_id": "PRJ-004",
+      "quantity": "95.4",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-008"
     },
     {
-      "criticality": 2,
-      "description": "Energy Recovery Unit — replacement module",
+      "criticality": 1,
+      "description": "Circuit Protective Device — commissioning spare",
       "events": [
         {
-          "occurred_at": "2025-11-03T00:00:00Z",
+          "occurred_at": "2025-10-13T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
+          "occurred_at": "2025-10-16T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-10-29T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-10-30T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-12-04T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-12-11T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Pyrelan Thermal",
+      "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
+      "need_by_date": "2025-12-11",
+      "order_date": "2025-10-13",
+      "part_number": "PYR-56455",
+      "po_number": "PO-004-0025",
+      "project_id": "PRJ-004",
+      "quantity": "290.1",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-008"
+    },
+    {
+      "criticality": 2,
+      "description": "Energy Recovery Unit — spare unit",
+      "events": [
+        {
+          "occurred_at": "2026-01-31T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-02-08T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-03-25T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-03-30T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Stillmere Hydronics",
+      "material_category": "ENERGY_RECOVERY_UNIT",
+      "need_by_date": "2026-05-03",
+      "order_date": "2026-01-31",
+      "part_number": "STM-93836",
+      "po_number": "PO-004-0025",
+      "project_id": "PRJ-004",
+      "quantity": "180.1",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-008"
+    },
+    {
+      "criticality": 4,
+      "description": "Water Chiller — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-11-19T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-11-23T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-12-05T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-12-12T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-01-10T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-17T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Wrenfield Air Systems",
+      "material_category": "WATER_CHILLER",
+      "need_by_date": "2026-02-26",
+      "order_date": "2025-11-19",
+      "part_number": "WRN-37839",
+      "po_number": "PO-004-0026",
+      "project_id": "PRJ-004",
+      "quantity": "428.4",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-009"
+    },
+    {
+      "criticality": 5,
+      "description": "Water Chiller — phase two allowance",
+      "events": [
+        {
+          "occurred_at": "2025-10-12T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-16T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-03T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
           "occurred_at": "2025-11-06T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-23T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-25T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Wrenfield Air Systems",
+      "material_category": "WATER_CHILLER",
+      "need_by_date": "2026-01-15",
+      "order_date": "2025-10-12",
+      "part_number": "WRN-97752",
+      "po_number": "PO-004-0027",
+      "project_id": "PRJ-004",
+      "quantity": "333.1",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-009"
+    },
+    {
+      "criticality": 2,
+      "description": "Low Voltage Transformer — site standby",
+      "events": [
+        {
+          "occurred_at": "2025-09-09T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-09-21T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-09-26T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-09-28T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-10-17T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-10-18T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Brackenlowe Power Systems",
+      "material_category": "LOW_VOLTAGE_TRANSFORMER",
+      "need_by_date": "2025-11-05",
+      "order_date": "2025-09-09",
+      "part_number": "BKL-85727",
+      "po_number": "PO-004-0028",
+      "project_id": "PRJ-004",
+      "quantity": "48.3",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-010"
+    },
+    {
+      "criticality": 5,
+      "description": "Medium Voltage Switchgear — spare unit",
+      "events": [
+        {
+          "occurred_at": "2025-08-05T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-08-11T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-08-24T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-08-27T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-20T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-27T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Stillmere Hydronics",
+      "material_category": "MEDIUM_VOLTAGE_SWITCHGEAR",
+      "need_by_date": "2025-11-16",
+      "order_date": "2025-08-05",
+      "part_number": "STM-84541",
+      "po_number": "PO-004-0029",
+      "project_id": "PRJ-004",
+      "quantity": "26.9",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-011"
+    },
+    {
+      "criticality": 4,
+      "description": "Water Chiller — commissioning spare",
+      "events": [
+        {
+          "occurred_at": "2025-07-13T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-07-19T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-08-01T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-08-14T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-09-10T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-09-18T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Ashvale Industrial",
+      "material_category": "WATER_CHILLER",
+      "need_by_date": "2025-11-02",
+      "order_date": "2025-07-13",
+      "part_number": "ASH-43043",
+      "po_number": "PO-004-0030",
+      "project_id": "PRJ-004",
+      "quantity": "432.2",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-011"
+    },
+    {
+      "criticality": 1,
+      "description": "Circuit Protective Device — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-10-14T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-18T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-11T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-11-13T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-12-08T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-12-17T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Norhelm Transformer Works",
+      "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
+      "need_by_date": "2025-12-22",
+      "order_date": "2025-10-14",
+      "part_number": "NRH-67219",
+      "po_number": "PO-004-0031",
+      "project_id": "PRJ-004",
+      "quantity": "459.4",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-012"
+    },
+    {
+      "criticality": 2,
+      "description": "Switchboard — spare unit",
+      "events": [
+        {
+          "occurred_at": "2025-10-05T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-25T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
@@ -9413,22 +8572,868 @@
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-12-06T00:00:00Z",
+          "occurred_at": "2025-11-17T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-12-11T00:00:00Z",
+          "occurred_at": "2025-11-21T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Ashvale Industrial",
+      "material_category": "SWITCHBOARD",
+      "need_by_date": "2025-12-16",
+      "order_date": "2025-10-05",
+      "part_number": "ASH-13882",
+      "po_number": "PO-005-0001",
+      "project_id": "PRJ-005",
+      "quantity": "50.3",
+      "unit_of_measure": "LF",
+      "vendor_id": "VND-001"
+    },
+    {
+      "criticality": 3,
+      "description": "Water Chiller — site standby",
+      "events": [
+        {
+          "occurred_at": "2025-10-16T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-26T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-02T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-11-08T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-28T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-12-03T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Stillmere Hydronics",
+      "material_category": "WATER_CHILLER",
+      "need_by_date": "2026-01-07",
+      "order_date": "2025-10-16",
+      "part_number": "STM-69054",
+      "po_number": "PO-005-0002",
+      "project_id": "PRJ-005",
+      "quantity": "316.6",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-001"
+    },
+    {
+      "criticality": 3,
+      "description": "Computer Room Air Conditioner — site standby",
+      "events": [
+        {
+          "occurred_at": "2025-11-13T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-11-18T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-20T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-11-22T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-12-16T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-12-21T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 2,
-      "manufacturer": null,
+      "manufacturer": "Brackenlowe Power Systems",
+      "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
+      "need_by_date": "2026-01-15",
+      "order_date": "2025-11-13",
+      "part_number": "BKL-58016",
+      "po_number": "PO-005-0002",
+      "project_id": "PRJ-005",
+      "quantity": "119.8",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-001"
+    },
+    {
+      "criticality": 1,
+      "description": "Circuit Protective Device — commissioning spare",
+      "events": [
+        {
+          "occurred_at": "2025-07-01T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-07-02T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-07-09T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-07-14T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-07-18T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-07-21T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Ashvale Industrial",
+      "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
+      "need_by_date": "2025-08-21",
+      "order_date": "2025-07-01",
+      "part_number": "ASH-68256",
+      "po_number": "PO-005-0003",
+      "project_id": "PRJ-005",
+      "quantity": "268.5",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-001"
+    },
+    {
+      "criticality": 4,
+      "description": "Static Uninterruptible Power Supply — spare unit",
+      "events": [
+        {
+          "occurred_at": "2025-11-26T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-12-03T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-12-19T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-12-20T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-01-04T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-10T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Halvard Climate",
+      "material_category": "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY",
+      "need_by_date": "2026-01-27",
+      "order_date": "2025-11-26",
+      "part_number": "HVD-03980",
+      "po_number": "PO-005-0004",
+      "project_id": "PRJ-005",
+      "quantity": "390.5",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-001"
+    },
+    {
+      "criticality": 4,
+      "description": "Computer Room Air Conditioner — replacement module",
+      "events": [
+        {
+          "occurred_at": "2026-02-05T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-02-07T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-02-18T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-02-22T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-03-21T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-03-25T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Emberdyne Controls",
+      "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
+      "need_by_date": "2026-04-02",
+      "order_date": "2026-02-05",
+      "part_number": "EMD-48978",
+      "po_number": "PO-005-0004",
+      "project_id": "PRJ-005",
+      "quantity": "345.7",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-001"
+    },
+    {
+      "criticality": 1,
+      "description": "Medium Voltage Cable — spare unit",
+      "events": [
+        {
+          "occurred_at": "2025-09-23T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-09-24T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-09-28T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-10-01T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-10-06T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-10-09T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Stillmere Hydronics",
+      "material_category": "MEDIUM_VOLTAGE_CABLE",
+      "need_by_date": "2025-11-12",
+      "order_date": "2025-09-23",
+      "part_number": "STM-83865",
+      "po_number": "PO-005-0005",
+      "project_id": "PRJ-005",
+      "quantity": "459.9",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-002"
+    },
+    {
+      "criticality": 4,
+      "description": "Cooling Tower — replacement module",
+      "events": [
+        {
+          "occurred_at": "2026-01-02T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-01-16T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-02-01T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-02-09T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-03-11T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-03-16T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Brackenlowe Power Systems",
+      "material_category": "COOLING_TOWER",
+      "need_by_date": "2026-03-27",
+      "order_date": "2026-01-02",
+      "part_number": "BKL-67870",
+      "po_number": "PO-005-0006",
+      "project_id": "PRJ-005",
+      "quantity": "161.1",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-002"
+    },
+    {
+      "criticality": 1,
+      "description": "Low Voltage Transformer — phase two allowance",
+      "events": [
+        {
+          "occurred_at": "2026-02-01T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-02-07T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-02-12T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-02-14T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-02-23T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-02-25T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Corvane Distribution",
+      "material_category": "LOW_VOLTAGE_TRANSFORMER",
+      "need_by_date": "2026-03-23",
+      "order_date": "2026-02-01",
+      "part_number": "CRV-12477",
+      "po_number": "PO-005-0007",
+      "project_id": "PRJ-005",
+      "quantity": "25.9",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-002"
+    },
+    {
+      "criticality": 5,
+      "description": "Water Chiller — commissioning spare",
+      "events": [
+        {
+          "occurred_at": "2025-12-12T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-12-23T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-01-04T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-01-05T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-01-24T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-26T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Stillmere Hydronics",
+      "material_category": "WATER_CHILLER",
+      "need_by_date": "2026-03-01",
+      "order_date": "2025-12-12",
+      "part_number": "STM-44210",
+      "po_number": "PO-005-0007",
+      "project_id": "PRJ-005",
+      "quantity": "8.0",
+      "unit_of_measure": "LF",
+      "vendor_id": "VND-002"
+    },
+    {
+      "criticality": 4,
+      "description": "Generator Assembly — spare unit",
+      "events": [
+        {
+          "occurred_at": "2025-07-12T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-07-15T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-07-31T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-08-02T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-14T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-19T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Stillmere Hydronics",
+      "material_category": "GENERATOR_ASSEMBLY",
+      "need_by_date": "2025-10-05",
+      "order_date": "2025-07-12",
+      "part_number": "STM-50357",
+      "po_number": "PO-005-0008",
+      "project_id": "PRJ-005",
+      "quantity": "146.9",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-002"
+    },
+    {
+      "criticality": 2,
+      "description": "Energy Recovery Unit — commissioning spare",
+      "events": [
+        {
+          "occurred_at": "2026-02-16T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-02-17T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-02-20T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-02-23T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-03-25T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-03-30T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Verrikon Electric",
       "material_category": "ENERGY_RECOVERY_UNIT",
-      "need_by_date": "2026-01-31",
-      "order_date": "2025-11-03",
-      "part_number": null,
+      "need_by_date": "2026-05-03",
+      "order_date": "2026-02-16",
+      "part_number": "VRK-41477",
+      "po_number": "PO-005-0009",
+      "project_id": "PRJ-005",
+      "quantity": "147.8",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-003"
+    },
+    {
+      "criticality": 3,
+      "description": "Generator Assembly — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-10-24T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-27T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-03T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-11-05T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-16T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-30T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Halvard Climate",
+      "material_category": "GENERATOR_ASSEMBLY",
+      "need_by_date": "2026-01-26",
+      "order_date": "2025-10-24",
+      "part_number": "HVD-43493",
+      "po_number": "PO-005-0010",
+      "project_id": "PRJ-005",
+      "quantity": "134.9",
+      "unit_of_measure": "LOT",
+      "vendor_id": "VND-003"
+    },
+    {
+      "criticality": 3,
+      "description": "Medium Voltage Cable — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-10-16T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-19T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-10-22T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-10-23T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-01T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-05T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Emberdyne Controls",
+      "material_category": "MEDIUM_VOLTAGE_CABLE",
+      "need_by_date": "2025-11-27",
+      "order_date": "2025-10-16",
+      "part_number": "EMD-83047",
+      "po_number": "PO-005-0011",
+      "project_id": "PRJ-005",
+      "quantity": "95.0",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-003"
+    },
+    {
+      "criticality": 4,
+      "description": "Primary Unit Substation — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-11-24T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-11-25T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-12-01T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-12-13T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-01-08T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-12T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Pyrelan Thermal",
+      "material_category": "PRIMARY_UNIT_SUBSTATION",
+      "need_by_date": "2026-02-17",
+      "order_date": "2025-11-24",
+      "part_number": "PYR-49169",
+      "po_number": "PO-005-0012",
+      "project_id": "PRJ-005",
+      "quantity": "274.0",
+      "unit_of_measure": "SET",
+      "vendor_id": "VND-003"
+    },
+    {
+      "criticality": 2,
+      "description": "Medium Voltage Cable — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-10-03T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-10-16T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-11-05T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-11-10T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-11-28T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-12-04T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Wrenfield Air Systems",
+      "material_category": "MEDIUM_VOLTAGE_CABLE",
+      "need_by_date": "2025-11-19",
+      "order_date": "2025-10-03",
+      "part_number": "WRN-03960",
+      "po_number": "PO-005-0012",
+      "project_id": "PRJ-005",
+      "quantity": "38.5",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-003"
+    },
+    {
+      "criticality": 4,
+      "description": "Medium Voltage Switchgear — site standby",
+      "events": [
+        {
+          "occurred_at": "2025-11-25T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-12-08T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-12-14T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-12-24T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-02-09T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-02-15T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Emberdyne Controls",
+      "material_category": "MEDIUM_VOLTAGE_SWITCHGEAR",
+      "need_by_date": "2026-02-23",
+      "order_date": "2025-11-25",
+      "part_number": "EMD-72223",
+      "po_number": "PO-005-0013",
+      "project_id": "PRJ-005",
+      "quantity": "166.9",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-004"
+    },
+    {
+      "criticality": 3,
+      "description": "Medium Voltage Cable — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-12-26T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-01-08T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-01-22T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-02-02T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-02-10T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-02-18T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Pyrelan Thermal",
+      "material_category": "MEDIUM_VOLTAGE_CABLE",
+      "need_by_date": "2026-02-09",
+      "order_date": "2025-12-26",
+      "part_number": "PYR-78820",
+      "po_number": "PO-005-0014",
+      "project_id": "PRJ-005",
+      "quantity": "340.6",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-004"
+    },
+    {
+      "criticality": 3,
+      "description": "Energy Recovery Unit — replacement module",
+      "events": [
+        {
+          "occurred_at": "2025-09-11T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-09-12T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2025-09-17T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-09-22T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2025-10-07T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2025-11-06T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 2,
+      "manufacturer": "Norhelm Transformer Works",
+      "material_category": "ENERGY_RECOVERY_UNIT",
+      "need_by_date": "2025-11-26",
+      "order_date": "2025-09-11",
+      "part_number": "NRH-89823",
       "po_number": "PO-005-0014",
       "project_id": "PRJ-005",
       "quantity": "444.9",
@@ -9440,42 +9445,42 @@
       "description": "Circuit Protective Device — site standby",
       "events": [
         {
-          "occurred_at": "2025-08-30T00:00:00Z",
+          "occurred_at": "2025-09-15T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-09-02T00:00:00Z",
+          "occurred_at": "2025-09-20T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-09-10T00:00:00Z",
+          "occurred_at": "2025-09-23T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-09-11T00:00:00Z",
+          "occurred_at": "2025-10-03T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-11-08T00:00:00Z",
+          "occurred_at": "2025-10-11T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-11-10T00:00:00Z",
+          "occurred_at": "2025-10-12T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 3,
-      "manufacturer": null,
+      "manufacturer": "Halvard Climate",
       "material_category": "CIRCUIT_PROTECTIVE_DEVICE",
-      "need_by_date": "2025-10-12",
-      "order_date": "2025-08-30",
-      "part_number": null,
+      "need_by_date": "2025-10-31",
+      "order_date": "2025-09-15",
+      "part_number": "HVD-22481",
       "po_number": "PO-005-0014",
       "project_id": "PRJ-005",
       "quantity": "100.6",
@@ -9487,42 +9492,42 @@
       "description": "Low Voltage Transformer — commissioning spare",
       "events": [
         {
-          "occurred_at": "2025-10-19T00:00:00Z",
+          "occurred_at": "2025-11-10T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-10-22T00:00:00Z",
+          "occurred_at": "2025-11-12T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-10-30T00:00:00Z",
+          "occurred_at": "2025-11-17T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-11-03T00:00:00Z",
+          "occurred_at": "2025-11-20T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-11-23T00:00:00Z",
+          "occurred_at": "2025-12-14T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-11-26T00:00:00Z",
+          "occurred_at": "2025-12-20T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Halvard Climate",
       "material_category": "LOW_VOLTAGE_TRANSFORMER",
-      "need_by_date": "2025-12-10",
-      "order_date": "2025-10-19",
-      "part_number": null,
+      "need_by_date": "2025-12-30",
+      "order_date": "2025-11-10",
+      "part_number": "HVD-98522",
       "po_number": "PO-005-0015",
       "project_id": "PRJ-005",
       "quantity": "388.8",
@@ -9530,8 +9535,102 @@
       "vendor_id": "VND-005"
     },
     {
-      "criticality": 1,
+      "criticality": 3,
       "description": "Low Voltage Transformer — site standby",
+      "events": [
+        {
+          "occurred_at": "2026-02-05T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2026-02-15T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-02-23T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-02-28T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-03-07T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-03-14T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Ashvale Industrial",
+      "material_category": "LOW_VOLTAGE_TRANSFORMER",
+      "need_by_date": "2026-03-25",
+      "order_date": "2026-02-05",
+      "part_number": "ASH-91994",
+      "po_number": "PO-005-0016",
+      "project_id": "PRJ-005",
+      "quantity": "26.3",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-005"
+    },
+    {
+      "criticality": 2,
+      "description": "Computer Room Air Conditioner — site standby",
+      "events": [
+        {
+          "occurred_at": "2025-12-25T00:00:00Z",
+          "sequence_no": 1,
+          "to_state": "submitted"
+        },
+        {
+          "occurred_at": "2025-12-30T00:00:00Z",
+          "sequence_no": 2,
+          "to_state": "under_review"
+        },
+        {
+          "occurred_at": "2026-01-02T00:00:00Z",
+          "sequence_no": 3,
+          "to_state": "approved"
+        },
+        {
+          "occurred_at": "2026-01-03T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-01-19T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-24T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
+        }
+      ],
+      "line_number": 1,
+      "manufacturer": "Corvane Distribution",
+      "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
+      "need_by_date": "2026-03-17",
+      "order_date": "2025-12-25",
+      "part_number": "CRV-84012",
+      "po_number": "PO-005-0017",
+      "project_id": "PRJ-005",
+      "quantity": "477.2",
+      "unit_of_measure": "M",
+      "vendor_id": "VND-005"
+    },
+    {
+      "criticality": 3,
+      "description": "Variable Frequency Drive — site standby",
       "events": [
         {
           "occurred_at": "2025-06-22T00:00:00Z",
@@ -9544,126 +9643,32 @@
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-07-12T00:00:00Z",
+          "occurred_at": "2025-07-02T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
+        },
+        {
+          "occurred_at": "2025-07-07T00:00:00Z",
+          "sequence_no": 4,
+          "to_state": "released_for_fabrication"
         },
         {
           "occurred_at": "2025-07-15T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-08-10T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-08-12T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "LOW_VOLTAGE_TRANSFORMER",
-      "need_by_date": "2025-08-16",
-      "order_date": "2025-06-22",
-      "part_number": null,
-      "po_number": "PO-005-0016",
-      "project_id": "PRJ-005",
-      "quantity": "26.3",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-005"
-    },
-    {
-      "criticality": 3,
-      "description": "Computer Room Air Conditioner — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-09-14T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-09-18T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-09-27T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-09-28T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-10-04T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2025-10-09T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
-        }
-      ],
-      "line_number": 1,
-      "manufacturer": null,
-      "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
-      "need_by_date": "2025-11-29",
-      "order_date": "2025-09-14",
-      "part_number": null,
-      "po_number": "PO-005-0017",
-      "project_id": "PRJ-005",
-      "quantity": "477.2",
-      "unit_of_measure": "M",
-      "vendor_id": "VND-005"
-    },
-    {
-      "criticality": 3,
-      "description": "Variable Frequency Drive — site standby",
-      "events": [
-        {
-          "occurred_at": "2025-11-19T00:00:00Z",
-          "sequence_no": 1,
-          "to_state": "submitted"
-        },
-        {
-          "occurred_at": "2025-11-28T00:00:00Z",
-          "sequence_no": 2,
-          "to_state": "under_review"
-        },
-        {
-          "occurred_at": "2025-12-02T00:00:00Z",
-          "sequence_no": 3,
-          "to_state": "approved"
-        },
-        {
-          "occurred_at": "2025-12-05T00:00:00Z",
-          "sequence_no": 4,
-          "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2026-01-03T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-01-06T00:00:00Z",
+          "occurred_at": "2025-07-21T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 2,
-      "manufacturer": null,
+      "manufacturer": "Stillmere Hydronics",
       "material_category": "VARIABLE_FREQUENCY_DRIVE",
-      "need_by_date": "2026-02-04",
-      "order_date": "2025-11-19",
-      "part_number": null,
+      "need_by_date": "2025-09-07",
+      "order_date": "2025-06-22",
+      "part_number": "STM-64740",
       "po_number": "PO-005-0017",
       "project_id": "PRJ-005",
       "quantity": "403.7",
@@ -9675,42 +9680,42 @@
       "description": "Automatic Transfer Switch — phase two allowance",
       "events": [
         {
-          "occurred_at": "2026-01-21T00:00:00Z",
+          "occurred_at": "2026-02-03T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-01-27T00:00:00Z",
+          "occurred_at": "2026-02-04T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-01-28T00:00:00Z",
+          "occurred_at": "2026-02-09T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-01-30T00:00:00Z",
+          "occurred_at": "2026-02-10T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-02-04T00:00:00Z",
+          "occurred_at": "2026-03-29T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2026-02-18T00:00:00Z",
+          "occurred_at": "2026-03-31T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Wrenfield Air Systems",
       "material_category": "AUTOMATIC_TRANSFER_SWITCH",
-      "need_by_date": "2026-03-31",
-      "order_date": "2026-01-21",
-      "part_number": null,
+      "need_by_date": "2026-04-16",
+      "order_date": "2026-02-03",
+      "part_number": "WRN-55632",
       "po_number": "PO-005-0018",
       "project_id": "PRJ-005",
       "quantity": "107.2",
@@ -9722,42 +9727,42 @@
       "description": "Low Voltage Transformer — commissioning spare",
       "events": [
         {
-          "occurred_at": "2025-09-05T00:00:00Z",
+          "occurred_at": "2026-01-23T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-09-06T00:00:00Z",
+          "occurred_at": "2026-01-26T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-09-11T00:00:00Z",
+          "occurred_at": "2026-02-06T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-09-15T00:00:00Z",
+          "occurred_at": "2026-02-07T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-09-22T00:00:00Z",
+          "occurred_at": "2026-03-25T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-10-06T00:00:00Z",
+          "occurred_at": "2026-03-31T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Corvane Distribution",
       "material_category": "LOW_VOLTAGE_TRANSFORMER",
-      "need_by_date": "2025-10-31",
-      "order_date": "2025-09-05",
-      "part_number": null,
+      "need_by_date": "2026-03-19",
+      "order_date": "2026-01-23",
+      "part_number": "CRV-37829",
       "po_number": "PO-005-0019",
       "project_id": "PRJ-005",
       "quantity": "122.0",
@@ -9765,41 +9770,46 @@
       "vendor_id": "VND-006"
     },
     {
-      "criticality": 2,
+      "criticality": 3,
       "description": "Static Uninterruptible Power Supply — replacement module",
       "events": [
         {
-          "occurred_at": "2026-01-06T00:00:00Z",
+          "occurred_at": "2025-12-06T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-01-14T00:00:00Z",
+          "occurred_at": "2025-12-24T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-02-12T00:00:00Z",
+          "occurred_at": "2026-01-03T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-02-16T00:00:00Z",
+          "occurred_at": "2026-01-09T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-03-23T00:00:00Z",
+          "occurred_at": "2026-02-21T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-03-04T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Verrikon Electric",
       "material_category": "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY",
-      "need_by_date": "2026-04-01",
-      "order_date": "2026-01-06",
-      "part_number": null,
+      "need_by_date": "2026-02-22",
+      "order_date": "2025-12-06",
+      "part_number": "VRK-20945",
       "po_number": "PO-005-0020",
       "project_id": "PRJ-005",
       "quantity": "314.2",
@@ -9811,37 +9821,42 @@
       "description": "Primary Unit Substation — spare unit",
       "events": [
         {
-          "occurred_at": "2026-02-03T00:00:00Z",
+          "occurred_at": "2025-11-05T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-02-17T00:00:00Z",
+          "occurred_at": "2025-11-11T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-02-28T00:00:00Z",
+          "occurred_at": "2025-11-18T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-03-03T00:00:00Z",
+          "occurred_at": "2025-11-21T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-03-18T00:00:00Z",
+          "occurred_at": "2026-01-21T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-01-24T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Wrenfield Air Systems",
       "material_category": "PRIMARY_UNIT_SUBSTATION",
-      "need_by_date": "2026-05-04",
-      "order_date": "2026-02-03",
-      "part_number": null,
+      "need_by_date": "2026-02-02",
+      "order_date": "2025-11-05",
+      "part_number": "WRN-13776",
       "po_number": "PO-005-0021",
       "project_id": "PRJ-005",
       "quantity": "392.8",
@@ -9853,42 +9868,32 @@
       "description": "Static Uninterruptible Power Supply — replacement module",
       "events": [
         {
-          "occurred_at": "2025-11-08T00:00:00Z",
+          "occurred_at": "2026-02-12T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-11-09T00:00:00Z",
+          "occurred_at": "2026-02-22T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-11-26T00:00:00Z",
+          "occurred_at": "2026-03-04T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-11-30T00:00:00Z",
+          "occurred_at": "2026-03-09T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
-        },
-        {
-          "occurred_at": "2025-12-26T00:00:00Z",
-          "sequence_no": 5,
-          "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-01-08T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Pyrelan Thermal",
       "material_category": "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY",
-      "need_by_date": "2026-02-01",
-      "order_date": "2025-11-08",
-      "part_number": null,
+      "need_by_date": "2026-05-07",
+      "order_date": "2026-02-12",
+      "part_number": "PYR-92288",
       "po_number": "PO-005-0022",
       "project_id": "PRJ-005",
       "quantity": "255.2",
@@ -9896,46 +9901,46 @@
       "vendor_id": "VND-007"
     },
     {
-      "criticality": 3,
+      "criticality": 2,
       "description": "Variable Frequency Drive — replacement module",
       "events": [
         {
-          "occurred_at": "2025-08-14T00:00:00Z",
+          "occurred_at": "2025-09-26T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-08-20T00:00:00Z",
+          "occurred_at": "2025-10-02T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-08-30T00:00:00Z",
+          "occurred_at": "2025-10-14T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-09-04T00:00:00Z",
+          "occurred_at": "2025-10-15T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-09-08T00:00:00Z",
+          "occurred_at": "2025-11-04T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-09-14T00:00:00Z",
+          "occurred_at": "2025-11-11T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 2,
-      "manufacturer": null,
+      "manufacturer": "Brackenlowe Power Systems",
       "material_category": "VARIABLE_FREQUENCY_DRIVE",
-      "need_by_date": "2025-11-03",
-      "order_date": "2025-08-14",
-      "part_number": null,
+      "need_by_date": "2025-12-23",
+      "order_date": "2025-09-26",
+      "part_number": "BKL-69049",
       "po_number": "PO-005-0022",
       "project_id": "PRJ-005",
       "quantity": "11.5",
@@ -9947,42 +9952,42 @@
       "description": "Medium Voltage Cable — commissioning spare",
       "events": [
         {
-          "occurred_at": "2025-11-30T00:00:00Z",
+          "occurred_at": "2025-09-17T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-12-01T00:00:00Z",
+          "occurred_at": "2025-09-18T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-12-03T00:00:00Z",
+          "occurred_at": "2025-09-24T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-12-05T00:00:00Z",
+          "occurred_at": "2025-09-30T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-01-10T00:00:00Z",
+          "occurred_at": "2025-10-13T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2026-01-14T00:00:00Z",
+          "occurred_at": "2025-10-23T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Stillmere Hydronics",
       "material_category": "MEDIUM_VOLTAGE_CABLE",
-      "need_by_date": "2026-01-31",
-      "order_date": "2025-11-30",
-      "part_number": null,
+      "need_by_date": "2025-11-14",
+      "order_date": "2025-09-17",
+      "part_number": "STM-53444",
       "po_number": "PO-005-0023",
       "project_id": "PRJ-005",
       "quantity": "37.8",
@@ -9990,46 +9995,46 @@
       "vendor_id": "VND-008"
     },
     {
-      "criticality": 3,
+      "criticality": 2,
       "description": "Variable Frequency Drive — site standby",
       "events": [
         {
-          "occurred_at": "2025-09-23T00:00:00Z",
+          "occurred_at": "2025-09-09T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-10-01T00:00:00Z",
+          "occurred_at": "2025-09-20T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-10-19T00:00:00Z",
+          "occurred_at": "2025-09-23T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-10-20T00:00:00Z",
+          "occurred_at": "2025-09-29T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-11-21T00:00:00Z",
+          "occurred_at": "2025-11-01T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-12-01T00:00:00Z",
+          "occurred_at": "2025-11-05T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Norhelm Transformer Works",
       "material_category": "VARIABLE_FREQUENCY_DRIVE",
-      "need_by_date": "2025-12-10",
-      "order_date": "2025-09-23",
-      "part_number": null,
+      "need_by_date": "2025-12-13",
+      "order_date": "2025-09-09",
+      "part_number": "NRH-64672",
       "po_number": "PO-005-0024",
       "project_id": "PRJ-005",
       "quantity": "74.3",
@@ -10037,46 +10042,46 @@
       "vendor_id": "VND-008"
     },
     {
-      "criticality": 3,
+      "criticality": 2,
       "description": "Pad Mounted Transformer — phase two allowance",
       "events": [
         {
-          "occurred_at": "2025-07-22T00:00:00Z",
+          "occurred_at": "2025-11-14T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-07-27T00:00:00Z",
+          "occurred_at": "2025-11-24T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-08-13T00:00:00Z",
+          "occurred_at": "2025-12-13T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-08-21T00:00:00Z",
+          "occurred_at": "2025-12-16T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-09-10T00:00:00Z",
+          "occurred_at": "2025-12-18T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-09-11T00:00:00Z",
+          "occurred_at": "2025-12-25T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Brackenlowe Power Systems",
       "material_category": "PAD_MOUNTED_TRANSFORMER",
-      "need_by_date": "2025-10-16",
-      "order_date": "2025-07-22",
-      "part_number": null,
+      "need_by_date": "2026-02-15",
+      "order_date": "2025-11-14",
+      "part_number": "BKL-62709",
       "po_number": "PO-005-0025",
       "project_id": "PRJ-005",
       "quantity": "441.7",
@@ -10084,46 +10089,41 @@
       "vendor_id": "VND-009"
     },
     {
-      "criticality": 2,
+      "criticality": 3,
       "description": "Computer Room Air Conditioner — replacement module",
       "events": [
         {
-          "occurred_at": "2025-12-16T00:00:00Z",
+          "occurred_at": "2026-02-12T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-12-22T00:00:00Z",
+          "occurred_at": "2026-02-15T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-12-27T00:00:00Z",
+          "occurred_at": "2026-02-27T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-01-01T00:00:00Z",
+          "occurred_at": "2026-03-06T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-02-12T00:00:00Z",
+          "occurred_at": "2026-03-21T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
-        },
-        {
-          "occurred_at": "2026-02-17T00:00:00Z",
-          "sequence_no": 6,
-          "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Pyrelan Thermal",
       "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
-      "need_by_date": "2026-03-22",
-      "order_date": "2025-12-16",
-      "part_number": null,
+      "need_by_date": "2026-05-09",
+      "order_date": "2026-02-12",
+      "part_number": "PYR-73570",
       "po_number": "PO-005-0026",
       "project_id": "PRJ-005",
       "quantity": "422.8",
@@ -10131,46 +10131,46 @@
       "vendor_id": "VND-009"
     },
     {
-      "criticality": 2,
+      "criticality": 4,
       "description": "Computer Room Air Conditioner — commissioning spare",
       "events": [
         {
-          "occurred_at": "2026-01-12T00:00:00Z",
+          "occurred_at": "2025-12-26T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-01-23T00:00:00Z",
+          "occurred_at": "2026-01-07T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-02-11T00:00:00Z",
+          "occurred_at": "2026-02-08T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-02-24T00:00:00Z",
+          "occurred_at": "2026-02-10T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-03-05T00:00:00Z",
+          "occurred_at": "2026-03-09T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2026-03-13T00:00:00Z",
+          "occurred_at": "2026-03-22T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Stillmere Hydronics",
       "material_category": "COMPUTER_ROOM_AIR_CONDITIONER",
-      "need_by_date": "2026-04-17",
-      "order_date": "2026-01-12",
-      "part_number": null,
+      "need_by_date": "2026-03-19",
+      "order_date": "2025-12-26",
+      "part_number": "STM-16817",
       "po_number": "PO-005-0027",
       "project_id": "PRJ-005",
       "quantity": "186.7",
@@ -10182,42 +10182,42 @@
       "description": "Low Voltage Transformer — spare unit",
       "events": [
         {
-          "occurred_at": "2026-01-22T00:00:00Z",
+          "occurred_at": "2026-02-02T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-02-01T00:00:00Z",
+          "occurred_at": "2026-02-03T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-02-02T00:00:00Z",
+          "occurred_at": "2026-02-08T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-02-04T00:00:00Z",
+          "occurred_at": "2026-02-12T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2026-02-27T00:00:00Z",
+          "occurred_at": "2026-02-25T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2026-03-03T00:00:00Z",
+          "occurred_at": "2026-02-27T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 2,
-      "manufacturer": null,
+      "manufacturer": "Wrenfield Air Systems",
       "material_category": "LOW_VOLTAGE_TRANSFORMER",
-      "need_by_date": "2026-03-18",
-      "order_date": "2026-01-22",
-      "part_number": null,
+      "need_by_date": "2026-03-30",
+      "order_date": "2026-02-02",
+      "part_number": "WRN-97963",
       "po_number": "PO-005-0027",
       "project_id": "PRJ-005",
       "quantity": "168.2",
@@ -10229,42 +10229,42 @@
       "description": "Secondary Unit Substation — replacement module",
       "events": [
         {
-          "occurred_at": "2025-07-24T00:00:00Z",
+          "occurred_at": "2025-11-15T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-07-30T00:00:00Z",
+          "occurred_at": "2025-11-20T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-08-08T00:00:00Z",
+          "occurred_at": "2025-11-26T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-08-11T00:00:00Z",
+          "occurred_at": "2025-12-03T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-09-23T00:00:00Z",
+          "occurred_at": "2025-12-30T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-10-01T00:00:00Z",
+          "occurred_at": "2026-01-06T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Brackenlowe Power Systems",
       "material_category": "SECONDARY_UNIT_SUBSTATION",
-      "need_by_date": "2025-11-11",
-      "order_date": "2025-07-24",
-      "part_number": null,
+      "need_by_date": "2026-03-05",
+      "order_date": "2025-11-15",
+      "part_number": "BKL-11988",
       "po_number": "PO-005-0028",
       "project_id": "PRJ-005",
       "quantity": "335.3",
@@ -10272,46 +10272,46 @@
       "vendor_id": "VND-011"
     },
     {
-      "criticality": 5,
+      "criticality": 3,
       "description": "Generator Assembly — replacement module",
       "events": [
         {
-          "occurred_at": "2025-06-21T00:00:00Z",
+          "occurred_at": "2025-09-22T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2025-06-25T00:00:00Z",
+          "occurred_at": "2025-09-29T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2025-07-06T00:00:00Z",
+          "occurred_at": "2025-10-07T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2025-07-09T00:00:00Z",
+          "occurred_at": "2025-10-10T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
         },
         {
-          "occurred_at": "2025-07-25T00:00:00Z",
+          "occurred_at": "2025-11-22T00:00:00Z",
           "sequence_no": 5,
           "to_state": "shipped"
         },
         {
-          "occurred_at": "2025-08-07T00:00:00Z",
+          "occurred_at": "2025-11-24T00:00:00Z",
           "sequence_no": 6,
           "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Ashvale Industrial",
       "material_category": "GENERATOR_ASSEMBLY",
-      "need_by_date": "2025-09-27",
-      "order_date": "2025-06-21",
-      "part_number": null,
+      "need_by_date": "2026-01-14",
+      "order_date": "2025-09-22",
+      "part_number": "ASH-04879",
       "po_number": "PO-005-0029",
       "project_id": "PRJ-005",
       "quantity": "202.1",
@@ -10319,36 +10319,46 @@
       "vendor_id": "VND-011"
     },
     {
-      "criticality": 4,
+      "criticality": 3,
       "description": "Switchboard — site standby",
       "events": [
         {
-          "occurred_at": "2026-01-08T00:00:00Z",
+          "occurred_at": "2025-11-24T00:00:00Z",
           "sequence_no": 1,
           "to_state": "submitted"
         },
         {
-          "occurred_at": "2026-01-17T00:00:00Z",
+          "occurred_at": "2025-11-28T00:00:00Z",
           "sequence_no": 2,
           "to_state": "under_review"
         },
         {
-          "occurred_at": "2026-01-24T00:00:00Z",
+          "occurred_at": "2025-12-20T00:00:00Z",
           "sequence_no": 3,
           "to_state": "approved"
         },
         {
-          "occurred_at": "2026-02-02T00:00:00Z",
+          "occurred_at": "2026-01-03T00:00:00Z",
           "sequence_no": 4,
           "to_state": "released_for_fabrication"
+        },
+        {
+          "occurred_at": "2026-02-16T00:00:00Z",
+          "sequence_no": 5,
+          "to_state": "shipped"
+        },
+        {
+          "occurred_at": "2026-02-19T00:00:00Z",
+          "sequence_no": 6,
+          "to_state": "delivered"
         }
       ],
       "line_number": 1,
-      "manufacturer": null,
+      "manufacturer": "Stillmere Hydronics",
       "material_category": "SWITCHBOARD",
-      "need_by_date": "2026-04-07",
-      "order_date": "2026-01-08",
-      "part_number": null,
+      "need_by_date": "2026-03-02",
+      "order_date": "2025-11-24",
+      "part_number": "STM-52292",
       "po_number": "PO-005-0030",
       "project_id": "PRJ-005",
       "quantity": "381.7",
