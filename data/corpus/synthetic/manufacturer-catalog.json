@@ -1,0 +1,155 @@
+{
+  "manufacturers": {
+    "ASH": {
+      "aliases": [
+        "ASHVALE INDUSTRIAL",
+        "Ashvale Ind.",
+        "Ashvale Industrial Works"
+      ],
+      "canonical_name": "Ashvale Industrial",
+      "categories": [
+        "COOLING_TOWER",
+        "HYDRONIC_PUMP"
+      ],
+      "part_number_prefix": "ASH"
+    },
+    "BKL": {
+      "aliases": [
+        "BRACKENLOWE POWER SYSTEMS",
+        "Brackenlowe Power Sys.",
+        "Brackenlowe"
+      ],
+      "canonical_name": "Brackenlowe Power Systems",
+      "categories": [
+        "AUTOMATIC_TRANSFER_SWITCH",
+        "GENERATOR_ASSEMBLY",
+        "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY"
+      ],
+      "part_number_prefix": "BKL"
+    },
+    "CRV": {
+      "aliases": [
+        "CORVANE DISTRIBUTION",
+        "Corvane Dist.",
+        "Corvane Distribution Co"
+      ],
+      "canonical_name": "Corvane Distribution",
+      "categories": [
+        "CIRCUIT_PROTECTIVE_DEVICE",
+        "MEDIUM_VOLTAGE_CABLE",
+        "MEDIUM_VOLTAGE_SWITCHGEAR",
+        "VARIABLE_FREQUENCY_DRIVE"
+      ],
+      "part_number_prefix": "CRV"
+    },
+    "EMD": {
+      "aliases": [
+        "EMBERDYNE CONTROLS",
+        "Emberdyne Ctrl.",
+        "Emberdyne"
+      ],
+      "canonical_name": "Emberdyne Controls",
+      "categories": [
+        "AUTOMATIC_TRANSFER_SWITCH",
+        "CIRCUIT_PROTECTIVE_DEVICE",
+        "LOW_VOLTAGE_SWITCHGEAR",
+        "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY",
+        "SWITCHBOARD",
+        "VARIABLE_FREQUENCY_DRIVE"
+      ],
+      "part_number_prefix": "EMD"
+    },
+    "HVD": {
+      "aliases": [
+        "HALVARD CLIMATE",
+        "Halvard Climate Systems",
+        "Halvard"
+      ],
+      "canonical_name": "Halvard Climate",
+      "categories": [
+        "COMPUTER_ROOM_AIR_CONDITIONER",
+        "COOLING_TOWER",
+        "ENERGY_RECOVERY_UNIT",
+        "WATER_CHILLER"
+      ],
+      "part_number_prefix": "HVD"
+    },
+    "NRH": {
+      "aliases": [
+        "NORHELM TRANSFORMER WORKS",
+        "Norhelm Transformer Wks.",
+        "Norhelm"
+      ],
+      "canonical_name": "Norhelm Transformer Works",
+      "categories": [
+        "LIQUID_FILLED_TRANSFORMER",
+        "LOW_VOLTAGE_TRANSFORMER",
+        "MEDIUM_VOLTAGE_CABLE",
+        "PAD_MOUNTED_TRANSFORMER",
+        "PRIMARY_UNIT_SUBSTATION",
+        "SECONDARY_UNIT_SUBSTATION"
+      ],
+      "part_number_prefix": "NRH"
+    },
+    "PYR": {
+      "aliases": [
+        "PYRELAN THERMAL",
+        "Pyrelan Thermal Co",
+        "Pyrelan"
+      ],
+      "canonical_name": "Pyrelan Thermal",
+      "categories": [
+        "COOLING_TOWER",
+        "HEATING_BOILER",
+        "WATER_CHILLER"
+      ],
+      "part_number_prefix": "PYR"
+    },
+    "STM": {
+      "aliases": [
+        "STILLMERE HYDRONICS",
+        "Stillmere Hydronics Ltd",
+        "Stillmere"
+      ],
+      "canonical_name": "Stillmere Hydronics",
+      "categories": [
+        "HEATING_BOILER",
+        "HYDRONIC_PUMP"
+      ],
+      "part_number_prefix": "STM"
+    },
+    "VRK": {
+      "aliases": [
+        "VERRIKON ELECTRIC",
+        "Verrikon Elec.",
+        "Verrikon Electric Co"
+      ],
+      "canonical_name": "Verrikon Electric",
+      "categories": [
+        "GENERATOR_ASSEMBLY",
+        "LIQUID_FILLED_TRANSFORMER",
+        "LOW_VOLTAGE_SWITCHGEAR",
+        "LOW_VOLTAGE_TRANSFORMER",
+        "MEDIUM_VOLTAGE_SWITCHGEAR",
+        "PAD_MOUNTED_TRANSFORMER",
+        "PRIMARY_UNIT_SUBSTATION",
+        "SECONDARY_UNIT_SUBSTATION",
+        "SWITCHBOARD"
+      ],
+      "part_number_prefix": "VRK"
+    },
+    "WRN": {
+      "aliases": [
+        "WRENFIELD AIR SYSTEMS",
+        "Wrenfield Air Sys.",
+        "Wrenfield"
+      ],
+      "canonical_name": "Wrenfield Air Systems",
+      "categories": [
+        "COMPUTER_ROOM_AIR_CONDITIONER",
+        "ENERGY_RECOVERY_UNIT"
+      ],
+      "part_number_prefix": "WRN"
+    }
+  }
+}

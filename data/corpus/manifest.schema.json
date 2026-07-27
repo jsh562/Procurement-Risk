@@ -196,11 +196,11 @@
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
         },
         "roster_hash": {
-          "description": "SYNTHETIC only. The E001 roster reader's content_hash, recorded verbatim - a digest over the roster's canonical re-serialized content, never over the roster file's bytes (FR-020). VR-029 compares it against read_roster().content_hash as evaluated now. It is the first of the four generation inputs FR-009b covers, carried in its own field precisely because its computation differs from the raw-byte digests in generation_inputs.",
+          "description": "SYNTHETIC only. The E001 roster reader's content_hash, recorded verbatim - a digest over the roster's canonical re-serialized content, never over the roster file's bytes (FR-020). VR-029 compares it against read_roster().content_hash as evaluated now. It is the first of the five generation inputs FR-009b covers, carried in its own field precisely because its computation differs from the raw-byte digests in generation_inputs.",
           "$ref": "#/$defs/digest"
         },
         "generation_inputs": {
-          "description": "SYNTHETIC only. The remaining three generation inputs, each digested over its file's raw bytes (FR-009b).",
+          "description": "SYNTHETIC only. The remaining four generation inputs, each digested over its file's raw bytes (FR-009b).",
           "$ref": "#/$defs/generationInputs"
         },
         "document_model_hash": {
@@ -395,13 +395,14 @@
     },
     "generationInputs": {
       "title": "Generation-input digests",
-      "description": "A closed three-key map from repository-relative path to a digest over that file's raw bytes (FR-009b, VR-061). The keys are fixed here rather than left open because the enumeration is closed by maintenance: extending it is the same change that gives the generator a further committed input. The roster is the fourth generation input and is deliberately not a key - its digest is roster_hash, computed over canonical content rather than bytes, and mixing the two procedures into one mapping would report a roster reformat as drift. Because the keys are path-valued, VR-061 compares them as literal strings against this set before any filesystem access (CWE-73).",
+      "description": "A closed four-key map from repository-relative path to a digest over that file's raw bytes (FR-009b, VR-061). The keys are fixed here rather than left open because the enumeration is closed by maintenance: extending it is the same change that gives the generator a further committed input, which is exactly what happened when FR-037 added the manufacturer catalogue - it is the fourth key. The roster is a generation input and is deliberately not a key - its digest is roster_hash, computed over canonical content rather than bytes, and mixing the two procedures into one mapping would report a roster reformat as drift. Because the keys are path-valued, VR-061 compares them as literal strings against this set before any filesystem access (CWE-73). Adding a required key tightens this schema rather than loosening it: a manifest that omits the new digest now fails, so no previously rejected document becomes admissible.",
       "type": "object",
       "additionalProperties": false,
       "required": [
         "data/corpus/synthetic/equipment-category-map.json",
         "data/corpus/synthetic/field-label-vocabulary.json",
-        "data/corpus/synthetic/generation-config.json"
+        "data/corpus/synthetic/generation-config.json",
+        "data/corpus/synthetic/manufacturer-catalog.json"
       ],
       "properties": {
         "data/corpus/synthetic/equipment-category-map.json": {
@@ -411,6 +412,9 @@
           "$ref": "#/$defs/digest"
         },
         "data/corpus/synthetic/generation-config.json": {
+          "$ref": "#/$defs/digest"
+        },
+        "data/corpus/synthetic/manufacturer-catalog.json": {
           "$ref": "#/$defs/digest"
         }
       }

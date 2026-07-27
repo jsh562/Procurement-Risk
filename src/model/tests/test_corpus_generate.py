@@ -51,7 +51,7 @@ from model.corpus.generate import (
     generate_corpus,
     load_config,
 )
-from model.corpus.manifest import MANIFEST_FILENAME
+from model.corpus.manifest import GENERATION_INPUT_PATHS, MANIFEST_FILENAME
 from model.corpus.model import DocumentModel, FieldValue, Page, RenderDirective, document_model_hash
 from model.corpus.paths import DEFAULT_CORPUS_ROOT, REPO_ROOT
 from model.corpus.templates import TemplateError, assign_templates
@@ -75,19 +75,41 @@ BYTES_MATCH = "PASS"
 BYTES_DIFFER = "FAIL"
 REGENERATION_EVENT = "REGENERATION_EVENT"
 
+#: `GENERATION_INPUT_PATHS` is repository-relative (`data/corpus/...`) while the
+#: copier below joins onto `base / "data"`, so the shared prefix is dropped here
+#: rather than the members being restated. Deriving them is the point: a further
+#: member of that tuple must reach the alternate checkout without anyone
+#: remembering to edit this file, which is what `manifest.py`'s "adding a member here is the
+#: whole change" claims and what a hand-maintained copy falsified.
+_DATA_PREFIX = "data/"
+
+
+def _under_data(path: str) -> str:
+    """Strip the `data/` prefix, refusing rather than silently mis-copying."""
+    if not path.startswith(_DATA_PREFIX):
+        raise AssertionError(
+            "VR-040a: generation input outside data/, cannot place it in the "
+            f"alternate checkout: {path}"
+        )
+    return path[len(_DATA_PREFIX) :]
+
+
+GENERATION_INPUTS_UNDER_DATA: tuple[str, ...] = tuple(
+    _under_data(path) for path in GENERATION_INPUT_PATHS
+)
+
 #: Everything the generator reads, copied into the alternate checkout. Written
 #: out rather than copying `data/` wholesale so the list is a statement of what
 #: generation depends on; the vendored PDFs are deliberately absent, because the
 #: generator reads the real *manifest* (for VR-048's section check) and never a
-#: real document.
+#: real document. The generation inputs proper come from the production tuple;
+#: only the members that are *not* generation inputs are named here.
 GENERATOR_INPUTS = (
     "corpus/manifest.schema.json",
     "corpus/real/retrieval-policy.json",
     "corpus/real/exclusions.json",
     "corpus/real/ufgs/manifest.json",
-    "corpus/synthetic/generation-config.json",
-    "corpus/synthetic/equipment-category-map.json",
-    "corpus/synthetic/field-label-vocabulary.json",
+    *GENERATION_INPUTS_UNDER_DATA,
     "corpus/synthetic/datasheet.md",
 )
 
