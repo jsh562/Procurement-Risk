@@ -1,9 +1,9 @@
 # QC Report: Public Corpus and Manifest
 
 **Feature**: `00002-public-corpus-and-manifest` | **Epic**: E002 | **Date**: 2026-07-27
-**Run**: Implement+QC loop, 3 iterations — judging the uncommitted FR-037 amendment | **Instructions**: `project-instructions.md` v1.2.3
+**Run**: Implement+QC loop, 3 iterations — judging the uncommitted FR-037 amendment | **Instructions**: `project-instructions.md` v1.2.4
 **Coverage target**: 80 | **Required categories**: linting, coverage | **Profile**: standard
-**Tree under test**: working tree on `main`, uncommitted. Nothing has been committed or pushed.
+**Tree under test**: branch `00002-public-corpus-and-manifest`, committed at `050d289` and then merged with `main` at instructions v1.2.4. The full-suite figures below were measured before that merge; the merge brought `project-instructions.md`, `specs/00003-core-data-schema/spec.md` and `tests/checks/test_dependency_isolation.py`, and the re-verification of the affected cross-entry checks is recorded at the end of this report.
 
 ## Changes from Prior Run
 
@@ -87,7 +87,11 @@ Not required by policy; no scanner run and none claimed. Surfaces as a **WARNING
 
 ## Project Instructions Compliance — PASSED
 
-Audited against **v1.2.3**.
+Audited against **v1.2.4**. The gate was re-run when `main` moved to v1.2.4 mid-review, under the Governance rule that a feature audited against a superseded version re-runs its compliance gate before its next phase gate.
+
+**v1.2.4 names `mypy` as the Python type checker and scopes it to `/src/gateway`.** The amendment is explicit that the scope is deliberate rather than provisional — retrofitting `/src/model`'s modules and `/src/api` is recorded as a separate decision, and it states that naming a checker which does not run over two thirds of the Python source would be the unverifiable claim that section exists to prevent. This epic touches no file under `/src/gateway`, so the new obligation does not reach it. That is a finding of inapplicability, not an exemption: were the scope later widened to `/src/model`, `manufacturers.py` and the amended `validate.py` would fall under it and this record would be the wrong one to rely on.
+
+v1.2.2 and v1.2.3 concern Feature Workspace numbering; this workspace is `00002` and its epic is E002, which already satisfies the convention v1.2.3 makes explicit.
 
 | Principle | Finding |
 |---|---|
@@ -168,3 +172,20 @@ None outstanding. All seven bug tasks (T065–T071) are closed and their fixes i
 ## Scope note on the final iteration
 
 Iteration 3 changed two Markdown files under `specs/00002-public-corpus-and-manifest/` and nothing else. Per the QC skill's re-run scoping, its verification was scoped rather than a fourth full suite: confirmed by grep that no test or rule reads that workspace (E003's five hard-coded-path tests read `specs/00003-core-data-schema/`), re-ran `corpus-validate` at 64/64, re-ran the repository-wide arity sweep clean, and confirmed zero checkbox deltas. The full-suite figures above are iteration 2's, measured on a tree identical to this one in every file any check reads. Stated rather than left for a reader to infer.
+
+## Post-merge re-verification
+
+`main` moved to instructions **v1.2.4** while this amendment was in review, bringing two E003 fixes with it. The merge was clean — no conflicts — and touched three files this branch does not own: `project-instructions.md`, `specs/00003-core-data-schema/spec.md`, and `tests/checks/test_dependency_isolation.py` (+119 lines).
+
+Re-verified on the merged tree rather than assuming the earlier figures carried:
+
+| Check | Result |
+|---|---|
+| `tests/checks/test_dependency_isolation.py` — the file E003 changed | 18 passed |
+| Cross-entry checks, full, no deselect | **145 passed** (was 142; +3 from E003's new isolation tests) |
+| `corpus-validate` | 64 rules, 64 passed, 0 failed, 0 skipped |
+| `ruff check` (root / model) | All checks passed |
+
+The serving image was rebuilt to CI parity first, because a sibling checkout on this host shares the `procurement-api:e001` tag.
+
+The model, gateway, and web suites and the coverage gates were not re-run after the merge: the merge changed no file any of them reads — `specs/00003-core-data-schema/spec.md` is read only by E003's five hard-coded-path tests, which live in the model suite and passed against that same file before the merge because it was already at this revision on `main`. Stated rather than left implicit, so a reader knows which figures are pre-merge and why that is sound.
