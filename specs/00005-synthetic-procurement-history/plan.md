@@ -229,8 +229,8 @@ A refusal that has never refused, and a detector that has never detected, are in
 | FR-023, FR-024, FR-025, FR-026, FR-029, FR-030 | Loader: staging, comparison, refusal, ordering, closure | `model/procurement/load.py` |
 | FR-027 | Generation-input drift detection | `model/procurement/validate.py` |
 | FR-028, FR-033 | No split emitted; assumption recorded | `model/procurement/datasheet.py` |
-| FR-031, FR-032, FR-037 | Descriptive columns; corpus vocabulary overlap; manufacturer drawn from E002's published catalog, asserted against the real-firm exclusion list | `model/procurement/equipment.py`, `model/procurement/manufacturer.py` (catalog reader), `model/roster/naming.py` (existing exclusion list reader) |
-| FR-034 | Manufacturer/part-number overlap, ≥60% drawn from E002's catalog (DV-028) | `model/procurement/manufacturer.py`, reading `model.corpus.manufacturers.load_catalog()`; the former unblocking trigger at `src/model/tests/procurement/test_fr034_unblock_trigger.py`, retained and inverted (NC-12) |
+| FR-031, FR-032, FR-037 | Descriptive columns; corpus vocabulary overlap; manufacturer drawn from E002's published catalog, asserted against the real-firm exclusion list | `model/procurement/equipment.py` (descriptions, overlap predicate and the catalog draw), `model/roster/naming.py` (existing exclusion list reader) |
+| FR-034 | Manufacturer/part-number overlap, ≥60% drawn from E002's catalog (DV-028) | `model/procurement/equipment.py`, reading `model.corpus.manufacturers.load_catalog()` — the same module that owns the descriptive fields, so the pair is drawn where the line's category is already in hand; the former unblocking trigger at `src/model/tests/procurement/test_fr034_unblock_trigger.py`, retained and inverted (NC-12) |
 
 ## Project Structure
 

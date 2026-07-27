@@ -599,7 +599,7 @@ Properties this data model does not enforce structurally, recorded as uncovered 
 | FR-031 | §Line record and §Row-Level Mapping — all six descriptive columns present and non-blank, category from the committed map; §Generation Inputs records the map's digest; DV-004 |
 | FR-032 | §Corpus overlap — the four-clause predicate and the falsifiable complement; DV-014 |
 | FR-033 | §Generation Process disclosures — the assumed 0.25 as a cross-epic assumption; limitation L-8; gap G-5 |
-| FR-034 | §Corpus overlap — clauses 5–6 and the catalog-overlap share; §Line record; DV-028; gap G-1 closed, limitation L-5 withdrawn |
+| FR-034 | §Corpus overlap — clauses 5–6 and the catalog-overlap share; §Line record (); DV-028; gap G-1 closed, limitation L-5 withdrawn |
 | FR-035 | §Category tiers — three tiers over the 20 map keys, mean-zero offsets, and the two distinctly named duration quantities |
 | FR-036 | §Duration model and §Ground-Truth Record — the vendor / category / residual decomposition, and the category-adjusted ratio as the quantity asserted against FR-008's band; DV-011 |
 | FR-037 | §Line record — `manufacturer` drawn from E002's published catalog rather than invented, asserted disjoint from E001's real-firm exclusion list and from its vendor-name convention; DV-021 |
