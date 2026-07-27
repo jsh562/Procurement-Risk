@@ -31,6 +31,7 @@ from typing import Any
 
 import pytest
 
+from model.corpus.equipment import EQUIPMENT_MAP_INPUT_PATH
 from model.corpus.manifest import DIGEST_PATTERN
 from model.procurement.model import (
     DIGEST_KIND_CANONICAL_CONTENT,
@@ -70,13 +71,25 @@ from model.procurement.serialize import (
     read_payload,
     write_payload,
 )
+from model.roster.reader import DEFAULT_ROSTER_PATH
 
 # --------------------------------------------------------------------------
 # Sample records
 # --------------------------------------------------------------------------
 
-ROSTER_INPUT = "data/roster/project-vendor-roster.json"
-CATEGORY_MAP_INPUT = "data/corpus/synthetic/equipment-category-map.json"
+#: The two `generation_inputs` paths, **derived rather than written out**.
+#:
+#: VR-013 and VR-045 hold the roster's filename to exactly one naming site under
+#: `src/` — `model/roster/reader.py` — and `tests/checks/test_single_import_site.py`
+#: fails the build on a second one. That rule reaches this file: an early draft
+#: spelled the path as a literal here and the scan caught it, which is the rule
+#: working rather than the rule being inconvenient. The same reasoning applies to
+#: the category map, whose path E002 already publishes as
+#: `corpus.equipment.EQUIPMENT_MAP_INPUT_PATH`, itself taken from the closed
+#: three in `corpus.manifest`. Every later E005 module that records a generation
+#: input has the same obligation.
+ROSTER_INPUT = DEFAULT_ROSTER_PATH.relative_to(REPO_ROOT).as_posix()
+CATEGORY_MAP_INPUT = EQUIPMENT_MAP_INPUT_PATH
 
 #: A description that leaves ASCII in three different ways: a combining-free
 #: accented letter, an em dash, and the numero sign.
