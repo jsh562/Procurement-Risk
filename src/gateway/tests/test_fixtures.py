@@ -380,3 +380,48 @@ def test_the_exemplar_key_is_reproducible() -> None:
         "prompt_template_version": None,
     }
     assert digest(canonical_json(payload)) in FixtureStore(COMMITTED_ROOT).stored_keys()
+
+
+# --- AD-008: the fixture store's soft cap ------------------------------------
+
+#: 25 MB, from AD-008. A **soft** cap: exceeding it warns rather than fails.
+#: A hard cap would break the build for a store that is merely large, and the
+#: thing worth knowing is the trend, not the threshold — a store growing past
+#: this is usually one where regenerated fixtures were added without their
+#: predecessors being deleted (see the README's regeneration procedure).
+FIXTURE_STORE_SOFT_CAP_BYTES = 25 * 1024 * 1024
+
+
+def store_size_bytes(root: Path) -> int:
+    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+
+
+def test_the_committed_store_is_under_its_soft_cap() -> None:
+    """Warns by failing *this* test alone, which is the soft part: nothing else
+    in the suite depends on it, so a large store reports itself without
+    blocking anything that matters."""
+    if not COMMITTED_ROOT.is_dir():
+        pytest.skip(f"no committed fixture store at {COMMITTED_ROOT}")
+
+    size = store_size_bytes(COMMITTED_ROOT)
+    assert size <= FIXTURE_STORE_SOFT_CAP_BYTES, (
+        f"the committed fixture store is {size / 1024 / 1024:.1f} MB against a "
+        f"{FIXTURE_STORE_SOFT_CAP_BYTES / 1024 / 1024:.0f} MB soft cap (AD-008). "
+        f"The usual cause is regenerated fixtures added without deleting the ones "
+        f"they replaced — a content-hash key means a changed prompt writes a new "
+        f"file rather than overwriting one."
+    )
+
+
+def test_the_size_measurement_counts_sidecars_too(tmp_path: Path) -> None:
+    """A control on the measurement. Counting only responses would understate a
+    store by roughly the size of its provenance, which is most of the size of a
+    store full of small fixtures."""
+    store = FixtureStore(tmp_path / "fixtures")
+    store.save(fixture_key(InvocationRequest(prompt="sized")), "x" * 1000, a_provenance())
+
+    size = store_size_bytes(tmp_path / "fixtures")
+    assert size > 1000, (
+        f"measured {size} bytes for a 1000-byte response plus a sidecar; the "
+        f"sidecar is not being counted"
+    )

@@ -83,6 +83,10 @@ disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Registered so an unknown-marker warning cannot hide a typo. `slow` marks the
+# one test that reaches the provider (OBJ6); it is already gated on
+# GATEWAY_ALLOW_PROVIDER_CALLS, so the marker is a label rather than a control.
+markers = ["slow: reaches the network and costs money; opt-in gated"]
 
 [tool.coverage.run]
 branch = true

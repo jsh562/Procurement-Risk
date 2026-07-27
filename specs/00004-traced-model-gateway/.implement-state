@@ -1,30 +1,27 @@
-phase: Phase 6 complete — OBJ5 (Credential Redaction and Error Normalization)
-completed: 68
-remaining: 7
+phase: All phases complete — 73/75 tasks, 2 formally withdrawn
+completed: 73
+remaining: 0 (T004 and T031 withdrawn with recorded evidence)
 blocked: none
-next: Phase 7 (OBJ6, P2) T071-T074 — the opted-in provider-reaching smoke check
-      and fixture refresh; then Phase 8 polish (T075). OBJ6 is P2 and is the
-      only objective that reaches the provider, so it is the one that cannot
-      run in CI by design.
-notes: OBJ5 delivered. Redaction covers TR-059's five sinks with a seeded
-       positive for each — the five differ in what scanning even means (files
-       as bytes, log output as what a formatter emits, the exception payload as
-       a rendered traceback), so one seeded case would have evidenced one sink
-       and left four asserted by analogy.
-       CredentialHandle closes every rendering path: __repr__, __str__,
-       __format__, __reduce__, and __slots__ so there is no __dict__ to walk.
-       configuration_failure_message refuses a detail argument for the
-       credential key rather than redacting one — a parameter that does not
-       exist cannot be forgotten.
-       The self-referential test trap recurred for the fourth and fifth time
-       this phase: a check scanning source text matches the prose explaining
-       what it looks for. Every such check in this epic is now an AST walk.
-       The lesson generalises and is recorded in the plan as OI-15: a check
-       whose subject is code must read the parse tree, because prose about code
-       contains the words the code is being checked for.
-       Environment, unchanged and worth repeating: the DB container has been
-       torn down externally five times, twice with its volume. Re-run
-       `docker compose up -d db` then `uv run --directory src/model migrate`.
-       `procurement-api:e001` is an unqualified tag the sibling checkouts share
-       and must be rebuilt here before the image check runs.
-timestamp: 2026-07-26
+next: QC. `.completed` can be written once a full green run is confirmed on the
+      pull request rather than only locally.
+notes: OBJ1-OBJ6 and Phase 8 polish delivered. 376 gateway tests, 193 root
+       checks, 1072 model tests, 4 import contracts KEPT, mypy strict clean,
+       ruff lint and format clean across all four command sites.
+       Gateway entry at 92% line coverage against AD-007's 85% target.
+       Benchmarks inside AD-008's budgets.
+       orchestrator.invoke() still raises NotImplementedError: it needs the
+       mode branch to compose the pieces, and every piece it will compose
+       exists and is tested. That is the one thing a reader should not mistake
+       for finished.
+       The CI failure the user pointed at was step 10, "Lint (Python)". That
+       step runs FOUR commands, not three — the fourth is `uv run ruff check .`
+       from the repository root, covering /tests. Never run it and /tests goes
+       unlinted while every local check reports green. The full step list is
+       now recorded in memory.
+       Environment: something repeatedly runs `docker compose down` in this
+       directory — Risk1 and Risk3 stay up while only risk2 disappears, and
+       unrelated exited containers survive, so it is not a prune. Recovery is
+       automatic via the scratchpad ensure-db.sh. Port 5437 via /.env.
+       `procurement-api:e001` is an unqualified tag the siblings share; rebuild
+       from this checkout before the image checks.
+timestamp: 2026-07-27

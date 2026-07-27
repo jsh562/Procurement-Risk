@@ -5,9 +5,10 @@ goes through `gateway.api.invoke` and through nothing else — which is what mak
 "every model call is traced" a property of the code rather than of reviewer
 diligence.
 
-This file documents the three procedures that are **not** obvious from the code
+This file documents the four procedures that are **not** obvious from the code
 and that cost something to get wrong: changing what the invocation record
-carries, bumping the semantic-convention pin, and correcting a price table.
+carries, bumping the semantic-convention pin, correcting a price table, and
+regenerating fixtures.
 
 ---
 
@@ -139,3 +140,76 @@ gateway logs nothing else, and adding an event is an amendment to that list.
 the resolved model, and the reason — because a pin that has fallen behind a rate
 change otherwise has no symptom except a cost that is not there, which nobody
 reads until they go looking for it.
+
+---
+
+## Regenerating fixtures (TR-027, OBJ6)
+
+Fixtures are committed model responses. Replay resolves from them and reaches
+no network, so a stale fixture is not a broken test — it is a **passing** test
+describing a request nobody makes any more.
+
+### When to regenerate
+
+Regenerate when any of these changes, because each one changes the fixture key
+and every existing fixture stops matching:
+
+| Trigger | Why the key moves |
+|---|---|
+| A prompt template's resolved text | Its digest is a hashed input (TR-038) |
+| The caller's output schema, **including a validator** | Same — the digest covers constraints, not just field names |
+| Any declared request field: model, sampling parameters, provider | The hashed set is the request model's declared fields (TR-020) |
+| Adding a request field | Adding a parameter *is* adding a field; the old key described a different call |
+
+Also regenerate when the provider's behaviour has changed enough that a
+recorded response no longer represents what it returns — a model deprecation,
+or a response shape change. Nothing detects that automatically; it is a
+judgement call, which is why it is written down rather than left to a check.
+
+**A replay miss is the signal.** `FixtureMissError` names the derived key. It
+means either the request changed or the fixture was never recorded, and those
+are the same action.
+
+### How to regenerate
+
+Reaching the provider takes three separate things, none of which happens by
+accident:
+
+```bash
+export GATEWAY_MODE=record                  # no default (TR-021)
+export GATEWAY_ALLOW_PROVIDER_CALLS=1       # separate opt-in (TR-063)
+uv run --directory src/gateway pytest tests/test_provider_smoke.py -q
+```
+
+The third thing is the credential, in the variable the provider SDK itself
+resolves (TR-062). It is deliberately **not** written as an example assignment
+here: `tests/checks/test_supply_chain.py` fails on any assignment to that
+variable anywhere in the committed tree, placeholder value or not. That is the
+right rule — a committed assignment is the shape of the mistake, and a detector
+that made an exception for documentation would make the same exception for the
+line someone pasted a real key into. Export it in your shell; never in a file.
+
+Then review the diff before committing. What to look at:
+
+1. **The sidecar.** Every fixture carries `recorded_on`, `gen_ai_response_model`,
+   `gateway_revision`, and the token counts (TR-033). A response without one is
+   an orphan and both `has()` and `load()` treat it as absent.
+2. **The response body.** It is committed to the repository and read by everyone
+   who clones it. Only corpus material E002 labels public-domain or synthetic
+   may go across that boundary (TR-067).
+3. **No credential material.** `test_fixture_credential_scan.py` runs the two
+   detectors over the committed store, but read the diff anyway — the scan is a
+   backstop, not a substitute for looking.
+4. **The old fixture.** A regenerated key is a *new* file; the one it replaced
+   is still there. Delete it in the same commit, or the store grows a copy for
+   every prompt edit ever made.
+
+### What never happens
+
+- **Continuous integration does not regenerate.** It never sets the opt-in, and
+  `tests/checks/test_ci_provider_gate_absent.py` asserts that of every workflow.
+- **Replay never falls back to the provider.** There is no code path from the
+  fixture store to a socket, which is stronger than a flag defaulting to off.
+- **`replay` mode refuses to run beside a credential** (TR-023). If regeneration
+  left one exported, the offline suite will stop rather than quietly reach out.
+  Unset it, or run the offline suite in a child environment without it.

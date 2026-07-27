@@ -141,16 +141,16 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 
 **Separable from P1: nothing in OBJ1–OBJ5 depends on these tasks, and the credential-free suite passes without them.**
 
-- [ ] T071 [OBJ6] {TR-027,TR-063} [COMPLETES TR-063] Add the opt-in-gated provider-reaching smoke check, skipped without the gate, in src/gateway/tests/test_provider_smoke.py after:T060
-- [ ] T072 [OBJ6] {TR-027} [COMPLETES TR-027] Document the fixture regeneration procedure and its trigger conditions in src/gateway/README.md after:T071
+- [X] T071 [OBJ6] {TR-027,TR-063} [COMPLETES TR-063] Add the opt-in-gated provider-reaching smoke check, skipped without the gate, in src/gateway/tests/test_provider_smoke.py after:T060 — the skip keys on the opt-in gate, not the credential (STF-005) — keying on the credential would make an opted-in run with no credential skip silently, which is the outcome the opt-in exists to prevent. Verified in both gate states
+- [X] T072 [OBJ6] {TR-027} [COMPLETES TR-027] Document the fixture regeneration procedure and its trigger conditions in src/gateway/README.md after:T071 — regeneration procedure in src/gateway/README.md: the four triggers that move the fixture key, the three things that must be set, what to review in the diff, and what never happens
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T073 [P] Add the fixture-store 25 MB and spool-depth 10 MB soft-cap warning checks in src/gateway/tests/test_fixtures.py and src/gateway/tests/test_spool_reconcile.py (AD-008)
-- [ ] T074 Verify the gateway entry reaches ≥85% line coverage in the root combined report with the provider-path exclusion stated (AD-007) after:T005
-- [ ] T075 [P] Benchmark gateway overhead ≤50 ms p95 excluding provider time and replay resolution ≤10 ms p95 (AD-008)
+- [X] T073 [P] Add the fixture-store 25 MB and spool-depth 10 MB soft-cap warning checks in src/gateway/tests/test_fixtures.py and src/gateway/tests/test_spool_reconcile.py (AD-008) — soft caps as soft — exceeding one fails its own test and blocks nothing, since a hard cap would turn a long outage into a second failure on top of the first
+- [X] T074 Verify the gateway entry reaches ≥85% line coverage in the root combined report with the provider-path exclusion stated (AD-007) after:T005 — gateway entry at 92% line coverage in the combined report, against AD-007's 85% target and the repository's 80% floor
+- [X] T075 [P] Benchmark gateway overhead ≤50 ms p95 excluding provider time and replay resolution ≤10 ms p95 (AD-008) — benchmark over the gateway's own work with the provider excluded; p95 is nearest-rank one-based, matching the convention E003 seeded, so two percentiles in one product are not computed two ways
 
 ---
 

@@ -419,3 +419,44 @@ def test_the_write_error_reaching_the_drain_carries_no_driver_exception() -> Non
     assert raised.value.constraint_name == "fk_llm_invocation__price_table_version"
     assert raised.value.__context__ is None
     assert not isinstance(raised.value, _DriverError)
+
+
+# --- AD-008: the spool's depth soft cap --------------------------------------
+
+#: 10 MB, from AD-008. The spool's steady state is empty (ADR-0015), so any
+#: sustained size at all is a signal — this cap is where "the outage is long"
+#: becomes "the outage is long enough to act on".
+SPOOL_SOFT_CAP_BYTES = 10 * 1024 * 1024
+
+
+def test_a_spool_under_the_cap_reports_its_size(tmp_path: Path) -> None:
+    """The measurement itself, on a spool with something in it. A cap check
+    that only ever ran against an empty file would pass on any threshold."""
+    spool = InvocationSpool(tmp_path / "spool.sqlite3")
+    spool.append(a_record(), write_error_type="OperationalError")
+
+    size = spool.path.stat().st_size
+    assert 0 < size <= SPOOL_SOFT_CAP_BYTES, (
+        f"spool is {size} bytes against a {SPOOL_SOFT_CAP_BYTES} byte soft cap"
+    )
+
+
+def test_an_empty_spool_is_the_steady_state(tmp_path: Path) -> None:
+    """ADR-0015's third test, restated as the thing an operator watches. Depth
+    rather than bytes, because the file keeps its pages after a drain — size
+    stays up while depth returns to zero, and depth is the honest signal."""
+    spool = InvocationSpool(tmp_path / "spool.sqlite3")
+    record = a_record()
+    spool.append(record, write_error_type="OperationalError")
+    spool.discard(record.invocation_id)
+
+    assert spool.depth() == 0
+    assert spool.path.stat().st_size <= SPOOL_SOFT_CAP_BYTES
+
+
+def test_the_cap_is_a_soft_one() -> None:
+    """Recorded as a decision rather than left to inference: exceeding this
+    fails one test and blocks nothing. A hard cap would convert a long outage —
+    the case the spool exists for — into a second failure on top of the first.
+    """
+    assert SPOOL_SOFT_CAP_BYTES == 10 * 1024 * 1024
