@@ -12,6 +12,7 @@ import pytest
 from tests.checks.helpers.entries import (
     ALL_ENTRIES,
     PYTHON_ENTRIES,
+    SRC_ROOT,
     declared_third_party,
     first_party_sources,
     locked_distributions,
@@ -30,6 +31,48 @@ from tests.checks.helpers.root_checks import (
 #: sets are keyed by.
 DATABASE_TOOLING = frozenset({"alembic", "psycopg", "sqlalchemy"})
 
+#: The half of that stack which is genuinely exclusive to the schema owner
+#: ({SAD:ADR-0016}, correcting the clause in {SAD:ADR-0013}'s consequences).
+#:
+#: Correction of 2026-07-26, recorded rather than applied silently. This set was
+#: originally the whole of `DATABASE_TOOLING`, which made E003's own design
+#: unbuildable: ADR-0013's chosen option has `/src/api` reading `schema_constants`
+#: **over a connection**, and lists "`/src/api` pays a startup read against the
+#: database before it can serve" among its costs — neither is possible without a
+#: driver. The assertion below even said so in its own failure message while
+#: forbidding the thing that message describes.
+#:
+#: What is actually exclusive is the migration and ORM stack, because that is
+#: what carries schema *authorship*. A driver is how any entry talks to Postgres
+#: at all, and ADR-0016 sanctions one wherever an accepted record already grants
+#: the purpose — `/src/api` for the constants read and SQL-side risk computation
+#: ({SAD:ADR-0004}), `/src/gateway` for writing invocation records
+#: ({SAD:ADR-0010}). Narrowed, not relaxed: no object was added, and the
+#: schema-asset check below closes the gap a name-based set left open anyway.
+MIGRATION_STACK = frozenset({"alembic", "sqlalchemy"})
+
+#: Filenames and directories that constitute schema authorship. Checked as
+#: files rather than as distribution names, because an entry that hand-rolls
+#: DDL never imports anything a name-based set would catch.
+SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
+
+#: Distributions the schema owner declares that are nonetheless shared
+#: infrastructure rather than part of the modeling stack.
+#:
+#: The two checks below derive "the modeling stack" from what `model` declares,
+#: which is the right instinct — a hand-listed stack goes stale the moment
+#: someone adds a dependency. But the derivation is only as good as its
+#: exclusions, and the driver is declared by `model` while belonging to no
+#: boundary in particular: {SAD:ADR-0016} sanctions it for `/src/api` and
+#: `/src/gateway` too. Without this subtraction those checks read every shared
+#: transitive as a modeling intrusion, which is precisely what the first one's
+#: own docstring says it is not looking for.
+#:
+#: What TR-003 and TR-004 actually protect is the request-serving image staying
+#: free of PyMC, ArviZ, pandas and NumPy — the packages that make it fat. Those
+#: are still derived, never listed, and none of them appears here.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
 #: against it rather than against a repeated literal.
 SCHEMA_OWNING_ENTRY = "model"
@@ -42,7 +85,8 @@ def test_no_modeling_dependency_reaches_the_serving_resolution() -> None:
     what would matter is the modeling boundary's own stack arriving in the
     boundary that serves requests.
     """
-    leaked = declared_third_party("model") & locked_distributions("api")
+    modeling_stack = declared_third_party("model") - SHARED_INFRASTRUCTURE
+    leaked = modeling_stack & locked_distributions("api")
     assert not leaked, f"modeling distributions present in the serving resolution: {sorted(leaked)}"
 
 
@@ -58,8 +102,40 @@ def test_both_boundaries_declare_the_gateway_as_a_path_dependency(boundary: str)
 
 def test_gateway_carries_no_modeling_stack() -> None:
     """TR-003. The modeling stack is derived, never hand-listed."""
-    intrusion = locked_distributions("gateway") & declared_third_party("model")
+    modeling_stack = declared_third_party("model") - SHARED_INFRASTRUCTURE
+    intrusion = locked_distributions("gateway") & modeling_stack
     assert not intrusion, f"gateway resolved set carries the modeling stack: {sorted(intrusion)}"
+
+
+def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() -> None:
+    """Guard on the subtraction above, because an exclusion list is a loophole.
+
+    Two ways `SHARED_INFRASTRUCTURE` could rot. Someone adds `pymc` to it and
+    the two checks that depend on it pass while the serving image grows a
+    modeling stack — so the heavy packages are asserted absent from it by name.
+    Or it drifts to cover something the schema owner no longer declares, leaving
+    a dead entry that quietly weakens nothing but tells the next reader a
+    falsehood — so every member is required to still be declared by `model`.
+    """
+    heavy = {"pymc", "arviz", "pandas", "numpy"}
+    smuggled = heavy & SHARED_INFRASTRUCTURE
+    assert not smuggled, (
+        f"{sorted(smuggled)} is excluded from the derived modeling stack. That defeats "
+        f"TR-003 and TR-004: the serving image could acquire it and both checks would "
+        f"still pass. The exclusion is for shared infrastructure, not for the stack."
+    )
+
+    declared = declared_third_party(SCHEMA_OWNING_ENTRY)
+    stale = SHARED_INFRASTRUCTURE - declared
+    assert not stale, (
+        f"{sorted(stale)} is excluded but {SCHEMA_OWNING_ENTRY} no longer declares it, so "
+        f"the subtraction removes nothing and the comment explaining it is wrong."
+    )
+
+    assert heavy <= declared, (
+        f"{SCHEMA_OWNING_ENTRY} no longer declares {sorted(heavy - declared)}; the guard "
+        f"above compares against a stack that has moved, so update the term."
+    )
 
 
 def test_gateway_carries_no_web_framework() -> None:
@@ -84,18 +160,45 @@ def test_the_schema_owning_entry_declares_the_database_tooling() -> None:
 
 
 @pytest.mark.parametrize("entry", [e for e in PYTHON_ENTRIES if e != SCHEMA_OWNING_ENTRY])
-def test_no_other_entry_declares_or_resolves_the_database_tooling(entry: str) -> None:
-    """TR-008. Schema assets live in one entry, so the client it needs does too.
+def test_no_other_entry_declares_or_resolves_the_migration_stack(entry: str) -> None:
+    """TR-008. Schema *authorship* lives in one entry, so its tooling does too.
 
     Checked against the resolved set as well as the declared one. A declaration
     is the intent; the lockfile is what actually arrives, and a boundary that
     pulled `sqlalchemy` in transitively would ship it without ever naming it.
+
+    Scoped to `MIGRATION_STACK` rather than the whole storage stack: a driver is
+    not schema authorship, and forbidding it here would forbid the constants
+    read this requirement exists to describe. See the note on `MIGRATION_STACK`.
     """
-    intrusion = DATABASE_TOOLING & (declared_third_party(entry) | locked_distributions(entry))
+    intrusion = MIGRATION_STACK & (declared_third_party(entry) | locked_distributions(entry))
     assert not intrusion, (
-        f"{entry} carries {sorted(intrusion)}. Only {SCHEMA_OWNING_ENTRY} owns schema "
-        f"assets (ADR-0013); the serving boundary reads published constants over the "
-        f"connection rather than through the migration stack (TR-008, TR-047)."
+        f"{entry} carries {sorted(intrusion)}. Only {SCHEMA_OWNING_ENTRY} authors schema "
+        f"assets (ADR-0013, ADR-0016); another entry carrying the migration stack can "
+        f"declare DDL, which is the decision that belongs to one plan (TR-008, TR-047)."
+    )
+
+
+@pytest.mark.parametrize("entry", [e for e in PYTHON_ENTRIES if e != SCHEMA_OWNING_ENTRY])
+def test_no_other_entry_holds_schema_assets(entry: str) -> None:
+    """TR-008 / TR-047. The boundary that matters, asserted over files.
+
+    Stronger than the distribution-name check above and the reason narrowing it
+    costs nothing: an entry could author DDL in raw SQL and import nothing at
+    all. What is forbidden is *holding the assets* — an Alembic config, a
+    `versions/` directory, a migration environment — not owning a driver.
+    """
+    entry_root = SRC_ROOT / entry
+    found = sorted(
+        path.relative_to(entry_root).as_posix()
+        for name in SCHEMA_ASSET_NAMES
+        for path in entry_root.rglob(name)
+        if ".venv" not in path.parts
+    )
+    assert not found, (
+        f"{entry} holds schema assets {found}. Only {SCHEMA_OWNING_ENTRY} authors schema "
+        f"(ADR-0013); an entry outside it declaring DDL takes a decision another epic's "
+        f"plan owns (TR-008, TR-047)."
     )
 
 
