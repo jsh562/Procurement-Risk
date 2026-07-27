@@ -17,6 +17,7 @@ import pytest
 
 from tests.checks.helpers.ports import (
     CONVENTIONAL,
+    MAX_PORT,
     SEARCH_SPAN,
     Holder,
     Resolution,
@@ -37,11 +38,33 @@ def occupied(port: int) -> Iterator[None]:
         holder.close()
 
 
-def a_free_port() -> int:
-    """A port the OS says is free right now, chosen by the OS itself."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
+#: How far above a drawn port the cases below walk. Every one of them either
+#: hands the port to `resolve_host_port`, which searches `SEARCH_SPAN` upward,
+#: or occupies that span plus one to exhaust it.
+WALKED_ABOVE = SEARCH_SPAN + 2
+
+
+def a_free_port(headroom: int = WALKED_ABOVE) -> int:
+    """A port the OS says is free right now, with `headroom` ports above it.
+
+    The headroom is the fix for a real flake, not a precaution. The OS draws
+    from the ephemeral range, whose top *is* `MAX_PORT`, so roughly one draw in
+    two hundred landed within a search span of the ceiling — and then
+    `range(start, start + SEARCH_SPAN + 2)` produced numbers above 65535, which
+    `bind` rejects with `OverflowError` rather than the `OSError` the occupying
+    loop catches. It failed once and passed on the next two runs.
+
+    Redrawn rather than clamped: a port the OS did not hand out is not known to
+    be free, and computing one would have the cases probe a port some unrelated
+    process may hold, which is the false failure this module exists to avoid.
+    """
+    for _ in range(64):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        if port + headroom <= MAX_PORT:
+            return port
+    pytest.skip(f"every ephemeral draw landed within {headroom} ports of {MAX_PORT}")
 
 
 def test_a_free_preferred_port_is_returned_unchanged() -> None:
@@ -109,6 +132,11 @@ def test_an_exhausted_search_fails_rather_than_returning_a_taken_port() -> None:
     """The failure path is a real answer, not a hang or a bad port."""
     start = a_free_port()
     span = range(start, start + SEARCH_SPAN + 2)
+    assert span[-1] <= MAX_PORT, (
+        f"the span to occupy runs past {MAX_PORT}; `a_free_port` is supposed to "
+        "leave room for it, and binding an out-of-range port raises OverflowError "
+        "rather than the OSError below"
+    )
     held = []
     try:
         for candidate in span:
@@ -126,6 +154,24 @@ def test_an_exhausted_search_fails_rather_than_returning_a_taken_port() -> None:
     finally:
         for sock in held:
             sock.close()
+
+
+def test_a_preferred_port_near_the_ceiling_fails_cleanly_rather_than_overflowing() -> None:
+    """The search stops at `MAX_PORT` instead of generating numbers past it.
+
+    A preferred port within `SEARCH_SPAN` of the ceiling used to put candidates
+    above 65535 into the loop. Those are not ports that happen to be taken:
+    `bind` rejects them with `OverflowError`, which is not an availability answer
+    and which nothing in the resolver or its callers catches.
+
+    Every port from the preferred one to the ceiling is declared taken through
+    `published`, so the case exercises the boundary rather than depending on
+    which high ports this machine happens to hold.
+    """
+    preferred = MAX_PORT - 3
+    published = {port: Holder("ceiling") for port in range(preferred, MAX_PORT + 1)}
+    with pytest.raises(RuntimeError, match="no free host port"):
+        resolve_host_port(preferred, name="db", published=published)
 
 
 def test_a_docker_published_port_is_refused_even_when_the_socket_binds() -> None:

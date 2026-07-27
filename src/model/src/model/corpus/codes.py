@@ -74,7 +74,7 @@ __all__ = [
     "load_vocabulary",
 ]
 
-# The vocabulary's repository-relative path, taken from the closed three
+# The vocabulary's repository-relative path, taken from the closed tuple
 # `manifest.py` holds rather than written out again — the string that names it
 # here and the key recorded in every SYNTHETIC entry are then the same object.
 VOCABULARY_INPUT_PATH = next(

@@ -67,17 +67,19 @@ from model.corpus.validate import (
 
 #: A digest of the right surface form that is not any real file's.
 OTHER_DIGEST = "sha256:" + "0" * 64
-#: The seven supporting artifacts FR-018a closes the corpus root over (VR-065),
+#: The eight supporting artifacts FR-018a closes the corpus root over (VR-065),
 #: every one of them copied from the committed tree rather than stubbed. Three
-#: are read by the validator and three by the generator; the seventh is the
-#: datasheet VR-051…VR-055 read. A stub would drift from the artifact the rules
-#: actually compare against and would start failing for a reason that is not a
-#: defect in the validator.
+#: are read by the validator and four by the generator — the manufacturer
+#: catalogue joined them with FR-037 — and the eighth is the datasheet
+#: VR-051…VR-055 read. A stub would drift from the artifact the rules actually
+#: compare against and would start failing for a reason that is not a defect in
+#: the validator.
 COMMITTED_SUPPORTING_ARTIFACTS = (
     "manifest.schema.json",
     "real/retrieval-policy.json",
     "real/exclusions.json",
     "synthetic/generation-config.json",
+    "synthetic/manufacturer-catalog.json",
     "synthetic/equipment-category-map.json",
     "synthetic/field-label-vocabulary.json",
     "synthetic/datasheet.md",
@@ -143,9 +145,9 @@ def _build_pristine_corpus(root: Path, committed_root: Path) -> Path:
     (root / "real").mkdir()
     (root / "synthetic").mkdir()
 
-    # All seven supporting artifacts are copied rather than invented: the schema
+    # All eight supporting artifacts are copied rather than invented: the schema
     # is the contract under test, the policy and ledger are what VR-022, VR-023,
-    # VR-025, VR-026 and VR-062 compare against, the three generation inputs are
+    # VR-025, VR-026 and VR-062 compare against, the four generation inputs are
     # what VR-030 and VR-061 compare against, and the datasheet is VR-051…VR-055's
     # whole population.
     for relative in COMMITTED_SUPPORTING_ARTIFACTS:
@@ -1293,8 +1295,8 @@ def test_vr_061_names_every_document_generated_from_the_drifted_input(
 
 
 def test_vr_061_a_missing_generation_input_key(corpus: CorpusFixture) -> None:
-    """Three keys exactly. Two of three passes every per-key comparison while
-    leaving one input undigested."""
+    """Exactly `GENERATION_INPUT_PATHS`, no subset. Dropping one key passes every
+    per-key comparison that remains while leaving that input undigested."""
     corpus.mutate(
         "synthetic/PRJ-001",
         lambda document: document["entries"][0]["generation_inputs"].pop(GENERATION_INPUT_PATHS[0]),
@@ -1303,7 +1305,7 @@ def test_vr_061_a_missing_generation_input_key(corpus: CorpusFixture) -> None:
 
 
 def test_vr_061_the_roster_is_not_a_generation_inputs_key(corpus: CorpusFixture) -> None:
-    """The roster is the fourth generation input and is covered by `roster_hash`.
+    """The roster is the fifth generation input and is covered by `roster_hash`.
 
     Admitting it here would put a canonical-content digest into a mapping every
     other value of which is over raw bytes — the conflation `data-model.md`
@@ -1766,3 +1768,256 @@ def test_vr_039_a_document_the_generator_no_longer_produces(corpus: CorpusFixtur
     document["entries"] = [entry]
     corpus.write(location_id, document)
     assert_fails_naming(corpus, "VR-039")
+
+
+# --------------------------------------------------------------------------
+# T064 - manufacturer identity and part numbers
+# VR-069, 070, 071, 072, 073
+#
+# These five mutate the *catalogue* rather than the committed PDFs. Re-rendering
+# a document to drop a field would mean running the renderer inside the
+# validator's test suite and re-deriving three digests to keep VR-012 quiet, and
+# the mutation under test would then be buried among the failures that repair
+# produced. Patching the catalogue puts the corpus and the catalogue into
+# exactly the disagreement each rule exists to detect, which is the state a
+# real drift produces too: the committed documents were generated from one
+# catalogue and are being validated against another.
+# --------------------------------------------------------------------------
+
+
+def _catalogue_the_corpus_never_prints() -> dict:
+    """A well-formed catalogue holding one manufacturer no document names.
+
+    Not an empty mapping: an empty one would empty VR-070's and VR-071's
+    populations and VR-066 would attach the emptiness failure instead, which
+    `assert_fails_naming` rejects precisely so a mutation cannot masquerade as
+    a rule's own finding.
+    """
+    from model.corpus.manufacturers import Manufacturer
+
+    return {
+        "ZZZ": Manufacturer(
+            key="ZZZ",
+            canonical_name="Zephyrline Absent",
+            aliases=("Zephyrline",),
+            part_number_prefix="ZZZ",
+            categories=("HYDRONIC_PUMP",),
+        )
+    }
+
+
+def test_vr_069_a_document_printing_no_part_number_beside_its_manufacturer(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every item prints both halves or the pair is incomplete.
+
+    Simulated by making the part-number label one the documents do not carry,
+    which is what a generator that stopped printing the field would leave
+    behind: manufacturers still present, part numbers gone, and the two counts
+    no longer equal.
+    """
+    import dataclasses
+
+    from model.corpus import codes
+
+    field = codes.VOCABULARY.fields["part_number"]
+    # Non-empty on purpose: `FieldLabels` refuses an empty alternate list, so
+    # the substitutes are labels the documents simply never carry.
+    renamed = dataclasses.replace(
+        field, canonical_label="Not Printed", alternate_labels=("Also Not Printed",)
+    )
+    fields = dict(codes.VOCABULARY.fields)
+    fields["part_number"] = renamed
+    monkeypatch.setattr(codes, "VOCABULARY", dataclasses.replace(codes.VOCABULARY, fields=fields))
+    assert_fails_naming(corpus, "VR-069")
+
+
+def test_vr_070_a_printed_manufacturer_no_catalogue_entry_claims(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A spelling nothing claims is the state a resolver cannot recover from.
+
+    Dropping the entry the committed layer prints is the same disagreement a
+    catalogue edit would produce after the corpus was generated.
+    """
+    from model.corpus import manufacturers as manufacturers_module
+
+    monkeypatch.setattr(manufacturers_module, "MANUFACTURERS", _catalogue_the_corpus_never_prints())
+    assert_fails_naming(corpus, "VR-070")
+
+
+def test_vr_071_a_part_number_whose_prefix_names_no_manufacturer(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Blocking on the prefix has to recover a maker, or it recovers nothing."""
+    from model.corpus import manufacturers as manufacturers_module
+
+    monkeypatch.setattr(manufacturers_module, "MANUFACTURERS", _catalogue_the_corpus_never_prints())
+    assert_fails_naming(corpus, "VR-071")
+
+
+def test_vr_072_an_equipment_category_no_manufacturer_makes(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A category with a section and no maker fails validation rather than the
+    generator's next run."""
+    from model.corpus import manufacturers as manufacturers_module
+
+    def _all_uncovered(categories):
+        return tuple(sorted(categories))
+
+    monkeypatch.setattr(manufacturers_module, "uncovered_categories", _all_uncovered)
+    assert_fails_naming(corpus, "VR-072")
+
+
+def test_vr_073_a_catalogue_name_on_the_real_firm_exclusion_list(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The roster's backstop reaches manufacturers, not only vendors.
+
+    Adding a committed manufacturer to the exclusion list is the direction that
+    matters: it is what happens when someone discovers an invented name is a
+    real firm after all and records it in the one place the project keeps that
+    list.
+    """
+    from model.corpus import manufacturers as manufacturers_module
+    from model.roster import naming
+
+    committed = sorted(manufacturers_module.MANUFACTURERS)[0]
+    excluded = manufacturers_module.MANUFACTURERS[committed].canonical_name
+    monkeypatch.setattr(naming, "load_exclusions", lambda: [excluded])
+    assert_fails_naming(corpus, "VR-073")
+
+
+# --------------------------------------------------------------------------
+# T067 - the two SC-029 clauses that were judged by no rule
+#
+# Both are extensions of rules that already exist rather than new rule ids: the
+# per-item prefix pairing is the strong form of what VR-071 already checks
+# weakly, and alias presence is the layer-side half of the alias handling VR-073
+# already owns. Registering VR-074 and VR-075 would have split one property
+# across two rules and moved the count off 64 in four documents.
+# --------------------------------------------------------------------------
+
+
+def _catalogue_with_every_name_moved_one_maker_along() -> dict:
+    """The committed catalogue with each maker's spellings rotated to the next key.
+
+    Deliberately the *narrowest* mutation that isolates the pairing: every
+    printed spelling still resolves to exactly one entry, so VR-070 stays quiet;
+    every key is still three letters and still its own prefix, so VR-071's
+    well-formedness and prefix-exists checks stay quiet; every key keeps its own
+    categories, so VR-072 stays quiet; and the alias spellings are the same set
+    of strings, so VR-073 stays quiet. Only the pairing breaks — which is what a
+    catalogue edit reassigning a brand after the corpus was generated leaves
+    behind, and exactly the state the old VR-071 could not see.
+    """
+    from model.corpus.manufacturers import MANUFACTURERS, Manufacturer
+
+    keys = sorted(MANUFACTURERS)
+    return {
+        key: Manufacturer(
+            key=key,
+            canonical_name=MANUFACTURERS[keys[(position + 1) % len(keys)]].canonical_name,
+            aliases=MANUFACTURERS[keys[(position + 1) % len(keys)]].aliases,
+            part_number_prefix=key,
+            categories=MANUFACTURERS[key].categories,
+        )
+        for position, key in enumerate(keys)
+    }
+
+
+def _catalogue_whose_aliases_no_document_prints() -> dict:
+    """The committed catalogue with every alias replaced by a spelling nothing carries.
+
+    The failing direction for "at least one alias appears in the committed
+    corpus" is a layer that exercises no variation, and the catalogue is the
+    only side of that pair a test may move — re-rendering the documents to print
+    canonical names everywhere would mean running the renderer inside the
+    validator's suite and re-deriving three digests per document.
+
+    VR-070 also fails here, because the spellings the layer does print are no
+    longer claimed by anything; the assertion below therefore names VR-073's own
+    message rather than settling for a failing run.
+    """
+    from model.corpus.manufacturers import MANUFACTURERS, Manufacturer
+
+    return {
+        key: Manufacturer(
+            key=key,
+            canonical_name=entry.canonical_name,
+            aliases=(f"{entry.canonical_name} (a spelling no document prints)",),
+            part_number_prefix=entry.part_number_prefix,
+            categories=entry.categories,
+        )
+        for key, entry in MANUFACTURERS.items()
+    }
+
+
+def test_vr_071_a_part_number_carrying_a_different_makers_prefix_than_the_item_names(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SC-029: the prefix must name *the* manufacturer, not merely *a* manufacturer.
+
+    A document printing `Manufacturer: Ashvale Industrial` beside
+    `Part Number: BKL-01234` passed every rule before this case existed, while
+    blocking on `BKL` recovers a maker the document never named — a silent wrong
+    merge, which Principle III ranks above a visible missing one.
+    """
+    from model.corpus import manufacturers as manufacturers_module
+
+    monkeypatch.setattr(
+        manufacturers_module, "MANUFACTURERS", _catalogue_with_every_name_moved_one_maker_along()
+    )
+    report = assert_fails_naming(corpus, "VR-071")
+    mismatches = [
+        failure
+        for failure in report.all_failures
+        if failure.rule_id == "VR-071" and "names a different manufacturer" in failure.message
+    ]
+    assert mismatches, report.render()
+    # The pairing, not the weaker check: no failure here may be the prefix-exists
+    # one, or the case would pass without the pairing ever having run.
+    assert not [
+        failure
+        for failure in report.all_failures
+        if failure.rule_id == "VR-071" and "names no catalogue manufacturer" in failure.message
+    ], report.render()
+
+
+def test_vr_073_a_layer_that_prints_no_alias_at_all(
+    corpus: CorpusFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SC-029: carrying aliases in the catalogue is not exercising them.
+
+    A generator that drew the canonical name every time would leave the
+    catalogue untouched and the criterion unmet, which is the shape of gap this
+    case closes.
+    """
+    from model.corpus import manufacturers as manufacturers_module
+
+    monkeypatch.setattr(
+        manufacturers_module, "MANUFACTURERS", _catalogue_whose_aliases_no_document_prints()
+    )
+    report = assert_fails_naming(corpus, "VR-073")
+    assert [
+        failure
+        for failure in report.all_failures
+        if failure.rule_id == "VR-073" and "no catalogue alias appears" in failure.message
+    ], report.render()
+
+
+def test_vr_073_admits_a_real_only_scope_rather_than_demanding_an_alias_from_it(
+    corpus: CorpusFixture,
+) -> None:
+    """`--layer REAL` prints no manufacturer at all, and that is not a defect.
+
+    Without this the alias-presence check would turn a scoping option into a
+    failure, which is the way a new assertion most easily becomes a false one.
+    """
+    report = run(corpus, layers=["REAL"])
+    assert not [
+        failure
+        for failure in report.all_failures
+        if failure.rule_id == "VR-073" and "no catalogue alias appears" in failure.message
+    ], report.render()

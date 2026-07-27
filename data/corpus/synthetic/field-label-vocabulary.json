@@ -61,12 +61,26 @@
       ],
       "canonical_label": "Equipment Category"
     },
+    "manufacturer": {
+      "alternate_labels": [
+        "Mfr",
+        "Make"
+      ],
+      "canonical_label": "Manufacturer"
+    },
     "material_item": {
       "alternate_labels": [
         "Item Description",
         "Equipment Item"
       ],
       "canonical_label": "Material Item"
+    },
+    "part_number": {
+      "alternate_labels": [
+        "Part No.",
+        "Catalogue No."
+      ],
+      "canonical_label": "Part Number"
     },
     "project_identifier": {
       "alternate_labels": [

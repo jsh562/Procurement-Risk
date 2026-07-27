@@ -1,6 +1,8 @@
 # Security: Public Corpus and Manifest
 **Created**: 2026-07-26 | **Feature**: [spec.md](../spec.md)
 
+> **Superseded count in an evaluator note below (recorded 2026-07-26).** Every `<!-- Evaluator: ... -->` note is a **dated record of what was true when its item was closed**, and is left verbatim. CHK006's note says the `generation_inputs` keys are compared against "their closed three-value set"; FR-037 later added `manufacturer-catalog.json`, so that set has **four** members. The control the note describes is unchanged — the key set is compared against `GENERATION_INPUT_PATHS` before any filesystem access, whatever its cardinality. No checkbox state changed.
+
 ## Path Containment for Manifest-Supplied Paths
 
 - [X] CHK001 Is the order of operations in the containment rule fixed — the path resolved first and the containment assertion applied to the resolved result — given a comparison performed before resolution is defeated by segments the filesystem evaluates afterwards (CWE-22, CWE-23, CWE-36)? [Unambiguous, data-model §VR-009 / research §Security criteria for path fields and redirect-following retrieval] <!-- Evaluator: Resolved — VR-009 rewritten to fix the order explicitly: reject separators, `..`, and absolute forms; resolve to the real path (links resolved, `..` collapsed by the filesystem rather than by string arithmetic); only then compare against the base. The research decision's ordering is now the rule rather than an implied reading of "resolved absolute path" -->

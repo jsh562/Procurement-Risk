@@ -6,8 +6,9 @@
 # `generation_inputs` digests would then fail VR-061 on CI for a line-ending
 # reason unrelated to content, which is exactly the trap HINT-004 names.
 #
-# This materialised during implementation: a stash/pop round-trip rewrote all
-# three generation inputs. Pinning them here makes the working copy agree with
+# This materialised during implementation: a stash/pop round-trip rewrote every
+# generation input then committed — three at the time, four since FR-037 added
+# the manufacturer catalogue. Pinning them here makes the working copy agree with
 # the index on every platform instead of relying on nobody running the wrong
 # git command.
 data/corpus/**/*.json text eol=lf

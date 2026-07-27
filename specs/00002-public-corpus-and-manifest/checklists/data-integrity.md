@@ -1,6 +1,8 @@
 # Data Integrity: Public Corpus and Manifest
 **Created**: 2026-07-25 | **Feature**: [spec.md](../spec.md)
 
+> **Superseded counts in the evaluator notes below (recorded 2026-07-26).** Every `<!-- Evaluator: ... -->` note is a **dated record of what was true when its item was closed**, and is left verbatim rather than rewritten. The FR-037 amendment later added `manufacturer-catalog.json` as a generation input, which moved six counts those notes state: CHK029's "seven supporting artifacts" is now **eight** (FR-018a, VR-065); CHK033's "four-item enumeration" and CHK034's "FR-009b's four inputs" are now **five** — four `generation_inputs` keys plus the roster; CHK037's "three of the six" is now three of the **eight** FR-018a enumerates, the three the validator reads; and CHK015's and CHK023's "three remaining inputs" are now **four**. The count in this notice is itself enumerated rather than summarised, because the defect it exists to disclose is a partial sweep, and a partial disclosure of a partial sweep would repeat it. The live normative text carries the current numbers; nothing here does. No checkbox state changed.
+
 ## Provenance Completeness and Credibility
 
 - [X] CHK001 Is the REAL applicable field set enumerated identically in FR-008, the CorpusManifestEntry entity, and the evaluator-facing statements, given US2 AS9 and SC-006 name seven fields where FR-008 requires eight? [Consistent (set), Spec §FR-008 / §US2 AS9 / §SC-006] <!-- Evaluator: Resolved — US2 AS9 and SC-006 now enumerate all eight FR-008 fields and bind the set to FR-008 by name rather than restating it -->

@@ -42,12 +42,28 @@ sides.
 | Vendors | 12 | E001 roster, via `read_roster()` — this epic declares none |
 | Documents | 25 or more | Generated, one PDF per submittal transmittal |
 | Pages per document | 2 | Transmittal block, then the submitted-item list |
+| Manufacturers | 10 | `manufacturer-catalog.json` — invented, checked against the roster's real-firm exclusion list |
 
 Each document is a submittal transmittal record carrying six structural fields: a transmittal
 number, the referenced specification section, a submittal descriptor code, an
 approving-authority marker, a revision suffix, and a reviewer action stamp. Every project
 carries at least one resubmittal chain — two documents sharing a submittal number with an
 incremented revision suffix and a different action code.
+
+Every submitted item also carries a **manufacturer** and a **part number**, added so that
+identity resolution downstream has a left-hand side: a purchase-order line records both as
+required values, and a document that never printed either would leave that join with nothing
+to match against. Both are drawn from a committed catalogue of ten invented manufacturers,
+each with a canonical name, alias spellings, and a part-number prefix that every number it
+issues begins with.
+
+**Alias spellings are deliberate and are not irregularities.** A real submittal package
+spells one manufacturer several ways, so the layer prints aliases as well as canonical names
+— "Verrikon Elec." and "Verrikon Electric Co" are the same maker. This is ordinary naming
+variation, recorded nowhere in the irregularity classes, which remain the closed five. A
+consumer that treats printed manufacturer strings as identities rather than normalizing them
+will over-count makers; that is the property the layer exists to exercise, not a defect in
+it.
 
 Material items on a transmittal name an equipment category drawn from the committed
 `equipment-category-map.json`. Every category in that map resolves to a MasterFormat section
@@ -66,8 +82,9 @@ details, no addresses, and no attribution to any identifiable person or organiza
 ## Generation Process
 
 Generation is offline, seeded, and model-free. The generator reads the roster through E001's
-single reader, the committed `generation-config.json`, `equipment-category-map.json`, and
-`field-label-vocabulary.json`, and nothing else. It reaches no network and invokes no language
+single reader, the committed `generation-config.json`, `equipment-category-map.json`,
+`field-label-vocabulary.json`, and `manufacturer-catalog.json`, and nothing else. It reaches
+no network and invokes no language
 model; that is enforced by an import contract over the module graph and by a socket guard
 installed before the generator package is imported, not merely asserted here.
 
@@ -78,8 +95,10 @@ than clock-derived. A re-run under an unchanged seed and roster therefore rewrit
 
 Reproducibility is recorded rather than claimed. Each entry carries a `document_model_hash`
 over the pre-render document model, a `roster_hash` carrying the reader's canonical-content
-digest of the roster, and a `generation_inputs` mapping of raw-byte digests over the three
-committed generation inputs. Re-running the generator reproduces every model hash; editing the
+digest of the roster, and a `generation_inputs` mapping of raw-byte digests over the four
+remaining committed generation inputs — five inputs in all, the roster being the one whose
+digest is over canonical content rather than bytes. Re-running the generator reproduces every
+model hash; editing the
 roster or any generation input moves a recorded value and fails validation, naming every
 document generated from it.
 
@@ -145,8 +164,9 @@ Three changes require regeneration, and validation names each of them:
 
 - The roster's content changes. Every entry's `roster_hash` goes stale and every document is
   named; regeneration or reverting the roster are the only resolutions.
-- A generation input changes — the generation config, the equipment-category map, or the
-  field-label vocabulary. The recorded `generation_inputs` digest for that input no longer
+- A generation input changes — the generation config, the equipment-category map, the
+  field-label vocabulary, or the manufacturer catalogue. The recorded `generation_inputs`
+  digest for that input no longer
   matches its bytes, and every document whose own entry records it is named.
 - The pinned renderer version changes. This is reported as a regeneration event with both
   versions named rather than as a validation failure: the document-model hashes and the

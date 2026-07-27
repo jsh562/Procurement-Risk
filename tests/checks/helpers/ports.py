@@ -55,6 +55,14 @@ CONVENTIONAL = frozenset({80, 443, 3306, 5000, 5432, 5433, 6379, 8000, 8080, 844
 # a hang.
 SEARCH_SPAN = 64
 
+# The highest number a TCP port can carry. The search is bounded by this rather
+# than by the span alone: a preferred port within `SEARCH_SPAN` of the ceiling
+# would otherwise generate candidates no socket call accepts, and `bind` answers
+# those with `OverflowError` rather than the `OSError` an availability probe is
+# written to expect. Stated as a constant because the callers walking upward
+# from a resolved port need the same ceiling and must not restate it.
+MAX_PORT = 65535
+
 
 @dataclass(frozen=True)
 class Holder:
@@ -175,8 +183,12 @@ def resolve_host_port(
         return Resolution(name=name, preferred=preferred, port=preferred)
 
     holder = published.get(preferred)
-    for candidate in range(preferred + 1, preferred + 1 + SEARCH_SPAN):
-        if candidate in CONVENTIONAL or candidate > 65535:
+    # The ceiling truncates the span rather than each candidate being tested
+    # against it inside the loop: a candidate above `MAX_PORT` is not a port
+    # that happens to be taken, it is not a port at all, and generating one only
+    # to discard it is what let an out-of-range number reach a `bind` call.
+    for candidate in range(preferred + 1, min(preferred + 1 + SEARCH_SPAN, MAX_PORT + 1)):
+        if candidate in CONVENTIONAL:
             continue
         if available(candidate):
             return Resolution(name=name, preferred=preferred, port=candidate, holder=holder)
