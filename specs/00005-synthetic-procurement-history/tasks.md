@@ -156,18 +156,18 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 **Independent test**: give the datasheet to a reader with no access to the generator source and confirm every generative assumption is recoverable from it.
 
-- [ ] T060 [US4] {FR-014} Emit the seven named sections deterministically with no clock read in PKG/datasheet.py — Motivation … Maintenance, per FR-014 after:T037
-- [ ] T061 [US4] {FR-015,FR-022} [COMPLETES FR-022] Write the Generation Process provenance in PKG/datasheet.py — identity, revision, seed, scheme, date, label, all three generation-input digests, each named with its `digest_kind`, `library_pin` after:T060
-- [ ] T062 [US4] {FR-007} [COMPLETES FR-007] Disclose the duration model in PKG/datasheet.py — family, parameters in the generator's parameterization, unit, rounding, floor, apportionment after:T061
-- [ ] T063 [US4] {FR-035} [COMPLETES FR-035] Disclose the per-category expected duration offset, the tier assignment and the two named duration quantities (SC-028) in PKG/datasheet.py after:T062
-- [ ] T064 [US4] {FR-015} Record realized against intended in PKG/datasheet.py — every figure in data-model §Generation Process disclosures, each naming its bounding criterion after:T063
-- [ ] T065 [US4] {FR-016} Emit the **nine** active limitation records — L-1…L-10 less L-5, withdrawn on 2026-07-26 when E002 published the corpus fields. Emit nine and assert nine; do not renumber, so L-6…L-10 keep the identities other artifacts cite, each with scope decision, evidence, reversal trigger and production-scale alternative, in PKG/datasheet.py after:T064
-- [ ] T066 [US4] {FR-028,FR-033} State in PKG/datasheet.py that no split is emitted, that ownership of the split is unassigned, and that 0.25 is an assumed cross-epic fraction after:T065
-- [ ] T067 [US4] {FR-014,FR-016} Add the datasheet conformance check (DV-019) to PKG/validate.py — all seven sections present and 100% of limitation records carrying all four parts after:T066
-- [ ] T068 [P] [US4] {FR-016} [COMPLETES FR-016] **NC-8** — a three-part limitation record must fail the checker — TST/test_limitation_format_control.py after:T067
-- [ ] T069 [P] [US4] {FR-028} DV-020 / SC-021 — the emitted set is exactly the four artifacts, no file partitions `lines[]`, no split label — TST/test_emitted_artifact_set.py after:T066
-- [ ] T070 [P] [US4] {FR-015} [COMPLETES FR-015] SC-015 / SC-018 — every duration assumption and the criticality mapping recoverable from the datasheet alone — TST/test_datasheet.py after:T066
-- [ ] T071 [US4] {FR-014} [COMPLETES FR-014] Run `procurement-generate` and commit DAT/datasheet.md after:T070
+- [X] T060 [US4] {FR-014} Emit the seven named sections deterministically with no clock read in PKG/datasheet.py — Motivation … Maintenance, per FR-014 after:T037
+- [X] T061 [US4] {FR-015,FR-022} [COMPLETES FR-022] Write the Generation Process provenance in PKG/datasheet.py — identity, revision, seed, scheme, date, label, all three generation-input digests, each named with its `digest_kind`, `library_pin` after:T060
+- [X] T062 [US4] {FR-007} [COMPLETES FR-007] Disclose the duration model in PKG/datasheet.py — family, parameters in the generator's parameterization, unit, rounding, floor, apportionment after:T061
+- [X] T063 [US4] {FR-035} [COMPLETES FR-035] Disclose the per-category expected duration offset, the tier assignment and the two named duration quantities (SC-028) in PKG/datasheet.py after:T062
+- [X] T064 [US4] {FR-015} Record realized against intended in PKG/datasheet.py — every figure in data-model §Generation Process disclosures, each naming its bounding criterion after:T063
+- [X] T065 [US4] {FR-016} Emit the **nine** active limitation records — L-1…L-10 less L-5, withdrawn on 2026-07-26 when E002 published the corpus fields. Emit nine and assert nine; do not renumber, so L-6…L-10 keep the identities other artifacts cite, each with scope decision, evidence, reversal trigger and production-scale alternative, in PKG/datasheet.py after:T064
+- [X] T066 [US4] {FR-028,FR-033} State in PKG/datasheet.py that no split is emitted, that ownership of the split is unassigned, and that 0.25 is an assumed cross-epic fraction after:T065
+- [X] T067 [US4] {FR-014,FR-016} Add the datasheet conformance check (DV-019) to PKG/validate.py — all seven sections present and 100% of limitation records carrying all four parts after:T066
+- [X] T068 [P] [US4] {FR-016} [COMPLETES FR-016] **NC-8** — a three-part limitation record must fail the checker — TST/test_limitation_format_control.py after:T067
+- [X] T069 [P] [US4] {FR-028} DV-020 / SC-021 — the emitted set is exactly the four artifacts, no file partitions `lines[]`, no split label — TST/test_emitted_artifact_set.py after:T066
+- [X] T070 [P] [US4] {FR-015} [COMPLETES FR-015] SC-015 / SC-018 — every duration assumption and the criticality mapping recoverable from the datasheet alone — TST/test_datasheet.py after:T066
+- [X] T071 [US4] {FR-014} [COMPLETES FR-014] Run `procurement-generate` and commit DAT/datasheet.md after:T070
 
 ---
 

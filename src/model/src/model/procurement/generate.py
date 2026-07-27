@@ -362,7 +362,81 @@ def generate(root: Path | None = None) -> dict[str, Any]:
 
     digest = dataset_content_hash(envelope)
     _write(root, envelope, digest, drawn, offsets)
+
+    from model.procurement.datasheet import write_datasheet
+
+    write_datasheet(envelope, _realized_figures(envelope, drawn, offsets), root)
     return envelope
+
+
+def _realized_figures(
+    envelope: Mapping[str, Any], drawn: Sequence[_DrawnLine], offsets: Mapping[str, float]
+) -> dict[str, Any]:
+    """Every figure the datasheet reports against its bounding criterion.
+
+    Computed from the emitted envelope and the drawn lines rather than
+    re-derived, so the datasheet cannot disagree with the artifact it describes.
+    """
+    import numpy as _np
+
+    from model.procurement.criticality import pressure_terciles
+    from model.procurement.equipment import (
+        LineEquipment,
+        catalog_overlap_share,
+        corpus_overlap_share,
+    )
+
+    lines = envelope["lines"]
+    finals = [line["events"][-1]["to_state"] for line in lines]
+    delivered = sum(1 for state in finals if state == "delivered")
+
+    totals = _np.array([sum(line.leg_days) for line in drawn], dtype=float)
+    equipment = [
+        LineEquipment(
+            line.material_category,
+            line.description,
+            line.manufacturer,
+            line.part_number,
+            line.quantity,
+            line.unit_of_measure,
+        )
+        for line in drawn
+    ]
+    ratios = [
+        line.slack_days / category_expected_duration_days(line.material_category) for line in drawn
+    ]
+    ordered = sorted(ratios)
+    third = len(ordered) // 3
+    cuts = (ordered[third], ordered[2 * third])
+
+    late = sum(
+        1
+        for line, emitted in zip(drawn, lines, strict=True)
+        if emitted["events"][-1]["to_state"] == "delivered"
+        and emitted["events"][-1]["occurred_at"][:10] > emitted["need_by_date"]
+    )
+    _ = pressure_terciles
+
+    logs = [math.log(total) for total in totals]
+    decomposition = decompose_spread(
+        logs,
+        [line.allocated.vendor_id for line in drawn],
+        [line.material_category for line in drawn],
+    )
+
+    return {
+        "delivered": delivered,
+        "delivered_share": delivered / len(lines),
+        "corpus_overlap_share": corpus_overlap_share(equipment, sorted(TIER_OFFSETS), {}),
+        "catalog_overlap_share": catalog_overlap_share(equipment),
+        "spread_ratio": decomposition.adjusted_ratio,
+        "spread_ratio_unadjusted": decomposition.unadjusted_ratio,
+        "median_days": float(_np.median(totals)),
+        "p80_days": float(_np.percentile(totals, 80)),
+        "late_share": late / delivered if delivered else 0.0,
+        "rework_lines": sum(1 for line in drawn if line.rework_loops),
+        "tercile_cuts": cuts,
+    }
 
 
 def _check_shape(drawn: Sequence[_DrawnLine]) -> None:

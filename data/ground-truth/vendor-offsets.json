@@ -1,6 +1,6 @@
 {
   "between_vendor_spread_sd_log": 0.1224,
-  "dataset_content_hash": "sha256:967c1ab1d75df0aca5b217211e4afa3829a30904ca290662f74ad86198e328fe",
+  "dataset_content_hash": "sha256:138a0fbff44acd5bdfd72dcd263f02c9ac3e616a787bc90410c88cdfd684cb6b",
   "generation_date": "2026-04-16",
   "generator_id": "model.procurement.generate",
   "generator_revision": 1,
@@ -30,13 +30,13 @@
   "realized_corpus_overlap_share": 0.698492462312,
   "residual_spread_sd_log": 0.460585496949,
   "root_seed": 20260416,
-  "spread_ratio": 0.306930733802,
-  "spread_ratio_unadjusted": 0.267358442214,
+  "spread_ratio": 0.306369726678,
+  "spread_ratio_unadjusted": 0.26738893228,
   "truth_schema_version": 1,
   "variance_decomposition": {
-    "material_category": 0.067901643039,
-    "residual": 0.182422083901,
-    "vendor": 0.017185341551
+    "material_category": 0.0684962487,
+    "residual": 0.181072214477,
+    "vendor": 0.016995874331
   },
   "vendor_offsets": [
     {

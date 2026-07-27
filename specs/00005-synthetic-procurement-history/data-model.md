@@ -330,7 +330,7 @@ Neither may be written where the other is meant.
 
 ### Slack, schedule pressure, criticality
 
-`slack_days = max(0, round(line_expected_total_duration_days × f))`, `f ~ Normal(0.15, 0.10)` truncated at 0. Mean slack ≈ 10.4 days, **calibrated** so 25–35% of *delivered* lines miss their need-by date.
+`slack_days = max(0, round(line_expected_total_duration_days × f))`, `f ~ Normal(0.13, 0.10)` truncated at 0. Mean slack ≈ 8.4 days, **calibrated** so 25–35% of *delivered* lines miss their need-by date — realized 26.3%. **Corrected 2026-07-27**: this row declared 0.15 and described it as already calibrated to that band, but 0.15 produces 24.6% on the emitted dataset, outside a MUST. The declared value and the declared outcome disagreed; the outcome is the requirement. 0.13 is the smallest departure that clears the floor while keeping slack meaningful — lower values reach the band's midpoint but push a fifth of lines to zero slack, piling ties onto the tercile cut points.
 
 Slack is **multiplicative on the line's expected duration, not additive**, and that is a modelling decision with a data consequence: `schedule_pressure_ratio = slack_days / category_expected_duration_days` then reduces to approximately `f × exp(b_v)`, which is nearly independent of category. An additive slack would make T3's ratio systematically largest, collapsing the tier × tercile table onto its diagonal and leaving cells — and therefore criticality bands — unpopulated.
 

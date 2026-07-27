@@ -182,15 +182,34 @@ SIGMA_0 = round(solve_sigma_0(), 2)
 #: before rework instead lands near 66 / 104 (STF-005), which is why this is not
 #: simply the median target.
 #:
-#: Solved, not chosen: the bisection returns 59.8–60.1 across calibration seeds
-#: and `test_the_solver_reproduces_the_pinned_constant` re-runs it. The solve is
-#: driven by `rework_loop_allocation`, so the population it calibrates against
-#: is the declared one — an earlier draft used an even 0–3 loop spread, which is
-#: 3.6× the declared rework and pulled the answer down to 46.7. Re-solved from
-#: 59.9 to 57.8 when `LOOP_SHARES` corrected the loop from two legs to three:
-#: the calibration had been fitting a population whose rework lines were each
-#: one leg short.
-T_PRE = 57.8
+#: **Calibrated against the realized 199-line dataset, not a converged one.**
+#: `data-model.md` says T_pre is "solved so the rework-inclusive **realized**
+#: median is 61 ± 5", and the realized population is the 199 lines actually
+#: emitted. `solve_pre_rework_mean` bisects over 20,000 lines instead, where the
+#: median has converged, and returns 57.8 — at which the *emitted* dataset has a
+#: median of exactly 56.0. That satisfies SC-023 with **zero margin**, which is
+#: not a calibration so much as a coincidence that happens to round the right way.
+#:
+#: 60.0 is the value with the widest margin on the emitted dataset **across all
+#: three constraints jointly**, which is the part that took a second pass. Tuned
+#: against SC-023 alone the answer is 62.0 — and 62.0 breaks FR-010, because
+#: longer durations censor fewer lines and `revise_and_resubmit` empties out.
+#: The constants interact, so the search has to be joint: median 58 (2 days of
+#: room), P80 90.4 (4.4), delivered share 0.879 inside `[0.804, 0.90]` with room
+#: at both ends, late share 0.263 inside FR-011's band. Every one of those is
+#: recorded in the datasheet against its bounding criterion.
+#:
+#: Keeping both numbers is deliberate. The converged solve is the honest answer
+#: to "what mean produces a 61-day median in the limit"; 62.0 is the honest
+#: answer to "what mean makes *this* dataset satisfy SC-023 with room". They
+#: differ by ~7% because the median over 199 lines moves several days between
+#: seeds — the sampling noise recorded against the SC-023 property test.
+#:
+#: Earlier corrections, kept because each was a real defect: an even 0–3 loop
+#: spread is 3.6× the declared rework and pulled the answer to 46.7; and before
+#: `LOOP_SHARES` fixed the loop from two legs to three, the calibration was
+#: fitting a population whose rework lines were each one leg short.
+T_PRE = 60.0
 
 
 def vendor_offsets(vendor_ids: Sequence[str]) -> Mapping[str, float]:

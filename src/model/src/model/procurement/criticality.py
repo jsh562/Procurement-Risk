@@ -40,9 +40,23 @@ TIERS = ("T1", "T2", "T3")
 #: the lowest tercile of the ratio.
 PRESSURE_LEVELS = ("TIGHT", "MODERATE", "RELAXED")
 
-#: `f ~ Normal(0.15, 0.10)` truncated at 0. Calibrated so 25–35% of *delivered*
-#: lines miss their need-by date (FR-011); mean slack lands near 10.4 days.
-SLACK_MEAN = 0.15
+#: `f ~ Normal(0.13, 0.10)` truncated at 0. **Calibrated against FR-011's band**,
+#: which is what this parameter is for: 25–35% of *delivered* lines must miss
+#: their need-by date.
+#:
+#: `data-model.md` declared 0.15 and described it as already calibrated to that
+#: band. Measured on the emitted dataset it produces **24.6%** — outside a MUST
+#: by four tenths of a point. The declared value and the declared outcome
+#: disagreed, and the outcome is the requirement, so the parameter moved.
+#:
+#: 0.13 is the *smallest* departure that clears the floor: realized 26.3%, mean
+#: slack 8.4 days, 8.5% of lines at zero slack, all five criticality bands
+#: populated. Lower values reach the band's midpoint but push a fifth of lines to
+#: zero slack, which piles ties onto the tercile cut points the pressure
+#: dimension depends on. The lever is weak in any case — the late share moves
+#: only 24.6% to 29.6% across the whole plausible range, because most lateness
+#: comes from duration variance rather than from slack.
+SLACK_MEAN = 0.13
 SLACK_SD = 0.10
 
 #: Nine cells, five distinct bands, every band reachable.

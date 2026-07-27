@@ -40,6 +40,7 @@ __all__ = [
     "ROSTER_INPUT_PATH",
     "ValidationError",
     "ValidationReport",
+    "check_datasheet",
     "check_input_drift",
     "check_pin_resolved",
     "check_provenance_agreement",
@@ -171,6 +172,53 @@ def check_input_drift(envelope: Mapping[str, Any], root: Path | None = None) -> 
     return len(entries)
 
 
+def check_datasheet(root: Path | None = None) -> int:
+    """DV-019 — all seven sections present, every limitation record complete.
+
+    Reads the emitted markdown rather than the objects that produced it. A check
+    over the in-memory records would pass on a datasheet whose renderer dropped a
+    section, which is the failure mode that matters: the artifact is what a
+    reader audits.
+    """
+    from model.procurement.datasheet import (
+        ACTIVE_LIMITATIONS,
+        LIMITATION_PARTS,
+        SECTION_TITLES,
+        check_limitations,
+    )
+
+    target = paths.datasheet_path(root)
+    if not target.is_file():
+        raise ValidationError(f"no datasheet at {target}")
+    text = target.read_text(encoding="utf-8")
+
+    missing = [title for title in SECTION_TITLES if f". {title}" not in text]
+    if missing:
+        raise ValidationError(
+            f"the datasheet omits section(s) {', '.join(missing)}; FR-014 names seven and "
+            f"a datasheet short a section discloses less than it claims to"
+        )
+
+    check_limitations(ACTIVE_LIMITATIONS)
+    for record in ACTIVE_LIMITATIONS:
+        if f"### {record.identifier}" not in text:
+            raise ValidationError(f"limitation {record.identifier} is not in the emitted text")
+    labels = (
+        "Scope decision",
+        "Supporting evidence",
+        "Reversal trigger",
+        "Production-scale alternative",
+    )
+    for label in labels:
+        rendered = text.count(f"**{label}**")
+        if rendered != len(ACTIVE_LIMITATIONS):
+            raise ValidationError(
+                f"'{label}' appears {rendered} time(s) against {len(ACTIVE_LIMITATIONS)} "
+                f"limitation records; 100% must carry all {len(LIMITATION_PARTS)} parts"
+            )
+    return len(ACTIVE_LIMITATIONS)
+
+
 def check_pin_resolved(envelope: Mapping[str, Any], observed_numpy: str | None = None) -> None:
     """The recorded pin is the version that actually resolved (DV-025).
 
@@ -248,6 +296,7 @@ def validate(root: Path | None = None, observed_numpy: str | None = None) -> Val
             scope_limits=limits,
         )
 
+    check_datasheet(root)
     digest = check_reproduction(root=root)
     return ValidationReport(dataset_content_hash=digest, inputs_checked=inputs)
 

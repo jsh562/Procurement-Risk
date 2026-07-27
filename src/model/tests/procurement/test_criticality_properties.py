@@ -78,7 +78,14 @@ class TestSlack:
     """`f ~ Normal(0.15, 0.10)` truncated at 0, multiplicative on expected duration."""
 
     def test_the_declared_parameters(self) -> None:
-        assert (SLACK_MEAN, SLACK_SD) == (0.15, 0.10)
+        """0.13, not the 0.15 `data-model.md` first declared.
+
+        The parameter exists to be calibrated against FR-011's 25-35% late band,
+        and 0.15 produced 24.6% on the emitted dataset — outside a MUST. The
+        declared value and the declared outcome disagreed; the outcome is the
+        requirement.
+        """
+        assert (SLACK_MEAN, SLACK_SD) == (0.13, 0.10)
 
     def test_slack_is_never_negative(self) -> None:
         rng = np.random.default_rng(SEED)
@@ -90,10 +97,12 @@ class TestSlack:
         assert 0 in {draw_slack_days(rng, 70.0) for _ in range(20_000)}
 
     def test_mean_slack_is_near_the_declared_figure(self) -> None:
-        """≈10.4 days at a tier-2 expected duration."""
+        """≈9.0 days at a tier-2 expected duration, following the recalibration
+        from 0.15 to 0.13. Asserted as a consequence of SLACK_MEAN rather than
+        as a second constant, so the two cannot drift apart."""
         rng = np.random.default_rng(SEED)
         drawn = [draw_slack_days(rng, 69.5) for _ in range(20_000)]
-        assert float(np.mean(drawn)) == pytest.approx(10.4, abs=1.0)
+        assert float(np.mean(drawn)) == pytest.approx(69.5 * SLACK_MEAN, abs=1.0)
 
     def test_slack_scales_with_expected_duration(self) -> None:
         """Multiplicative, not additive — AD-009."""
