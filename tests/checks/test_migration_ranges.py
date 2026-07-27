@@ -137,9 +137,7 @@ def test_the_filename_prefix_matches_the_revision_id_inside() -> None:
         assert match is not None, f"{path.name} declares no `revision:` line"
         if int(match.group(1)) != _prefix(path):
             mismatched.append(f"{path.name} declares revision {match.group(1)!r}")
-    assert not mismatched, (
-        f"filename prefix and declared revision id disagree: {mismatched}"
-    )
+    assert not mismatched, f"filename prefix and declared revision id disagree: {mismatched}"
 
 
 def test_the_revision_graph_resolves_to_a_single_head() -> None:
@@ -205,8 +203,7 @@ def test_the_two_epics_blocks_are_both_populated() -> None:
         if low <= _prefix(path) <= high
     }
     assert populated == {owner for _, _, owner in BLOCKS}, (
-        f"only {sorted(populated)} have revisions; the partition is untested for "
-        f"the rest"
+        f"only {sorted(populated)} have revisions; the partition is untested for the rest"
     )
 
 
@@ -220,6 +217,5 @@ def test_the_check_reports_a_revision_numbered_outside_the_blocks(prefix: str) -
     """
     number = int(prefix)
     assert not any(low <= number <= high for low, high, _ in BLOCKS), (
-        f"{prefix} was expected to fall outside every declared block, but the "
-        f"block table admits it"
+        f"{prefix} was expected to fall outside every declared block, but the block table admits it"
     )

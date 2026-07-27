@@ -66,9 +66,7 @@ def test_the_guard_is_autouse() -> None:
     forgot — and the test that reaches the network by accident is exactly the
     one whose author did not think it would.
     """
-    decorators = [
-        ast.unparse(decorator) for decorator in _guard_function().decorator_list
-    ]
+    decorators = [ast.unparse(decorator) for decorator in _guard_function().decorator_list]
     assert any("autouse=True" in decorator for decorator in decorators), (
         f"the network guard is not autouse: {decorators}. SC-008 counts requests "
         f"across the whole suite, not across the tests that asked to be watched."
@@ -100,9 +98,7 @@ def test_the_guard_patches_both_connect_entry_points() -> None:
 def test_the_guard_raises_rather_than_returning_quietly() -> None:
     """A guard that logged and continued would let the suite pass while making
     the very requests SC-008 counts at zero."""
-    raises = [
-        node for node in ast.walk(_guard_function()) if isinstance(node, ast.Raise)
-    ]
+    raises = [node for node in ast.walk(_guard_function()) if isinstance(node, ast.Raise)]
     assert raises, "the network guard does not raise; it observes without objecting"
 
 
@@ -119,12 +115,9 @@ def test_the_permitted_destinations_are_loopback_only() -> None:
     tree = ast.parse(source)
     permitted: set[str] = set()
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == "LOOPBACK_HOSTS"
-                for target in node.targets
-            )
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "LOOPBACK_HOSTS"
+            for target in node.targets
         ):
             permitted = {
                 element.value

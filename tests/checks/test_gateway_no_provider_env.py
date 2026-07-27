@@ -59,7 +59,9 @@ def ask(prompt: str, trace_id: str | None = None) -> str:
 #: The same consumer with one added line: an annotation naming a type that only
 #: exists inside the provider SDK. In an environment without the SDK this must
 #: fail to type-check — that is what makes the passing run above evidence.
-CONSUMER_REACHING_FOR_THE_SDK = CONSUMER + """
+CONSUMER_REACHING_FOR_THE_SDK = (
+    CONSUMER
+    + """
 
 from anthropic import Anthropic
 
@@ -67,6 +69,7 @@ from anthropic import Anthropic
 def client() -> Anthropic:
     raise NotImplementedError
 """
+)
 
 
 def _interpreter(venv: Path) -> Path:
@@ -137,9 +140,7 @@ def test_the_environment_holds_zero_provider_packages(no_provider_env: Path) -> 
     installed distributions rather than an import attempt: a package can be
     present and fail to import for unrelated reasons, and "0 present" is the
     claim."""
-    listed = _uv(
-        "pip", "list", "--format", "json", "--python", str(_interpreter(no_provider_env))
-    )
+    listed = _uv("pip", "list", "--format", "json", "--python", str(_interpreter(no_provider_env)))
     assert listed.returncode == 0, listed.stderr
     names = {package["name"].lower() for package in json.loads(listed.stdout)}
     assert PROVIDER_DISTRIBUTION not in names, (

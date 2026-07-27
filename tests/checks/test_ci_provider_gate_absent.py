@@ -35,9 +35,7 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 #: two by reading the source, so the duplication cannot drift silently.
 OPT_IN = "GATEWAY_ALLOW_PROVIDER_CALLS"
 
-CONFIG_SOURCE = (
-    REPO_ROOT / "src" / "gateway" / "src" / "gateway" / "config.py"
-)
+CONFIG_SOURCE = REPO_ROOT / "src" / "gateway" / "src" / "gateway" / "config.py"
 
 
 def _workflows() -> list[Path]:
@@ -60,9 +58,9 @@ def test_no_workflow_sets_the_provider_opt_in(workflow: Path) -> None:
     ]
     assert not lines, (
         f"{workflow.name} names {OPT_IN}:\n  " + "\n  ".join(lines) + "\n"
-        f"That control gates the only provider-reaching path and must be absent "
-        f"from every CI environment (TR-063). Continuous integration runs in "
-        f"`replay` mode against committed fixtures."
+        "That control gates the only provider-reaching path and must be absent "
+        "from every CI environment (TR-063). Continuous integration runs in "
+        "`replay` mode against committed fixtures."
     )
 
 
@@ -99,8 +97,7 @@ def test_the_scan_reports_a_planted_opt_in(tmp_path: Path) -> None:
     """
     planted = tmp_path / "verify.yml"
     planted.write_text(
-        "jobs:\n  verify:\n    env:\n      "
-        f"{OPT_IN}: '1'\n    steps:\n      - run: pytest\n",
+        f"jobs:\n  verify:\n    env:\n      {OPT_IN}: '1'\n    steps:\n      - run: pytest\n",
         encoding="utf-8",
     )
     matching = [line for line in planted.read_text(encoding="utf-8").splitlines() if OPT_IN in line]

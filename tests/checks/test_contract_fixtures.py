@@ -140,9 +140,7 @@ FIXTURE_FOR_CONTRACT = {
     "The provider-facing module does not reach the arithmetic modules": (
         "gateway_compute_boundary"
     ),
-    "The gateway-owned type modules do not reach the provider module": (
-        "gateway_public_surface"
-    ),
+    "The gateway-owned type modules do not reach the provider module": ("gateway_public_surface"),
     "The public entry point does not import the provider module directly": (
         "gateway_public_surface"
     ),
