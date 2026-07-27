@@ -35,7 +35,7 @@
 | IV. Agent Output Style | Tables and tagged lists throughout; prose limited to Summary | PASS |
 | V. The Model Extracts, Code Computes | Model-facing code confined to `model.llm`, which the forbidden contract already names; confidence, coercion, and metrics live in `model.compute` and are unreachable from it | PASS — see AD-001; FR-031, FR-048, FR-049 |
 | VI. Evaluate Before You Tune | Confidence floor declared before the first run and not refitted; the extraction reference is E002's committed generation record, already hash-pinned | PASS — FR-032; SC-013 |
-| VII. Publish the Miss | Limitations carry scope decision, evidence, reversal trigger, and production-scale alternative — including G-6, the one shortfall this epic actually expects to publish | PASS — spec Disclosed Limitations, six rows; SC-024 left absolute and the shortfall published beside it rather than the target softened |
+| VII. Publish the Miss | Limitations carry scope decision, evidence, reversal trigger, and production-scale alternative — including G-6, the one shortfall this epic actually expects to publish | PASS — spec Disclosed Limitations, eleven rows, and data-model §Disclosed Gaps now carries the reversal trigger and the production-scale alternative as separate columns rather than one merged sentence; SC-024 left absolute and the shortfall published beside it rather than the target softened |
 | VIII. Honest Opponents | Deterministic template extractor over the same transmittals, labelled strong or weak | PASS — `ingest/baseline.py`; FR-050 |
 | Technology Stack | ONNX Runtime already declared for INT8 CPU inference; PostgreSQL 16 + pgvector; no second datastore of record | PASS — see ADR-0018 |
 | Testing & Quality Policy | Deterministic computation modules take **both** mandates: strict test-first (red-green-refactor) **and** property-based tests; architecture contracts gate the build; new packages enter the coverage denominator | PASS — see Testing Strategy; the coverage `--source` list is an enumeration that overrides rather than merges, so it is a real change, not "configured" |
@@ -100,8 +100,8 @@ Feature-local tradeoffs only. Project-wide decisions are standalone records: **A
 | AD-008 | Confidence score shape and floor | Equal weights / three tiers / deductions from 1.0 | Deductions; floor **0.80** | Three binary signals admit eight scores, so the floor is only meaningful stated as what it excludes: any repaired invocation, and any value both alternate-labelled and page-split — each scoring 0.75. **The 0.70 originally proposed admitted both**, so it was raised (spec Clarifications) |
 | AD-009 | Which fields are attempted per chunk | All 22 vocabulary terms / declared transmittal subset | Declared transmittal subset; absence recorded once per document | Roughly ten vocabulary terms cannot appear on a transmittal. Attempting all 22 per chunk makes the failure table chunks × 22, dominated by structural absences, and buys ~10 impossible model calls per chunk |
 | AD-010 | Line-item grouping | Source chunk as de facto key / association table / header + first item only | Association keyed by value, document, item ordinal | The chunk-as-key option breaks silently the moment an over-long item entry splits into two chunks — one line item becomes two with no symptom, which is the invisible-corruption class Principle III targets |
-| AD-011 | Interval method for per-field figures | Wald / bootstrap over documents / Wilson | Wilson 95%, denominator printed | Per-field denominators are frequently under 20. Wald degenerates to [0,0] and [1,1] at the boundaries, so "100% precision" from 7 of 7 reads as certainty; Wilson keeps both bounds inside [0,1] and makes the small denominator visible |
-| AD-012 | Baseline extractor design | None / an LLM at lower temperature / template rules | Deterministic per-vendor template rules | The synthetic layer uses a fixed set of per-vendor templates, so a template extractor could plausibly win — the only kind of baseline whose defeat carries information (Principle VIII) |
+| AD-011 | Interval method for per-field figures | Wald / bootstrap over documents / Wilson, corrected or not | **Continuity-corrected** Wilson 95%, denominator printed, variant named with the figures (FR-060) | Per-field denominators are frequently under 20. Wald degenerates to [0,0] and [1,1] at the boundaries, so "100% precision" from 7 of 7 reads as certainty; Wilson keeps both bounds inside [0,1] and makes the small denominator visible. **The continuity correction is applied rather than its absence disclosed**: the research records under-coverage at extreme proportions for very small *n* without it, which is exactly this regime — denominators under 20 with precision expected near 1 — and the corrected form errs toward over-coverage, which is the honest direction under Principle II |
+| AD-012 | Baseline extractor design | None / an LLM at lower temperature / template rules **written from the generator's templates** / template rules **re-derived from rendered text** | Deterministic per-vendor template rules, **re-derived from the rendered documents** | The synthetic layer uses a fixed set of per-vendor templates, so a template extractor could plausibly win — the only kind of baseline whose defeat carries information (Principle VIII). Reading the generator's own template definitions was the cheaper option and is rejected: it scores at or near 100% by construction, which makes it the answer key rather than an opponent and makes the model's defeat by it carry no information. Enforced by import contract, not by intent (FR-050) |
 | AD-013 | How is migration block `0300`–`0399` claimed without turning CI red? | One-line `BLOCKS` append / declare E005's block too / relax the gapless assertion | Declare **both** `(200,299,"E005")` and `(300,399,"E006")`, and amend two assertions | A one-line append fails the gapless-partition assertion, and adding E005's block then fails two more: every declared block must currently hold revisions, and `"0200"` is a parametrized negative control asserting 200 is outside every block. Fix: distinguish *claimed-and-populated* from *reserved-and-empty* — assert every block holding revisions is declared and that at least two are populated — and move the just-past-the-end control from `"0200"` to `"0400"`. Every property the file exists for survives, and the E005 reservation becomes machine-checked instead of a sentence in one spec |
 | AD-014 | ONNX export precision | INT8 / FP32 | FP32 | ADR-0012 budgets "roughly 80 MB" for full-precision weights and ADR-0018 preserves 384 dimensions; FP32 keeps ADR-0012's own figure true. INT8 would shrink the session below that budget but changes the vectors every published retrieval number is measured on, which is a quantization ablation, not a packaging choice. Recorded here because ADR-0018 pinned the runtime and artifact without pricing this term, and E008 inherits the resident figure |
 
@@ -109,13 +109,13 @@ Feature-local tradeoffs only. Project-wide decisions are standalone records: **A
 
 | Entity | Key Fields | Relationships | Notes |
 |--------|------------|---------------|-------|
-| `ingestion_run` | run id, agent identity, provider model, chunker version, embedding model id + revision, corpus manifest digests, prompt/schema digest, resolution mode, started/finished, `run_failure_kind`, `run_failure_detail` | Parent of every run-output association | Carries **no** status — that lives per document, below. The two failure columns are FR-056's home: a run-level failure cannot be an `extraction_failure` row, because that table's source chunk is NOT NULL against a chunk the rollback removed. Its five values are disjoint from the seven per-field outcomes, asserted by intersecting both `CHECK` definitions |
+| `ingestion_run` | run id, agent identity, provider model, chunker version, embedding model id + revision, corpus manifest digests, prompt/schema digest, resolution mode, `run_trace_id`, started/finished, `run_failure_kind`, `run_failure_detail` | Parent of every run-output association | Carries **no** status — that lives per document, below. The two failure columns are FR-056's home: a run-level failure cannot be an `extraction_failure` row, because that table's source chunk is NOT NULL against a chunk the rollback removed. Its five values are disjoint from the seven per-field outcomes, asserted by intersecting both `CHECK` definitions |
 | `ingestion_run_document` | run id, document id, status, `input_tuple_digest` | run → `document` | Where the generation lives (ADR-0019). Status `active` \| `superseded`; partial unique index on document `WHERE status = 'active'` makes two live generations unrepresentable. The digest is over **that document's own** content hash plus chunker version, encoder revision, provider model, and prompt/schema digest — corpus-wide would reload all 51 on any single change, inverting FR-043. **Promotion removes the prior generation's rows** ({SAD:ADR-0020}): chunk ordinals are unique within a document, not a generation, so retention was unstorable |
-| `extracted_value_confidence_signal` | extracted value id, run id, label form, page-split flag, repair flag | → the run-output association | FR-063. Two of the three deduction signals exist in no E003 column, so without this the SC-026 recomputation check reduces to comparing the stored score with itself |
+| `extracted_value_parse_signal` | extracted value id, run id, document id, label form, source chunk count, repair flag | → the run-output association, and → `extracted_value` on `(id, source_chunk_count)` | FR-063. Two of the three deduction signals exist in no E003 column, so without this the SC-026 recomputation check reduces to comparing the stored score with itself. The third is not duplicated — the page-split signal is the value's own `source_chunk_count`, held equal by composite FK |
 | `ingestion_run_chunk` | run id, chunk id | run → `chunk` | Association, not a column — `chunk` belongs to E003 and gains nothing |
 | `ingestion_run_extracted_value` | run id, extracted value id | run → `extracted_value` | Same reason |
 | `ingestion_run_extraction_failure` | run id, extraction failure id | run → `extraction_failure` | Same reason |
-| `extracted_value_line_item` | extracted value id, run id, document id, item ordinal | → the run-output association, not `extracted_value` directly | Targets a deliberately redundant unique key so a line item cannot exist for a value with no run attribution, its run and document cannot disagree with the value's, and the grouping is generation-scoped — two generations never merge their item 3 (AD-010) |
+| `extracted_value_line_item` | extracted value id, run id, document id, item ordinal (`>= 0`) | → the run-output association, not `extracted_value` directly | Targets a deliberately redundant unique key so a line item cannot exist for a value with no run attribution, its run and document cannot disagree with the value's, and the grouping is generation-scoped — two generations never merge their item 3 (AD-010). Ordinal **0** is the declared group for document-scoped values (submittal number, submittal date, approval date); real items are numbered from 1 |
 | `v_active_ingestion_generation` | — | view over the associations | The single place E008, E009, and E012 meet ADR-0019's filtering obligation, rather than each reader remembering it |
 
 **Populated but not owned** (E003's, unchanged): `document`, `chunk`, `extracted_value`, `extracted_value_contributing_chunk`, `extraction_failure`, `field_vocabulary`.
@@ -131,13 +131,28 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | Tier | Tool | Scope | Mock Boundary | Install |
 |------|------|-------|---------------|---------|
 | Unit | pytest | Chunker ladder, tokenizer budget, segmentation, id minting, failure classification | Filesystem fixtures; no database | configured |
-| Property | Hypothesis | `model.compute.confidence`, `coerce`, `metrics` — the policy's "scoring functions", which take **both** mandates: strict test-first (red-green-refactor) **and** property-based tests. Tasks must order the test task before its implementation task for every module under `model/compute/` | Pure functions, nothing mocked | configured |
+| Property | Hypothesis | `model.compute.confidence`, `coerce`, `metrics` — the policy's "scoring functions", which take **both** mandates: strict test-first (red-green-refactor) **and** property-based tests. Tasks must order the test task before its implementation task for every module under `model/compute/`. Relation class declared per module (below); confidence is **enumerated exhaustively, not sampled** | Pure functions, nothing mocked | configured |
 | Integration | pytest + live PostgreSQL | Per-document transaction boundary, abort leaves earlier documents intact, generation promotion, partial unique index rejects a second active run | Real database; gateway in `replay` from committed fixtures | configured |
-| Architecture | import-linter | Computation boundary reaches `model.llm`; new placement check that only `model.llm` imports `gateway` | — | configured |
+| Architecture | import-linter | Computation boundary reaches `model.llm`; new placement check that only `model.llm` imports `gateway`; **one page reader** — nothing under `model.ingest` declares a second tolerance map, normalization, or page-text assembly (SC-037); **baseline independence** — `model.ingest.baseline` may not import `model.corpus.templates`, `.render`, or `.model` (FR-050) | — | configured |
 | Security | committed-fixture credential scan (E004's) + `ruff` | Fixture bodies and committed tree | — | configured |
-| Coverage | coverage.py | Combined, 80% floor | — | **not configured** — `verify.yml`'s `--source` is an enumeration that overrides rather than merges, and lists only `roster`, `schema`, `corpus`. `ingest`, `llm`, and `compute` must be appended or every line this epic adds is invisible to the gate |
+| Coverage | coverage.py | Combined 80% floor **and a per-package 80% floor on each of the three packages this epic adds** — `ingest`, `llm`, `compute` — asserted per package, not only on the total | — | **not configured** — `verify.yml`'s `--source` is an enumeration that overrides rather than merges, and lists only `roster`, `schema`, `corpus`. `ingest`, `llm`, and `compute` must be appended or every line this epic adds is invisible to the gate. The per-package floor is a second change to the same job: a single combined figure lets `roster`, `schema`, and `corpus` — already covered — carry a newly added package across the threshold with none of its lines exercised, which is the arithmetic that makes a coverage gate agree with adding untested code |
 
 **New dependencies to add**: `onnxruntime`, `tokenizers`, `pysbd`, `pgvector` (psycopg adapter). No new test tooling — every tier already has a configured tool.
+
+### The test-first boundary, and what makes it observable
+
+**Which modules take the strict mandate, and why the chunker does not.** The boundary is package placement — every module under `model/compute/` — and the rule behind the placement is stated so a new module can be classified without a ruling: `model/compute/` holds the **scoring functions** the policy names, the ones whose output is a *number that is stored or published* (a confidence written to a row, a coerced typed value, a precision figure with an interval). The chunker ladder, the tokenizer budget, and the input-tuple digest are equally deterministic and equally pure, and they are deliberately in the test-after unit tier: their output is a boundary, a count, and a digest — ingestion work, which the policy assigns test-after — and their correctness is carried by SC-004, SC-007, and SC-038 as total assertions over the corpus rather than by properties over a generator domain. A module that computes a stored or published number belongs under `model/compute/` and takes both mandates; one that does not, does not.
+
+**The observable artifact for red-green-refactor.** An ordering claim no reviewer can check after a squash merge is not evidence, so two artifacts carry it rather than commit order. First, the **task pair in `tasks.md`**: the test task for each `model/compute/` module precedes its implementation task and names it, so the ordering is readable in a committed artifact and its completion order is visible in checkbox state. Second, the **test task's own completion condition**: it is complete when the module's tests have been run against the absent module and observed to fail for the stated reason — a collection error for the missing module, never a green suite — and that observed failure is recorded on the task line. A test task marked complete beside a passing suite is the defect this condition exists to name.
+
+**Relation class per module**, since "property-based tests over pure functions" states the tool and not what is asserted:
+
+| Module | Relation class | What is asserted |
+|---|---|---|
+| `compute/confidence.py` | **Alternate implementation over an exhaustively enumerated domain** | FR-057's three binary signals admit exactly eight combinations, so the domain is enumerated in full — a sampled property over an eight-point domain is strictly weaker than covering it, and Hypothesis is used here for the *weights and floor*, which are run-row inputs, not for the signals. Each of the eight is checked against an independently written expression of the same policy, and the left-to-right application order is asserted as **bit equality**, not equality within a tolerance (FR-057, SC-026) |
+| `compute/confidence.py` | **Invariant** | Output within `[0,1]`; non-increasing as any deduction is added; equal to `1.0` exactly when no signal fires; the three admissible combinations are at or above the floor and the five excluded ones are below it, for any weight-and-floor triple the run row's own `CHECK`s admit |
+| `compute/coerce.py` | **Round-trip and metamorphic** | Round-trip: printed text → typed value → canonical text reproduces the stored canonical form. Metamorphic: whitespace and separator variants of one printed date or quantity coerce to the same typed value; a string outside the accepted forms raises rather than defaulting, for every generated input — the property that keeps FR-037's "absent, not inferred" true at the coercion layer |
+| `compute/metrics.py` | **Invariant and metamorphic** | Invariant: `0 ≤ p, r ≤ 1`; the **continuity-corrected** Wilson interval lies inside `[0,1]`, contains its point estimate, and never has zero width at `0` or `n` successes — the Wald failure AD-011 rejects; width is non-increasing in `n` at a fixed proportion, and is **never narrower than the uncorrected Wilson interval on the same input**, which is the property that distinguishes the two implementations and would otherwise let an uncorrected one pass every test here. Metamorphic: permuting field labels permutes the per-field figures and changes none of them; pooling two fields is *not* asserted to preserve either figure, and the absence is deliberate — pooling to manufacture a larger `n` is what the research rejects |
 
 ## Error Handling Strategy
 
@@ -154,7 +169,7 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 
 | Risk (from spec) | Likelihood | Impact | Mitigation | Owner |
 |-------------------|------------|--------|------------|-------|
-| Parser page attribution is correctness-critical | M | H | Total containment assertion for every chunk against an independent extraction of its named page, under the tolerances and normalization form `corpus/derive.py` already pins — not a sample | `ingest/chunker.py`, `tests/ingest/test_page_attribution.py` |
+| Parser page attribution is correctness-critical | M | H | Total containment assertion for every chunk against an independent extraction of its named page — a fresh post-run read of the document's bytes addressed by the chunk's recorded page number, never the chunker's cached page text (FR-010) — through the one reader `corpus/derive.py` already pins, not a sample. Independent of the run's own state; **not** independent of the parser, which is disclosed rather than implied | `ingest/chunker.py`, `src/model/tests/ingest/test_page_attribution.py` |
 | Computed confidence may not discriminate | H | M | Floor declared before the run and never refitted; signals and weights recorded so any score recomputes from its row; distribution published rather than a mean | `compute/confidence.py`, `ingest/report.py` |
 | Extraction accuracy measured only on generated documents | H | M | Every figure labelled by layer and published beside the template baseline with a Wilson interval; the zero-recognition-error upper bound stated in the report rather than on request | `compute/metrics.py`, `ingest/report.py` |
 
@@ -169,10 +184,10 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-005 | Manifest reader | `model/ingest/manifest_reader.py` | Content-hash verify before parse; abort with zero rows |
 | FR-006 | Document minting | `model/ingest/documents.py` | Closed type set: `specification` / `transmittal` |
 | FR-007 | Parser | `model/ingest/parse.py` | Page numbers from pdfplumber only |
-| FR-008 | Parser | `model/ingest/parse.py` | Reuses `corpus.derive.WORD_EXTRACTION` and `normalize_page_text` |
-| FR-009 | Report | `model/ingest/report.py` | Zero-OCR upper bound disclosed |
-| FR-010 | Page-attribution check | `tests/ingest/test_page_attribution.py` | Total, not sampled |
-| FR-011 | Report | `model/ingest/report.py` | Inspected count, defects, stated bound method |
+| FR-008 | Parser | `model/ingest/parse.py` | Calls `corpus.derive`'s committed reader — `read_document`, `page_text`, `normalize_page_text` under the pinned `WORD_EXTRACTION` — and assembles no page text of its own. Asserted by `src/model/tests/ingest/test_single_page_reader.py`: no module under `src/model/src/model/ingest` calls `extract_words`, declares a tolerance mapping, or defines a second normalization (SC-037). Entry-local, so it stays inside the model entry rather than claiming the root `/tests` cross-entry exception |
+| FR-009 | Report | `model/ingest/report.py` | Zero-OCR upper bound disclosed **per layer** — by construction on the synthetic layer (datasheet), no-recognition-step on the real layer, with the embedded-text-layer residual named |
+| FR-010 | Writer (write-time guard) + page-attribution check | `model/ingest/writer.py`, `src/model/tests/ingest/test_page_attribution.py` | Total, not sampled. Two actors, stated: the job re-checks containment inside each document's transaction so an unattributable chunk is never committed; the suite re-asserts corpus-wide against a **fresh post-run extraction** addressed by the recorded page number, and publishes the enumerated population (FR-068). Path is entry-local under `src/model/tests/`, not the root `/tests` cross-entry exception |
+| FR-011 | Report | `model/ingest/report.py` | Enumerated claim set, inspected count, defects, and the fixed bound method: rule-of-three `3/n` for zero defects at `n > 30`, Wilson otherwise. The known member is real-layer structure detection |
 | FR-012 | Chunker | `model/ingest/chunker.py` | Three boundary classes; fragment keeps structural id |
 | FR-013 | Chunker | `model/ingest/chunker.py` | Page split applied before structure |
 | FR-014 | Chunker, tokens | `model/ingest/chunker.py`, `tokens.py` | Ladder to sentence; fail only on an over-long sentence |
@@ -180,7 +195,7 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-016 | Chunker | `model/ingest/chunker.py` | Bracket markup preserved verbatim |
 | FR-017 | Chunker, runs | `model/ingest/chunker.py`, `runs.py` | Deterministic boundaries; chunker version recorded |
 | FR-018 | Report | `model/ingest/report.py` | Chunk-identity contract for E008 |
-| FR-019 | Encoder | `model/ingest/embed.py` | ONNX Runtime, pinned artifact, no network (ADR-0018). Includes attention-masked mean pooling and L2 normalization as repository code, plus the parity assertion against the reference encoder |
+| FR-019 | Encoder | `model/ingest/embed.py`, `model/ingest/artifacts.py` | ONNX Runtime, pinned artifact, no network (ADR-0018). Encoder export **and** tokenizer resolve from a repository-committed artifact directory, digest-verified before the session is created; a mismatch or absence fails the run and never falls back to a fetch. Committed rather than fetched because SC-023's window opens before the package is imported. Includes attention-masked mean pooling and L2 normalization as repository code, plus the parity assertion against the reference encoder: bounds **declared before the comparison** (cosine ≥ 0.999999, max absolute per-dimension difference ≤ 1e-5) over a **committed probe set spanning both layers**, with the observed maxima published beside them and a breach failing the run (SC-058) |
 | FR-020 | Encoder, writer | `model/ingest/embed.py`, `writer.py` | Model id and revision on every chunk |
 | FR-021 | Writer | `model/ingest/writer.py` | Dimension read from `schema_constants` |
 | FR-022 | Orchestrator | `model/ingest/cli.py` | Extraction restricted to the synthetic layer |
@@ -190,7 +205,7 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-026 | Extraction | `model/llm/extraction.py` | Repair budget fixed at 1 by the gateway |
 | FR-027 | Extraction, writer | `model/llm/extraction.py`, `ingest/writer.py` | Stored exactly as printed; no normalized twin |
 | FR-028 | — | — | Prohibition; asserted by `tests/ingest/test_no_identity_claims.py` |
-| FR-029 | Writer | `model/ingest/writer.py` | Citation inherited from the chunk; composite FK makes disagreement unstorable |
+| FR-029 | Writer | `model/ingest/writer.py` | Citation inherited from the chunk; composite FK makes disagreement unstorable. A page-split value anchors on the chunk carrying the **printed value**, so its cited page is the later page and any reassembly orders chunks by page, not by contributor ordinal (SC-027) |
 | FR-030 | Confidence | `model/compute/confidence.py` | Confidence on every value |
 | FR-031 | Confidence | `model/compute/confidence.py` | Deterministic from parse signals; property-tested |
 | FR-032 | Confidence | `model/compute/confidence.py` | Floor 0.80, declared pre-run |
@@ -199,7 +214,7 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-035 | Failures | `model/ingest/failures.py` | Five required fields on every failure |
 | FR-036 | Failures | `model/ingest/failures.py` | No value or confidence on a failure |
 | FR-037 | Failures | `model/ingest/failures.py` | `no_value_found`, recorded once per document |
-| FR-038 | Runs | `model/ingest/runs.py` | Full run record |
+| FR-038 | Runs | `model/ingest/runs.py` | Full run record. Agent identity is the composite `principal=…; build=…` grammar, enforced by `ck_ingestion_run__agent_id_format` rather than by convention — E003's TR-082 made this the project's only record of who ran a thing |
 | FR-039 | Runs, writer | `model/ingest/runs.py`, `writer.py` | Association tables |
 | FR-040 | Migrations, partition check | `model/schema/versions/03*`, `tests/checks/test_migration_ranges.py` | Block claimed. Per AD-013 this is a three-part amendment to the partition check, not a one-line append |
 | FR-041 | Operator procedure | `model/ingest/report.py` (documented), runbook | Removal under the schema-owning role, not the job |
@@ -211,7 +226,7 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-047 | — | spec Compliance Check | Amendment recorded; blocks implementation |
 | FR-048 | Placement check | `tests/checks/test_model_facing_placement.py` | Only `model.llm` may import `gateway` (AD-001) |
 | FR-049 | Coercion | `model/compute/coerce.py` | Deterministic; property-tested |
-| FR-050 | Baseline, metrics | `model/ingest/baseline.py`, `compute/metrics.py` | Labelled baseline; interval on every figure |
+| FR-050 | Baseline, metrics | `model/ingest/baseline.py`, `compute/metrics.py` | **Two** baseline labels — the declared one recorded before any figure is computed, the observed one read from the published table, with a disagreement published as a finding rather than reconciled; interval on every figure. **Authored from rendered text only**: an import contract (`src/model/tests/ingest/test_baseline_independence.py`) forbids `baseline.py` from reaching `model.corpus.templates`, `model.corpus.render`, and `model.corpus.model`, so the answer key cannot be read into the opponent. The committed field-label vocabulary is the one shared input and is permitted (AD-012) |
 | FR-051 | — | `specs/adrs/0018-*`, `0019-*` | Numbers claimed at epic start |
 | FR-052 | Document minting | `model/ingest/documents.py` | Identifier collision aborts naming both files |
 | FR-053 | Chunker, report | `model/ingest/chunker.py`, `report.py` | Leaf-length distribution measured and published |
@@ -220,12 +235,22 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-056 | Orchestrator, runs | `model/ingest/cli.py`, `runs.py` | Run-level failure on `ingestion_run`; five values disjoint from the seven per-field outcomes. Cannot be an `extraction_failure` row — its source chunk would have no referent after a rollback |
 | FR-057 | Confidence | `model/compute/confidence.py` | Deductions 0.15 / 0.10 / 0.25; floor 0.80 |
 | FR-058 | Extraction, schemas | `model/llm/schemas.py`, `prompts.py` | Declared transmittal subset only |
-| FR-059 | Line items | `model/ingest/lineitems.py` | Association table |
-| FR-060 | Metrics | `model/compute/metrics.py` | Precision/recall/F1, Wilson, printed-field denominator |
+| FR-059 | Line items | `model/ingest/lineitems.py` | Association table. Ordinal 0 is the declared group for values a transmittal prints once for the whole document, real items from 1 — which keeps SC-046 absolute over every value instead of narrowing its population |
+| FR-060 | Metrics | `model/compute/metrics.py` | Precision and recall only, Wilson, both denominators printed. **No F1** — a Wilson interval is undefined for a harmonic mean of two proportions with different denominators, and SC-029 admits no figure without one; the omission is published with its reason |
+| FR-071 | Report | `model/ingest/report.py` | The report is one committed artifact at `specs/00006-document-ingestion-and-extraction/ingestion-report.md`, regenerated in full; the builder emits the closed content list and fails on a missing item rather than emitting a short report |
+| FR-072 | Report, metrics | `model/ingest/report.py`, `compute/metrics.py` | Every figure carries run, generation set, kind (census / sampled / descriptive), unit, and layer — a figure is a labelled record in the builder, not a bare number |
+| FR-073 | Orchestrator, report | `model/ingest/cli.py`, `report.py` | Per-document disposition ledger: `ingested`, `skipped_unchanged`, `rolled_back`, `not_reached`, partitioning the enumerated corpus |
+| FR-074 | Report, reproduction job | `model/ingest/report.py`, `.github/workflows/` | Replay run against a committed results manifest; exact for counts, encoder parity tolerance for the near-duplicate counts ({SAD:ADR-0009}, {SAD:ADR-0018}) |
 | FR-061 | Report | `model/ingest/report.py` | Near-duplicate cluster counts by cause |
 | FR-062 | Writer, coercion | `model/ingest/writer.py`, `compute/coerce.py` | Printed text is the evidence; coerced form in its own column |
 | FR-063 | Confidence signals | `model/ingest/runs.py`, `compute/confidence.py` | E006-owned signal record; without it SC-026 compares the score with itself |
 | FR-064 | Operator procedure | runbook, `model/ingest/report.py` | Index drop/rebuild under the schema-owning role; sequential-scan window and abort recovery stated |
+| FR-065 | Migrations, ownership test | `model/schema/versions/03*`, `src/model/tests/schema/test_table_ownership.py` | Catalog snapshot of the six E003-owned tables at `0103` and at head must be equal (VR-015); the boundary covers all six, not only the three the revoke names |
+| FR-066 | Privileges migration | `model/schema/versions/0304_*.py`, `src/model/tests/schema/test_privileges.py` | `SELECT, INSERT` only on the six tables this epic adds beyond the run record; `UPDATE` on `ingestion_run` limited to the finish timestamp and the two failure columns; `DELETE` withheld everywhere (VR-011, VR-012) |
+| FR-067 | Reference set | `model/ingest/reference.py`, `compute/metrics.py` | The pre-render document model, reproduced from committed generation inputs and checked against the manifest's `document_model_hash` before any figure is computed. Every accuracy comparison takes its expected side from here and never from a parsed chunk (SC-052) |
+| FR-068 | Report, verification suite | `model/ingest/report.py`, `src/model/tests/ingest/` | Each total check returns its enumerated population and count; an empty population fails rather than passes (SC-053) |
+| FR-069 | Orchestrator, report | `model/ingest/cli.py`, `report.py` | Attempt ledger — attempts reconcile to stored values plus failures with none unaccounted; every published count carries its unit, invocation-level and attempt-level tables kept apart (SC-054) |
+| FR-070 | Orchestrator, runs, report | `model/ingest/cli.py`, `runs.py`, `report.py` | One trace identifier per run, recorded on `ingestion_run.run_trace_id`; the report reconciles attempted invocations against `llm_invocation` rows carrying that identifier and requires equality (SC-011, VR-027) |
 
 ## Project Structure
 
@@ -242,24 +267,29 @@ src/model/src/model/
 + ingest/chunker.py                # three boundary classes
 + ingest/tokens.py                 # pinned tokenizer, 254 budget
 + ingest/segment.py                # pySBD terminal split
++ ingest/artifacts.py              # committed encoder + tokenizer, digest-verified (FR-019)
 + ingest/embed.py                  # ONNX Runtime session
 + ingest/writer.py                 # per-document transaction, COPY
 + ingest/runs.py                   # generations, active/superseded
 + ingest/lineitems.py              # line-item grouping
 + ingest/failures.py               # closed-set classification
-+ ingest/baseline.py               # deterministic template extractor
++ ingest/baseline.py               # deterministic template extractor — rendered text only (FR-050)
++ ingest/reference.py              # pre-render document model, digest-checked (FR-067)
 + ingest/report.py                 # ingestion report
 + llm/extraction.py                # ONLY module importing gateway
 + llm/schemas.py                   # Pydantic output models
 + llm/prompts.py                   # prompt templates
 + compute/confidence.py            # deterministic score
 + compute/coerce.py                # numeric/date coercion
-+ compute/metrics.py               # precision/recall/F1 + Wilson
++ compute/metrics.py               # precision/recall + Wilson; no F1 (FR-060)
 + schema/versions/0300_*.py … 03NN_*.py   # 6 tables + 1 view; 0300 gated on FR-047
 ~ pyproject.toml                   # deps + `ingest` console script
 
 src/model/tests/
 + ingest/                          # chunker, tokens, segment, documents, failures
++ ingest/test_page_attribution.py  # FR-010 total containment, fresh post-run extraction
++ ingest/test_single_page_reader.py    # no second tolerance map, normalization, or assembly (SC-037)
++ ingest/test_baseline_independence.py # baseline.py may not import corpus templates/render/model
 + llm/test_extraction.py
 + compute/                         # property-based: confidence, coerce, metrics
 + schema/test_ingestion_run.py
@@ -268,8 +298,10 @@ tests/checks/
 + test_model_facing_placement.py   # only model.llm imports gateway
 ~ test_migration_ranges.py         # AD-013: declare E005 + E006 blocks, amend 2 assertions
 
+data/encoder/                      # committed ONNX export + tokenizer, digests recorded (FR-019)
+
 .github/
-~ workflows/verify.yml             # append ingest,llm,compute to coverage --source
+~ workflows/verify.yml             # append ingest,llm,compute to coverage --source; per-package floor
 
 specs/00006-document-ingestion-and-extraction/
 + ingestion-report.md              # the published figures (FR-003/009/011/018/033/046/053/061)
