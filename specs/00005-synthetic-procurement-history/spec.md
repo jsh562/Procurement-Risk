@@ -357,7 +357,12 @@ The analyze pass amended this spec a second time, after the checklist note above
 
 **Original B-series line, preserved:** **Open — must clear before Plan**: none. The re-run was performed against the remediated spec during the Plan phase and returned PASS; the two residuals it found (B-1 in the Risks bullet, B-7 in the amendment-need conditional) were fixed before the verdict above was recorded. The table above is retained as the record of what the superseded audit found, not as a description of the current spec.
 
-**Carried into planning**: state explicitly that FR-034 and SC-026 are excluded from the epic's completion denominator; decide whether FR-011's 25–35% late share should align with the product document's 38% from the same published illustration (the departure is now recorded in FR-011 rather than silent); record the coverage level and reference proportion behind the ±4pp bound; split FR-016's four-part format rule from its minimum limitation set before tasks are written.
+**Carried into planning**, with what each item actually became — annotated 2026-07-27, because a carried-forward list that never records its outcomes reads like a list nobody acted on:
+
+- ~~State explicitly that FR-034 and SC-026 are excluded from the epic's completion denominator~~ — **overtaken**. E002 published the corpus fields on 2026-07-26, the gate was discharged, and nothing is excluded: the completion denominators equal the printed ones at 37 and 33.
+- Decide whether FR-011's 25–35% late share should align with the product document's 38% from the same published illustration — **decided: not aligned, and the departure is recorded** in FR-011 and in datasheet limitation L-10 rather than left silent. The realized share is 26.3%.
+- ~~Record the coverage level and reference proportion behind the ±4pp bound~~ — **reassigned to E014**, which owns the forecast calibration the bound belongs to. E005 publishes neither, and `test_gate_discharged.py` asserts that no E005 artifact does.
+- Split FR-016's four-part format rule from its minimum limitation set before tasks are written — **done**; the format rule is DV-019 and the minimum set is FR-016's own enumeration, now nine active records after L-5's withdrawal.
 
 ### Amended after this audit — checklist evaluation, 2026-07-26
 

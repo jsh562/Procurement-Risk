@@ -175,23 +175,23 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 **Separable from P1: the record itself ships in US1 and nothing in US1–US4 depends on this phase. T072–T074 share one file and are strictly sequential.**
 
-- [ ] T072 [US5] {FR-018} DV-018 — enumerate the fitting entry point's input roots from its **own configuration**; GT/ is outside every one — TST/test_ground_truth_isolation.py after:T037
-- [ ] T073 [US5] {FR-018} **NC-3** / DV-026 — the root set is non-empty and contains DAT/; an empty enumeration fails rather than passing vacuously — TST/test_ground_truth_isolation.py after:T072
-- [ ] T074 [US5] {FR-018} [COMPLETES FR-018] **NC-2** — a probe copy of the record placed inside an enumerated root makes the check fail, in TST/test_ground_truth_isolation.py after:T073
-- [ ] T075 [P] [US5] {FR-017} SC-019 — no loaded column exposes an offset: `roster_hash` is the only provenance column and `note` is NULL on every event, in TST/test_truth_not_in_db.py after:T042
-- [ ] T076 [P] [US5] {FR-017} [COMPLETES FR-017] Add the ground-truth binding check (DV-017) to PKG/validate.py — 12 unique vendor offsets, `dataset_content_hash` equal to the fixture's after:T054
+- [X] T072 [US5] {FR-018} DV-018 — enumerate the fitting entry point's input roots from its **own configuration**; GT/ is outside every one — TST/test_ground_truth_isolation.py after:T037
+- [X] T073 [US5] {FR-018} **NC-3** / DV-026 — the root set is non-empty and contains DAT/; an empty enumeration fails rather than passing vacuously — TST/test_ground_truth_isolation.py after:T072
+- [X] T074 [US5] {FR-018} [COMPLETES FR-018] **NC-2** — a probe copy of the record placed inside an enumerated root makes the check fail, in TST/test_ground_truth_isolation.py after:T073
+- [X] T075 [P] [US5] {FR-017} SC-019 — no loaded column exposes an offset: `roster_hash` is the only provenance column and `note` is NULL on every event, in TST/test_truth_not_in_db.py after:T042
+- [X] T076 [P] [US5] {FR-017} [COMPLETES FR-017] Add the ground-truth binding check (DV-017) to PKG/validate.py — 12 unique vendor offsets, `dataset_content_hash` equal to the fixture's after:T054
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T077 [P] {FR-034} Assert the corpus side of the join exists — `data/corpus/synthetic/field-label-vocabulary.json` publishes `manufacturer` and `part_number`, and `manufacturer-catalog.json` supplies per-category manufacturers — and fail if either is withdrawn. **NC-12 inverted**: it watched for the fields arriving and has fired; it now guards against their removal — TST/test_corpus_match_fields.py
-- [ ] T078 [P] **NC-11a/11b** / A1–A2 — a report-conformance check over qc-report.md: no criterion or requirement renders a state outside its allowed set, and the printed denominators equal the number of `FR-###` / `SC-###` **definitions** in spec.md. Count within § Functional Requirements and § Success Criteria only, and require the IDs to be contiguous from 001 — a whole-file prefix count returns 39 and 34, because the audit-history section refers to amended IDs in the same bullet form. Derive by counting, never assert the literals — TST/test_report_conformance.py
-- [ ] T079 A3 — assert `WITHDRAWN` was retired unused and that no artifact still reports FR-034 or SC-026 as `BLOCKED`, so the discharged gate cannot be re-asserted by a stale string — TST/test_gate_discharged.py after:T078
-- [ ] T080 Record the ±4pp coverage-convention reassignment to E014 and assert no E005 artifact publishes a coverage level or reference proportion for it — TST/test_report_conformance.py after:T079
-- [ ] T081 [P] Verify `model.procurement` is counted in the root combined coverage report rather than landing in the denominator uncounted, in .github/workflows/verify.yml after:T001 *(the `--source` line was applied during T001: T001's own purpose — "or new code is uncounted" — is not achieved by the root config alone, because the CI flag overrides it, and leaving the two halves 80 tasks apart held the E003 coverage regression open the whole time. T081 is now verification, not change.)*
-- [ ] T082 [P] Confirm the model entry declares no new dependency for `model.procurement` and keep tests/checks/test_dependency_isolation.py green after:T002
-- [ ] T083 Add the build-gating step — reproduction oracle, isolation, emitted artifact set, report conformance, FR-034 trigger — as a release gate in .github/workflows/verify.yml after:T078
+- [X] T077 [P] {FR-034} Assert the corpus side of the join exists — `data/corpus/synthetic/field-label-vocabulary.json` publishes `manufacturer` and `part_number`, and `manufacturer-catalog.json` supplies per-category manufacturers — and fail if either is withdrawn. **NC-12 inverted**: it watched for the fields arriving and has fired; it now guards against their removal — TST/test_corpus_match_fields.py
+- [X] T078 [P] **NC-11a/11b** / A1–A2 — a report-conformance check over qc-report.md: no criterion or requirement renders a state outside its allowed set, and the printed denominators equal the number of `FR-###` / `SC-###` **definitions** in spec.md. Count within § Functional Requirements and § Success Criteria only, and require the IDs to be contiguous from 001 — a whole-file prefix count returns 39 and 34, because the audit-history section refers to amended IDs in the same bullet form. Derive by counting, never assert the literals — TST/test_report_conformance.py
+- [X] T079 A3 — assert `WITHDRAWN` was retired unused and that no artifact still reports FR-034 or SC-026 as `BLOCKED`, so the discharged gate cannot be re-asserted by a stale string — TST/test_gate_discharged.py after:T078
+- [X] T080 Record the ±4pp coverage-convention reassignment to E014 and assert no E005 artifact publishes a coverage level or reference proportion for it — TST/test_report_conformance.py after:T079
+- [X] T081 [P] Verify `model.procurement` is counted in the root combined coverage report rather than landing in the denominator uncounted, in .github/workflows/verify.yml after:T001 *(the `--source` line was applied during T001: T001's own purpose — "or new code is uncounted" — is not achieved by the root config alone, because the CI flag overrides it, and leaving the two halves 80 tasks apart held the E003 coverage regression open the whole time. T081 is now verification, not change.)*
+- [X] T082 [P] Confirm the model entry declares no new dependency for `model.procurement` and keep tests/checks/test_dependency_isolation.py green after:T002
+- [X] T083 Add the build-gating step — reproduction oracle, isolation, emitted artifact set, report conformance, FR-034 trigger — as a release gate in .github/workflows/verify.yml after:T078
 
 ---
 

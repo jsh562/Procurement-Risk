@@ -45,6 +45,7 @@ __all__ = [
     "check_pin_resolved",
     "check_provenance_agreement",
     "check_reproduction",
+    "check_truth_binding",
     "main",
     "scope_limit",
     "validate",
@@ -172,6 +173,29 @@ def check_input_drift(envelope: Mapping[str, Any], root: Path | None = None) -> 
     return len(entries)
 
 
+def check_truth_binding(root: Path | None = None) -> int:
+    """DV-017 — the record binds to this fixture and covers the roster's vendors.
+
+    A record whose `dataset_content_hash` names a different dataset is worse than
+    no record: it supports a recovery claim against data it did not describe.
+    """
+    import json
+
+    from model.procurement.truth import validate_truth_record
+    from model.roster.reader import read_roster
+
+    record = json.loads(paths.truth_path(root).read_text(encoding="utf-8"))
+    validate_truth_record(record, [entry.id for entry in read_roster().vendors])
+
+    committed = read_payload(paths.hash_path(root))["dataset_content_hash"]
+    if record["dataset_content_hash"] != committed:
+        raise ValidationError(
+            f"the ground-truth record binds to {record['dataset_content_hash']} but the "
+            f"committed dataset digests to {committed}; the record describes a different run"
+        )
+    return len(record["vendor_offsets"])
+
+
 def check_datasheet(root: Path | None = None) -> int:
     """DV-019 — all seven sections present, every limitation record complete.
 
@@ -297,6 +321,7 @@ def validate(root: Path | None = None, observed_numpy: str | None = None) -> Val
         )
 
     check_datasheet(root)
+    check_truth_binding(root)
     digest = check_reproduction(root=root)
     return ValidationReport(dataset_content_hash=digest, inputs_checked=inputs)
 
