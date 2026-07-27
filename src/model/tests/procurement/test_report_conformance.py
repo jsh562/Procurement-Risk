@@ -118,10 +118,28 @@ class TestA2StateVocabulary:
 
 class TestTheReportDoesNotOverclaim:
     def test_a_pass_verdict_requires_no_open_critical_finding(self) -> None:
+        """Scoped to the *open* section, not the whole report.
+
+        A PASS report that records the CRITICAL findings it closed is doing the
+        right thing — Principle VII asks for exactly that history. What it must
+        not do is carry one as still open. An earlier version of this check
+        scanned the whole body and flagged the report for describing its own
+        remediation, which would have pressured the report into hiding it.
+        """
         report = _report()
-        if re.search(r"\*\*Verdict\*\*:\s*\*\*PASS\*\*", report):
-            body = report.split("Verdict", 1)[1]
-            assert "CRITICAL" not in body or "0 CRITICAL" in body or "no CRITICAL" in body
+        if not re.search(r"\*\*Verdict\*\*:\s*\*\*PASS\*\*", report):
+            return
+        open_section = re.search(r"^## Open and disclosed$(.*?)(?=^## |\Z)", report, re.M | re.S)
+        assert open_section, "a PASS report must carry an 'Open and disclosed' section"
+        assert "CRITICAL" not in open_section.group(1)
+
+    def test_closed_findings_are_recorded_rather_than_omitted(self) -> None:
+        """The other direction. A report that passed by saying nothing about
+        what it fixed is the silent pass these obligations exist to prevent."""
+        report = _report()
+        if re.search(r"\*\*Verdict\*\*:\s*\*\*PASS\*\*", report) and "Iterations**: 2" in report:
+            assert "closed" in report.lower()
+            assert re.search(r"iteration 1 .*(finding|CRITICAL)", report, re.I)
 
     def test_the_coverage_figure_is_stated_with_its_threshold(self) -> None:
         report = _report()
