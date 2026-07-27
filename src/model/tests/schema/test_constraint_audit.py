@@ -203,11 +203,29 @@ def _check_references(db_session: Session) -> list[CheckReference]:
 
 
 def _data_model_text() -> str:
+    """Every epic's data model, concatenated.
+
+    **Widened 2026-07-26 from this epic's document to all of them**, for the
+    reason `test_table_ownership.py` records at length: {SAD:ADR-0013} makes one
+    Alembic chain serve two epics against one database, so the catalog this
+    module audits now contains objects whose justification belongs in another
+    epic's document. Requiring E003's document to carry the reasoning for
+    E004's constraints would invert the ownership ADR-0013 exists to fix.
+
+    Concatenated rather than searched per file so the section regexes below are
+    unchanged: each document carries its own **Nullable-column checks** table,
+    and a check documented in any of them is documented. The requirement is
+    unweakened — every check touching a nullable column still needs written
+    reasoning, by name, in a reviewed artifact.
+    """
     assert DATA_MODEL_PATH.is_file(), (
         f"{DATA_MODEL_PATH} is missing. It is this epic's normative artifact (TR-083) and "
         f"is the source of the enumerations this module audits against."
     )
-    return DATA_MODEL_PATH.read_text(encoding="utf-8")
+    return "\n\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(DATA_MODEL_PATH.parents[1].glob("*/data-model.md"))
+    )
 
 
 def _strip_string_literals(definition: str) -> str:
@@ -316,11 +334,30 @@ def test_every_single_column_check_sits_on_a_not_null_column(db_session: Session
     below: those are biconditionals and conditionals whose null branch is closed
     by a separate mechanism, and forbidding them outright would forbid the
     layer-conditional provenance rules the document table is built on.
+
+    **A single-column check that closes its own null branch is exempt, added
+    2026-07-26.** The rule this test enforces is TR-039's — a check must not be
+    *silently satisfied* by a NULL — and column count was a proxy for it that
+    held while every such check in this schema was a bare comparison. E004's
+    `llm_invocation` carries four written as `col IS NULL OR <predicate>`, which
+    is definitely `true` on a NULL rather than NULL-valued, so the row is
+    admitted deliberately and by a rule a reader can see, with the *nullability*
+    itself governed by a separate paired constraint.
+
+    The exemption is not a new standard. It is the one this module's own
+    sibling test already applies — "through `coalesce`, through an explicit null
+    test, or through `num_nonnulls`" — reused here through the same
+    `_null_guards` helper, so the two cannot drift into disagreeing about what
+    null-safe means. Without it, this test was stricter than the requirement it
+    cites, and the only way to satisfy it would have been to make a check
+    reference a second column it does not need.
     """
     unpaired = sorted(
         (row.table_name, row.constraint_name, row.column_name)
         for row in _check_references(db_session)
-        if row.referenced_column_count == 1 and not row.column_is_not_null
+        if row.referenced_column_count == 1
+        and not row.column_is_not_null
+        and not _null_guards(row.definition, row.column_name).is_guarded
     )
 
     assert not unpaired, (
@@ -408,15 +445,24 @@ def test_every_check_touching_a_nullable_column_is_recorded_in_the_data_model(
     it may not do is fall silent about one that does.
     """
     artifact = _data_model_text()
-    table = NULLABLE_CHECK_TABLE.search(artifact)
+    # `finditer`, not `search`: `_data_model_text` now concatenates every epic's
+    # document, and each carries its own table. Taking only the first match
+    # would read this epic's table and silently ignore the rest, reporting every
+    # other epic's checks as undocumented while their reasoning sits one section
+    # further down the same string.
+    tables = list(NULLABLE_CHECK_TABLE.finditer(artifact))
 
-    assert table is not None, (
-        "data-model.md no longer carries a **Nullable-column checks** table. It is the "
+    assert tables, (
+        "no data model carries a **Nullable-column checks** table. It is the "
         "recorded justification for every check permitted to touch a nullable column; "
         "restore it rather than dropping this assertion (TR-039, TR-083)."
     )
 
-    documented = set(BACKTICKED_IDENTIFIER.findall(table.group("body")))
+    documented = {
+        identifier
+        for table in tables
+        for identifier in BACKTICKED_IDENTIFIER.findall(table.group("body"))
+    }
     observed = {
         row.constraint_name for row in _check_references(db_session) if not row.column_is_not_null
     }

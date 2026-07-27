@@ -27,6 +27,22 @@ from packaging.markers import Marker
 from tests.checks.helpers.images import resolve_image_tag
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+#: Distributions the modeling boundary declares that are shared infrastructure
+#: rather than modeling stack, so the serving image may carry them.
+#:
+#: Mirrors `SHARED_INFRASTRUCTURE` in `test_dependency_isolation.py`, and exists
+#: for the same reason: the denylist is derived from what `model` declares,
+#: which is the right instinct, but `psycopg` is declared there while belonging
+#: to no boundary in particular. The serving image is not merely permitted to
+#: carry the driver — it is *required* to, because {SAD:ADR-0004} computes risk
+#: in SQL at request time and {SAD:ADR-0013}'s TR-047 has `/src/api` reading
+#: `schema_constants` over the connection. Without this exclusion the denylist
+#: forbids the image the thing the design requires it to have.
+#:
+#: What TR-013 protects is unchanged: PyMC, ArviZ, pandas and NumPy are still
+#: derived, never listed, and none of them appears here.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
 API_LOCK = REPO_ROOT / "src" / "api" / "uv.lock"
 MODEL_LOCK = REPO_ROOT / "src" / "model" / "uv.lock"
 # Resolved, not restated. A literal here and another in the workflow is how
@@ -123,16 +139,38 @@ def expected_distributions(
         environment["python_version"] = ".".join(version.split(".")[:2])
     packages = _lock_packages(lock_path)
     seen: set[str] = set()
-    queue = [normalize(root)]
+    # Each queue entry is a package plus the extras that edge asked for. Extras
+    # have to be carried rather than discarded: a lockfile records an edge like
+    # `{ name = "psycopg", extra = ["binary"] }`, and the distribution that
+    # actually installs — `psycopg-binary` — is reachable only through that
+    # package's own optional-dependencies group. Walking `dependencies` alone
+    # reaches `psycopg` and stops, so the derived set is short by whatever the
+    # extra pulls in, and the equality this function feeds reports it as
+    # "installed but absent from the lockfile" — a real distribution in the
+    # image that the check cannot account for.
+    #
+    # The gap predates the edge that exposed it: until an entry in this closure
+    # used an extra, nothing here had optional dependencies to miss.
+    queue: list[tuple[str, frozenset[str]]] = [(normalize(root), frozenset())]
     while queue:
-        current = queue.pop()
-        if current in seen or current not in packages:
+        current, extras = queue.pop()
+        key = (current, extras)
+        if key in seen or current not in packages:
             continue
-        seen.add(current)
-        for dependency in packages[current].get("dependencies", []):
+        seen.add(key)
+
+        edges = list(packages[current].get("dependencies", []))
+        optional = packages[current].get("optional-dependencies", {})
+        for extra in extras:
+            edges.extend(optional.get(extra, []))
+
+        for dependency in edges:
             if _dependency_applies(dependency, environment):
-                queue.append(normalize(dependency["name"]))
-    return seen - {normalize(root)}
+                queue.append(
+                    (normalize(dependency["name"]), frozenset(dependency.get("extra", ())))
+                )
+
+    return {name for name, _ in seen} - {normalize(root)}
 
 
 def modeling_module_names() -> set[str]:
@@ -154,7 +192,7 @@ def modeling_module_names() -> set[str]:
     # list. Without it the gateway — which the modeling boundary is required to
     # declare — would land in the denylist, and the serving image is required
     # to contain the gateway. STF-001 was filed about exactly this.
-    third_party = declared - first_party
+    third_party = declared - first_party - SHARED_INFRASTRUCTURE
 
     # Read the top-level modules each distribution actually provides, from the
     # modeling boundary's synced environment. Substituting `name.replace("-",

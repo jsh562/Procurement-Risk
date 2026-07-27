@@ -1,0 +1,11 @@
+[importlinter]
+root_package = gateway_compute_fixture
+
+[importlinter:contract:gateway-compute-boundary]
+name = The provider-facing module does not reach the arithmetic modules
+type = forbidden
+source_modules =
+    gateway_compute_fixture.provider
+forbidden_modules =
+    gateway_compute_fixture.compute
+allow_indirect_imports = False

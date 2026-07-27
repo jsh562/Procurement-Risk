@@ -189,9 +189,22 @@ jobs:
           # reach the contracts it exists to trip.
           test -s "$target" || { echo "::error::injection wrote nothing to $target"; exit 1; }
 
+      # The gateway is synced with its `provider` extra and the other entries
+      # without any, and that asymmetry is the point rather than an oversight.
+      # ADR-0014 made the provider SDK optional, so a plain `uv sync` resolves
+      # the gateway *without* it — which would leave the gateway's own provider
+      # tests unable to load a client and its type check unable to resolve the
+      # import, both failing for the absence of a dependency the entry is
+      # entitled to. The gateway is the one entry entitled to it.
+      #
+      # The environment that must NOT have it is built separately and
+      # deliberately, by `tests/checks/test_gateway_no_provider_env.py` — that
+      # is the check carrying OBJ1 VC1, and it constructs its own environment
+      # precisely because no entry's own sync can stand in for one.
       - name: Sync every Python entry against its own lockfile
         run: |
-          for entry in gateway api model; do
+          uv sync --locked --extra provider --directory src/gateway
+          for entry in api model; do
             uv sync --locked --directory "src/$entry"
           done
           uv sync
@@ -228,6 +241,14 @@ jobs:
       - name: Type check (web)
         working-directory: src/web
         run: npx tsc --noEmit
+
+      # `project-instructions.md` v1.2.4. Scoped to the gateway, and the scope is
+      # in the step name rather than only in the policy: `api` and `model` are
+      # not annotated to a standard strict mypy would accept, and a step named
+      # "Type check (Python)" that ran over one entry would read as covering all
+      # three. The scope widens when those entries are annotated, not before.
+      - name: Type check (gateway)
+        run: uv run --directory src/gateway mypy src
 
       - name: Architecture contracts
         run: |
@@ -311,6 +332,14 @@ jobs:
       - name: Unit tests (gateway)
         env:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage.gateway
+          # E004 T032: `test_migrations.py` drives E003's runner at a throwaway
+          # database to verify TR-017's apply-from-empty and TR-050's
+          # re-runnable postcondition. Without this it skips — and a skipped
+          # tier reporting as a pass is the exact failure E003 measured and
+          # documented. `src/gateway/tests/conftest.py` turns the unset variable
+          # into a refusal to start, but only if a database was meant to be
+          # there, which is what this line says.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
         run: uv run --directory src/gateway coverage run -m pytest tests -q
 
       - name: Unit tests (web)

@@ -8,8 +8,20 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "anthropic>=0.120.0",
     "pydantic>=2.13.4",
+    "psycopg[binary]>=3.2.3",
+]
+
+# ADR-0014. The provider SDK is an extra, not a base dependency, so an
+# environment can exist in which this package imports and type-checks with no
+# provider installed. That environment is what makes TR-003's absent-provider
+# criterion an assertion rather than a claim — while the SDK was a hard
+# dependency, anything able to import the gateway also had it, and the harness
+# had nothing to test. `gateway.provider` imports it lazily, inside the
+# invocation function, because a module-scope import would defeat this.
+[project.optional-dependencies]
+provider = [
+    "anthropic>=0.120.0",
 ]
 
 [build-system]
@@ -19,7 +31,9 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "coverage==7.15.2",
+    "hypothesis>=6.122.3",
     "import-linter>=2.13",
+    "mypy>=1.14.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.0",
@@ -30,10 +44,49 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# `S` (flake8-bandit) is here because this package handles a credential and
+# builds SQL. It is the lint half of the security posture TR-024 and TR-060
+# specify; the scan half is a test.
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on redaction using synthetic credential-shaped values that are
+# never live (TR-060 requires a seeded positive case per sink), and they use
+# `assert` by construction.
+"tests/**" = ["S101", "S105", "S106"]
+
+# `project-instructions.md` v1.2.4. Scoped to this entry: the other two Python
+# entries are not type-checked yet, and claiming otherwise would be the kind of
+# unverifiable assertion the policy section exists to prevent.
+#
+# Strict here is affordable because the package is new and small. It is also
+# load-bearing rather than decorative: TR-002 forbids a provider SDK type
+# appearing anywhere in the public surface, and `disallow_any_explicit` plus
+# strict optionality is what stops that leaking in as an untyped escape hatch
+# after the import contracts have had their say.
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+strict = true
+warn_unreachable = true
+enable_error_code = [
+    "ignore-without-code",  # a bare `# type: ignore` hides the next error too
+    "redundant-expr",
+    "truthy-bool",
+]
+
+[[tool.mypy.overrides]]
+# Tests construct deliberately wrong values to prove validation rejects them,
+# so strict annotation of every fixture would fight the thing under test.
+module = "tests.*"
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Registered so an unknown-marker warning cannot hide a typo. `slow` marks the
+# one test that reaches the provider (OBJ6); it is already gated on
+# GATEWAY_ALLOW_PROVIDER_CALLS, so the marker is a label rather than a control.
+markers = ["slow: reaches the network and costs money; opt-in gated"]
 
 [tool.coverage.run]
 branch = true
@@ -55,3 +108,71 @@ name = "Only the provider wrapper imports the model-provider client"
 type = "protected"
 protected_modules = ["anthropic"]
 allowed_importers = ["gateway.provider"]
+
+# TR-032: the computation boundary, extended over this entry. This is the first
+# real arithmetic in the repository — cost, content hashing, duration — and
+# `provider.py` must not reach it. `forbidden` with indirect detection ON is
+# deliberate and is the opposite choice from the contract above: laundering the
+# dependency through an intermediate module is exactly the evasion this exists
+# to catch. The orchestration module above both composes them instead.
+#
+# Disclosed limit: this catches import edges only. Arithmetic written inline
+# inside `provider.py` produces no edge and no failure — code review is the
+# only guard against that, and the plan records it as a residual.
+[[tool.importlinter.contracts]]
+name = "The provider-facing module does not reach the arithmetic modules"
+type = "forbidden"
+source_modules = ["gateway.provider"]
+forbidden_modules = ["gateway.compute"]
+allow_indirect_imports = false
+
+# TR-002: the public surface is built from gateway-owned types only.
+#
+# Neither contract below restates "the public surface must not import
+# anthropic" — the `protected` contract above already forbids that for every
+# module in the repository except `gateway.provider`, so a second contract
+# saying it would be a tautology wearing a stronger contract's clothes.
+#
+# What they forbid instead is the public surface reaching `gateway.provider`.
+# That is the edge the first contract cannot see: `provider.py` legitimately
+# imports the SDK, so anything importing `provider` can receive an SDK object
+# from it and re-expose it in a signature without ever importing `anthropic`
+# itself.
+#
+# This is TWO contracts because the two halves of the public surface can afford
+# different strictness, and collapsing them into one would have to pick the
+# weaker setting for both.
+#
+# `models` and `errors` define types and nothing else. No composition passes
+# through them, so no legitimate path takes them to the provider by any route,
+# and indirect detection stays ON — laundering through an intermediate module
+# is the evasion worth catching.
+#
+# `api` is the composition front door. TR-002's own deliverable puts `invoke()`
+# there and OBJ1's deliverables put an orchestration module "above both" that
+# composes the call, the validation, the computation and the record — so
+# `api -> orchestrator -> provider` is the designed arrangement, not a leak.
+# Indirect detection on `api` would forbid exactly that path and leave the
+# entry point with no way to reach the provider at all. Direct detection is
+# what remains meaningful: `api` may compose through the orchestrator and may
+# never touch the provider itself.
+#
+# Disclosed limit, and it is the reason T013 is not optional: with indirect
+# detection off, `api` re-exporting something the orchestrator obtained from
+# `provider` produces no forbidden edge here. That is a type leak, not an
+# import leak, and the remaining half — a leaked SDK type reported *by name* —
+# cannot be a contract at all, because contracts report module paths. That is
+# `tests/test_public_surface.py` (T013), which OBJ1 VC3 designates for it.
+[[tool.importlinter.contracts]]
+name = "The gateway-owned type modules do not reach the provider module"
+type = "forbidden"
+source_modules = ["gateway.models", "gateway.errors"]
+forbidden_modules = ["gateway.provider"]
+allow_indirect_imports = false
+
+[[tool.importlinter.contracts]]
+name = "The public entry point does not import the provider module directly"
+type = "forbidden"
+source_modules = ["gateway.api"]
+forbidden_modules = ["gateway.provider"]
+allow_indirect_imports = true

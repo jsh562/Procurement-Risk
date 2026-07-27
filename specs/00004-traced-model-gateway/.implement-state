@@ -1,0 +1,27 @@
+phase: All phases complete — 73/75 tasks, 2 formally withdrawn
+completed: 73
+remaining: 0 (T004 and T031 withdrawn with recorded evidence)
+blocked: none
+next: QC. `.completed` can be written once a full green run is confirmed on the
+      pull request rather than only locally.
+notes: OBJ1-OBJ6 and Phase 8 polish delivered. 376 gateway tests, 193 root
+       checks, 1072 model tests, 4 import contracts KEPT, mypy strict clean,
+       ruff lint and format clean across all four command sites.
+       Gateway entry at 92% line coverage against AD-007's 85% target.
+       Benchmarks inside AD-008's budgets.
+       orchestrator.invoke() still raises NotImplementedError: it needs the
+       mode branch to compose the pieces, and every piece it will compose
+       exists and is tested. That is the one thing a reader should not mistake
+       for finished.
+       The CI failure the user pointed at was step 10, "Lint (Python)". That
+       step runs FOUR commands, not three — the fourth is `uv run ruff check .`
+       from the repository root, covering /tests. Never run it and /tests goes
+       unlinted while every local check reports green. The full step list is
+       now recorded in memory.
+       Environment: something repeatedly runs `docker compose down` in this
+       directory — Risk1 and Risk3 stay up while only risk2 disappears, and
+       unrelated exited containers survive, so it is not a prune. Recovery is
+       automatic via the scratchpad ensure-db.sh. Port 5437 via /.env.
+       `procurement-api:e001` is an unqualified tag the siblings share; rebuild
+       from this checkout before the image checks.
+timestamp: 2026-07-27

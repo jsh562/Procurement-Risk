@@ -118,15 +118,32 @@ def test_vr_044_corpus_offline_contract_breaks_on_a_direct_provider_import() -> 
 # manifests below rather than trusted, so this map cannot drift into naming a
 # contract the repository no longer has, or omitting one it has gained.
 #
-# Three keys for four declarations: `api` and `model` each declare the
+# The mapping is many-to-one in both directions, and each direction has a
+# reason.
+#
+# Fewer keys than declarations: `api` and `model` each declare the
 # computation-boundary contract under the same name and with the same shape, and
 # one fixture stands in for both. The name is the unit FR-035 speaks about — a
 # failing check names the violated contract — so deduplicating by name is the
 # requirement's own granularity rather than a convenience.
+#
+# Two keys onto one fixture: the gateway's public surface is guarded by two
+# contracts with different indirect-detection settings, and one fixture package
+# violates both. Splitting it in two would duplicate the provider and relay
+# modules to no end — the assertion below runs `lint-imports` over the fixture
+# once per key and requires the output to name that key's contract, so a fixture
+# that broke only one of the two still fails the other.
 FIXTURE_FOR_CONTRACT = {
     "Only the provider wrapper imports the model-provider client": "provider_import",
     "Model-facing code does not reach the computation package": "computation_boundary",
     "Corpus code does not reach the model provider": "corpus_offline",
+    "The provider-facing module does not reach the arithmetic modules": (
+        "gateway_compute_boundary"
+    ),
+    "The gateway-owned type modules do not reach the provider module": ("gateway_public_surface"),
+    "The public entry point does not import the provider module directly": (
+        "gateway_public_surface"
+    ),
 }
 
 # The step in verify.yml that executes this file.

@@ -1,0 +1,21 @@
+[importlinter]
+root_package = gateway_surface_fixture
+
+[importlinter:contract:gateway-type-modules]
+name = The gateway-owned type modules do not reach the provider module
+type = forbidden
+source_modules =
+    gateway_surface_fixture.models
+    gateway_surface_fixture.errors
+forbidden_modules =
+    gateway_surface_fixture.provider
+allow_indirect_imports = False
+
+[importlinter:contract:gateway-public-entry]
+name = The public entry point does not import the provider module directly
+type = forbidden
+source_modules =
+    gateway_surface_fixture.api
+forbidden_modules =
+    gateway_surface_fixture.provider
+allow_indirect_imports = True

@@ -85,7 +85,20 @@ Nullability is the load-bearing part of this table: every `NOT NULL` here is a c
 
 **Transform, forward-only (TR-073).** An OpenTelemetry generative-AI attribute maps to a column by lowercasing and replacing `.` with `_`: `gen_ai.request.model` → `gen_ai_request_model`. The transform is mechanical so the OBJ3 VC7 check can apply it without a hand-kept list — but it is **not invertible**, because several convention attributes carry underscores inside their own segments (`gen_ai.usage.input_tokens`), so a column name does not determine the attribute it came from. The check therefore runs in one direction only: transform every attribute the pinned version defines and compare the results against the column set; never reconstruct an attribute from a column. Two attributes transforming to one column name is a build failure, not an ambiguous match.
 
-**Pin (TR-070).** The pinned convention version is **`1.36.0`** — a concrete version rather than a configuration key with no value, so OBJ3 VC7 compares against a fixed referent. It is chosen as the version carrying `gen_ai.provider.name` under that spelling. The value is recorded in exactly three places that must agree, and the check asserts their agreement: gateway configuration as `otel_genai_semconv_version`, a `COMMENT ON TABLE llm_invocation` mirror so a database inspected without the repository still states which version its column names follow, and TR-070 itself. The implementing task verifies that `1.36.0` is a published release defining every attribute classified Convention-named below, and corrects TR-070 and this table together if it is not. These attributes are not stable, which is why the pin exists at all.
+**Pin (TR-070).** The pinned convention version is **`1.37.0`** — a concrete version rather than a configuration key with no value, so OBJ3 VC7 compares against a fixed referent. It is chosen as the version carrying `gen_ai.provider.name` under that spelling. The value is recorded in exactly three places that must agree, and the check asserts their agreement: gateway configuration as `otel_genai_semconv_version`, a `COMMENT ON TABLE llm_invocation` mirror so a database inspected without the repository still states which version its column names follow, and TR-070 itself. The implementing task verifies that the pin is a published release defining every attribute classified Convention-named below, and corrects TR-070 and this table together if it is not. These attributes are not stable, which is why the pin exists at all.
+
+**Correction of 2026-07-26 (T026), recorded rather than applied silently.** The pin read `1.36.0`, and the verification this document demands found that release does **not** define `gen_ai.provider.name` — it defines `gen_ai.system`, which `v1.37.0` marks deprecated and *replaced by* `gen_ai.provider.name`. The pin's own stated selection reason was therefore false of the version it named, and OBJ3 VC7 would have failed against it. Corrected to `1.37.0`, the first release satisfying the criterion; a later release would have been a larger change than the evidence calls for. Verified in the same pass, against the published `v1.37.0` registry:
+
+| Attribute | Present in 1.37.0 | Note |
+|---|---|---|
+| `gen_ai.provider.name` | yes | The rename this pin exists to resolve |
+| `gen_ai.operation.name` | yes | — |
+| `gen_ai.request.model` | yes | — |
+| `gen_ai.response.model` | yes | — |
+| `gen_ai.usage.input_tokens` | yes | — |
+| `gen_ai.usage.output_tokens` | yes | — |
+| `error.type` | yes, and marked **Stable** | General attribute registry of the same release. Its stability is what TR-072's Stable class for `error_type` rests on, so it was checked rather than assumed |
+| *any cached / cache-read input-tokens attribute* | **no** | Checked in both `1.36.0` and `1.37.0`. `cache_read_input_tokens` therefore **stays Gateway-local** — the row below anticipated a move and the move does not happen at this pin |
 
 | Column | Classification | Note |
 |--------|----------------|------|
@@ -95,7 +108,7 @@ Nullability is the load-bearing part of this table: every `NOT NULL` here is a c
 | `gen_ai_response_model` | Convention-named | — |
 | `gen_ai_usage_input_tokens` | Convention-named | — |
 | `gen_ai_usage_output_tokens` | Convention-named | — |
-| `error_type` | Convention-named | From the general (non-gen-AI) attribute registry, `error.type` — **its own pinned source**, the general attribute registry shipped with the same `1.36.0` release, named rather than inherited silently from the gen-AI pin (TR-071). |
+| `error_type` | Convention-named | From the general (non-gen-AI) attribute registry, `error.type` — **its own pinned source**, the general attribute registry shipped with the same `1.37.0` release, verified present and *Stable* there, named rather than inherited silently from the gen-AI pin (TR-071). |
 | `trace_id` | Convention-named | A first-class span field rather than an attribute; spelled as the specification spells it. **Its own pinned source**: W3C Trace Context **Level 1** (W3C Recommendation), which is where both the 32-lowercase-hex domain and the invalidity of the all-zero value come from (TR-071, TR-047). |
 | `cache_write_input_tokens` | Gateway-local | The convention has no cache-write token attribute at any version considered; the name mirrors the provider's own reporting. |
 | `cache_read_input_tokens` | Gateway-local | **Pin-sensitive in the other direction**: recent convention versions add a cached-input-tokens attribute. If the pinned version defines one, this column MUST take that spelling and move to the convention-named set. The task must check rather than inherit this row. |
@@ -142,6 +155,78 @@ Three rules, all of which the property-based tests behind SC-006 and SC-017 asse
 - **Forward-only.** No down migrations exist. A mistake is corrected by a new higher-prefixed revision. The property is *detected*, not merely asserted: the ledger's `checksum` is compared against the file on every run and a changed already-applied file fails the runner (TR-050).
 - **Seed re-run semantics.** A rate corrected by editing `0103` is **not** applied on re-run, and this is a decided outcome rather than a side effect of `ON CONFLICT DO NOTHING`: the ledger skips the applied `migration_id` before the file is even read, and the checksum comparison fails the run outright once the file's bytes change. A corrected or updated rate is therefore a **new price-table version in a new higher-numbered migration** — the same rule the price tables already carry (TR-055), applied to the seed that populates them.
 - **Spool DDL is not in this sequence.** `invocation_spool` is created with `CREATE TABLE IF NOT EXISTS` by the gateway when it opens the SQLite file. It cannot come from the Postgres migration runner, because it is needed at precisely the moment Postgres is unreachable.
+
+## Named Object Inventory
+
+Every database object this epic's revisions create, **by name**. Added 2026-07-26 when E003's TR-083 enforcement was widened to read every epic's data model rather than only its own — the widening moved the duty to document these objects onto their owner, which is this document, and the duty was unmet until now.
+
+The names are the contract. A constraint whose name is not written down cannot be referenced by a later migration's `DROP CONSTRAINT`, and cannot be *expected* by another epic's test — and a test that matches on message text instead is matching on something locale- and version-dependent. Reproduced from the migrated catalog rather than transcribed from the migration source, so this table records what exists rather than what was intended.
+
+### Relations and indexes
+
+| Object | Kind | Revision | Purpose |
+|---|---|---|---|
+| `price_table_version` | table | `0100` | Sourced, dated header for a set of rates |
+| `price_table_entry` | table | `0101` | Four per-million-token rates for one model from one effective date |
+| `llm_invocation` | table | `0102` | One row per invocation, never per attempt |
+| `pk_price_table_version` | index | `0100` | Primary-key index on `version_id` |
+| `pk_price_table_entry` | index | `0101` | Primary-key index; its leading columns also serve the TR-039 lookup, which is why no secondary index exists |
+| `pk_llm_invocation` | index | `0102` | Primary-key index on `invocation_id` |
+| `ix_llm_invocation__created_at` | index | `0102` | E013's panel orders by recency (`created_at DESC`) |
+| `ix_llm_invocation__trace_id` | index | `0102` | Trace lookup — the question the identifier exists to answer |
+
+### Constraints
+
+| Constraint | Kind | Rule |
+|---|---|---|
+| `pk_price_table_version` | primary key | `(version_id)` |
+| `ck_price_table_version__slug` | check | `version_id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'` |
+| `ck_price_table_version__source_url_present` | check | `btrim(source_url) <> ''` — a blank URL satisfies `NOT NULL` and carries no provenance |
+| `pk_price_table_entry` | primary key | `(price_table_version_id, model_id, effective_from)` — the uniqueness TR-057's determinism rests on |
+| `fk_price_table_entry__version` | foreign key | → `price_table_version(version_id)`, `ON DELETE RESTRICT ON UPDATE RESTRICT` |
+| `ck_price_table_entry__input_rate_non_negative` | check | `input_usd_per_mtok >= 0` |
+| `ck_price_table_entry__cache_write_rate_non_negative` | check | `cache_write_usd_per_mtok >= 0` |
+| `ck_price_table_entry__cache_read_rate_non_negative` | check | `cache_read_usd_per_mtok >= 0` |
+| `ck_price_table_entry__output_rate_non_negative` | check | `output_usd_per_mtok >= 0` |
+| `ck_price_table_entry__model_id_present` | check | `btrim(model_id) <> ''` — a blank identifier matches no response model |
+| `pk_llm_invocation` | primary key | `(invocation_id)` |
+| `fk_llm_invocation__price_table_version` | foreign key | → `price_table_version(version_id)`, `ON DELETE RESTRICT ON UPDATE RESTRICT` (TR-046) |
+| `ck_llm_invocation__response_model_unless_failed` | check | `outcome = 'failed' OR gen_ai_response_model IS NOT NULL` — an implication, not a biconditional (OBJ3 VC8) |
+| `ck_llm_invocation__resolution_mode_domain` | check | `resolution_mode IN ('record','replay')` |
+| `ck_llm_invocation__fixture_key_shape` | check | `fixture_key IS NULL OR fixture_key ~ '^sha256:[0-9a-f]{64}$'` |
+| `ck_llm_invocation__fixture_key_when_replaying` | check | `resolution_mode <> 'replay' OR fixture_key IS NOT NULL` — separate from the shape rule, since neither implies the other |
+| `ck_llm_invocation__input_tokens_non_negative` | check | `gen_ai_usage_input_tokens >= 0` |
+| `ck_llm_invocation__output_tokens_non_negative` | check | `gen_ai_usage_output_tokens >= 0` |
+| `ck_llm_invocation__cache_write_tokens_non_negative` | check | `cache_write_input_tokens >= 0` |
+| `ck_llm_invocation__cache_read_tokens_non_negative` | check | `cache_read_input_tokens >= 0` |
+| `ck_llm_invocation__duration_non_negative` | check | `duration_ms >= 0` |
+| `ck_llm_invocation__transport_attempts_in_budget` | check | `transport_attempt_count BETWEEN 1 AND 3` (TR-010) |
+| `ck_llm_invocation__repair_attempts_in_budget` | check | `repair_attempt_count BETWEEN 0 AND 1` (TR-007) |
+| `ck_llm_invocation__cost_non_negative` | check | `cost_usd IS NULL OR cost_usd >= 0` |
+| `ck_llm_invocation__cost_absent_reason_domain` | check | `cost_absent_reason IN ('no_covering_price_entry','model_unresolved','cost_out_of_range')` |
+| `ck_llm_invocation__cost_xor_absent_reason` | check | `(cost_usd IS NULL) <> (cost_absent_reason IS NULL)` — absence is representable only with a stated reason (TR-016) |
+| `ck_llm_invocation__outcome_domain` | check | `outcome IN ('valid','repaired','failed')` |
+| `ck_llm_invocation__error_type_iff_failed` | check | `(outcome = 'failed') = (error_type IS NOT NULL)` — a biconditional, so E013 reads "has an error type" as "failed" |
+| `ck_llm_invocation__error_type_domain` | check | `error_type IN ('validation_failed','transport_failed','deadline_exceeded')` (TR-064) |
+| `ck_llm_invocation__trace_id_format` | check | `trace_id ~ '^[0-9a-f]{32}$'` |
+| `ck_llm_invocation__trace_id_not_all_zero` | check | `trace_id <> repeat('0', 32)` — not redundant with the format rule, which the all-zero value satisfies |
+
+### Nullable-column checks
+
+**Nullable-column checks** — the complete list of `CHECK` constraints this epic declares that touch a nullable column, with why each one's null branch is closed. A `CHECK` rejects only on *false*, and any comparison against NULL is NULL, which a `CHECK` **accepts** — so a check on a nullable column is vacuous unless it says what it means on a null. That reasoning is the review, which is why it is written here rather than left in the migration.
+
+| Check | Nullable column(s) | Why the null case is closed |
+|---|---|---|
+| `ck_llm_invocation__cost_non_negative` | `cost_usd` | `cost_usd IS NULL OR cost_usd >= 0` — definitely *true* on a null rather than null-valued. A null cost is admitted **deliberately**: TR-016 requires absence to be representable. Nullability itself is governed by `ck_llm_invocation__cost_xor_absent_reason`, so this check owns the value domain and that one owns whether absence is allowed. |
+| `ck_llm_invocation__cost_absent_reason_domain` | `cost_absent_reason` | `cost_absent_reason IS NULL OR cost_absent_reason IN (...)` — the same split. A null reason is correct on every row that *has* a cost; the XOR check below is what forbids a null reason beside a null cost. |
+| `ck_llm_invocation__cost_xor_absent_reason` | `cost_usd`, `cost_absent_reason` | `(cost_usd IS NULL) <> (cost_absent_reason IS NULL)` — both references are null *tests*, so the expression is never null-valued. This is the constraint that closes the null branch of the two above, which is why all three exist rather than one. |
+| `ck_llm_invocation__fixture_key_shape` | `fixture_key` | `fixture_key IS NULL OR fixture_key ~ '...'` — a `record`-mode row legitimately has no key until a fixture is written, so absence is admitted and only the *shape* of a present key is constrained. |
+| `ck_llm_invocation__fixture_key_when_replaying` | `fixture_key` | `resolution_mode <> 'replay' OR fixture_key IS NOT NULL` — `resolution_mode` is `NOT NULL`, so the left operand is never null; the right is a null test. Neither this nor the shape check implies the other: one admits a malformed key on a `record` row, the other admits a missing key on a `replay` row. |
+| `ck_llm_invocation__error_type_domain` | `error_type` | `error_type IS NULL OR error_type IN (...)` — null is correct on every row that did not fail. The biconditional below is what ties absence to outcome. |
+| `ck_llm_invocation__error_type_iff_failed` | `error_type` | `(outcome = 'failed') = (error_type IS NOT NULL)` — `outcome` is `NOT NULL` and the right operand is a null test, so the expression is definite on every row. This closes the null branch of the domain check above. |
+| `ck_llm_invocation__response_model_unless_failed` | `gen_ai_response_model` | `outcome = 'failed' OR gen_ai_response_model IS NOT NULL` — `outcome` is `NOT NULL`, and the second operand is a null test. Deliberately an implication and not a biconditional: an invocation may resolve a model and *then* fail, so the reverse direction would reject a legitimate row. |
+
+The pattern across all eight: a nullable column's **value domain** and its **permitted absence** are separate constraints. Folding them together would produce one check that is either vacuous on a null or forbids an absence the requirements need — and would lose the ability to say, in a failure message, which of the two rules a row broke.
 
 ## Validation Rules
 
@@ -393,7 +478,7 @@ Two further items are noted rather than divergent: the exact spelling of `gen_ai
 | TR-058 | VR-031 |
 | TR-068 | E013 Read Contract — closure and change procedure; VR-032 |
 | TR-069 | E013 Read Contract — closure and change procedure; Migrations — new higher-numbered file, never an edit; Field Naming Alignment — pin bump procedure |
-| TR-070 | Field Naming Alignment — Pin (`1.36.0`, three recording points); VR-033 |
+| TR-070 | Field Naming Alignment — Pin (`1.37.0`, three recording points, corrected from `1.36.0` by T026); VR-033 |
 | TR-071 | Field Naming Alignment — classification table with per-field pinned sources for `error_type` and `trace_id`; normative naming rule; VR-015, VR-033 |
 | TR-072 | Field Naming Alignment — Stability class table; VR-033 |
 | TR-073 | Field Naming Alignment — Transform, forward-only; VR-033 |

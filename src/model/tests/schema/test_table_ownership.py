@@ -57,6 +57,64 @@ from sqlalchemy.orm import Session
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DATA_MODEL_PATH = REPO_ROOT / "specs" / "00003-core-data-schema" / "data-model.md"
 
+#: The Alembic revisions, which both epics author into ({SAD:ADR-0013}).
+VERSIONS_DIR = REPO_ROOT / "src" / "model" / "schema" / "versions"
+if not VERSIONS_DIR.is_dir():  # pragma: no cover - layout differs under an install
+    VERSIONS_DIR = REPO_ROOT / "src" / "model" / "src" / "model" / "schema" / "versions"
+
+#: This epic's reserved filename-prefix block, inclusive. {SAD:ADR-0013} leaves
+#: `0100`-`0199` to E004; the numbers are a *claim*, never something the runner
+#: compares to decide order.
+OWN_BLOCK = (1, 99)
+
+#: `CREATE TABLE [IF NOT EXISTS] name`, and the same for the relation kinds that
+#: could carry another epic's design just as effectively. Written to match the
+#: statement rather than the file, so a docstring explaining why a revision does
+#: *not* create something is not mistaken for one that does.
+CREATE_RELATION = re.compile(
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?"
+    r"(?:TABLE|VIEW|MATERIALIZED\s+VIEW|UNLOGGED\s+TABLE)\s+"
+    r"(?:IF\s+NOT\s+EXISTS\s+)?"
+    r'"?(?P<name>[A-Za-z_][A-Za-z0-9_]*)"?',
+    re.IGNORECASE,
+)
+
+#: `NNNN_name.py`.
+REVISION_FILENAME = re.compile(r"^(?P<prefix>\d{4})_")
+
+
+def _data_model_paths() -> list[Path]:
+    """Every epic's data model, this one included."""
+    return sorted((REPO_ROOT / "specs").glob("*/data-model.md"))
+
+
+def _revision_files() -> list[Path]:
+    return sorted(
+        path
+        for path in VERSIONS_DIR.glob("*.py")
+        if path.name != "__init__.py" and REVISION_FILENAME.match(path.name)
+    )
+
+
+def _is_own_block(path: Path) -> bool:
+    match = REVISION_FILENAME.match(path.name)
+    assert match is not None, f"unreachable: {path.name} passed the filter"
+    low, high = OWN_BLOCK
+    return low <= int(match.group("prefix")) <= high
+
+
+def _revisions_creating(relation_name: str) -> list[Path]:
+    """Revisions whose executed SQL creates a relation of this name."""
+    return [
+        path
+        for path in _revision_files()
+        if any(
+            match.group("name") == relation_name
+            for match in CREATE_RELATION.finditer(path.read_text(encoding="utf-8"))
+        )
+    ]
+
+
 #: TR-036 / SC-017. Named, with the epic each belongs to, because the point of
 #: the requirement is the ownership boundary and not merely a count of tables.
 OTHER_EPIC_TABLES: dict[str, str] = {
@@ -166,25 +224,42 @@ IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _documented_identifiers() -> set[str]:
-    """Every identifier appearing inside code formatting in `data-model.md`.
+    """Every identifier inside code formatting in **every** epic's data model.
 
     Restricted to code spans deliberately. Matching the whole document would
     let a table called `document` pass on the strength of the English word, and
     the point of TR-083 is that the *object* was written down, not that its name
     is a word someone used.
+
+    **Widened 2026-07-26 from this epic's document to every `specs/*/`
+    data model, for the same reason the ownership test above was rescoped.**
+    TR-083 makes a data model normative "for the whole object set", and while
+    E003 was the sole author of the chain, this epic's document *was* the whole
+    object set. {SAD:ADR-0013} put E004's revisions in the same directory
+    against the same database, so the catalog now enumerates objects this
+    document has no business declaring -- E004's `data-model.md` already
+    declares them, in the epic that owns them.
+
+    The requirement is unweakened: every object still has to be documented
+    somewhere, by name, in a reviewed artifact. What changed is that "somewhere"
+    is the set of epic data models rather than this one, so documenting an
+    object is the owner's job instead of a duty that lands on whichever epic's
+    tests run last. Requiring E003's document to carry E004's thirty-one
+    constraints would invert the ownership {SAD:ADR-0013} exists to fix and
+    duplicate a document that already exists.
     """
     assert DATA_MODEL_PATH.is_file(), (
         f"{DATA_MODEL_PATH} is missing. It is the normative artifact TR-083 makes this "
         f"module enforce; without it there is nothing to check the catalog against."
     )
-    artifact = DATA_MODEL_PATH.read_text(encoding="utf-8")
     identifiers: set[str] = set()
-    for span in CODE_SPAN.findall(artifact):
-        identifiers.update(IDENTIFIER.findall(span))
+    for path in _data_model_paths():
+        for span in CODE_SPAN.findall(path.read_text(encoding="utf-8")):
+            identifiers.update(IDENTIFIER.findall(span))
 
     assert len(identifiers) > 100, (
-        f"only {len(identifiers)} identifiers were recovered from data-model.md's code "
-        f"spans. The document declares well over a hundred named objects, so this is a "
+        f"only {len(identifiers)} identifiers were recovered from the data models' code "
+        f"spans. The documents declare well over a hundred named objects, so this is a "
         f"parsing failure and every assertion below would fail for the wrong reason."
     )
     return identifiers
@@ -206,24 +281,75 @@ def _undocumented(objects: list[tuple[str, str]], kinds: dict[str, str]) -> list
 @pytest.mark.parametrize(
     ("relation_name", "owner"), sorted(OTHER_EPIC_TABLES.items()), ids=sorted(OTHER_EPIC_TABLES)
 )
-def test_a_table_owned_by_another_epic_was_not_created_here(
-    db_session: Session, relation_name: str, owner: str
-) -> None:
-    """TR-036 / SC-017: this name does not exist in the migrated schema.
+def test_a_table_owned_by_another_epic_was_not_created_here(relation_name: str, owner: str) -> None:
+    """TR-036 / SC-017: no revision *in this epic's block* creates this name.
 
     One test per name rather than one test over a set, so a failure reports
-    *which* boundary was crossed and to whose epic the design belongs. Asserted
-    over `pg_class` rather than over `pg_tables`, so a view or a materialized
-    view carrying the name is caught too -- encroaching on another epic's design
-    by declaring its shape as a view is the same encroachment.
-    """
-    found = db_session.execute(text(NAMED_RELATION_SQL), {"relation_name": relation_name}).all()
+    *which* boundary was crossed and to whose epic the design belongs.
 
-    assert not found, (
-        f"the migrated schema contains {relation_name!r} as a "
-        f"{', '.join(RELATION_KINDS.get(kind, kind) for (kind,) in found)}. That object "
-        f"belongs to {owner} (TR-036, SC-017). Creating it here fixes a design decision "
-        f"that another epic's plan owns, and two chains would then both claim it."
+    **Rescoped 2026-07-26 from the catalog to this epic's revision sources, and
+    the reason is that the original premise stopped being true.** This test read
+    `pg_class` and required the name to be absent from the migrated schema. That
+    was a faithful implementation of "created here" only while E003 was the sole
+    author of the chain. {SAD:ADR-0013} puts both epics' revisions in one
+    directory against one database -- E003 in `0001`-`0099`, E004 in
+    `0100`-`0199` -- so once E004's revisions landed, three of these six names
+    existed in the migrated schema *because their owner created them*, which is
+    the arrangement working rather than the boundary being crossed.
+
+    The claim is unchanged and no weaker: this module's own docstring already
+    stated the intent as "a migration in this chain that creates one has taken a
+    decision that belongs to another epic's plan". Authorship was always what
+    TR-036 was about; presence was a proxy that a shared chain invalidated. The
+    scan reads only `0001`-`0099`, so an E003 revision creating `llm_invocation`
+    still fails, which is the case the requirement exists for.
+
+    Still asserted across relation *kinds*: declaring another epic's design as a
+    view is the same encroachment as declaring it as a table.
+    """
+    offenders = sorted(
+        path.name for path in _revisions_creating(relation_name) if _is_own_block(path)
+    )
+
+    assert not offenders, (
+        f"{offenders} create {relation_name!r}, which belongs to {owner} "
+        f"(TR-036, SC-017). Creating it in this epic's revision block fixes a "
+        f"design decision that another epic's plan owns, and two revisions would "
+        f"then both claim it."
+    )
+
+
+@pytest.mark.parametrize(
+    ("relation_name", "owner"), sorted(OTHER_EPIC_TABLES.items()), ids=sorted(OTHER_EPIC_TABLES)
+)
+def test_an_other_epic_table_that_exists_was_created_by_a_revision_outside_this_block(
+    db_session: Session, relation_name: str, owner: str
+) -> None:
+    """The other half of the rescoping, and what keeps it from being a loophole.
+
+    Dropping the catalog assertion entirely would leave TR-036 blind to a table
+    that exists for no attributable reason -- made by hand against a shared
+    database, or by a revision since edited. So presence is still read from
+    `pg_class`; what changed is the *conclusion* drawn from it. A name that
+    exists must be traceable to a revision outside this epic's block, which is
+    the positive form of "its owner created it".
+
+    Absent names pass trivially and deliberately: E009's and E017's tables do
+    not exist yet, and this test must not become a demand that they do.
+    """
+    exists = db_session.execute(text(NAMED_RELATION_SQL), {"relation_name": relation_name}).all()
+    if not exists:
+        return
+
+    creators = sorted(
+        path.name for path in _revisions_creating(relation_name) if not _is_own_block(path)
+    )
+    assert creators, (
+        f"{relation_name!r} exists in the migrated schema as a "
+        f"{', '.join(RELATION_KINDS.get(kind, kind) for (kind,) in exists)}, but no "
+        f"revision outside this epic's block {OWN_BLOCK} creates it. It belongs to "
+        f"{owner}, so either it was created by hand against a shared database, or "
+        f"the revision that created it has been edited away (TR-036)."
     )
 
 

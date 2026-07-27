@@ -94,6 +94,29 @@ from model.schema.url import DATABASE_URL_ENV_VAR
 RESERVED_BLOCK_FIRST = 1
 RESERVED_BLOCK_LAST = 99
 
+#: Every block {SAD:ADR-0013} assigns, as inclusive `(low, high, owner)` triples.
+#:
+#: **Added 2026-07-26, and the reason is the same one that rescoped
+#: `test_table_ownership.py`.** The range check below asserted that *every*
+#: revision in the chain falls inside `0001`-`0099`, which was a faithful
+#: reading of TR-004 while E003 was the sole author of this directory. ADR-0013
+#: put E004's revisions in the same directory at `0100`-`0103`, so the chain the
+#: test walks now contains revisions that are correctly numbered *outside*
+#: E003's block, and the assertion failed on the arrangement working as designed.
+#:
+#: The claim keeps its teeth: a revision numbered `0250` still fails, because it
+#: is inside no declared block at all. What it no longer does is treat another
+#: epic's correctly-numbered revision as an encroachment.
+#:
+#: The *partition* claim — that the blocks tile the range without overlap or gap
+#: — deliberately does not live here. TR-051 places it at the repository root,
+#: in `tests/checks/test_migration_ranges.py`, on the ground that it asserts the
+#: boundary *between* two epics' claims and so belongs to neither entry.
+DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
+    (RESERVED_BLOCK_FIRST, RESERVED_BLOCK_LAST, "E003"),
+    (100, 199, "E004"),
+)
+
 #: Revision ids are the four-digit prefix itself (see alembic.ini). Exactly four
 #: digits: `123` sorts wrong in a directory listing and `00003` is not the
 #: convention, so both are defects even though Alembic would accept either.
@@ -459,12 +482,17 @@ def test_chain_resolves_to_exactly_one_head() -> None:
 
 @pytest.mark.parametrize("script", CHAIN, ids=CHAIN_REVISION_IDS)
 def test_revision_id_falls_inside_the_reserved_block(script: Script) -> None:
-    """TR-004/TR-005: every revision id is four digits inside `0001`-`0099`.
+    """TR-004/TR-005: every revision id is four digits inside a declared block.
 
     The revision id *is* the filename prefix in this project (alembic.ini's
-    `file_template` is `%(rev)s_%(slug)s`), so checking the id checks both. A
-    revision numbered `0100` would be inside E004's block and would collide when
-    the two workstreams' migration directories are read as one chain.
+    `file_template` is `%(rev)s_%(slug)s`), so checking the id checks both.
+
+    **Rescoped 2026-07-26 from "inside E003's block" to "inside a declared
+    block".** ADR-0013 makes this one directory serve two epics, so the chain
+    this test walks contains E004's `0100`-`0103` — correctly numbered, in the
+    block reserved for them, and previously reported here as an encroachment.
+    See `DECLARED_BLOCKS` for the full reasoning and for why the partition claim
+    lives at the repository root instead.
     """
     assert REVISION_ID_PATTERN.match(script.revision), (
         f"revision id {script.revision!r} is not a four-digit prefix. "
@@ -473,11 +501,14 @@ def test_revision_id_falls_inside_the_reserved_block(script: Script) -> None:
     )
 
     number = int(script.revision)
+    owner = next((owner for low, high, owner in DECLARED_BLOCKS if low <= number <= high), None)
 
-    assert RESERVED_BLOCK_FIRST <= number <= RESERVED_BLOCK_LAST, (
-        f"revision {script.revision!r} is outside E003's reserved block "
-        f"{RESERVED_BLOCK_FIRST:04d}-{RESERVED_BLOCK_LAST:04d} (TR-004). "
-        f"0100-0199 belongs to E004; renumber this revision into E003's block."
+    assert owner is not None, (
+        f"revision {script.revision!r} is outside every declared block (TR-004). "
+        f"Declared: "
+        f"{', '.join(f'{low:04d}-{high:04d} {name}' for low, high, name in DECLARED_BLOCKS)}. "
+        f"Nothing but the prefix says which epic owns a revision, so a number "
+        f"outside the blocks belongs to no one; renumber it into its epic's block."
     )
 
 
