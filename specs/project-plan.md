@@ -12,6 +12,17 @@ dod_source: null
 
 ## Epic Checklist
 
+> **`[X]` means the epic has passed QC and merged to the default branch** — its
+> workspace carries `.qc-passed` and its work is on `main`. Per
+> `amend-project/SKILL.md`, a ticked epic is **immutable**: only unchecked epics
+> may be adjusted by a later amendment.
+>
+> E001 through E004 are merged and remain unticked. That is a gap in this
+> document's bookkeeping, not a statement about those epics — the tick was never
+> applied as they landed, and back-filling four rows would freeze them against
+> adjustment in the same stroke as recording their status. Read an unticked row
+> as *not yet ticked*, and check the workspace marker for the epic's real state.
+
 ### Wave 1 — Foundation
 
 > One epic, and everything waits on it. The scaffold's real payload is the enforcement machinery — import contracts, architecture tests, and the image package assertion — because those turn later constraints into build failures rather than review comments. It also declares the project and vendor roster, the shared fixture both synthetic-data epics read.
@@ -30,7 +41,7 @@ dod_source: null
 
 > Synthetic history and document ingestion are fully independent: one produces procurement records, the other produces chunks and extracted line items.
 
-- [ ] E005 [P1] [PRODUCT] [P] {PRD:CAP-001} Synthetic Procurement History — 200 lines with lifecycle events and disclosed assumptions
+- [X] E005 [P1] [PRODUCT] [P] {PRD:CAP-001} Synthetic Procurement History — 200 lines with lifecycle events and disclosed assumptions
 - [ ] E006 [P1] [PRODUCT] [P] {PRD:CAP-002}{SAD:ADR-0008} Document Ingestion and Extraction — structure-aware chunking with deterministic page provenance
 
 ### Wave 4 — Core Capabilities
