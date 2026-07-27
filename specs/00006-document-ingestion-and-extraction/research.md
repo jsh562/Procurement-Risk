@@ -1,6 +1,8 @@
 # Research: Document Ingestion and Extraction
 
 > Feature E006 `00006-document-ingestion-and-extraction` | 2026-07-27 | Purpose: ground chunk-boundary policy, the encoder-cap interaction, per-field confidence semantics, line-item field sets, page-provenance validation, and evaluation-set stability for a product spec
+>
+> Second pass | 2026-07-27 | Purpose: ground tokenizer measurement, sentence segmentation, transactional ingestion, derived-data generations, vector bulk-loading, and interval reporting for the implementation plan
 
 ## Structure-aware chunking of UFGS sections
 
@@ -50,9 +52,59 @@
 - **Pitfalls**: A span that a new chunker splits across two chunks changes what recall@k counts — fix the hit rule and the overlap predicate in writing before the first tuning run, since choosing it afterwards is tuning; publish the unjudged rate at k beside every metric, or figures from two chunker versions are not comparable; a span quoted with normalization applied will not resolve against chunks stored under different normalization.
 - **Sources**: <https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=150469>, <https://dl.acm.org/doi/10.1145/1277741.1277755>
 
+## Counting word pieces in the pinned encoder's tokenizer
+
+- **Decision**: Load the tokenizer alone with `AutoTokenizer.from_pretrained(<pinned model id>, revision=<commit sha>)` and count `len(tokenizer(text)["input_ids"])`, leaving `add_special_tokens` at its default `True`. That is the number of pieces the model actually consumes. Cache the tokenizer once per process and encode in batches.
+- **Rationale**: `from_pretrained` reads `tokenizer_config.json` for the tokenizer class and loads the serialized Rust pipeline from `tokenizer.json`; no model weights are fetched. The tokenizer files for a MiniLM-class encoder are well under a megabyte, load in well under a second, and the Rust backend parallelises batch encodes — so exact measurement is cheaper than any heuristic worth defending.
+- **Rejected**: Character or word budgets scaled by a fudge factor; `tokenizer.tokenize()`, which returns pieces *without* `[CLS]`/`[SEP]` and so undercounts by 2 for BERT-family encoders; instantiating the full `SentenceTransformer` just to measure length.
+- **Pitfalls**: `model_max_length` in `tokenizer_config.json` is `512` for `sentence-transformers/all-MiniLM-L6-v2`, while the effective sentence-transformers cap is `max_seq_length` `256` from `sentence_bert_config.json` — trusting the tokenizer's own field doubles the budget silently; the cap counts special tokens, so the content budget is 254, not 256; pin the tokenizer to the same revision as the encoder or the count and the truncation disagree; measure the exact string that will be embedded, after any normalization, not the pre-normalized source.
+- **Sources**: <https://huggingface.co/docs/transformers/main/en/fast_tokenizers>, <https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/blob/main/tokenizer_config.json>
+
+## Deterministic sentence segmentation for specification prose
+
+- **Decision**: Use pySBD (`pysbd.Segmenter(language="en", clean=False, char_span=True)`), version-pinned, as the terminal split level below a paragraph. Keep character spans so each sentence maps back to an offset in the parent unit and the page-containment assertion still holds.
+- **Rationale**: pySBD is purely rule-based — a regex cascade ported from the Ruby pragmatic-segmenter — with no model, no training data, and no download, so identical input yields identical output across runs and machines, which is what a reproducibility gate requires. It passes 97.92% of the English Golden Rules Set, about 25% above the next-best open-source Python tool, and the GRS exemplars are precisely the abbreviation, decimal-number, numbered-list and citation cases that naive splitters fail.
+- **Rejected**: NLTK `punkt` (an unsupervised statistical model requiring a downloaded pickle, so behaviour is tied to a data artifact); spaCy's `parser`/`senter` (model download, heavier, statistical); a hand-rolled `[.!?]\s` regex, which breaks on `2.4.7`, `ASTM A653/A653M`, `No.`, and `approx.`.
+- **Pitfalls**: pySBD is slow relative to a regex, so invoke it only on units that already exceed the cap, not on every paragraph; `clean=True` rewrites the text and would break both page containment and offset arithmetic — leave it off; the residual few percent of GRS failures are exactly designation-heavy strings, so a single "sentence" can still exceed the token cap and the fail-closed leaf rule must remain; the project is lightly maintained, so pin an exact version and treat an upgrade as a chunker-version bump.
+- **Sources**: <https://github.com/nipunsadvilkar/pySBD>, <https://aclanthology.org/2020.nlposs-1.15/>
+
+## Per-document transactional ingestion with psycopg 3
+
+- **Decision**: Open one **autocommit** connection for the run and wrap each document in `with conn.transaction():`. Chunks, embeddings, extracted values, contributing-chunk rows, association rows, and any failure row for that document commit or roll back as one unit. Use `cursor.copy()` for the high-volume chunk and embedding inserts and `executemany` for the small child tables.
+- **Rationale**: This is psycopg's own recommendation — "use an autocommit connection" plus "`with conn.transaction()` blocks to manage transactions only where needed". The block starts a transaction on entry and the transaction is committed, or rolled back if an exception is raised inside the block, which makes the document the unit of atomicity: an abort at document *k* leaves documents 1..*k*−1 committed and durable and document *k* entirely absent. The default non-autocommit connection begins an implicit transaction on first execute and commits at block exit, which would silently make the whole run a single transaction.
+- **Rejected**: One transaction for the entire run (a late failure discards the whole batch and holds locks and bloat throughout); committing per row (loses per-document atomicity and admits half-ingested documents).
+- **Pitfalls**: Nested `transaction()` blocks are savepoints, so a per-document error handler must catch *outside* the block or the inner rollback never happens; a failure row describing document *k* written inside *k*'s transaction is rolled back along with it — write it in a fresh transaction after the rollback; a failed statement poisons the rest of the transaction until rollback; `COPY` inside the block is transactional and rolls back with it; `psycopg.Rollback` abandons a block without propagating the exception.
+- **Sources**: <https://www.psycopg.org/psycopg3/docs/basic/transactions.html>, <https://www.psycopg.org/psycopg3/docs/basic/copy.html>
+
+## Generations of derived data with active/superseded state
+
+- **Decision**: Add a generation table (run id, chunker version, encoder revision, status) with every chunk associated to it, and enforce "at most one active generation per document" with a partial unique index on `(document_id) WHERE status = 'active'`. Readers join through the generation or read a view that already filters it; nothing reads the chunk table unqualified. Promotion is one transaction: insert the new generation, set the old to `superseded`, set the new to `active`.
+- **Rationale**: PostgreSQL documents the partial unique index for exactly this shape — a unique index over a subset of a table enforces uniqueness among the rows satisfying the predicate without constraining those that do not. That turns the invariant into a database guarantee: a second activation fails on write rather than producing two live generations that queries silently union. Keeping the superseded rows preserves the audit trail and makes a bad promotion reversible by flipping status back.
+- **Rejected**: A bare `is_active` boolean with no index (concurrent promotions produce two actives); deleting the previous generation at promotion time (no rollback, no diff); a `max(version)` subquery re-implemented in every reader.
+- **Pitfalls**: `ON DELETE RESTRICT` does not allow the check to be deferred whereas `NO ACTION` does — a retirement job therefore cannot delete parents before children inside one transaction and must delete strictly leaf-up (contributing-chunk rows → extracted values → chunks → generation); retire by age or retained-count in a separate job, never as part of promotion; constrain status with a `CHECK` so a typo cannot create a third state that no reader filters.
+- **Sources**: <https://www.postgresql.org/docs/16/indexes-partial.html>, <https://www.postgresql.org/docs/16/ddl-constraints.html>
+
+## Bulk-loading pgvector embeddings
+
+- **Decision**: Load vectors with `COPY` through `cursor.copy()` with the pgvector psycopg 3 adapter registered, and build the HNSW index **after** the load rather than inside the per-document transaction.
+- **Rationale**: pgvector is explicit that indexes should be added after loading the initial data for best performance, and points at `COPY` as the bulk path. Building the HNSW graph incrementally, one row-insert at a time, costs far more than a single bulk build. Before the build, raise `maintenance_work_mem` — indexes build significantly faster when the graph fits in it — and raise `max_parallel_maintenance_workers` above its default of 2, with `max_parallel_workers` raised to match.
+- **Rejected**: Row-at-a-time `INSERT` for several thousand 384-dimension vectors; `CREATE INDEX CONCURRENTLY`, which is slower and buys availability this offline job does not need.
+- **Pitfalls**: Index creation is DDL — keeping it in the per-document transaction would rebuild it per document and defeat the point; binary `COPY` requires source and target types to match exactly, so the declared `vector(384)` and the encoder's output dimension must agree or the load fails mid-stream; `m` and `ef_construction` drive build time as much as row count; between a drop and a rebuild every similarity query falls back to a sequential scan, which is acceptable offline but should be stated.
+- **Sources**: <https://github.com/pgvector/pgvector>
+
+## Wilson score intervals for per-field precision and recall
+
+- **Decision**: Report every per-field precision and recall as a point estimate plus a 95% Wilson score interval, with the denominator printed beside it. Do not use the Wald/normal-approximation interval anywhere in the evaluation report.
+- **Rationale**: Brown, Cai and DasGupta show the Wald interval's coverage is chaotically wrong and that the textbook rules for when it is "safe" cannot be trusted; they recommend the Wilson interval (or equal-tailed Jeffreys) for small *n*. Wilson is obtained by inverting the score test, is asymmetric, and keeps both bounds inside [0, 1] by construction, so it does not overshoot or produce zero-width intervals. Per-field denominators here are frequently under 20, which is precisely the regime where Wald misleads.
+- **Rejected**: The normal-approximation interval; a bare point estimate with no interval; pooling distinct fields together to manufacture a larger *n*.
+- **Pitfalls**: At 0 successes Wald collapses to [0, 0] and at *n* successes to [1, 1] — "100% precision" from 7 of 7 — whereas Wilson returns a real interval that makes the small denominator visible; Wilson still under-covers at extreme proportions for very small *n* unless continuity-corrected, so state which variant is used and use it consistently; precision and recall have different denominators, so their interval widths are not comparable; an interval presupposes a random sample, and a deliberately adversarial evaluation set is not one — label such figures descriptive rather than inferential.
+- **Sources**: <https://projecteuclid.org/journals/statistical-science/volume-16/issue-2/Interval-Estimation-for-a-Binomial-Proportion/10.1214/ss/1009213286.full>, <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>
+
 ## Summary
 
-Three constraints in this feature are structural rather than tunable and should surface as acceptance criteria: the encoder truncates silently, so chunk length must be measured in the encoder's own tokenizer and a too-long leaf must fail rather than embed; page attribution is verifiable exhaustively from pdfplumber's per-object page number, so a sampled audit is a weaker claim than the one available for free; and a chunk-id-keyed frozen evaluation set freezes the chunker by accident, so span-keyed identity with run-time resolution is the version that survives re-chunking. Model self-reported confidence is the weakest signal in the design — it is defensible as a review-routing hint and indefensible as a published number, so the spec should say which one it is.
+Three constraints in this feature are structural rather than tunable and should surface as acceptance criteria: the encoder truncates silently, so chunk length must be measured in the encoder's own tokenizer and a too-long leaf must fail rather than embed; page attribution is verifiable exhaustively from pdfplumber's per-object page number, so a sampled audit is a weaker claim than the one available for free; and a chunk-id-keyed frozen evaluation set freezes the chunker by accident, so span-keyed identity with run-time resolution is the version that survives re-chunking. Model self-reported confidence is the weakest signal in the design — it is defensible as a review-routing hint and indefensible as a published number, so the spec should say which one it is. The clarification pass resolved this by computing confidence from parse signals instead, which moves it to the code side of the computation boundary.
+
+On the implementation stack, four choices carry the most weight. The tokenizer is loadable standalone for under a megabyte and no weights, so exact word-piece counting is affordable — but `model_max_length` (512) is not the effective cap (256), and reading the wrong field is the likeliest way to ship silent truncation. An autocommit connection with `with conn.transaction()` per document is psycopg's own recommended shape and is exactly what makes a mid-run abort leave earlier documents intact; the corollary is that a failure row must be written *after* the rollback, in its own transaction. "One active generation per document" should be a partial unique index rather than application discipline, and because `ON DELETE RESTRICT` cannot be deferred, retirement must delete leaf-up. Finally, the HNSW index belongs after the load rather than inside the per-document transaction, and every per-field metric should carry a Wilson interval so that a 7-of-7 result is not read as certainty.
 
 ## Sources Index
 
@@ -70,3 +122,14 @@ Three constraints in this feature are structural rather than tunable and should 
 | <https://jhanley.biostat.mcgill.ca/c607/ch08/zero_numerator.pdf> | page-attribution validation | 2026-07-27 |
 | <https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=150469> | evaluation-set stability | 2026-07-27 |
 | <https://dl.acm.org/doi/10.1145/1277741.1277755> | evaluation-set stability | 2026-07-27 |
+| <https://huggingface.co/docs/transformers/main/en/fast_tokenizers> | standalone tokenizer counting | 2026-07-27 |
+| <https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/blob/main/tokenizer_config.json> | standalone tokenizer counting | 2026-07-27 |
+| <https://github.com/nipunsadvilkar/pySBD> | deterministic sentence segmentation | 2026-07-27 |
+| <https://aclanthology.org/2020.nlposs-1.15/> | deterministic sentence segmentation | 2026-07-27 |
+| <https://www.psycopg.org/psycopg3/docs/basic/transactions.html> | per-document transactional ingestion | 2026-07-27 |
+| <https://www.psycopg.org/psycopg3/docs/basic/copy.html> | per-document transactional ingestion | 2026-07-27 |
+| <https://www.postgresql.org/docs/16/indexes-partial.html> | active/superseded generations | 2026-07-27 |
+| <https://www.postgresql.org/docs/16/ddl-constraints.html> | active/superseded generations | 2026-07-27 |
+| <https://github.com/pgvector/pgvector> | pgvector bulk loading | 2026-07-27 |
+| <https://projecteuclid.org/journals/statistical-science/volume-16/issue-2/Interval-Estimation-for-a-Binomial-Proportion/10.1214/ss/1009213286.full> | Wilson score intervals | 2026-07-27 |
+| <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval> | Wilson score intervals | 2026-07-27 |
