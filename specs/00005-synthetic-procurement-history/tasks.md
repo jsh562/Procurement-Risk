@@ -69,8 +69,8 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 **The record types, the path resolution and the canonical serializer gate every delivery phase. `serialize.py` gates the hash oracle and the hash oracle gates the validator, so T007 → T034 → T051 is the spine FR-021 rests on.**
 
-- [ ] T004 [P] Create the package docstring and path resolution in PKG/__init__.py and PKG/paths.py following `corpus.paths` → exports: fixture_path(), truth_path()
-- [ ] T005 [P] {FR-013} Create the closed envelope, line and event record types and the `NS_E005` namespace uuid in PKG/model.py → exports: FixtureEnvelope, FixtureLine, NS_E005
+- [X] T004 [P] Create the package docstring and path resolution in PKG/__init__.py and PKG/paths.py following `corpus.paths` → exports: fixture_path(), truth_path()
+- [X] T005 [P] {FR-013} Create the closed envelope, line and event record types and the `NS_E005` namespace uuid in PKG/model.py → exports: FixtureEnvelope, FixtureLine, NS_E005
 - [ ] T006 {FR-013,FR-021} **RED** Failing serializer property tests in TST/test_serialize_properties.py — parse/canonicalize round-trip, key-order and file-layout invariance after:T005
 - [ ] T007 {FR-013,FR-021} **GREEN** Implement the canonical serializer in PKG/serialize.py — reuse `roster.reader.canonical_bytes`, no JSON float after:T006 → exports: dataset_content_hash()
 - [ ] T008 {FR-013} Add worked-case serializer unit tests — non-ASCII description, trailing-zero quantity, absent note, CRLF and LF checkouts — in TST/test_serialize.py after:T007
