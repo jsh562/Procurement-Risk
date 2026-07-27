@@ -297,15 +297,16 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Actors**: Developer, coordinator (downstream)
 - **Key entities**: ForecastRun, PosteriorDraws, SurvivalArray
 - **Depends on**: E003, E005
-- **Dependency contracts**: E007 needs procurement lines and lifecycle events from E005; the forecast tables and run contract from E003
+- **Dependency contracts**: E007 needs procurement lines and lifecycle events from E005; the forecast tables and run contract from E003. **E007 performs the train/held-out split of E005's lines and publishes the realized fraction.** E005 emits no split and names no owner for one — it recorded the gap rather than settling another epic's scope — and this plan previously allocated the split to nobody while assigning frozen, hashed evaluation sets to E014. The split is constructed here and **frozen and hashed by E014**, which keeps E014's freeze-before-tuning discipline intact while putting construction in the epic that reads the lines. E005's FR-033 assumes a held-out fraction of 0.25 to bound its post-split uncensored event count and never observes one; E007 publishing the realized fraction is what turns that assumption into a checked value.
 - **Depended on by**: E010, E012, E014, E019
-- **Produces (shared)**: Fitted posteriors, survival arrays, run manifest, active-run pointer
+- **Produces (shared)**: Fitted posteriors, survival arrays, run manifest, active-run pointer, the train/held-out split and its realized fraction
 - **Constraints**: Fitting is offline only, never at request time; both array representations written in one transaction; seeds recorded in the manifest
 - **Acceptance criteria**:
   - [ ] The model fits with partial pooling across vendor and category and handles right-censored open orders
   - [ ] Each open line has both a canonical draw array and a derived survival array, written together and mutually consistent
   - [ ] The run manifest records code revision, input hash, all seeds, and library versions, and the active-run pointer is set explicitly
   - [ ] Sampling diagnostics are recorded and within acceptable bounds
+  - [ ] The train/held-out split is performed and its realized fraction recorded, so E005's assumed 0.25 is replaced by an observed value rather than carried forward
 - **Specify input**:
   - Description: Fit the hierarchical censored delivery-duration model offline and materialize per-line posterior draws and survival arrays with a complete, hashable run manifest.
   - Actors: Developer
@@ -461,7 +462,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 
 - **Category**: PRODUCT · **Priority**: P1
 - **Source**: {PRD:CAP-009}{SAD:ADR-0009}
-- **Scope**: Build the evaluation harness covering retrieval, identity resolution, and forecast calibration. Evaluation sets are canonicalized, hashed, and committed before any tuning; the harness verifies the hash and aborts on mismatch. Results are written to a committed manifest that a reproduction job diffs against within the published tolerance.
+- **Scope**: Build the evaluation harness covering retrieval, identity resolution, and forecast calibration. Evaluation sets are canonicalized, hashed, and committed before any tuning; the harness verifies the hash and aborts on mismatch. **E007 performs the train/held-out split of E005's lines; E014 freezes and hashes the resulting set.** The two are deliberately separated: construction belongs with the epic that reads the lines, and the freeze-before-tuning guarantee belongs with the harness that would otherwise be tuning against its own evaluation set. Results are written to a committed manifest that a reproduction job diffs against within the published tolerance.
 - **Actors**: Developer, evaluator
 - **Key entities**: GoldenSetItem, LabeledPair, ResultsManifest
 - **Depends on**: E004, E007, E008, E009
@@ -687,6 +688,7 @@ None. All 14 capabilities and all 9 accepted architecture decisions map to at le
 | Risk-read module | E010 | E012, E017, E019 |
 | Architecture-test harness | E001 | All epics (build gate) |
 | Project/vendor roster fixture | E001 | E002, E005 |
+| Train/held-out split and its realized fraction | E007 | E014 |
 | Evaluation harness and reproduction job | E014 | E015 |
 | Corpus manifest | E002 | E015 |
 | Generator datasheet | E005 | E015 |
