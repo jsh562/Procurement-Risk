@@ -159,6 +159,32 @@ class TestPurchaseOrderGrouping:
         assert max(sizes.values()) >= 2
         assert max(PO_SIZE_CYCLE) >= 2
 
+    def test_every_declared_order_size_actually_occurs(self) -> None:
+        """Each size in the cycle must appear at least once, and none outside it.
+
+        This is what `data-model.md` actually requires — the sizes are declared,
+        so a declared size that never occurs means the cycle was not followed.
+        It catches the per-group reset, under which the pattern's `3` occurs
+        once in the whole dataset and its second `2` never distinguishably at
+        all: a pattern declared and not realized reads, from the outside,
+        exactly like a pattern that was followed.
+
+        What this deliberately does **not** assert is that the realized shares
+        match the cycle's composition. Clipping at group boundaries means they
+        do not, and no artifact states a target distribution to hold them to.
+        Asserting one here would be inventing the number and then shaping the
+        generator to hit it. The gap is disclosed rather than tested away.
+        """
+        sizes: dict[tuple[str, str], int] = {}
+        for line in allocate_lines():
+            key = (line.project_id, line.po_number)
+            sizes[key] = sizes.get(key, 0) + 1
+
+        realized = set(sizes.values())
+        assert realized == set(PO_SIZE_CYCLE), (
+            f"realized order sizes {sorted(realized)} against declared {sorted(set(PO_SIZE_CYCLE))}"
+        )
+
 
 class TestDeterminism:
     """No seed is consumed here, so equality is the whole claim."""

@@ -82,9 +82,9 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 **Independent test**: run the generator against the frozen roster at the recorded seed and confirm it emits the fixture, its digest sidecar and the ground-truth record, with line and event counts inside the intended shape.
 
-- [ ] T010 [US1] {FR-004} **RED** Failing allocate property tests in TST/test_allocate_properties.py — exact margins, totals at 190 and 210, the 5-line vendor, the N=200 crossover (DV-002)
-- [ ] T011 [US1] {FR-003,FR-004} **GREEN** Implement the declared vendor and project vectors, greedy fill and cyclic PO grouping in PKG/allocate.py after:T010 → exports: allocate_lines()
-- [ ] T012 [P] [US1] {FR-003} Assert DV-001 (190–210 lines, 5 projects, 12 vendors from `read_roster().identifiers()`) and DV-003 in TST/test_allocate.py after:T011
+- [X] T010 [US1] {FR-004} **RED** Failing allocate property tests in TST/test_allocate_properties.py — exact margins, totals at 190 and 210, the 5-line vendor, the N=200 crossover (DV-002)
+- [X] T011 [US1] {FR-003,FR-004} **GREEN** Implement the declared vendor and project vectors, greedy fill and cyclic PO grouping in PKG/allocate.py after:T010 → exports: allocate_lines()
+- [X] T012 [P] [US1] {FR-003} Assert DV-001 (190–210 lines, 5 projects, 12 vendors from `read_roster().identifiers()`) and DV-003 in TST/test_allocate.py after:T011
 - [ ] T013 [P] [US1] {FR-019} **RED** Failing seeds property tests in TST/test_seeds_properties.py — insert or reorder changes no other stream key; the key is pure in the natural key
 - [ ] T014 [US1] {FR-019,FR-020} **GREEN** Implement the content-addressed `SeedSequence` spawn-key derivation in PKG/seeds.py after:T013 → exports: line_stream_key(), line_generator()
 - [ ] T015 [US1] {FR-007,FR-008,FR-036} **RED** Failing durations property tests in TST/test_durations_properties.py — the four relations in plan §Mandated properties (DV-011, DV-012)
