@@ -56,6 +56,23 @@ MIGRATION_STACK = frozenset({"alembic", "sqlalchemy"})
 #: DDL never imports anything a name-based set would catch.
 SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
 
+#: Distributions the schema owner declares that are nonetheless shared
+#: infrastructure rather than part of the modeling stack.
+#:
+#: The two checks below derive "the modeling stack" from what `model` declares,
+#: which is the right instinct — a hand-listed stack goes stale the moment
+#: someone adds a dependency. But the derivation is only as good as its
+#: exclusions, and the driver is declared by `model` while belonging to no
+#: boundary in particular: {SAD:ADR-0016} sanctions it for `/src/api` and
+#: `/src/gateway` too. Without this subtraction those checks read every shared
+#: transitive as a modeling intrusion, which is precisely what the first one's
+#: own docstring says it is not looking for.
+#:
+#: What TR-003 and TR-004 actually protect is the request-serving image staying
+#: free of PyMC, ArviZ, pandas and NumPy — the packages that make it fat. Those
+#: are still derived, never listed, and none of them appears here.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
 #: against it rather than against a repeated literal.
 SCHEMA_OWNING_ENTRY = "model"
@@ -68,7 +85,8 @@ def test_no_modeling_dependency_reaches_the_serving_resolution() -> None:
     what would matter is the modeling boundary's own stack arriving in the
     boundary that serves requests.
     """
-    leaked = declared_third_party("model") & locked_distributions("api")
+    modeling_stack = declared_third_party("model") - SHARED_INFRASTRUCTURE
+    leaked = modeling_stack & locked_distributions("api")
     assert not leaked, f"modeling distributions present in the serving resolution: {sorted(leaked)}"
 
 
@@ -84,8 +102,40 @@ def test_both_boundaries_declare_the_gateway_as_a_path_dependency(boundary: str)
 
 def test_gateway_carries_no_modeling_stack() -> None:
     """TR-003. The modeling stack is derived, never hand-listed."""
-    intrusion = locked_distributions("gateway") & declared_third_party("model")
+    modeling_stack = declared_third_party("model") - SHARED_INFRASTRUCTURE
+    intrusion = locked_distributions("gateway") & modeling_stack
     assert not intrusion, f"gateway resolved set carries the modeling stack: {sorted(intrusion)}"
+
+
+def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() -> None:
+    """Guard on the subtraction above, because an exclusion list is a loophole.
+
+    Two ways `SHARED_INFRASTRUCTURE` could rot. Someone adds `pymc` to it and
+    the two checks that depend on it pass while the serving image grows a
+    modeling stack — so the heavy packages are asserted absent from it by name.
+    Or it drifts to cover something the schema owner no longer declares, leaving
+    a dead entry that quietly weakens nothing but tells the next reader a
+    falsehood — so every member is required to still be declared by `model`.
+    """
+    heavy = {"pymc", "arviz", "pandas", "numpy"}
+    smuggled = heavy & SHARED_INFRASTRUCTURE
+    assert not smuggled, (
+        f"{sorted(smuggled)} is excluded from the derived modeling stack. That defeats "
+        f"TR-003 and TR-004: the serving image could acquire it and both checks would "
+        f"still pass. The exclusion is for shared infrastructure, not for the stack."
+    )
+
+    declared = declared_third_party(SCHEMA_OWNING_ENTRY)
+    stale = SHARED_INFRASTRUCTURE - declared
+    assert not stale, (
+        f"{sorted(stale)} is excluded but {SCHEMA_OWNING_ENTRY} no longer declares it, so "
+        f"the subtraction removes nothing and the comment explaining it is wrong."
+    )
+
+    assert heavy <= declared, (
+        f"{SCHEMA_OWNING_ENTRY} no longer declares {sorted(heavy - declared)}; the guard "
+        f"above compares against a stack that has moved, so update the term."
+    )
 
 
 def test_gateway_carries_no_web_framework() -> None:
