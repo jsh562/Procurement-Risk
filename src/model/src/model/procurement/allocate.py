@@ -33,6 +33,7 @@ against a hard-coded key.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -41,6 +42,7 @@ from model.roster.reader import read_roster
 
 __all__ = [
     "DECLARED_TOTAL",
+    "PO_NUMBER_PATTERN",
     "PO_SIZE_CYCLE",
     "PROJECT_LINE_COUNTS",
     "TAU",
@@ -237,6 +239,27 @@ def shrinkage(line_count: int) -> float:
     return TAU**2 / (TAU**2 + WITHIN_VENDOR_SIGMA**2 / line_count)
 
 
+#: `^PO-[0-9]{3}-[0-9]{4}$` — the project's own digits, then a per-project
+#: ordinal. Matching `data-model.md` § Line record. The project digits are
+#: *extracted from the roster-supplied identifier* rather than written here, so
+#: FR-001 still holds: nothing in this module names a project.
+PO_NUMBER_PATTERN = re.compile(r"^PO-[0-9]{3}-[0-9]{4}$")
+
+
+def _po_number(project_id: str, ordinal: int) -> str:
+    digits = "".join(c for c in project_id if c.isdigit())
+    if not digits:
+        raise AllocationError(
+            f"project identifier {project_id!r} carries no digits, so no purchase-order "
+            f"number matching {PO_NUMBER_PATTERN.pattern} can be built from it"
+        )
+    if ordinal > 9999:
+        raise AllocationError(
+            f"purchase-order ordinal {ordinal} exceeds the four digits the format allows"
+        )
+    return f"PO-{int(digits):03d}-{ordinal:04d}"
+
+
 def rework_loop_allocation(line_count: int = DECLARED_TOTAL) -> tuple[int, ...]:
     """How many rework loops each line takes, as a declared per-stratum count.
 
@@ -354,7 +377,7 @@ def allocate_lines(total: int | None = None) -> tuple[AllocatedLine, ...]:
             size = min(PO_SIZE_CYCLE[cycle_index % len(PO_SIZE_CYCLE)], remaining)
             cycle_index += 1
             po_counter[project_id] += 1
-            po_number = f"PO-{po_counter[project_id]:05d}"
+            po_number = _po_number(project_id, po_counter[project_id])
             for line_number in range(1, size + 1):
                 lines.append(AllocatedLine(project_id, vendor_id, po_number, line_number))
             remaining -= size
