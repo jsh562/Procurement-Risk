@@ -1,0 +1,3 @@
+QC PASSED 2026-07-27 — 37/37 requirements, 33/33 criteria, 1725 tests, 93% coverage.
+See qc-report.md. Two findings carried open and disclosed: FR-032 clause vacuity (G-7),
+and the red-green obligation evidenced for six of seven mandatory modules.

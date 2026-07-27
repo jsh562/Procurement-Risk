@@ -299,12 +299,52 @@ jobs:
         working-directory: src/model
         # --source overrides the root pyproject.toml `source` list rather than
         # merging with it, so every package in that list must appear here too or
-        # it lands in the denominator with no hits. Three packages now: roster
-        # from the scaffold, schema from E003, corpus from E002. Both epics
-        # widened this line independently and the union is what is correct —
-        # dropping either package would put it in the denominator uncovered and
-        # drag the gate down while measuring nothing.
-        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus -m pytest tests -q
+        # it lands in the denominator with no hits. Four packages now: roster
+        # from the scaffold, corpus from E002, schema from E003, procurement
+        # from E005. Each epic widened this line independently and the union is
+        # what is correct — dropping any package would put it in the denominator
+        # uncovered and drag the gate down while measuring nothing.
+        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement -m pytest tests -q
+
+      # E005's release gate. Each command below is a checkable claim about the
+      # committed dataset, and each fails the build rather than warning:
+      #
+      #   procurement-validate  regenerates from the recorded seed and compares
+      #                         the digest (DV-015), recomputes all three
+      #                         generation-input digests each under its own
+      #                         convention (DV-016), checks the datasheet's seven
+      #                         sections and its limitation records (DV-019), and
+      #                         checks the ground-truth record binds to this
+      #                         fixture and covers the roster (DV-017).
+      #
+      # The isolation, emitted-artifact-set, report-conformance and corpus-field
+      # checks run as tests rather than as a second entry point, because each is
+      # an assertion about the repository tree rather than an operation on it —
+      # and running them here as well as in the suite would be two places for one
+      # rule to be stated.
+      - name: Procurement dataset release gate
+        env:
+          # The same step-scoped literal the migration and coverage steps carry,
+          # and step-scoped for the reason stated there: a job-wide URL would
+          # point the web and image steps at a database too.
+          #
+          # Required even though none of the four checks below touches one.
+          # `tests/procurement/conftest.py::pytest_configure` turns `CI` set with
+          # `DATABASE_URL` unset into a hard abort *before collection*, so
+          # omitting this killed all four invocations on the first CI run — the
+          # release gate failing for a reason unrelated to anything it gates.
+          #
+          # `REQUIRE_DB: "0"` would also silence it and is the wrong fix: it
+          # makes a claim about the tier rather than about these four files, and
+          # would silently cover a future gate check that does need a database.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+        working-directory: src/model
+        run: |
+          uv run procurement-validate
+          uv run pytest -q tests/procurement/test_ground_truth_isolation.py
+          uv run pytest -q tests/procurement/test_emitted_artifact_set.py
+          uv run pytest -q tests/procurement/test_gate_discharged.py
+          uv run pytest -q tests/procurement/test_corpus_match_fields.py
 
       # FR-017: corpus validation runs automatically, not on demand. The console
       # entry point is the same one a developer runs, so a green CI run and a
