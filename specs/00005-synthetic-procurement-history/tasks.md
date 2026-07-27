@@ -3,7 +3,7 @@
 **Input**: Design documents from `specs/00005-synthetic-procurement-history/`
 **Prerequisites**: `plan.md`, `spec.md`, `data-model.md`, `research.md`, `checklists/` (data-integrity, testing — both evaluated 40/40, so no checklist-completion task appears here)
 
-**Tests**: Included, and for six modules **test-first is mandatory rather than optional**. `plan.md` §Testing Strategy admits `serialize.py`, `allocate.py`, `seeds.py`, `durations.py`, `censor.py` and `criticality.py` to the property tier under a three-clause rule — pure, computes rather than transcribes, wrong is silent. Each is emitted as an ordered **RED → GREEN** pair: the property-test task must be observed failing before its implementation task begins, and the branch history carries a `test:` commit before the `feat:` commit for each pair, checkable before the squash merge. Every other module is test-after.
+**Tests**: Included, and for **seven** modules **test-first is mandatory rather than optional**. `plan.md` §Testing Strategy admits `serialize.py`, `allocate.py`, `seeds.py`, `durations.py`, `censor.py` and `criticality.py` to the property tier under a three-clause rule — pure, computes rather than transcribes, wrong is silent. Each is emitted as an ordered **RED → GREEN** pair: the property-test task must be observed failing before its implementation task begins, and the branch history carries a `test:` commit before the `feat:` commit for each pair, checkable before the squash merge. Every other module is test-after.
 
 **Organization**: Grouped by user story (`US#`) per `spec_type: product`. Requirement tags are `FR-###`. `plan.md` §Requirement Coverage Map is the authority for requirement → component → file; `data-model.md` §Enforcement point and test tier is the authority for which tier each `DV-###` rule lands in.
 
@@ -27,7 +27,7 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 - `[US1]` → Generate the procurement history — allocation, seeds, durations, censoring, criticality, lifecycle, equipment, the ground-truth record, the generator entry point and the committed fixture (P1)
 - `[US2]` → Load the history into the delivered schema — staged comparison, two refusals, forced write order, closure at commit (P1)
 - `[US3]` → Reproduce the dataset exactly — the hash oracle, input-drift refusal, provenance agreement, the pin scope limit (P1)
-- `[US4]` → Audit the dataset from its datasheet — seven sections, the disclosures, ten four-part limitations, no split (P1)
+- `[US4]` → Audit the dataset from its datasheet — seven sections, the disclosures, nine four-part limitations (L-5 withdrawn), no split (P1)
 - `[US5]` → Keep known truth out of the model's reach — isolation enumerated from the fitting entry point's own configuration (P2)
 
 ## Brownfield Notes
@@ -98,14 +98,17 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 - [ ] T023 [US1] {FR-011,FR-012,FR-035} **GREEN** Implement multiplicative slack, need-by, the pressure terciles and the tier×tercile table in PKG/criticality.py after:T022
 - [ ] T024 [US1] {FR-005,FR-006} Implement the legal transition walk and the declared rework allocation (`6+3L` events, new positions) in PKG/lifecycle.py ← T014:line_generator
 - [ ] T025 [US1] {FR-005,FR-006} Assert DV-007 (contiguous sequence, first event `submitted`, every pair legal, no position reused) and DV-009 (cap 3, and the realized looped-line count and one/two/three histogram **equal** the declared `L = round(0.30 x N)` and `(42, 13, 5)` — equality, not recording) in TST/test_lifecycle.py after:T024
-- [ ] T026 [US1] {FR-031,FR-032,FR-037} **RED** Write the failing property tests for the description grammars, the disjoint manufacturer space, the part number and the four-clause overlap predicate in TST/test_equipment_properties.py — `equipment.py` is the seventh mandatory deterministic-computation module, so its test commit MUST be observed failing first ← T014:line_generator
-- [ ] T027 [US1] {FR-031,FR-032,FR-037} **GREEN** Implement the description grammars, the disjoint manufacturer space, the part number and the four-clause predicate in PKG/equipment.py, then assert DV-004 (six non-blank descriptive fields, category a map key), DV-005 (fixed scale 1, UoM domain) and DV-014 in TST/test_equipment.py after:T026
+- [ ] T026 [US1] {FR-031,FR-032,FR-037} **RED** Write the failing property tests for the description grammars, the catalog-drawn manufacturer, the part number and the four-clause overlap predicate in TST/test_equipment_properties.py — `equipment.py` is the seventh mandatory deterministic-computation module, so its test commit MUST be observed failing first ← T014:line_generator
+- [ ] T027 [US1] {FR-031,FR-032,FR-037} **GREEN** Implement the description grammars, the catalog-drawn manufacturer, the part number and the four-clause predicate in PKG/equipment.py, then assert DV-004 (six non-blank descriptive fields, category a map key), DV-005 (fixed scale 1, UoM domain) and DV-014 in TST/test_equipment.py after:T026
 - [ ] T028 [P] [US1] {FR-032} [COMPLETES FR-032] **NC-7** — every complement line fails all four clauses, so the share can fall below 60% — TST/test_overlap_predicate_control.py after:T026
 - [ ] T029 [P] [US1] {FR-037} DV-021 — no `manufacturer` enters E001's real-firm exclusion list or matches its vendor convention, via `roster.naming` — TST/test_manufacturer_exclusion.py after:T026
+- [ ] T029a [P] {FR-034} **RED** — a failing property test for the catalog draw: every drawn `manufacturer` is a catalog `canonical_name` and never an alias, its `categories` contains the line's `material_category`, `part_number` carries that same entry's `part_number_prefix` and matches E002's `PART_NUMBER_PATTERN`, and the complement leaves both `NULL` — TST/test_manufacturer_draw.py
+- [ ] T029b {FR-034} **GREEN** — implement the catalog draw in `manufacturer.py`: load through `model.corpus.manufacturers.load_catalog()`, index by category via `manufacturers_for_category()`, draw the entry from the seeded generator and derive the part number from its prefix. Read the catalog; never restate its contents in source — SRC/manufacturer.py after:T029a
+- [ ] T029c {FR-034} DV-028 — assert the catalog-overlap share is ≥ 60% over all lines and record the realized share in the ground-truth record, separately from FR-032's share — SRC/manufacturer.py after:T029b
 - [ ] T030 [US1] {FR-017} Emit the ground-truth record — σ_w, τ, both ratios, the decomposition and 12 vendor offsets — in PKG/truth.py ← T017:decompose_variance → exports: write_truth_record()
 - [ ] T031 [P] [US1] {FR-017} DV-017 — exactly 12 unique `vendor_id`s covering the roster and a `dataset_content_hash` equal to the fixture's — in TST/test_truth_record.py after:T030
 - [ ] T032 [P] [US1] {FR-001} Implement `procurement-generate` in PKG/generate.py — identities only via `read_roster()`, plus a source scan asserting no `PRJ-`/`VND-` literal ← T011:allocate_lines
-- [ ] T033 [US1] {FR-002,FR-009,FR-015,FR-027} [COMPLETES FR-009] Assemble the closed 13-key envelope in PKG/generate.py — both `generation_inputs` carry their own `digest_kind` after:T032
+- [ ] T033 [US1] {FR-002,FR-009,FR-015,FR-027} [COMPLETES FR-009] Assemble the closed 13-key envelope in PKG/generate.py — all three `generation_inputs` carry their own `digest_kind` after:T032
 - [ ] T034 [US1] {FR-010,FR-013,FR-021} [COMPLETES FR-010] Wire the fail-fast shape gate and the write path (fixture, sidecar, truth record) in PKG/generate.py ← T007:dataset_content_hash after:T033
 - [ ] T035 [P] [US1] {FR-020} DV-023 — both stated total orders hold, two runs at one seed are byte-identical, no hash-ordered iteration in the write path — TST/test_generate_ordering.py after:T034
 - [ ] T036 [P] [US1] {FR-031} [COMPLETES FR-031] End-to-end test — all three artifacts emitted, six columns non-blank, `note` absent (DV-022) — TST/test_generate.py after:T034
@@ -154,11 +157,11 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 **Independent test**: give the datasheet to a reader with no access to the generator source and confirm every generative assumption is recoverable from it.
 
 - [ ] T060 [US4] {FR-014} Emit the seven named sections deterministically with no clock read in PKG/datasheet.py — Motivation … Maintenance, per FR-014 after:T037
-- [ ] T061 [US4] {FR-015,FR-022} [COMPLETES FR-022] Write the Generation Process provenance in PKG/datasheet.py — identity, revision, seed, scheme, date, label, both digests, `library_pin` after:T060
+- [ ] T061 [US4] {FR-015,FR-022} [COMPLETES FR-022] Write the Generation Process provenance in PKG/datasheet.py — identity, revision, seed, scheme, date, label, all three generation-input digests, each named with its `digest_kind`, `library_pin` after:T060
 - [ ] T062 [US4] {FR-007} [COMPLETES FR-007] Disclose the duration model in PKG/datasheet.py — family, parameters in the generator's parameterization, unit, rounding, floor, apportionment after:T061
 - [ ] T063 [US4] {FR-035} [COMPLETES FR-035] Disclose the per-category expected duration offset, the tier assignment and the two named duration quantities (SC-028) in PKG/datasheet.py after:T062
 - [ ] T064 [US4] {FR-015} Record realized against intended in PKG/datasheet.py — every figure in data-model §Generation Process disclosures, each naming its bounding criterion after:T063
-- [ ] T065 [US4] {FR-016} Emit the ten limitation records L-1…L-10, each with scope decision, evidence, reversal trigger and production-scale alternative, in PKG/datasheet.py after:T064
+- [ ] T065 [US4] {FR-016} Emit the **nine** active limitation records — L-1…L-10 less L-5, withdrawn on 2026-07-26 when E002 published the corpus fields. Emit nine and assert nine; do not renumber, so L-6…L-10 keep the identities other artifacts cite, each with scope decision, evidence, reversal trigger and production-scale alternative, in PKG/datasheet.py after:T064
 - [ ] T066 [US4] {FR-028,FR-033} State in PKG/datasheet.py that no split is emitted, that ownership of the split is unassigned, and that 0.25 is an assumed cross-epic fraction after:T065
 - [ ] T067 [US4] {FR-014,FR-016} Add the datasheet conformance check (DV-019) to PKG/validate.py — all seven sections present and 100% of limitation records carrying all four parts after:T066
 - [ ] T068 [P] [US4] {FR-016} [COMPLETES FR-016] **NC-8** — a three-part limitation record must fail the checker — TST/test_limitation_format_control.py after:T067
@@ -198,7 +201,7 @@ Setup → Foundational → US1 → US2 / US3 / US4 → US5 → Polish
 
 - **Foundational gates everything.** T005's record types and T007's canonical serializer are consumed by the generator, the loader and the validator. `serialize.py` gates the hash oracle and the oracle gates the validator: **T007 → T034 → T051**.
 - **US1 gates US2, US3 and US4.** The generator must exist before the loader has a fixture to load (T037 → T038), before the validator has anything to re-derive (T037 → T051), and before the datasheet has realized figures to record (T037 → T060).
-- **Mandatory red-green pairs** (`plan.md` §The test-first observable — the six property-tier modules): **T006 before T007** (`serialize.py`), **T010 before T011** (`allocate.py`), **T013 before T014** (`seeds.py`), **T015 before T016** (`durations.py`), **T019 before T020** (`censor.py`), **T022 before T023** (`criticality.py`). The test task must be observed **failing** before its implementation task begins, and the branch history must carry a `test:` commit before the `feat:` commit for each pair.
+- **Mandatory red-green pairs** (`plan.md` §The test-first observable — the seven property-tier modules): **T006 before T007** (`serialize.py`), **T010 before T011** (`allocate.py`), **T013 before T014** (`seeds.py`), **T015 before T016** (`durations.py`), **T019 before T020** (`censor.py`), **T022 before T023** (`criticality.py`). The test task must be observed **failing** before its implementation task begins, and the branch history must carry a `test:` commit before the `feat:` commit for each pair.
 - **Loader write order is forced, not chosen** (`data-model.md` §Write Order, HINT-004): T041 inserts `purchase_order_line` first because `fk_lifecycle_event__line` is non-deferrable, then `lifecycle_event` ascending by `(po_line_id, sequence_no)` because `fk_lifecycle_event__chain` is non-deferrable, then commits — where `fk_purchase_order_line__closing_event`, the schema's only `DEFERRABLE INITIALLY DEFERRED` constraint, validates. T040 must complete before T041: the comparison runs against staged rows before any write, which is what makes a refusal leave the database unchanged.
 - **Live database required**: T043–T050 and T075 need PostgreSQL on `${PRC_DB_PORT:-5434}` through T009's fixture. **None is `[P]`.**
 - **Cross-phase edges**: T051→T037, T059→T034, T060→T037, T067→T066 (over `validate.py`, created at T051), T072→T037, T075→T042, T076→T054, T081→T001, T082→T002.
@@ -218,11 +221,11 @@ Setup → Foundational → US1 → US2 / US3 / US4 → US5 → Polish
 | `[COMPLETES FR-###]` on the last task of every requirement spanning 3+ tasks | **20 markers**, no task carrying two |
 | Every DV rule implemented or asserted, at the tier `data-model.md` assigns it | **27 / 27** (DV-001…DV-027) |
 | Every negative control lands as a task | **12 / 12** (NC-1…NC-12) |
-| Mandatory red-green pairs present and correctly ordered | **6 / 6** |
+| Mandatory red-green pairs present and correctly ordered | **7 / 7** — the seventh is T026→T027 for `equipment.py`, promoted to the mandatory tier by A-005 |
 | Delivery tasks carry a `[US#]` label | **67 / 67** (T010–T076); Setup, Foundational and Polish carry none, as required |
 | No orphan `after:` reference | **0** — every `after:T###` names a lower, existing ID |
 | No `[P]` pair sharing a file; no `[P]` batch containing a task and its dependency | **0 violations** |
 | Every `← T###:Symbol` has a matching `→ exports:` on T### | **6 / 6** — T024←T014, T026←T014, T030←T017, T032←T011, T034←T007, T039←T005 |
 | No task line exceeds 200 characters | **pass** |
 | Migration tasks emitted | **0**, by design — the `0200`–`0299` block is claimed and goes unused |
-| Tasks attempting FR-034 or SC-026 | **0** — T077 records the blocked state and the unblocking trigger only |
+| Tasks implementing FR-034 / SC-026 | **3** — T029a, T029b, T029c. Was **0** while the gate held, with T077 recording the blocked state and the unblocking trigger only. The trigger fired on 2026-07-26; a row asserting zero is exactly what would have kept a discharged gate closed |

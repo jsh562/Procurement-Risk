@@ -131,8 +131,8 @@ Derived values are absent by design: the delivered schema enforces every bicondi
 | `line_number` | int | 1–3, contiguous from 1 within a PO | Allocation pass |
 | `material_category` | text | One of the **20 keys** of `equipment-category-map.json`, verbatim (`WATER_CHILLER`, …). Not a label, not a section code — the key is the shared token (FR-031). | Drawn |
 | `description` | text | Corpus-overlapping lines: `^<Category Title Case> \(Tag [1-5]0[1-3]-[1-9][0-9]\)$`, E002's own `MaterialItem.description` composition. Non-overlapping lines: `^<Category Title Case> — <descriptor>$`. Non-blank either way. | Drawn |
-| `manufacturer` | text | `^[A-Z][a-z]+(vane\|crest\|forge\|helm\|ridge\|stone) (Manufacturing\|Equipment\|Controls\|Electric\|Thermal)$`. Stem suffixes and trade nouns are **disjoint** from E001's vendor convention, so a manufacturer can never be read as a roster vendor. The vocabulary is a closed tuple in generator source, not a data file — otherwise it would be a third generation input and FR-015's enumeration of two would be wrong. | Drawn |
-| `part_number` | text | `^[A-Z]{3}-[0-9]{6}-[0-9]{4}$` — a 3-letter manufacturer code, the category's MasterFormat section with spaces removed, a 4-digit suffix. Deterministic in manufacturer + category, so it cannot name a section the category map does not hold. | Derived from manufacturer + category, suffix drawn |
+| `manufacturer` | text | A `canonical_name` drawn from `data/corpus/synthetic/manufacturer-catalog.json`, whose category list contains the line's `material_category`. **Not a generated grammar.** The prior domain was a regex over invented stems, justified by a sentence that is now false in both halves — none of the catalog's ten canonical names satisfies it, so keeping it would have made FR-037 unsatisfiable against the very file it now reads. Aliases are **not** drawn: the catalog publishes them for E006's normalisation to collapse, and emitting them here would make this dataset the source of the variation E006 exists to remove. The real-firm exclusion assertion is retained and now runs over drawn values (DV-021, SC-029) — a published catalog is not self-evidently clean. Disjointness from E001's vendor convention is asserted rather than constructed, because the names are no longer ours to shape | Drawn from catalog |
+| `part_number` | text | `<part_number_prefix>-<5 digits>`, the prefix taken from the **same** catalog entry the `manufacturer` was drawn from, matching E002's published `PART_NUMBER_PATTERN` `^[A-Z]{3}-[0-9]{5}$`. The digits are drawn from the seeded generator, so a part number is stable under replay but carries no meaning. Binding the prefix to the drawn manufacturer is what makes the pair a *true* pair for E009's blocking key rather than two independently valid fields that happen to co-occur | Drawn from catalog |
 | `quantity` | decimal string | `> 0`, value in `[0.5, 480.0]`, **written at a fixed scale of exactly one digit after the decimal point** — `^(0\|[1-9][0-9]{0,2})\.[0-9]$`, so `6.0` and never `6` or `6.00`. The scale is fixed rather than bounded (AD-004, HINT-005): `numeric` equality ignores trailing zeros, so `12.50 = 12.5` in SQL while the two are different digests, and "at most one decimal place" would leave the loader's comparison and the reproducibility oracle able to disagree on the same value. Integer *value* `1`–`6` on corpus-overlapping lines, still written at scale 1 (`1.0`…`6.0`). | Drawn |
 | `unit_of_measure` | text | `EA`, `LOT`, `SET`, `LF`, `M`. `EA` on corpus-overlapping lines. | Drawn |
 | `order_date` | date | Inside `order_date_window`, inclusive. Equal to the date part of the sequence-1 event. | Drawn |
@@ -217,12 +217,13 @@ Row **counts** are never the comparison. A regeneration under the same seed poli
 
 ## Generation Inputs and Digest Kinds
 
-Three digests, three different things. They are named separately for the reason E002 names its five separately: a reader who assumes two digests are the same kind draws the wrong conclusion from a match.
+Four digests, four different things — three generation inputs plus the dataset's own content hash. They are named separately for the reason E002 names its five separately: a reader who assumes two digests are the same kind draws the wrong conclusion from a match.
 
 | Kind | Over what | Produced by | Recorded in |
 |---|---|---|---|
 | roster digest | The roster's **canonical re-serialized content** | `model.roster.reader.read_roster().content_hash` — consumed verbatim, **never recomputed** | `generation_inputs`, and stamped on every loaded row |
 | category-map digest | The category map's **raw committed bytes** | `model.corpus.manifest.sha256_of_file` | `generation_inputs` |
+| manufacturer-catalog digest | The catalog's **raw committed bytes** | `model.corpus.manifest.sha256_of_file` | `generation_inputs` |
 | dataset content hash | `canonical_bytes(parsed fixture payload)` | `model.corpus.manifest.sha256_of_bytes` | `procurement-history.hash.json`, and in the ground-truth record as the binding |
 
 **The category-map digest is `sha256_of_file` over raw bytes, matching the value E002's manifests already record for the same file.** Each generation input is hashed the way its owning epic publishes it: the roster through `roster.reader.content_hash` (canonical content, which is what E001 publishes and what `ck_pol__roster_hash_format` receives), and the category map through `corpus.manifest.sha256_of_file` (raw bytes, which is what E002's `generation_input_digests` records at `manifest.py:253`).
@@ -361,7 +362,7 @@ The censored lines' current states follow the leg shares, so `approved` and `rev
 
 ### Corpus overlap (FR-032)
 
-A line is **corpus-overlapping** when all four clauses hold. The predicate is computable from the two declared generation inputs plus the roster — no corpus document is opened and no foreign key or citation into the corpus exists.
+A line is **corpus-overlapping** when all four clauses hold. FR-034 asserts a **separate** overlap over a different pair of fields, measured independently and stated below the table — it is not a fifth clause, because folding it in would move FR-032's realized share whenever the manufacturer draw changed, and the two requirements set different thresholds against different corpus surfaces. The predicate is computable from the three declared generation inputs plus the roster — no corpus document is opened and no foreign key or citation into the corpus exists.
 
 | # | Clause | Corpus counterpart |
 |---|---|---|
@@ -370,17 +371,33 @@ A line is **corpus-overlapping** when all four clauses hold. The predicate is co
 | 3 | `quantity` an integer *value* in `[1, 6]` — written at the fixed scale of 1, so `1.0`…`6.0` — **and** `unit_of_measure = 'EA'` | E002's published quantity domain |
 | 4 | `vendor_id` resolves through the roster to a vendor name | E002's `vendor_name` field |
 
-Target ≥ **60%**; realized share recorded. The complement is genuinely non-overlapping — measured quantities outside `[1,6]`, non-`EA` units, and descriptions in E005's own `<Category> — <descriptor>` grammar — so SC-025 can fail rather than passing by construction.
+Target ≥ **60%** for FR-032's four-clause predicate; realized share recorded. The complement is genuinely non-overlapping — measured quantities outside `[1,6]`, non-`EA` units, and descriptions in E005's own `<Category> — <descriptor>` grammar — so SC-025 can fail rather than passing by construction.
+
+**FR-034's manufacturer/part-number overlap.** A line is **catalog-overlapping** when both clauses hold:
+
+| # | Clause | Corpus counterpart |
+|---|---|---|
+| 5 | `manufacturer` is a `canonical_name` in `manufacturer-catalog.json` **whose `categories` list contains the line's `material_category`** | E002's `manufacturer` field |
+| 6 | `part_number` matches `^<part_number_prefix>-[0-9]{5}$` for the **same** catalog entry clause 5 drew | E002's `part_number` field, and its published `PART_NUMBER_PATTERN` |
+
+The category condition in clause 5 is what makes the pair informative rather than merely well-formed: a manufacturer drawn without regard to category would satisfy a membership test and still assert that a cooling-tower vendor supplies switchgear. Binding clause 6's prefix to clause 5's entry is the same argument one field further — an unbound prefix passes a regex while naming a different manufacturer than the row does.
+
+Target ≥ **60%** of lines catalog-overlapping (FR-034, SC-026); realized share recorded. The complement draws neither field, leaving both `NULL`, so the share is measured against a population that can fail it. **This share is measured and reported separately from FR-032's**, and the two are not required to select the same lines.
+
 
 **What this overlap is and is not.** It is *vocabulary* overlap, which is what FR-032's own text claims ("the four fields E002's published vocabulary already carries") and what the Glossary means by "shared vocabulary, not a document reference". It is **not** instance-level equality against a specific corpus item: E002 publishes no machine-readable item inventory, so the `(Tag …)` component of a description will rarely coincide with a real corpus item's tag. The join surface that does hold exactly is `equipment_category` + `vendor_name` + the **material-item stem**, the description with its parenthetical tag removed. E009 must normalise the tag out, or block on category; recorded as an integration obligation under **Disclosed Gaps** (G-1) and as a datasheet limitation.
 
 ### Not achievable — recorded, not designed away
 
-`manufacturer` and `part_number` are **generated and non-blank** because FR-031 requires values in all six descriptive columns and the delivered schema refuses a blank. They are **not** drawn from E002's corpus, because E002's field vocabulary publishes neither field — its synthetic layer is submittal transmittals, whose fields are workflow fields. **FR-034 and SC-026 are therefore unsatisfiable by this epic, are marked pending, and are excluded from this epic's completion denominator.** No model in this document attempts to satisfy them, and nothing here may be read as satisfying them. The corpus-side gap is carried as a four-part limitation in the datasheet with its reversal trigger and production-scale alternative.
+**Emptied 2026-07-26, and kept as a heading so the emptying is visible.**
 
-## Artifact 2 — Datasheet
+This section held one entry for the whole life of the gate: FR-034 and SC-026 were declared unsatisfiable because E002's published field vocabulary carried neither `manufacturer` nor `part_number`, so the corpus side of the join did not exist. The entry did three things — excluded the pair from the completion denominator, marked them pending, and forbade any model in this document from satisfying them.
 
-`data/procurement/datasheet.md`. **Emitted by the generator**, not hand-written, so every realized figure in it is written by the same run that wrote the fixture and cannot drift from it. Deterministic: no clock read, `generation_date` is the committed constant, so a re-run at an unchanged seed rewrites no byte.
+E002 published both fields plus `manufacturer-catalog.json`. All three statements are now false, and the third was **prohibitive**: left standing, this document would have forbidden the delivery of a live P1 requirement. It is removed rather than annotated, because a prohibition that a reader might apply is not made safe by a note next to it.
+
+What replaces it is design, not disclosure: § Line record draws `manufacturer` and `part_number` from the catalog, DV-028 bounds the resulting share, and the FR-034 tasks in Phase 3 and Phase 8 implement and assert it.
+
+Nothing else was ever recorded here. The section is retained empty rather than deleted so that a reader looking for the epic's unachievable set finds an explicit *none* and the record of what left it, instead of an absence they must interpret.
 
 ### Seven required sections (FR-014)
 
@@ -402,7 +419,7 @@ Target ≥ **60%**; realized share recorded. The complement is genuinely non-ove
 | Root seed and derivation scheme | The integer, and the `SeedSequence` spawn-key scheme in full |
 | Generation date | The committed constant |
 | Layer label | `SYNTHETIC` |
-| **Content hash of every generation input** | **Both named**: the E001 roster fixture and `data/corpus/synthetic/equipment-category-map.json` |
+| **Content hash of every generation input** | **All three named, each with its `digest_kind`**: the E001 roster fixture (canonical content), `data/corpus/synthetic/equipment-category-map.json` and `data/corpus/synthetic/manufacturer-catalog.json` (both raw bytes). The row says *every* rather than a number so that adding an input cannot leave the disclosure silently short |
 | Per-transition duration assumptions | Family, parameter names and values **in the generator's own parameterization**, time unit, rounding rule, 1-day floor, and the apportionment shares |
 | Vendor and category offsets | σ_w, τ, σ_c, σ_r, the **FR-036 variance decomposition** — vendor / material-category / residual, each reported — and **both** ratios: the category-adjusted one asserted against FR-008's band and the unadjusted one beside it, so a ratio inside the band for category reasons is not merely visible but fails |
 | As-of date and order-date window | The committed constants |
@@ -473,18 +490,19 @@ Machine-checkable properties over the emitted artifacts. Each is a build-gating 
 | DV-013 | 25% ≤ share of delivered lines missing need-by ≤ 35%. Denominator is **delivered lines only**: a censored line is excluded from numerator and denominator even when already past its need-by date at the as-of date, and the count of such already-overdue censored lines is recorded |
 | DV-014 | Corpus-overlap share ≥ 60% under the four-clause **vocabulary-level** predicate; every line in the non-overlapping complement fails **all four** clauses, so the share can fall below the threshold rather than being satisfied by construction |
 | DV-015 | `dataset_content_hash` recomputed from the parsed fixture equals the committed sidecar value; a different `root_seed` yields a different value |
-| DV-016 | Both recorded generation-input digests equal the inputs recomputed now, **each under the convention it was recorded with**; a mismatch refuses and names which input moved. **Each input has its own failing case** — a mutated roster and a mutated category map are exercised separately, so the half added by remediation B-5 is evidenced rather than inferred from the other |
+| DV-016 | Every recorded generation-input digest equals the inputs recomputed now, **each under the convention it was recorded with**; a mismatch refuses and names which input moved. **Each of the three inputs has its own failing case** — a mutated roster and a mutated category map are exercised separately, so the half added by remediation B-5 is evidenced rather than inferred from the other |
 | DV-017 | `vendor_offsets` has exactly 12 unique `vendor_id`s covering the roster; the record's `dataset_content_hash` matches the fixture's |
 | DV-018 | The ground-truth record's resolved directory is outside every input root enumerated from the fitting entry point's configuration. The enumerated set must be **non-empty** — see DV-026 |
 | DV-019 | The datasheet carries all seven named sections and 100% of its limitation records carry all four parts. A limitation record missing any one part **must fail this rule**, demonstrated on a deliberately three-part record, so the 100% is measured by a checker that inspects rather than by one that inspects nothing |
 | DV-020 | No train/evaluation split artifact is emitted, where "split artifact" is the checkable condition and not an open negative: the emitted set is exactly the fixture, its digest sidecar, the datasheet and the ground-truth record; no emitted file partitions `lines[]` into named subsets or folds; and no line record and no envelope field carries a split label, fold index or held-out flag. The datasheet states ownership of the split is unassigned |
-| DV-021 | No generated `manufacturer` normalizes into `data/roster/real-firm-exclusions.json`; no `manufacturer` matches E001's vendor name pattern. **Required by FR-037**, which states the obligation directly rather than inheriting it: Scope inherits E001's exclusion list for projects and vendors, whose identities are read from the roster, and manufacturer names are a name space this epic invents |
+| DV-021 | No generated `manufacturer` normalizes into `data/roster/real-firm-exclusions.json`; no `manufacturer` matches E001's vendor name pattern. **Required by FR-037**, which states the obligation directly rather than inheriting it: Scope inherits E001's exclusion list for projects and vendors, whose identities are read from the roster, and manufacturer names come from E002's catalog, which the roster's exclusion machinery never sees. The check runs over **drawn** values rather than invented ones — originally it verified a name space this epic constructed, and it now verifies one another epic publishes, which is the case where it is actually load-bearing: a catalog we did not write is not self-evidently free of real firms |
 | DV-022 | Every event's `note` is absent from the fixture and written `NULL` at load |
 | DV-023 | **Deterministic ordering (FR-020)**: `lines` is sorted ascending by `(project_id, po_number, line_number)` and each line's `events` ascending by `sequence_no`; two runs at the same seed in the pinned environment emit byte-identical payloads. Asserted over the artifact, so hash-ordered iteration reaching the write path fails here rather than surviving as a review note |
 | DV-024 | **Per-line independence (FR-019)**: regenerating with one line added to, or moved within, the declared allocation leaves every other line's generated values unchanged. Asserted over the artifact, so a positionally seeded stream fails here rather than being caught only by inspection |
 | DV-025 | **Provenance agreement (SC-018, FR-022)**: every provenance value in the datasheet equals its counterpart in the fixture envelope — `generator_id`, `generator_revision`, `root_seed`, `seed_derivation`, `generation_date`, `as_of_date`, `order_date_window`, `library_pin`, and both input digests — and `library_pin` equals the library version **actually resolved in the generating environment**. Presence and well-formedness do not discharge this rule |
 | DV-026 | **Non-vacuous isolation (SC-020)**: the root set enumerated for DV-018 is **non-empty** and contains the dataset fixture's directory. An enumeration resolving to nothing fails here rather than satisfying DV-018 over an empty set — no model-fitting entry point exists yet, so the empty enumeration is the expected accident, and a vacuous pass is indistinguishable in a report from a satisfied criterion |
 | DV-027 | **Refusal leaves no trace (SC-010, SC-022, FR-024)**: the loader inserts each line's events in ascending `sequence_no`, and every refusal leaves the database **unchanged** — the transaction is rolled back, so no row is inserted, altered or removed before a content-divergence or superset refusal. A partial insert followed by a refusal fails this rule |
+| DV-028 | Catalog-overlap share ≥ 60% under clauses 5–6, measured over all lines. Every drawn `manufacturer` is a catalog `canonical_name` — never an alias — whose `categories` contains the line's `material_category`; every drawn `part_number` carries the `part_number_prefix` of that same entry and matches E002's `PART_NUMBER_PATTERN`. The complement leaves both fields `NULL`, so the share can fall below the threshold rather than being satisfied by construction. Realized share recorded in the ground-truth record |
 
 ### Enforcement point and test tier
 
@@ -519,6 +537,7 @@ Each rule names **where the failure is excluded** and **which tier proves it**. 
 | DV-025 | Validator — non-zero exit | Unit |
 | DV-026 | Build-gating check | Build-gating |
 | DV-027 | Loader — refusal with rollback | Integration |
+| DV-028 | Generator + validator — the drawn pair against the catalog | Property |
 
 ## Disclosed Gaps
 
@@ -528,7 +547,7 @@ Properties this data model does not enforce structurally, recorded as uncovered 
 |---|---|---|---|
 | G-1 | ~~E009's blocking key finds no true pairs on `manufacturer` / `part_number`~~ — **closed 2026-07-26**. Pairs on `material_item` still require the tag normalised out; that half stands | E002 published both fields plus `manufacturer-catalog.json`, so the corpus side of the join now exists | **Closed by the trigger it declared.** The recorded condition was "E002's published field vocabulary contains a manufacturer field *and* a part-number field"; E002 satisfied it, so FR-034 and SC-026 are live and inside the completion denominator, and L-5 no longer discloses them as unachievable. The detector E005 owned has **inverted**: it asserted the fields were absent and failed when they arrived — it has now fired, and T077 rewrites it to assert they are *present* and fail if withdrawn. Recorded rather than deleted because the fired trigger is the evidence that watching a blocked dependency with a check rather than a note is what closed it. The `material_item` leg remains an integration obligation on E009 |
 | G-2 | "Every PO's lines share one vendor" is not a database constraint | Cross-row within a natural-key group; the delivered `UNIQUE` does not carry `vendor_id` and E005 may not add one | DV-003 |
-| G-3 | Two generation inputs are hashed by **different conventions** — the roster by canonical content, the category map by raw bytes | Each matches the convention its owning epic publishes, so E005's recorded value agrees with E001's and E002's respectively. The alternative, one convention for both, would make one of the two disagree with its owner | Recorded in §Generation Inputs; a test asserts the category-map digest equals `corpus.manifest.sha256_of_file` and the roster digest equals `roster.reader.content_hash` |
+| G-3 | Three generation inputs are hashed by **two different conventions** — the roster by canonical content, the category map by raw bytes | Each matches the convention its owning epic publishes, so E005's recorded value agrees with E001's and E002's respectively. The alternative, one convention for both, would make one of the two disagree with its owner | Recorded in §Generation Inputs; a test asserts the category-map digest equals `corpus.manifest.sha256_of_file` and the roster digest equals `roster.reader.content_hash` |
 | G-4 | A loaded row cannot be traced to the generation run that produced it | The delivered schema has no column for a dataset content hash or generator revision, and E005 may not add one | Datasheet limitation **L-7** |
 | G-5 | The realized post-split uncensored count is never observed by this epic | This epic does not perform the split; FR-033's 0.25 is an assumption | Datasheet limitation **L-8**; a divergence is an amendment, never a floor adjustment here |
 | G-6 | An empty non-terminal state at the as-of date is possible under an unlucky seed | Censoring is derived from a date, not targeted | DV-010 makes it a loud generation failure; §Calendar records the thin states in advance |
@@ -579,7 +598,7 @@ Properties this data model does not enforce structurally, recorded as uncovered 
 | FR-031 | §Line record and §Row-Level Mapping — all six descriptive columns present and non-blank, category from the committed map; §Generation Inputs records the map's digest; DV-004 |
 | FR-032 | §Corpus overlap — the four-clause predicate and the falsifiable complement; DV-014 |
 | FR-033 | §Generation Process disclosures — the assumed 0.25 as a cross-epic assumption; limitation L-8; gap G-5 |
-| FR-034 | §Corpus overlap — manufacturer and part number drawn from `manufacturer-catalog.json`, in the completion denominator; gap G-1 closed, limitation L-5 withdrawn |
+| FR-034 | §Corpus overlap — clauses 5–6 and the catalog-overlap share; §Line record; DV-028; gap G-1 closed, limitation L-5 withdrawn |
 | FR-035 | §Category tiers — three tiers over the 20 map keys, mean-zero offsets, and the two distinctly named duration quantities |
 | FR-036 | §Duration model and §Ground-Truth Record — the vendor / category / residual decomposition, and the category-adjusted ratio as the quantity asserted against FR-008's band; DV-011 |
 | FR-037 | §Line record — `manufacturer` drawn from E002's published catalog rather than invented, asserted disjoint from E001's real-firm exclusion list and from its vendor-name convention; DV-021 |
@@ -590,10 +609,10 @@ Paste target for `plan.md`.
 
 | Entity | Key Fields | Relationships | Notes |
 |--------|-----------|---------------|-------|
-| `DatasetFixture` | natural key per line `(project_id, po_number, line_number)` | 1:N `FixtureLine`; described by `Datasheet`; digested by `DatasetHash` | Committed JSON, 190–210 lines. Envelope carries seed, derivation scheme, as-of date, order-date window, both generation-input digests, NumPy pin and licence basis. Hash is over `canonical_bytes` of the **parsed** payload, so file layout and line endings cannot move it. |
+| `DatasetFixture` | natural key per line `(project_id, po_number, line_number)` | 1:N `FixtureLine`; described by `Datasheet`; digested by `DatasetHash` | Committed JSON, 190–210 lines. Envelope carries seed, derivation scheme, as-of date, order-date window, all three generation-input digests, NumPy pin and licence basis. Hash is over `canonical_bytes` of the **parsed** payload, so file layout and line endings cannot move it. |
 | `FixtureLine` | `(project_id, po_number, line_number)` | 1:N `FixtureEvent`; loads as `purchase_order_line` | 13 **generated** fields only. `lifecycle_state`, `is_closed`, `closing_event_id`, `from_state`, `is_terminal` and both uuid keys are **derived at load**. All six FR-031 descriptive columns present and non-blank. |
 | `FixtureEvent` | `(line, sequence_no)` | loads as `lifecycle_event` | `sequence_no` contiguous from 1, `occurred_at` strictly increasing and ≤ as-of. Insert order is ascending `sequence_no` — `fk_lifecycle_event__chain` is not deferrable. |
-| `Datasheet` | — | 1:N `LimitationRecord` | Seven named sections, generator-emitted. Publishes σ_w, τ, the ratio and the FR-036 decomposition — **never** the per-vendor offsets. Ten four-part limitation records. |
+| `Datasheet` | — | 1:N `LimitationRecord` | Seven named sections, generator-emitted. Publishes σ_w, τ, the ratio and the FR-036 decomposition — **never** the per-vendor offsets. Nine active four-part limitation records (L-5 withdrawn 2026-07-26; not renumbered). |
 | `GroundTruthRecord` | `dataset_content_hash` binds it to one fixture | 1:12 `VendorOffset` | Isolated: no loaded column, no fixture field, and no directory inside a fitting input root carries any of it. `lifecycle_event.note` is `NULL` on every event. |
 | `purchase_order_line` *(delivered)* | `po_line_id` PK (uuid5 of the natural key); UK `(project_id, po_number, line_number)` | 1:N `lifecycle_event`; deferred N:1 closing event | **Not created here.** Written to only. Closed line inserted already delivered and already naming its precomputed terminal `event_id`; the deferred FK proves the referent at COMMIT. |
 | `lifecycle_event` *(delivered)* | `event_id` PK (uuid5); UK `(po_line_id, sequence_no)` | N:1 `purchase_order_line`; self composite FK chains the sequence | **Not created here.** Rework repeats states at new positions, never positions. `note` always `NULL`. |
