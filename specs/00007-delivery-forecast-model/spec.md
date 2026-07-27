@@ -28,7 +28,7 @@ The consequence of doing nothing is not an absent feature but a misleading one: 
 - A run manifest recording provenance, sampling shape, diagnostics and wall-clock, with an explicitly set active-run pointer.
 - A blocking diagnostics gate with published thresholds: a fit that fails convergence writes nothing.
 
-**Numbers claimed at epic start**, per Governance: migration block **`0300`–`0399`** and decision-record numbers from **`0018`**. Workspace `00007` matches the epic number. The migration block is claimed whether or not it is used — Wave 4 runs E007, E008 and E009 in parallel from one baseline, which is the exact collision the clause exists to prevent. If the block is used, `tests/checks/test_migration_ranges.py` hard-codes block ownership and must be updated in the same change; it currently declares only E003 and E004 and asserts the declared blocks tile without gaps.
+**Numbers claimed at epic start**, per Governance: migration block **`0300`–`0399`** and decision-record number **`0018`** — bounded to that single number at Plan, because an open-ended "from `0018`" is the same collision the block clause exists to prevent and E008 and E009 branch from this baseline. Workspace `00007` matches the epic number. The migration block is claimed whether or not it is used — Wave 4 runs E007, E008 and E009 in parallel from one baseline, which is the exact collision the clause exists to prevent. If the block is used, `tests/checks/test_migration_ranges.py` hard-codes block ownership and must be updated in the same change; it currently declares only E003 and E004 and asserts the declared blocks tile without gaps.
 
 ### Excluded
 
@@ -64,7 +64,7 @@ A coordinator opens the worklist and every still-open purchase-order line carrie
 **Acceptance scenarios**:
 
 1. **Given** the committed procurement dataset and a recorded as-of date, **When** the fit job runs to completion, **Then** every line open at that date has a stored posterior carrying a sorted draw array, a day-grid survival array, a residual tail mass, and a draw digest.
-2. **Given** a stored posterior, **When** its survival array is inspected, **Then** it is non-increasing, every value lies in `[0,1]`, its length equals the horizon recorded on its own run, and its final value equals the residual tail mass.
+2. **Given** a stored posterior, **When** its survival array is inspected, **Then** it is non-increasing, every value lies in `[0,1]`, its length equals the horizon recorded on its own run, and its final value agrees with the residual tail mass **within the delivered residual-agreement tolerance**. Stated as agreement rather than equality because the delivered mechanism is a `1e-9` tolerance and E003 ships a test asserting that the check would fail if written as an equality — this scenario carried the equality form through Specify and Clarify, and it is corrected here rather than left for a task author to implement literally.
 3. **Given** a stored posterior, **When** residual tail mass is recomputed independently from the draw array as the fraction of draws exceeding the horizon, **Then** it agrees with the stored value within the delivered residual-agreement tolerance.
 4. **Given** a fitted run, **When** the model is inspected, **Then** a realized shrinkage weight is recorded for all twelve vendors, including any vendor with no training line.
 5. **Given** the vendor with the fewest training observations and the vendor with the most, **When** their vendor-effect intervals are compared, **Then** the sparser vendor's interval is wider.
@@ -343,7 +343,7 @@ Pass 1 returned FAIL with 4 CRITICAL, 5 HIGH, 4 MEDIUM, 3 LOW. All 16 were verif
 | Source Code Layout | PASS | Offline fit job in `/src/model`; specification artifacts under `specs/`, datasheets under `data/` |
 | Data Provenance | PASS | FR-014 records the input's layer label and datasheet reference; SC-020 |
 | Development Workflow | PASS | Branch `00007-delivery-forecast-model` matches `#####-feature-name`; the workspace resolves from it |
-| Governance | PASS | Migration block `0300`–`0399` and decision records from `0018` claimed at epic start; workspace `00007` matches epic E007; offline-only fitting treated as a registered architectural constraint, not a scope choice; the PRD conflict is recorded for a default-branch amendment |
+| Governance | PASS | Migration block `0300`–`0399` claimed at epic start and decision record `0018` claimed, bounded to that number at Plan; workspace `00007` matches epic E007; offline-only fitting treated as a registered architectural constraint, not a scope choice; the PRD conflict is recorded for a default-branch amendment |
 
 ### Open items for Plan — none blocks this gate
 
