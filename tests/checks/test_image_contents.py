@@ -57,9 +57,26 @@ def test_modeling_modules_do_not_import_in_the_image(module: str) -> None:
     assert not import_succeeds(module), f"{module!r} imported inside the serving image"
 
 
-@pytest.mark.parametrize("module", ["fastapi", "gateway", "anthropic"])
+@pytest.mark.parametrize("module", ["fastapi", "gateway"])
 def test_positive_control_required_modules_do_import(module: str) -> None:
-    """Without this, every negative above is satisfied by a broken container."""
+    """Without this, every negative above is satisfied by a broken container.
+
+    `anthropic` was removed from this list on 2026-07-26, and the reason
+    matters because the change looks like a weakening and is not. This control
+    exists to prove the import probe *works* — it is a guard against a vacuous
+    pass, not a statement that the serving image must carry any particular
+    package. `anthropic` qualified only because it was a guaranteed transitive
+    of the gateway, and {SAD:ADR-0014} deliberately ended that: the provider
+    SDK is now an optional extra, so a consumer carries it when it declares
+    `gateway[provider]`. `/src/api` does not, because it makes no model call
+    until E011.
+
+    Two modules serve the purpose exactly as well as three. The alternative —
+    declaring the extra on the serving boundary so this line stays green —
+    would add a real dependency, and SDK weight to the request-serving image,
+    to satisfy a test mechanism. That is the tail wagging the dog, and it would
+    also erode the compute envelope {SAD:ADR-0006} spends real effort to hold.
+    """
     assert import_succeeds(module), f"{module!r} failed to import; the check itself is broken"
 
 
