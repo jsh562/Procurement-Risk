@@ -1,10 +1,10 @@
 ---
 adr_id: ADR-0019
-status: accepted
+status: superseded
 date: 2026-07-27
 tags: [ingestion, provenance, data-lifecycle, schema, retrieval, traceability]
 supersedes: []
-superseded_by: ""
+superseded_by: "ADR-0020"
 related_artifacts: ["specs/00006-document-ingestion-and-extraction/spec.md", "FR-043", "FR-055", "SC-025", "SC-043", "ADR-0008", "ADR-0012", "ADR-0017", "E006", "E008", "E009", "E012"]
 deciders: ["Project owner", "Solution architect"]
 ---
@@ -13,7 +13,9 @@ deciders: ["Project owner", "Solution architect"]
 
 ## Status
 
-Accepted. Supersedes nothing — this record is additive and changes no earlier decision.
+Superseded by [ADR-0020](0020-superseded-generations-are-removed-at-promotion-not-retained.md), on the retention clause only. This record still supersedes nothing itself — it was additive when accepted and changed no earlier decision. The generation mechanism decided below stands: generation state is per document, carried on the run-to-document association rather than the run row, because FR-043's skip rule means a run touches some documents and not others; the partial unique index on the document predicated on `status = 'active'` still makes two live generations for one document unrepresentable rather than merely discouraged; the status column is still `NOT NULL` and `CHECK`-constrained, so a NULL third state cannot be arrived at by omission; promotion still cannot activate an incoming generation while another is active, because a partial unique index cannot back a `DEFERRABLE` constraint; the reader-filtering view still carries no `LIMIT` and is still the single place **E008**, **E009**, and **E012** discharge their filtering obligation; and removal is still strictly leaf-up under `ON DELETE RESTRICT`, which fires immediately regardless of any deferral setting. ADR-0020 replaces only the retention clause — that a superseded generation's rows stay in place, so "a bad promotion is reversible by flipping status back, because the superseded rows are still there," and so two chunkers can be compared over one corpus. That clause is withdrawn as unimplementable: E003's `uq_chunk__document_ordinal UNIQUE (document_id, ordinal)` (`src/model/src/model/schema/versions/0004_chunk.py:257`) scopes chunk ordinals to the document rather than to the generation, so two retained generations of one document both hold `(document_id, 0)` and the second cannot be stored. Under ADR-0020 promotion removes the prior generation for that document leaf-up, under the schema-owning role, before writing the new one.
+
+The sections below are left as accepted and state what was true when this record was written. Where they assert retention — the second and third pros of Option A, the second and third positive consequences, the storage-growth negative and its rule that retirement is "**never** part of promotion," the Option C and Option D bullets that turn on retained rows, and the Decision Outcome paragraph ruling Option C out on privilege — read them against ADR-0020, which is authoritative on that clause.
 
 The number is claimed rather than scanned. E006's **FR-051** claims ADR-0018 and ADR-0019 at epic start, alongside the migration block, precisely because number allocation works by scanning for the highest in use and a concurrent epic branching from the same baseline would allocate the same number and be equally right. ADR-0018 is being authored concurrently for the embedding runtime; this record does not depend on it.
 

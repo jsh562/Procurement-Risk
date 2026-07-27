@@ -86,7 +86,7 @@ C4Component
 
 ## Architecture Decisions
 
-Feature-local tradeoffs only. Project-wide decisions are standalone records: **ADR-0018** (embedding runtime) and **ADR-0019** (ingestion generations).
+Feature-local tradeoffs only. Project-wide decisions are standalone records: **ADR-0018** (embedding runtime), **ADR-0019** (ingestion generations, superseded on its retention clause), and **ADR-0020** (superseded generations are removed at promotion).
 
 | ID | Decision | Options Considered | Chosen | Rationale |
 |----|----------|--------------------|--------|-----------|
@@ -110,7 +110,8 @@ Feature-local tradeoffs only. Project-wide decisions are standalone records: **A
 | Entity | Key Fields | Relationships | Notes |
 |--------|------------|---------------|-------|
 | `ingestion_run` | run id, agent identity, provider model, chunker version, embedding model id + revision, corpus manifest digests, prompt/schema digest, resolution mode, started/finished, `run_failure_kind`, `run_failure_detail` | Parent of every run-output association | Carries **no** status — that lives per document, below. The two failure columns are FR-056's home: a run-level failure cannot be an `extraction_failure` row, because that table's source chunk is NOT NULL against a chunk the rollback removed. Its five values are disjoint from the seven per-field outcomes, asserted by intersecting both `CHECK` definitions |
-| `ingestion_run_document` | run id, document id, status, `input_tuple_digest` | run → `document` | Where the generation lives (ADR-0019). Status `active` \| `superseded`; partial unique index on document `WHERE status = 'active'` makes two live generations unrepresentable. The digest is over **that document's own** manifest content hash — a corpus-wide digest would reload all 51 on any single change, inverting FR-043 |
+| `ingestion_run_document` | run id, document id, status, `input_tuple_digest` | run → `document` | Where the generation lives (ADR-0019). Status `active` \| `superseded`; partial unique index on document `WHERE status = 'active'` makes two live generations unrepresentable. The digest is over **that document's own** content hash plus chunker version, encoder revision, provider model, and prompt/schema digest — corpus-wide would reload all 51 on any single change, inverting FR-043. **Promotion removes the prior generation's rows** ({SAD:ADR-0020}): chunk ordinals are unique within a document, not a generation, so retention was unstorable |
+| `extracted_value_confidence_signal` | extracted value id, run id, label form, page-split flag, repair flag | → the run-output association | FR-063. Two of the three deduction signals exist in no E003 column, so without this the SC-026 recomputation check reduces to comparing the stored score with itself |
 | `ingestion_run_chunk` | run id, chunk id | run → `chunk` | Association, not a column — `chunk` belongs to E003 and gains nothing |
 | `ingestion_run_extracted_value` | run id, extracted value id | run → `extracted_value` | Same reason |
 | `ingestion_run_extraction_failure` | run id, extraction failure id | run → `extraction_failure` | Same reason |
@@ -223,6 +224,8 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-060 | Metrics | `model/compute/metrics.py` | Precision/recall/F1, Wilson, printed-field denominator |
 | FR-061 | Report | `model/ingest/report.py` | Near-duplicate cluster counts by cause |
 | FR-062 | Writer, coercion | `model/ingest/writer.py`, `compute/coerce.py` | Printed text is the evidence; coerced form in its own column |
+| FR-063 | Confidence signals | `model/ingest/runs.py`, `compute/confidence.py` | E006-owned signal record; without it SC-026 compares the score with itself |
+| FR-064 | Operator procedure | runbook, `model/ingest/report.py` | Index drop/rebuild under the schema-owning role; sequential-scan window and abort recovery stated |
 
 ## Project Structure
 
@@ -302,6 +305,6 @@ specs/00006-document-ingestion-and-extraction/
 
 - **[HINT-001]** Gotcha: `model_max_length` in the tokenizer config is **512**; the effective cap is **256** and it counts `[CLS]`/`[SEP]`. Budget **254** content pieces. Reading the tokenizer's own field doubles the budget and ships silently truncated vectors that look fine.
 - **[HINT-002]** Order: nested `psycopg` `transaction()` blocks are savepoints, so a per-document error handler must catch **outside** the block or the rollback never happens. And what you write afterwards is **not** an `extraction_failure` row — that table's source chunk is NOT NULL against a chunk the rollback just removed, so the row is unstorable. Record it as a run-level failure on `ingestion_run`, in a fresh transaction.
-- **[HINT-003]** Constraint: `ON DELETE RESTRICT` cannot be deferred (`NO ACTION` can). Generation retirement must delete strictly leaf-up — contributing chunks, then values and failures, then chunks, then the run.
+- **[HINT-003]** Constraint: `ON DELETE RESTRICT` cannot be deferred (`NO ACTION` can), so removing a superseded generation must delete strictly leaf-up — contributing chunks, then values and failures, then chunks, then the run-document association. This runs **at promotion**, not as a later retirement job ({SAD:ADR-0020}), because `uq_chunk__document_ordinal` makes two generations of one document unstorable — ordinals are unique within a document, not within a generation.
 - **[HINT-004]** Order: split on the page boundary **before** the structural ladder. A structurally clean split applied first will straddle a page and violate the scalar `page_number`.
 - **[HINT-005]** Gotcha: a raw ONNX export of a sentence-transformer emits **token-level hidden states and stops**. Attention-masked mean pooling and L2 normalization are separate modules in the reference implementation and become repository code here. Getting the mask wrong — pooling over padding — produces plausible vectors that are quietly wrong, which is exactly why ADR-0018 makes the parity tolerance mandatory rather than diligent.
