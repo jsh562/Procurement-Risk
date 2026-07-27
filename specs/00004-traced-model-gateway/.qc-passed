@@ -1,0 +1,37 @@
+E004 Traced Model Gateway — QC PASSED, run 1, 2026-07-27.
+Governing document: project-instructions.md v1.2.4.
+Measured on the merged tree (main 79f4f68 merged in), not the branch alone.
+
+Required categories (profile `standard`):
+  linting  — ruff check and ruff format clean at all four command sites,
+             including the repository-root `ruff check .` that covers /tests;
+             mypy strict clean; 7 import contracts kept, 0 broken; 3 locks consistent
+  coverage — 93% combined (5427 statements, 280 missed) against threshold 80,
+             exit 0, combined from 3 files; corpus 93%, exit 0;
+             gateway entry 95% against AD-007's 85%
+
+Tests: 391 gateway (5 skipped), 211 root cross-entry, 1141 model.
+Objectives 6; validation criteria 43; success criteria 27.
+All 81 technical requirements cited in code or tests; 0 declared-but-uncited.
+tasks.md 73/75 [X], 2 withdrawn with recorded evidence.
+
+Not measured here, recorded rather than implied:
+  - OBJ6 VC2, one live provider invocation, needs a real credential and spends
+    money. The smoke check covers the gate, the credential handle and the guard
+    exemption, and skips the call. The 5 skips above are that file.
+  - Schema-validated output is not threaded through invoke(). validate_or_repair
+    is implemented and tested as a unit (31 tests), but InvocationRequest has no
+    schema field, so every invocation classifies `valid` with 0 repairs. Closing
+    it changes the request model and belongs with E013's first real caller.
+  - The record arm is driven through an injected client; the SDK's own wire
+    behaviour is not exercised.
+
+Corrections this epic made that its own checks caught, not review:
+  - TR-070 pinned semconv 1.36.0 for an attribute that release does not define.
+    Corrected to 1.37.0 across five recording sites (OI-12).
+  - Three E003 checks encoded "E003 is the sole author of this chain", which
+    ADR-0013 had made false. Rescoped to authorship (OI-13, OI-14).
+  - Five self-referential test bugs: a text scan matching the prose explaining
+    what it looks for. All now AST walks.
+
+See qc-report.md for the full run.

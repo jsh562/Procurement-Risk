@@ -1,0 +1,23 @@
+E004 implementation complete: 73/75 tasks [X], 2 withdrawn with recorded evidence
+(T004 — HINT-002's premise does not hold; T031 — ADR-0013 gives E003 the runner).
+
+Local gate green on the merged tree (main 79f4f68 merged in):
+  391 gateway tests (5 skipped: the opt-in-gated provider smoke check)
+  211 root cross-entry checks
+  1141 model tests
+  4 import contracts kept, 0 broken; mypy strict clean over src
+  ruff check and ruff format clean at all four command sites, including the
+  repository-root `ruff check .` that CI runs and that covers /tests
+  gateway entry coverage 92% against AD-007's 85% target and the 80% floor
+
+Beyond the 75 tasks: orchestrator.invoke() is wired end to end. The mode branch
+was outstanding when the task list closed — every piece existed and nothing
+joined them — so `invoke()` raised NotImplementedError. Both arms now run and
+are tested offline: replay against a real fixture store, record through an
+injected client.
+
+Not implemented, recorded rather than implied: schema-validated output is not
+threaded through invoke(). validate_or_repair exists and is tested, but
+InvocationRequest carries no schema field, so every invocation classifies as
+`valid` with zero repairs. Adding it changes the request model and belongs with
+E013's first real caller.

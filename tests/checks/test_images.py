@@ -89,13 +89,23 @@ def test_a_blank_override_is_not_an_override(monkeypatch: pytest.MonkeyPatch) ->
 def test_an_image_built_from_another_checkout_is_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The failing direction: a stamp naming somebody else's path."""
-    monkeypatch.setattr(
-        "tests.checks.helpers.images._label", lambda tag: "S:/claudecode/KayaDemoProcurementRisk2"
-    )
+    """The failing direction: a stamp naming somebody else's path.
+
+    The foreign path is **derived from this checkout's own root** rather than
+    written as a literal. The first version hardcoded
+    `S:/claudecode/KayaDemoProcurementRisk2`, which is foreign on most machines
+    and is *home* on the one where this repository happens to live at that
+    path — there, `foreign_build` correctly returned None and the test failed
+    for being right. Deriving a sibling of the real root makes the case foreign
+    everywhere, which is what the test is actually about.
+    """
+    elsewhere = REPO_ROOT.parent / f"{REPO_ROOT.name}-some-other-checkout"
+    assert elsewhere != REPO_ROOT
+
+    monkeypatch.setattr("tests.checks.helpers.images._label", lambda tag: str(elsewhere))
     finding = foreign_build("procurement-api:e001-x")
     assert isinstance(finding, ForeignBuild)
-    assert "KayaDemoProcurementRisk2" in str(finding)
+    assert elsewhere.name in str(finding)
 
 
 def test_an_unstamped_image_is_reported_rather_than_assumed_benign(

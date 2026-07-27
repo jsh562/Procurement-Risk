@@ -9,10 +9,10 @@ notes: OBJ1-OBJ6 and Phase 8 polish delivered. 376 gateway tests, 193 root
        ruff lint and format clean across all four command sites.
        Gateway entry at 92% line coverage against AD-007's 85% target.
        Benchmarks inside AD-008's budgets.
-       orchestrator.invoke() still raises NotImplementedError: it needs the
-       mode branch to compose the pieces, and every piece it will compose
-       exists and is tested. That is the one thing a reader should not mistake
-       for finished.
+       orchestrator.invoke() now runs end to end. The mode branch was the one
+       thing left after the 75 tasks closed — every piece existed and nothing
+       joined them. Both arms are tested offline: replay against a real store,
+       record through an injected client. 391 gateway tests.
        The CI failure the user pointed at was step 10, "Lint (Python)". That
        step runs FOUR commands, not three — the fourth is `uv run ruff check .`
        from the repository root, covering /tests. Never run it and /tests goes
