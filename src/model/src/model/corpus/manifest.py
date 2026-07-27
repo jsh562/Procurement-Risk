@@ -143,17 +143,27 @@ STATUTE_FOR_BASIS: Mapping[str, str] = MappingProxyType({REAL_BASIS_ID: "17 U.S.
 POINT_OF_USE_CHECK = "NO_COPYRIGHTED_EXCERPT_FOUND"
 THIRD_PARTY_RIGHTS = "NONE"
 
-# VR-061's closed three, repository-relative. Held here rather than in the
+# VR-061's closed set, repository-relative. Held here rather than in the
 # generator because the keys are path-valued and externally controlled once
 # they are written into a manifest (CWE-73): membership is decided against this
 # literal set before any filesystem access, so a traversal sequence in a
-# manifest-supplied key never reaches a resolution step. The roster is the
-# fourth generation input and is deliberately not a key — its digest is
-# `roster_hash`, because the reader's value is over canonical content.
+# manifest-supplied key never reaches a resolution step. The roster is a
+# generation input and is deliberately not a key — its digest is `roster_hash`,
+# because the reader's value is over canonical content.
+#
+# The manufacturer catalogue joined this set with FR-037. It is a fourth key
+# rather than a section of the equipment map because it answers a different
+# question — the map says which specification section a category answers, the
+# catalogue says who makes it and under what part number — and folding the two
+# together would leave one file whose name describes half of what it holds.
+# Every consumer resolves its own path out of this tuple by suffix, and the
+# key-set check below compares against the tuple rather than a restated
+# literal, so adding a member here is the whole change.
 GENERATION_INPUT_PATHS: tuple[str, ...] = (
     "data/corpus/synthetic/equipment-category-map.json",
     "data/corpus/synthetic/field-label-vocabulary.json",
     "data/corpus/synthetic/generation-config.json",
+    "data/corpus/synthetic/manufacturer-catalog.json",
 )
 
 # The closed five of FR-030, in ascending codepoint order. `irregularity.py`
@@ -236,13 +246,15 @@ def upstream_digest_of_response(body: bytes) -> str:
 
 
 def generation_input_digests(repo_root: Path) -> Mapping[str, str]:
-    """`generation_inputs` — raw-byte digests of the closed three (FR-009b).
+    """`generation_inputs` — raw-byte digests of the closed set (FR-009b).
 
     Keys are the repository-relative paths of `GENERATION_INPUT_PATHS` and are
     validator-owned literals rather than caller-supplied strings, so no path
-    here originates outside this module. A missing input is an error, never an
-    omitted key: an entry recording two of three inputs would pass every
-    per-key rule while leaving one input undigested.
+    here originates outside this module. The count is not restated anywhere: it
+    is whatever that tuple holds, four since FR-037 added the manufacturer
+    catalogue. A missing input is an error, never an omitted key — an entry
+    recording a proper subset would pass every per-key rule while leaving one
+    input undigested.
     """
     root = Path(repo_root)
     digests = {}

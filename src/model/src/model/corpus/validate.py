@@ -12,7 +12,7 @@ here reads committed artifacts. FR-031a requires re-derivation to be independent
 of what the generator recorded, so a validator that regenerated in order to
 validate could not distinguish a corpus defect from a generator defect — which
 is why `data-model.md` splits the 72 rules across two runners and gives this one
-VR-001…VR-033, VR-035…VR-039 and VR-051…VR-068 — **59 registered rules**, with
+VR-001…VR-033, VR-035…VR-039 and VR-051…VR-073 — **64 registered rules**, with
 VR-035 registered as its four sub-rules VR-035a…VR-035d. The rules needing a
 generator *run* live in `src/model/tests/`, VR-034 among them: its failing
 direction is a layer emitted below the document floor, which only a generation
@@ -61,6 +61,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlsplit
 
 from model.corpus.manifest import (
@@ -105,6 +106,9 @@ from model.corpus.paths import _scan as _non_following_scan
 from model.corpus.retrieve import read_ledger
 from model.corpus.sources import RetrievalPolicyError, load_policy
 from model.roster.reader import read_roster
+
+if TYPE_CHECKING:  # `derive` pulls the PDF reader in; the rules import it lazily
+    from model.corpus.derive import TextLine
 
 __all__ = [
     "CLASSED_ENTRY_FLOOR",
@@ -1286,6 +1290,7 @@ SUPPORTING_ARTIFACTS: tuple[str, ...] = (
     "synthetic/equipment-category-map.json",
     "synthetic/field-label-vocabulary.json",
     "synthetic/generation-config.json",
+    "synthetic/manufacturer-catalog.json",
 )
 
 
@@ -1676,7 +1681,7 @@ def _vr_064(corpus: Corpus) -> RuleOutcome:
 
 @rule(
     "VR-065",
-    summary="Outside every location the corpus root holds only the seven supporting artifacts",
+    summary="Outside every location the corpus root holds only the eight supporting artifacts",
     population="files under the corpus root outside every location",
 )
 def _vr_065(corpus: Corpus) -> RuleOutcome:
@@ -1685,7 +1690,7 @@ def _vr_065(corpus: Corpus) -> RuleOutcome:
     failures = tuple(
         Failure(
             "VR-065",
-            f"{path.relative_to(corpus.root).as_posix()} is not one of the seven committed "
+            f"{path.relative_to(corpus.root).as_posix()} is not one of the eight committed "
             f"supporting artifacts {list(SUPPORTING_ARTIFACTS)}; any other file here sits "
             "outside a location requiring no entry, whatever its extension",
         )
@@ -1828,6 +1833,424 @@ def _vr_068(corpus: Corpus) -> RuleOutcome:
                         reading.location_id,
                     )
                 )
+    return RuleOutcome(observed=observed, failures=tuple(failures))
+
+
+# ---------------------------------------------------------------------------
+# T064 - manufacturer identity and part numbers
+# VR-069, VR-070, VR-071, VR-072, VR-073
+#
+# FR-037. Three of these read emitted documents and two read only committed
+# data. The split is deliberate: a catalogue defect should fail without opening
+# a single PDF, because it is a defect whatever the corpus happens to contain.
+# VR-073 straddles the line -- its exclusion and collision checks are pure
+# catalogue checks, and its alias-presence check is SC-029's claim about the
+# *layer*, which cannot be judged without reading what the layer prints.
+# ---------------------------------------------------------------------------
+
+
+def _every_label_prefix() -> tuple[str, ...]:
+    """`<label>:` for every label of every field in the committed vocabulary.
+
+    Used to decide whether a line *below* a label is that label's value or the
+    next field's label. Built over the whole vocabulary rather than over the
+    field being read, because the line that must not be swallowed belongs to a
+    different field by definition.
+    """
+    from model.corpus.codes import VOCABULARY
+    from model.corpus.derive import LABEL_SEPARATOR
+
+    return tuple(
+        f"{label}{LABEL_SEPARATOR}"
+        for field in VOCABULARY.fields.values()
+        for label in (field.canonical_label, *field.alternate_labels)
+    )
+
+
+def _value_below(lines: Sequence[TextLine], position: int, label_prefixes: Sequence[str]) -> str:
+    """The value written beneath the label at `position`, or `""`.
+
+    The stacked layout templates put a value on the line after its label and
+    indent it (`render.py`'s `_STYLE_INDENT`: `field_value` is the only style
+    carrying an indent), so the line below counts as the value only when it is
+    indented relative to the label and is not itself a label. This is the same
+    test `derive.py`'s `_value_region` applies, restated here rather than shared
+    because that function resolves one value per field key and these rules need
+    every occurrence, per item, in document order.
+
+    Both guards are load-bearing for the blank case: without the label test a
+    blanked field would take the next field's label, and without the indent test
+    it would take an unindented body line.
+    """
+    from model.corpus.derive import VALUE_INDENT_FLOOR
+
+    following = position + 1
+    if following >= len(lines):
+        return ""
+    candidate = lines[following]
+    text = candidate.text.strip()
+    if not text or any(text.startswith(prefix) for prefix in label_prefixes):
+        return ""
+    if candidate.x0 <= lines[position].x0 + VALUE_INDENT_FLOOR:
+        return ""
+    return text
+
+
+def _printed_field_values(corpus: Corpus, key: str) -> list[tuple[EntryRef, str]]:
+    """`_read_printed_field_values`, read once per key per run.
+
+    Four rules ask for the same two fields and each answer costs a full pass
+    over every emitted PDF, so the read is cached on the corpus the way the
+    retrieval policy and the roster are -- for the reason `Corpus.cached` gives:
+    two rules must not be able to disagree about what a document prints.
+    """
+    cached = corpus.cached(f"printed-field:{key}", lambda: _read_printed_field_values(corpus, key))
+    if isinstance(cached, Exception):  # `cached` stores the failure; re-raise it as before
+        raise cached
+    return list(cast("list[tuple[EntryRef, str]]", cached))
+
+
+def _read_printed_field_values(corpus: Corpus, key: str) -> list[tuple[EntryRef, str]]:
+    """Every value printed under `key`'s labels, per SYNTHETIC document.
+
+    Reads the emitted document rather than anything the generator recorded,
+    which is the stance FR-031a takes for structural classes: a field the
+    generator says it wrote and did not is exactly what this has to catch.
+
+    **Two placements, one value.** An inline template writes the value beside
+    its label, a stacked one writes it indented on the line below, and both are
+    ordinary output of the same renderer -- so when the label line's tail is
+    empty the line below is consulted (`_value_below`). Reading only the label
+    line reported a full population and judged the same-line share of it, which
+    is the silent under-coverage Principle III exists to exclude.
+
+    An empty string means the value is genuinely absent: `MISSING_OR_BLANK_FIELD`
+    blanks a field on purpose, and `_value_below`'s two guards keep such a field
+    reading as `""` rather than borrowing whatever the renderer put next. Blanks
+    are returned, and each rule decides for itself whether one is admissible.
+    """
+    from model.corpus.codes import VOCABULARY
+    from model.corpus.derive import LABEL_SEPARATOR, DeriveError, read_document
+
+    field = VOCABULARY.fields.get(key)
+    if field is None:
+        return []
+    labels = (field.canonical_label, *field.alternate_labels)
+    label_prefixes = _every_label_prefix()
+
+    found: list[tuple[EntryRef, str]] = []
+    for entry in corpus.entry_list(LAYER_SYNTHETIC):
+        path = entry.reading.path / str(entry.payload.get("location"))
+        if not path.is_file():
+            continue
+        try:
+            pages = read_document(path)
+        except DeriveError:  # a document VR-013 already fails; not this rule's business
+            continue
+        for page in pages:
+            # `page.lines`, not `page_text(page)`: the latter joins a page into
+            # one string for digesting, so a label test over it would match the
+            # first field on the page and nothing after it.
+            for position, line in enumerate(page.lines):
+                stripped = line.text.strip()
+                for label in labels:
+                    prefix = f"{label}{LABEL_SEPARATOR}"
+                    if stripped.startswith(prefix):
+                        tail = stripped[len(prefix) :].strip()
+                        found.append(
+                            (entry, tail or _value_below(page.lines, position, label_prefixes))
+                        )
+                        break
+    return found
+
+
+def _printed_item_pairs(corpus: Corpus) -> list[tuple[EntryRef, str, str]]:
+    """`(entry, manufacturer, part_number)` per material item, in document order.
+
+    `generate.py`'s `_item_fields` emits an item's manufacturer and its part
+    number adjacently, and `_printed_field_values` returns occurrences in
+    document order, so the nth manufacturer printed on a document belongs to the
+    nth part number printed on it. Positional pairing rather than a recorded
+    association is deliberate and is the same stance FR-031a takes: the pair
+    under test is the one a reader of the PDF would form, not one the generator
+    asserts.
+
+    A document whose two counts differ is left out. VR-069 already reports that
+    as its own failure, and pairing across a missing field would misalign every
+    item after it and report a cascade of mismatches for one defect.
+    """
+    grouped: dict[str, dict[tuple[str, str], list[tuple[EntryRef, str]]]] = {}
+    for key in ("manufacturer", "part_number"):
+        per_document: dict[tuple[str, str], list[tuple[EntryRef, str]]] = {}
+        for entry, value in _printed_field_values(corpus, key):
+            per_document.setdefault((entry.location_id, entry.location), []).append((entry, value))
+        grouped[key] = per_document
+
+    pairs: list[tuple[EntryRef, str, str]] = []
+    for document, makers in grouped["manufacturer"].items():
+        numbers = grouped["part_number"].get(document, [])
+        if len(numbers) != len(makers):
+            continue
+        for (entry, maker), (_, number) in zip(makers, numbers, strict=True):
+            pairs.append((entry, maker, number))
+    return pairs
+
+
+@rule(
+    "VR-069",
+    summary="every SYNTHETIC document prints at least one manufacturer and one part number, "
+    "and prints them in equal number",
+    population="SYNTHETIC documents inspected for product fields",
+)
+def _vr_069(corpus: Corpus) -> RuleOutcome:
+    """The join's left-hand side exists at all (FR-037).
+
+    Equal counts rather than a count against the manifest: the manifest does
+    not record how many items a document carries, so the only self-consistent
+    check available from committed artifacts is that each item printed both
+    halves. A document printing three manufacturers and two part numbers has
+    lost one, whatever the generator believed it wrote.
+    """
+    entries = corpus.entry_list(LAYER_SYNTHETIC)
+    counts: dict[str, list[int]] = {}
+    for entry, _ in _printed_field_values(corpus, "manufacturer"):
+        counts.setdefault(str(entry.payload.get("location")), [0, 0])[0] += 1
+    for entry, _ in _printed_field_values(corpus, "part_number"):
+        counts.setdefault(str(entry.payload.get("location")), [0, 0])[1] += 1
+
+    failures: list[Failure] = []
+    for entry in entries:
+        seen = counts.get(str(entry.payload.get("location")), [0, 0])
+        if seen[0] == 0 or seen[1] == 0:
+            failures.append(
+                entry.failure(
+                    "VR-069",
+                    f"prints {seen[0]} manufacturer and {seen[1]} part-number field(s); a "
+                    "submittal naming neither leaves identity resolution with no left-hand side",
+                )
+            )
+        elif seen[0] != seen[1]:
+            failures.append(
+                entry.failure(
+                    "VR-069",
+                    f"prints {seen[0]} manufacturer field(s) against {seen[1]} part-number "
+                    "field(s); every item carries both or the pair is incomplete",
+                )
+            )
+    return RuleOutcome(observed=len(entries), failures=tuple(failures))
+
+
+@rule(
+    "VR-070",
+    summary="every non-blank printed manufacturer resolves to exactly one catalogue entry "
+    "under the roster's normalization",
+    population="printed manufacturer values",
+)
+def _vr_070(corpus: Corpus) -> RuleOutcome:
+    """An alias is reconcilable, an unknown name is not (FR-037a).
+
+    Blank values are admitted: `MISSING_OR_BLANK_FIELD` produces them on
+    purpose and VR-069 has already established the field was printed. What
+    fails here is a spelling no catalogue entry claims, which is the state a
+    downstream resolver cannot recover from -- it would block on a manufacturer
+    that does not exist.
+    """
+    from model.corpus.manufacturers import canonical_key_for_printed_name
+
+    failures: list[Failure] = []
+    values = _printed_field_values(corpus, "manufacturer")
+    for entry, value in values:
+        if value and canonical_key_for_printed_name(value) is None:
+            failures.append(
+                entry.failure(
+                    "VR-070",
+                    f"prints manufacturer {value!r}, which no catalogue entry claims under "
+                    "the roster's normalization",
+                )
+            )
+    return RuleOutcome(observed=len(values), failures=tuple(failures))
+
+
+@rule(
+    "VR-071",
+    summary="every non-blank printed part number is well formed, carries the prefix of a "
+    "catalogue manufacturer, and carries the prefix of the manufacturer printed beside it",
+    population="printed part-number values",
+)
+def _vr_071(corpus: Corpus) -> RuleOutcome:
+    """The blocking key is recoverable from the number alone, and it is the right one.
+
+    Two claims of SC-029, judged together because they are the same property at
+    two strengths (FR-037a).
+
+    **The prefix names a catalogue manufacturer.** This is what lets a resolver
+    block correctly on a document whose printed manufacturer is an alias it has
+    not normalized yet: the prefix names the maker regardless. A number whose
+    prefix is not a catalogue key breaks that property silently, because it
+    still looks like a part number.
+
+    **The prefix names the manufacturer printed for the same item.** The check
+    above is satisfied by any catalogue key, so a document printing
+    `Manufacturer: Ashvale Industrial` beside `Part Number: BKL-01234` would
+    pass it while blocking on `BKL` recovers a maker the document never named --
+    a wrong merge rather than a missing one, which Principle III ranks as the
+    worse failure precisely because nothing downstream can see it.
+
+    Items whose manufacturer does not resolve are skipped here rather than
+    failed twice: VR-070 owns the unresolvable spelling, and reporting it again
+    under this rule would attribute one defect to two rules.
+    """
+    from model.corpus.manufacturers import (
+        MANUFACTURERS,
+        PART_NUMBER_PATTERN,
+        canonical_key_for_printed_name,
+    )
+
+    failures: list[Failure] = []
+    values = _printed_field_values(corpus, "part_number")
+    for entry, value in values:
+        if not value:
+            continue
+        if not PART_NUMBER_PATTERN.match(value):
+            failures.append(
+                entry.failure(
+                    "VR-071",
+                    f"prints part number {value!r}, which is not <prefix>-<five digits>",
+                )
+            )
+        elif value.split("-", 1)[0] not in MANUFACTURERS:
+            failures.append(
+                entry.failure(
+                    "VR-071",
+                    f"prints part number {value!r}, whose prefix names no catalogue "
+                    "manufacturer, so blocking on the prefix would recover nothing",
+                )
+            )
+
+    for entry, maker, number in _printed_item_pairs(corpus):
+        if not maker or not number or not PART_NUMBER_PATTERN.match(number):
+            continue  # already judged above, or blank and admitted there
+        named = canonical_key_for_printed_name(maker)
+        if named is None:
+            continue  # VR-070's finding, not this rule's
+        prefix = number.split("-", 1)[0]
+        if prefix != named:
+            failures.append(
+                entry.failure(
+                    "VR-071",
+                    f"prints part number {number!r} beside manufacturer {maker!r}, which the "
+                    f"catalogue keys as {named}; the number's prefix {prefix!r} names a "
+                    "different manufacturer, so blocking on it recovers a maker this item "
+                    "never named",
+                )
+            )
+    return RuleOutcome(observed=len(values), failures=tuple(failures))
+
+
+@rule(
+    "VR-072",
+    summary="every equipment category in the committed map is backed by at least one manufacturer",
+    population="equipment categories in the committed map",
+)
+def _vr_072(corpus: Corpus) -> RuleOutcome:
+    """The catalogue's half of the item-constructibility guarantee (FR-037).
+
+    `equipment.py` already checks that every category maps to a section the
+    real layer holds. Without this, a category could have a section and no
+    maker, and the generator would fail at plan time on a corpus that had
+    validated clean -- a defect discoverable only by regenerating.
+    """
+    from model.corpus.equipment import CATEGORIES
+    from model.corpus.manufacturers import uncovered_categories
+
+    failures = tuple(
+        Failure(
+            "VR-072",
+            f"equipment category {category!r} maps to a specification section but no "
+            "manufacturer in the catalogue makes it",
+        )
+        for category in uncovered_categories(CATEGORIES)
+    )
+    return RuleOutcome(observed=len(CATEGORIES), failures=failures)
+
+
+@rule(
+    "VR-073",
+    summary="no catalogue name or alias is an excluded real firm, no printed spelling is "
+    "claimed by two manufacturers, and the committed layer prints at least one alias",
+    population="catalogue printed spellings",
+)
+def _vr_073(corpus: Corpus) -> RuleOutcome:
+    """Synthetic names enforced against the roster's list, not a second one (FR-037b).
+
+    Reusing E001's exclusion list rather than restating it is the point: two
+    lists would eventually disagree about what counts as a real firm, and the
+    disagreement would surface as a synthetic corpus quietly naming one.
+
+    The catalogue loader already refuses both of these at import, so a failure
+    here means the loaded catalogue and the committed file have diverged --
+    worth a rule rather than an assumption, because the loader runs in the
+    generator's process and this runs in the validator's.
+
+    **At least one alias is exercised.** SC-029 requires the layer to print
+    variation rather than one spelling per maker, because a resolver measured
+    against canonical names only is measured against the one case it never has
+    trouble with. Carrying aliases in the catalogue does not establish that: a
+    generator that drew the canonical name every time would leave the catalogue
+    untouched and the criterion unmet. Asserted only when the SYNTHETIC layer is
+    in scope and non-empty -- under `--layer REAL` there is nothing to print an
+    alias, and VR-066 owns the empty-population case.
+    """
+    from model.corpus.manufacturers import MANUFACTURERS
+    from model.roster.naming import load_exclusions, normalize
+
+    excluded = {normalize(name) for name in load_exclusions()}
+    failures: list[Failure] = []
+    owners: dict[str, str] = {}
+    observed = 0
+    for key, entry in MANUFACTURERS.items():
+        for printed in entry.printed_names:
+            observed += 1
+            folded = normalize(printed)
+            if folded in excluded:
+                failures.append(
+                    Failure(
+                        "VR-073",
+                        f"manufacturer {key} names an excluded real firm: {printed!r}",
+                    )
+                )
+            owner = owners.setdefault(folded, key)
+            if owner != key:
+                failures.append(
+                    Failure(
+                        "VR-073",
+                        f"printed spelling {printed!r} is claimed by both {owner} and {key}, "
+                        "which makes the field identity resolution blocks on undecidable",
+                    )
+                )
+
+    if LAYER_SYNTHETIC in corpus.layers and corpus.entry_list(LAYER_SYNTHETIC):
+        # An alias spelling is one the catalogue lists under `aliases` and no
+        # manufacturer carries as its canonical name; the exact printed string
+        # is compared rather than the normalized one, because a spelling that
+        # folds onto the canonical form is still variation a resolver must meet.
+        canonical = {entry.canonical_name for entry in MANUFACTURERS.values()}
+        aliases = {
+            alias
+            for entry in MANUFACTURERS.values()
+            for alias in entry.aliases
+            if alias not in canonical
+        }
+        printed_in_layer = {value for _, value in _printed_field_values(corpus, "manufacturer")}
+        if not (aliases & printed_in_layer):
+            failures.append(
+                Failure(
+                    "VR-073",
+                    "no catalogue alias appears anywhere in the committed SYNTHETIC layer; every "
+                    "printed manufacturer is a canonical name, so a downstream resolver is "
+                    "measured against no spelling variation at all",
+                )
+            )
     return RuleOutcome(observed=observed, failures=tuple(failures))
 
 
@@ -2439,7 +2862,7 @@ def _vr_029(corpus: Corpus) -> RuleOutcome:
     roster's canonical re-serialized content, not over the roster file's bytes.
     That is why a roster reformat moves nothing here by design (FR-020, and
     `data-model.md` §State & Lifecycle), and why this rule is not the same check
-    as VR-061's over the other three generation inputs.
+    as VR-061's over the other four generation inputs.
 
     Detection, not reconciliation: a stale entry is named and the run fails.
     Nothing is regenerated, because a validator that regenerated to validate
@@ -2534,7 +2957,7 @@ def _vr_030(corpus: Corpus) -> RuleOutcome:
 
 @rule(
     "VR-061",
-    summary="generation_inputs names exactly the three committed inputs and each digest equals "
+    summary="generation_inputs names exactly GENERATION_INPUT_PATHS and each digest equals "
     "that file's current raw bytes",
     population="SYNTHETIC entries",
     layers=(LAYER_SYNTHETIC,),
@@ -2543,14 +2966,16 @@ def _vr_061(corpus: Corpus) -> RuleOutcome:
     """Supporting-artifact drift, with the key set treated as untrusted input.
 
     **Order of operations, stated because it is the control** (CWE-73): every
-    key is compared as a **literal string** against the closed three-value set
-    of repository-relative paths *before* any filesystem access. A key outside
+    key is compared as a **literal string** against `GENERATION_INPUT_PATHS` —
+    the closed set of repository-relative paths, four members since FR-037 added
+    the manufacturer catalogue, and compared against the tuple rather than a
+    restated literal — *before* any filesystem access. A key outside
     that set fails on set equality and is never opened, so no traversal sequence
     in a manifest-supplied key ever reaches a resolution step. Only a key inside
     the set is resolved, and it is resolved through `repository_relative_path`,
     which applies VR-009's ordering and VR-067's link prohibition.
 
-    The roster is **not** a key here. It is the fourth generation input and its
+    The roster is **not** a key here. It is the fifth generation input and its
     digest is `roster_hash`, compared by VR-029 against a live reader call,
     because the reader's value is over canonical content while every value in
     this mapping is over raw bytes. A mapping whose values were computed by two

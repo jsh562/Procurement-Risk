@@ -214,8 +214,8 @@ def repository_relative_path(repo_relative: str, root: Path | None = None) -> Pa
     `DEFAULT_CORPUS_ROOT` and `REPO_ROOT` rather than written down again.
 
     The string is passed in rather than imported from `manifest.py` — that
-    module already imports this one, and the closed three-value set stays where
-    the entry that records it lives.
+    module already imports this one, and the closed set — `GENERATION_INPUT_PATHS`,
+    four members since FR-037 — stays where the entry that records it lives.
 
     Resolution goes through `resolve_within`, so a generation input is held to
     the same containment ordering and link prohibition as a corpus document
