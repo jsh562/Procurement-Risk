@@ -24,10 +24,14 @@ from pathlib import Path
 
 from packaging.markers import Marker
 
+from tests.checks.helpers.images import resolve_image_tag
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 API_LOCK = REPO_ROOT / "src" / "api" / "uv.lock"
 MODEL_LOCK = REPO_ROOT / "src" / "model" / "uv.lock"
-IMAGE_TAG = "procurement-api:e001"
+# Resolved, not restated. A literal here and another in the workflow is how
+# the tag built and the tag asserted come to disagree; see helpers/images.py.
+IMAGE_TAG = resolve_image_tag()
 
 _NORMALIZE = re.compile(r"[-_.]+")
 
