@@ -12,6 +12,7 @@ import pytest
 from tests.checks.helpers.entries import (
     ALL_ENTRIES,
     PYTHON_ENTRIES,
+    SRC_ROOT,
     declared_third_party,
     first_party_sources,
     locked_distributions,
@@ -29,6 +30,31 @@ from tests.checks.helpers.root_checks import (
 #: the two are driven through. Normalized names, since that is what both derived
 #: sets are keyed by.
 DATABASE_TOOLING = frozenset({"alembic", "psycopg", "sqlalchemy"})
+
+#: The half of that stack which is genuinely exclusive to the schema owner
+#: ({SAD:ADR-0016}, correcting the clause in {SAD:ADR-0013}'s consequences).
+#:
+#: Correction of 2026-07-26, recorded rather than applied silently. This set was
+#: originally the whole of `DATABASE_TOOLING`, which made E003's own design
+#: unbuildable: ADR-0013's chosen option has `/src/api` reading `schema_constants`
+#: **over a connection**, and lists "`/src/api` pays a startup read against the
+#: database before it can serve" among its costs — neither is possible without a
+#: driver. The assertion below even said so in its own failure message while
+#: forbidding the thing that message describes.
+#:
+#: What is actually exclusive is the migration and ORM stack, because that is
+#: what carries schema *authorship*. A driver is how any entry talks to Postgres
+#: at all, and ADR-0016 sanctions one wherever an accepted record already grants
+#: the purpose — `/src/api` for the constants read and SQL-side risk computation
+#: ({SAD:ADR-0004}), `/src/gateway` for writing invocation records
+#: ({SAD:ADR-0010}). Narrowed, not relaxed: no object was added, and the
+#: schema-asset check below closes the gap a name-based set left open anyway.
+MIGRATION_STACK = frozenset({"alembic", "sqlalchemy"})
+
+#: Filenames and directories that constitute schema authorship. Checked as
+#: files rather than as distribution names, because an entry that hand-rolls
+#: DDL never imports anything a name-based set would catch.
+SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
 
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
 #: against it rather than against a repeated literal.
@@ -84,18 +110,45 @@ def test_the_schema_owning_entry_declares_the_database_tooling() -> None:
 
 
 @pytest.mark.parametrize("entry", [e for e in PYTHON_ENTRIES if e != SCHEMA_OWNING_ENTRY])
-def test_no_other_entry_declares_or_resolves_the_database_tooling(entry: str) -> None:
-    """TR-008. Schema assets live in one entry, so the client it needs does too.
+def test_no_other_entry_declares_or_resolves_the_migration_stack(entry: str) -> None:
+    """TR-008. Schema *authorship* lives in one entry, so its tooling does too.
 
     Checked against the resolved set as well as the declared one. A declaration
     is the intent; the lockfile is what actually arrives, and a boundary that
     pulled `sqlalchemy` in transitively would ship it without ever naming it.
+
+    Scoped to `MIGRATION_STACK` rather than the whole storage stack: a driver is
+    not schema authorship, and forbidding it here would forbid the constants
+    read this requirement exists to describe. See the note on `MIGRATION_STACK`.
     """
-    intrusion = DATABASE_TOOLING & (declared_third_party(entry) | locked_distributions(entry))
+    intrusion = MIGRATION_STACK & (declared_third_party(entry) | locked_distributions(entry))
     assert not intrusion, (
-        f"{entry} carries {sorted(intrusion)}. Only {SCHEMA_OWNING_ENTRY} owns schema "
-        f"assets (ADR-0013); the serving boundary reads published constants over the "
-        f"connection rather than through the migration stack (TR-008, TR-047)."
+        f"{entry} carries {sorted(intrusion)}. Only {SCHEMA_OWNING_ENTRY} authors schema "
+        f"assets (ADR-0013, ADR-0016); another entry carrying the migration stack can "
+        f"declare DDL, which is the decision that belongs to one plan (TR-008, TR-047)."
+    )
+
+
+@pytest.mark.parametrize("entry", [e for e in PYTHON_ENTRIES if e != SCHEMA_OWNING_ENTRY])
+def test_no_other_entry_holds_schema_assets(entry: str) -> None:
+    """TR-008 / TR-047. The boundary that matters, asserted over files.
+
+    Stronger than the distribution-name check above and the reason narrowing it
+    costs nothing: an entry could author DDL in raw SQL and import nothing at
+    all. What is forbidden is *holding the assets* — an Alembic config, a
+    `versions/` directory, a migration environment — not owning a driver.
+    """
+    entry_root = SRC_ROOT / entry
+    found = sorted(
+        path.relative_to(entry_root).as_posix()
+        for name in SCHEMA_ASSET_NAMES
+        for path in entry_root.rglob(name)
+        if ".venv" not in path.parts
+    )
+    assert not found, (
+        f"{entry} holds schema assets {found}. Only {SCHEMA_OWNING_ENTRY} authors schema "
+        f"(ADR-0013); an entry outside it declaring DDL takes a decision another epic's "
+        f"plan owns (TR-008, TR-047)."
     )
 
 
