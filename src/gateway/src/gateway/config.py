@@ -33,7 +33,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from gateway.errors import GatewayConfigError
 
 __all__ = [
+    "CONTENT_CAPTURE_ENABLED_VALUE",
+    "CONTENT_CAPTURE_ENV_VAR",
     "CREDENTIAL_ENV_VAR",
+    "configuration_failure_message",
+    "content_capture_enabled",
+    "credential_is_present",
     "MODES",
     "MODE_ENV_VAR",
     "PROVIDER_OPT_IN_ENV_VAR",
@@ -139,6 +144,12 @@ PROVIDER_OPT_IN_PERMITTED_VALUE: Final[str] = "1"
 #: explaining that rule, and the scan caught it — the same self-referential trap
 #: three of this epic's checks hit. Do not restate the rule using the word.
 CREDENTIAL_ENV_VAR: Final[str] = "ANTHROPIC_API_KEY"
+
+#: TR-026. Prompt and completion content in log output, **off by default**. The
+#: default is the requirement, not a preference: logs are the largest and
+#: least-reviewed sink in the system.
+CONTENT_CAPTURE_ENV_VAR: Final[str] = "GATEWAY_CAPTURE_CONTENT"
+CONTENT_CAPTURE_ENABLED_VALUE: Final[str] = "1"
 
 
 class GatewayConfig(BaseModel):
@@ -362,3 +373,74 @@ def require_no_credential_in_replay(env: Mapping[str, str] | None = None) -> Non
             f"Run the harness in a child environment with the variable removed "
             f"rather than unsetting it in your shell."
         )
+
+
+def credential_is_present(env: Mapping[str, str] | None = None) -> bool:
+    """Whether the one credential key holds a usable value (TR-062).
+
+    **Exactly one key, matched by exact name.** No prefix match, no
+    case-insensitive match, no scan of neighbouring names — so TR-023's guard
+    has one checkable subject rather than an intent, and cannot disagree with
+    the SDK's own resolution, which reads the same name.
+
+    Absent means unset, empty, or whitespace-only; present means anything else.
+    An exported-but-blank variable is a broken shell far more often than a
+    considered instruction, and treating it as present would refuse `replay`
+    mode on a machine that has no credential at all.
+
+    **Disclosed limit** (TR-062). This observes the gateway's own process
+    environment and nothing else. A credential reaching the SDK by another path
+    — an SDK configuration file, an explicit argument, a platform keychain —
+    is neither observed nor blocked. `replay` mode's no-credential property is
+    therefore a property of *this* environment, not a proof that no credential
+    exists anywhere the process could reach.
+    """
+    source = os.environ if env is None else env
+    return bool((source.get(CREDENTIAL_ENV_VAR) or "").strip())
+
+
+def content_capture_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Whether prompt and completion content may appear in log output (TR-026).
+
+    **Off by default**, and the default is the requirement rather than a
+    preference: content in logs is the largest, least-reviewed sink in the
+    system, and a capture toggle that defaulted on would put prompt text in
+    every operator's log aggregator before anyone decided it should be there.
+
+    Enabling it does not make it unconstrained (TR-066): captured content
+    remains subject to redaction and to the fail-closed rule, must not be
+    enabled in continuous integration or in any run that writes to the committed
+    repository, and its output must not be committed.
+
+    Scoped to **log output alone**. The invocation record and the normalized
+    gateway error carry no prompt or completion content at any setting of this
+    toggle, because both field sets are closed and neither names one — so this
+    toggle cannot widen them even if someone wanted it to.
+    """
+    source = os.environ if env is None else env
+    return source.get(CONTENT_CAPTURE_ENV_VAR) == CONTENT_CAPTURE_ENABLED_VALUE
+
+
+def configuration_failure_message(key: str, detail: str = "") -> str:
+    """A configuration-failure message bounded by TR-065's exclusion set.
+
+    The rule the set states, in the order it is stated: the message **MUST NOT**
+    contain the credential value, nor any substring, truncation, prefix, suffix,
+    hash, or length of it, nor any other value read from the credential
+    configuration key. It **MUST** name the key that is missing or unusable.
+
+    Naming the key is what makes the message actionable; withholding the value
+    is what keeps it safe. Both halves are needed — a message that named neither
+    would be safe and useless.
+
+    The value is never passed to this function, which is stronger than
+    redacting it here: a redaction step can be forgotten, and a parameter that
+    does not exist cannot be.
+    """
+    if key == CREDENTIAL_ENV_VAR and detail:
+        raise ValueError(
+            "a configuration-failure message for the credential key must carry no "
+            "detail drawn from its value — not a truncation, not a length, not a "
+            "hash (TR-065). Name the key alone."
+        )
+    return f"{key} is missing or unusable{f': {detail}' if detail else ''}"

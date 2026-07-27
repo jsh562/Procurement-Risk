@@ -1,31 +1,30 @@
-phase: Phase 5 complete — OBJ4 (Content-Hash Fixtures and Offline Replay)
-completed: 59
-remaining: 16
+phase: Phase 6 complete — OBJ5 (Credential Redaction and Error Normalization)
+completed: 68
+remaining: 7
 blocked: none
-next: Phase 6 (OBJ5) T062-T070 — credential redaction across the five egress
-      sinks, provider-exception normalization, and the credential-shaped
-      material scan. Then Phase 7 (OBJ6, P2) and Phase 8 polish.
-notes: OBJ4 delivered. Mode selection has no default and no fallback; the
-       provider opt-in is a separate control with a fixed form so a check can
-       assert its absence from CI. Replay refuses to run beside a credential —
-       refusing when the means of cheating is present is what makes the offline
-       claim structural rather than believed.
-       The network guard is the observation point SC-008's zero rests on. Its
-       public names live in netguard.py rather than the conftest: pytest
-       imports a conftest under its own module name, so a test catching the
-       exception by path caught a different class object and the guard read as
-       broken when it worked. The shape assertions are at the root; the
-       behavioural control is in the tier that installs the fixture.
-       Two checks from other epics caught real problems in this phase's work.
-       E001's supply-chain scan flagged a realistic fake credential in a test
-       literal — correctly, since the detector cannot tell a fake from a real
-       one, which is what makes it useful. And the single-naming-site scan
-       caught a comment in config.py that named the provider while explaining
-       the rule against naming it.
-       orchestrator.invoke() still raises NotImplementedError. Every piece it
-       composes now exists; joining them is Phase 6/8 work once redaction
-       lands, since the record path must not carry unredacted material.
-       Environment: the DB container was torn down externally three times this
-       session. `procurement-api:e001` is an unqualified tag the sibling
-       checkouts share and must be rebuilt here before the image check runs.
+next: Phase 7 (OBJ6, P2) T071-T074 — the opted-in provider-reaching smoke check
+      and fixture refresh; then Phase 8 polish (T075). OBJ6 is P2 and is the
+      only objective that reaches the provider, so it is the one that cannot
+      run in CI by design.
+notes: OBJ5 delivered. Redaction covers TR-059's five sinks with a seeded
+       positive for each — the five differ in what scanning even means (files
+       as bytes, log output as what a formatter emits, the exception payload as
+       a rendered traceback), so one seeded case would have evidenced one sink
+       and left four asserted by analogy.
+       CredentialHandle closes every rendering path: __repr__, __str__,
+       __format__, __reduce__, and __slots__ so there is no __dict__ to walk.
+       configuration_failure_message refuses a detail argument for the
+       credential key rather than redacting one — a parameter that does not
+       exist cannot be forgotten.
+       The self-referential test trap recurred for the fourth and fifth time
+       this phase: a check scanning source text matches the prose explaining
+       what it looks for. Every such check in this epic is now an AST walk.
+       The lesson generalises and is recorded in the plan as OI-15: a check
+       whose subject is code must read the parse tree, because prose about code
+       contains the words the code is being checked for.
+       Environment, unchanged and worth repeating: the DB container has been
+       torn down externally five times, twice with its volume. Re-run
+       `docker compose up -d db` then `uv run --directory src/model migrate`.
+       `procurement-api:e001` is an unqualified tag the sibling checkouts share
+       and must be rebuilt here before the image check runs.
 timestamp: 2026-07-26

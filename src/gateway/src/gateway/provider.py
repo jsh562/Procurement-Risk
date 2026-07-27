@@ -30,6 +30,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, Final, Protocol, runtime_checkable
 
+from gateway.config import CREDENTIAL_ENV_VAR
 from gateway.errors import ProviderError, ProviderUnavailableError
 
 # Pinned here rather than at each call site so the model in use is a property
@@ -50,6 +51,7 @@ MAX_TRANSPORT_RETRIES: Final[int] = 2
 MAX_TRANSPORT_ATTEMPTS: Final[int] = MAX_TRANSPORT_RETRIES + 1
 
 __all__ = [
+    "CredentialHandle",
     "DEFAULT_MODEL",
     "MAX_TRANSPORT_ATTEMPTS",
     "MAX_TRANSPORT_RETRIES",
@@ -280,3 +282,88 @@ def load_client_class() -> type[Any]:
         )
 
     return client_class
+
+
+class CredentialHandle:
+    """The credential, read once and held where nothing renders it.
+
+    TR-061. The requirement has three parts and each rules out an
+    implementation that would otherwise be natural:
+
+    **Read exactly once, at construction.** Not on each call. A value re-read
+    per request would be re-read from an environment that can change under a
+    long-running process, so two invocations in one run could use different
+    credentials with nothing recording which.
+
+    **Held off every object the gateway reprs, serializes, logs, or spools** —
+    *the client handle included*, which must expose no attribute carrying the
+    value. That last clause is why this class exists rather than the value
+    living on the client: a client's `repr` is written by the SDK, changes
+    between versions, and is exactly what a traceback renders when a frame
+    holding one is captured.
+
+    **`__repr__` and `__str__` are both overridden.** Overriding one is the
+    common half-measure: `repr` appears in tracebacks and debuggers, `str` in
+    f-strings and log messages, and a value safe in one and not the other leaks
+    through whichever the next author reaches for.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    @classmethod
+    def from_environment(cls, env: Mapping[str, str] | None = None) -> CredentialHandle:
+        """Read the credential once, from the one key TR-062 fixes.
+
+        Raises:
+            ProviderUnavailableError: No credential. A configuration error —
+                the fault is in how the environment was resolved, and it is
+                detectable before a request is built. The message names the key
+                and nothing about the value (TR-065).
+        """
+        import os
+
+        source = os.environ if env is None else env
+        value = (source.get(CREDENTIAL_ENV_VAR) or "").strip()
+        if not value:
+            raise ProviderUnavailableError(
+                f"{CREDENTIAL_ENV_VAR} is not set, so no provider request can be "
+                f"constructed. This is a configuration error rather than a "
+                f"provider failure: nothing was called and nothing was billed."
+            )
+        return cls(value)
+
+    def reveal(self) -> str:
+        """The value, for the one call that constructs a client.
+
+        Named `reveal` rather than exposed as a property or an attribute so
+        every use is a visible verb at the call site — an attribute read looks
+        like any other and would not draw a reviewer's eye.
+        """
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {CREDENTIAL_ENV_VAR}=[REDACTED]>"
+
+    __str__ = __repr__
+
+    def __format__(self, spec: str) -> str:
+        """Covers `f"{handle}"` and `format(handle)`, which bypass `__str__`
+        when a format spec is present — the case an override of `__str__` alone
+        would miss."""
+        del spec
+        return repr(self)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Refuse to pickle.
+
+        Serialization is one of the sinks TR-061 names, and a handle that
+        pickled would put the value in whatever the pickle was written to —
+        a cache, a queue, a crash dump. Refusing is the fail-closed direction.
+        """
+        raise TypeError(
+            "a credential handle must not be serialized (TR-061); the value is "
+            "read once at construction and held off every serialized object"
+        )

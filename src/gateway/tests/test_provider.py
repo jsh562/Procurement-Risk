@@ -112,6 +112,7 @@ def test_the_module_exports_a_stable_surface() -> None:
     """`__all__` is the contract consumers read. TR-004 changes it, so it is
     pinned rather than left to drift with whatever happens to be defined."""
     assert set(provider.__all__) == {
+        "CredentialHandle",
         "DEFAULT_MODEL",
         "MAX_TRANSPORT_ATTEMPTS",
         "MAX_TRANSPORT_RETRIES",
