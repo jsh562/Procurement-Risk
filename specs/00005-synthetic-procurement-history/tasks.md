@@ -71,7 +71,7 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 - [X] T004 [P] Create the package docstring and path resolution in PKG/__init__.py and PKG/paths.py following `corpus.paths` → exports: fixture_path(), truth_path()
 - [X] T005 [P] {FR-013} Create the closed envelope, line and event record types and the `NS_E005` namespace uuid in PKG/model.py → exports: FixtureEnvelope, FixtureLine, NS_E005
-- [ ] T006 {FR-013,FR-021} **RED** Failing serializer property tests in TST/test_serialize_properties.py — parse/canonicalize round-trip, key-order and file-layout invariance after:T005
+- [X] T006 {FR-013,FR-021} **RED** Failing serializer property tests in TST/test_serialize_properties.py — parse/canonicalize round-trip, key-order and file-layout invariance after:T005
 - [ ] T007 {FR-013,FR-021} **GREEN** Implement the canonical serializer in PKG/serialize.py — reuse `roster.reader.canonical_bytes`, no JSON float after:T006 → exports: dataset_content_hash()
 - [ ] T008 {FR-013} Add worked-case serializer unit tests — non-ASCII description, trailing-zero quantity, absent note, CRLF and LF checkouts — in TST/test_serialize.py after:T007
 - [ ] T009 Create the procurement test fixtures — live PostgreSQL on `${PRC_DB_PORT:-5434}` and tmp artifact roots — in TST/conftest.py, after src/model/tests/schema/conftest.py
