@@ -49,6 +49,7 @@ __all__ = [
     "checkout_slug",
     "default_image_tag",
     "foreign_build",
+    "image_exists",
     "resolve_image_tag",
 ]
 
@@ -154,7 +155,7 @@ def foreign_build(tag: str | None = None, root: Path | None = None) -> ForeignBu
         # No image, no daemon, or an unstamped image. Only the last is a
         # finding, and it is indistinguishable from the first two without a
         # second call — so ask.
-        if not _image_exists(resolved):
+        if not image_exists(resolved):
             return None
         return ForeignBuild(resolved, None)
     if Path(stamp) == (root or REPO_ROOT):
@@ -162,7 +163,13 @@ def foreign_build(tag: str | None = None, root: Path | None = None) -> ForeignBu
     return ForeignBuild(resolved, stamp)
 
 
-def _image_exists(tag: str) -> bool:
+def image_exists(tag: str) -> bool:
+    """Whether the daemon holds `tag`.
+
+    Public because a provenance check that cannot tell "ours" from "absent"
+    passes vacuously on a machine that never built the image — which is the
+    failure mode this module exists to close, one level up.
+    """
     try:
         completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
             ["docker", "image", "inspect", tag],

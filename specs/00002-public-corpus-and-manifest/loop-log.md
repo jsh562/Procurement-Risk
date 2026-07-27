@@ -10,3 +10,8 @@
 - Entering: blockquote undercount (same class, third occurrence) | Resolved: yes | Remaining: none
 - Regressions: none | Tests: scoped (two Markdown files, no test reads them) | Coverage: 93%
 - QC PASSED
+
+## Fourth run (standalone /sddp-qc, branch tip)
+- Entering: none open | Found: foreign_build() armed but never invoked | Resolved: yes, in-run
+- Regressions: none | Tests: 1119 model + 162 checks + 5 gateway + 3 web, 0 skipped | Coverage: 93%
+- QC PASSED

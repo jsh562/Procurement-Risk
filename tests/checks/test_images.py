@@ -104,7 +104,7 @@ def test_an_unstamped_image_is_reported_rather_than_assumed_benign(
     """Unstamped is what the tooling produced before this check existed, so
     treating it as ours would exempt exactly the images at risk."""
     monkeypatch.setattr("tests.checks.helpers.images._label", lambda tag: None)
-    monkeypatch.setattr("tests.checks.helpers.images._image_exists", lambda tag: True)
+    monkeypatch.setattr("tests.checks.helpers.images.image_exists", lambda tag: True)
     finding = foreign_build("procurement-api:e001-x")
     assert isinstance(finding, ForeignBuild)
     assert "unstamped" in str(finding)
@@ -114,7 +114,7 @@ def test_no_image_at_all_is_not_a_foreign_build(monkeypatch: pytest.MonkeyPatch)
     """ "Not built yet" is the caller's problem to report. Conflating it with
     "built by someone else" would make the message wrong in the common case."""
     monkeypatch.setattr("tests.checks.helpers.images._label", lambda tag: None)
-    monkeypatch.setattr("tests.checks.helpers.images._image_exists", lambda tag: False)
+    monkeypatch.setattr("tests.checks.helpers.images.image_exists", lambda tag: False)
     assert foreign_build("procurement-api:e001-x") is None
 
 
