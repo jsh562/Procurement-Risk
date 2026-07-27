@@ -53,6 +53,7 @@ __all__ = [
     "parse_payload",
     "read_payload",
     "write_payload",
+    "write_record",
 ]
 
 #: How deep a payload may nest before this module refuses it. The fixture nests
@@ -225,6 +226,48 @@ def write_payload(path: Path, payload: dict[str, Any]) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(committed_file_bytes(payload))
+    return target
+
+
+#: Decimal places every float in a non-fixture record is rounded to before it is
+#: written. Twelve is far beyond any precision these quantities carry meaning at,
+#: and well inside a double's ~15–17 significant digits, so rounding never loses
+#: information — it only removes the last-bit noise that would otherwise let two
+#: byte-identical runs differ in their thirtieth character.
+RECORD_FLOAT_PLACES = 12
+
+
+def _rounded(value: Any) -> Any:
+    if isinstance(value, float):
+        return round(value, RECORD_FLOAT_PLACES)
+    if isinstance(value, dict):
+        return {key: _rounded(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_rounded(item) for item in value]
+    return value
+
+
+def write_record(path: Path, payload: dict[str, Any]) -> Path:
+    """Write a committed record that legitimately carries JSON numbers.
+
+    **Not for the fixture.** The fixture carries no float at all (AD-004) because
+    it is the reproducibility oracle's input and float repr is not a canonical
+    decimal. The ground-truth record is a different artifact with a different
+    job: `data-model.md` types its spreads, ratios and vendor offsets as
+    `number`, and rendering them as strings would make the file this epic
+    publishes *for* downstream comparison awkward to compare against.
+
+    So floats are permitted here and rounded to a declared precision, which
+    keeps two runs at one seed byte-identical without pretending the values are
+    decimals. Everything else — sorted keys, indented form, `write_bytes` — is
+    the fixture's treatment unchanged.
+    """
+    mapping = _require_mapping(payload)
+    rounded = _rounded(mapping)
+    text = json.dumps(rounded, indent=2, sort_keys=True, ensure_ascii=False)
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(text.encode("utf-8") + b"\n")
     return target
 
 

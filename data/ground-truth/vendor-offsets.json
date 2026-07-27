@@ -1,0 +1,92 @@
+{
+  "between_vendor_spread_sd_log": 0.1224,
+  "dataset_content_hash": "sha256:b23775d90885f7dd341cc0e159b349607a944e3227820894f1948a94448c62d5",
+  "generation_date": "2026-04-16",
+  "generator_id": "model.procurement.generate",
+  "generator_revision": 1,
+  "material_category_tier_offsets": {
+    "AUTOMATIC_TRANSFER_SWITCH": 0.0,
+    "CIRCUIT_PROTECTIVE_DEVICE": -0.4,
+    "COMPUTER_ROOM_AIR_CONDITIONER": 0.0,
+    "COOLING_TOWER": 0.2,
+    "ENERGY_RECOVERY_UNIT": 0.0,
+    "GENERATOR_ASSEMBLY": 0.2,
+    "HEATING_BOILER": 0.2,
+    "HYDRONIC_PUMP": -0.4,
+    "LIQUID_FILLED_TRANSFORMER": 0.2,
+    "LOW_VOLTAGE_SWITCHGEAR": 0.0,
+    "LOW_VOLTAGE_TRANSFORMER": -0.4,
+    "MEDIUM_VOLTAGE_CABLE": -0.4,
+    "MEDIUM_VOLTAGE_SWITCHGEAR": 0.2,
+    "PAD_MOUNTED_TRANSFORMER": 0.0,
+    "PRIMARY_UNIT_SUBSTATION": 0.2,
+    "SECONDARY_UNIT_SUBSTATION": 0.2,
+    "STATIC_UNINTERRUPTIBLE_POWER_SUPPLY": 0.0,
+    "SWITCHBOARD": 0.0,
+    "VARIABLE_FREQUENCY_DRIVE": 0.0,
+    "WATER_CHILLER": 0.2
+  },
+  "realized_catalog_overlap_share": 0.698492462312,
+  "realized_corpus_overlap_share": 0.698492462312,
+  "residual_spread_sd_log": 0.460585496949,
+  "root_seed": 20260416,
+  "spread_ratio": 0.286651030338,
+  "spread_ratio_unadjusted": 0.256476821201,
+  "truth_schema_version": 1,
+  "variance_decomposition": {
+    "material_category": 0.057470288511,
+    "residual": 0.190108926552,
+    "vendor": 0.015621024872
+  },
+  "vendor_offsets": [
+    {
+      "offset_log": -0.223524063581,
+      "vendor_id": "VND-001"
+    },
+    {
+      "offset_log": -0.148487644959,
+      "vendor_id": "VND-002"
+    },
+    {
+      "offset_log": -0.104841459991,
+      "vendor_id": "VND-003"
+    },
+    {
+      "offset_log": -0.070803517049,
+      "vendor_id": "VND-004"
+    },
+    {
+      "offset_log": -0.041130120599,
+      "vendor_id": "VND-005"
+    },
+    {
+      "offset_log": -0.013506136199,
+      "vendor_id": "VND-006"
+    },
+    {
+      "offset_log": 0.013506136199,
+      "vendor_id": "VND-007"
+    },
+    {
+      "offset_log": 0.041130120599,
+      "vendor_id": "VND-008"
+    },
+    {
+      "offset_log": 0.070803517049,
+      "vendor_id": "VND-009"
+    },
+    {
+      "offset_log": 0.104841459991,
+      "vendor_id": "VND-010"
+    },
+    {
+      "offset_log": 0.148487644959,
+      "vendor_id": "VND-011"
+    },
+    {
+      "offset_log": 0.223524063581,
+      "vendor_id": "VND-012"
+    }
+  ],
+  "within_vendor_spread_sd_log": 0.51
+}

@@ -48,6 +48,7 @@ from model.procurement.allocate import REWORK_MAX_LOOPS, rework_loop_allocation
 __all__ = [
     "FORWARD_SHARES",
     "MU_BASE",
+    "LOOP_SHARES",
     "REWORK_SHARES",
     "SIGMA_0",
     "SIGMA_C",
@@ -109,10 +110,24 @@ MU_BASE = math.log(MEDIAN_TARGET_DAYS)
 #: →released_for_fabrication, →shipped, →delivered. Sums to one.
 FORWARD_SHARES = (0.12, 0.20, 0.08, 0.46, 0.14)
 
-#: The two rework legs, applied once per loop: under_review→revise_and_resubmit
-#: and revise_and_resubmit→submitted. Deliberately **not** part of the
-#: apportionment above — rework is additional time, not a redistribution of it.
+#: The two shares `data-model.md` names as rework legs:
+#: `under_review → revise_and_resubmit` and `revise_and_resubmit → submitted`.
+#: Deliberately **not** part of the apportionment above — rework is additional
+#: time, not a redistribution of it.
 REWORK_SHARES = (0.16, 0.12)
+
+#: **A loop is three transitions, not two.** `state_sequence` re-visits three
+#: states per loop — `revise_and_resubmit`, `submitted`, `under_review` — so
+#: getting back to where the loop started costs a third leg:
+#: `submitted → under_review` again, at the forward share it always carries.
+#:
+#: The two named rework shares alone give `5 + 2L` legs against `6 + 3L` events,
+#: and the mismatch is silent in every unit test: a rework line simply runs out
+#: of dates one event short and is recorded as censored. It surfaced only in the
+#: end-to-end run, where the emitted delivered share was 0.618 while the shape
+#: gate — computing delivery from the same short leg list — reported 0.874. Two
+#: definitions of one fact, agreeing with each other and with nothing else.
+LOOP_SHARES = (*REWORK_SHARES, FORWARD_SHARES[0])
 
 _TIER_1 = (
     "GENERATOR_ASSEMBLY",
@@ -171,8 +186,11 @@ SIGMA_0 = round(solve_sigma_0(), 2)
 #: and `test_the_solver_reproduces_the_pinned_constant` re-runs it. The solve is
 #: driven by `rework_loop_allocation`, so the population it calibrates against
 #: is the declared one — an earlier draft used an even 0–3 loop spread, which is
-#: 3.6× the declared rework and pulled the answer down to 46.7.
-T_PRE = 59.9
+#: 3.6× the declared rework and pulled the answer down to 46.7. Re-solved from
+#: 59.9 to 57.8 when `LOOP_SHARES` corrected the loop from two legs to three:
+#: the calibration had been fitting a population whose rework lines were each
+#: one leg short.
+T_PRE = 57.8
 
 
 def vendor_offsets(vendor_ids: Sequence[str]) -> Mapping[str, float]:
@@ -250,7 +268,7 @@ def draw_line_durations(
     """
     if rework_loops < 0:
         raise ValueError(f"rework loops cannot be negative, found {rework_loops}")
-    shares = list(FORWARD_SHARES) + list(REWORK_SHARES) * rework_loops
+    shares = list(FORWARD_SHARES) + list(LOOP_SHARES) * rework_loops
     return [_draw_leg(generator, share, log_offset) for share in shares]
 
 
@@ -471,7 +489,7 @@ def solve_pre_rework_mean(
         totals = np.zeros(line_count)
         for mu in base:
             totals += np.maximum(1, np.round(generator.lognormal(mu + offsets, SIGMA_0)))
-        rework_base = np.log(np.array(REWORK_SHARES) * candidate) - SIGMA_0**2 / 2
+        rework_base = np.log(np.array(LOOP_SHARES) * candidate) - SIGMA_0**2 / 2
         for loop in range(1, REWORK_MAX_LOOPS + 1):
             active = loops >= loop
             for mu in rework_base:

@@ -105,14 +105,14 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 - [ ] ~~T029a~~ **withdrawn 2026-07-27 — folded into T026.** Added to close audit finding C-004 ("FR-034 is live with no implementing task") when T027 already covered the draw; C-015 had just reworded T027 from "disjoint manufacturer space" to "catalog-drawn" and the pre-edit meaning was read when adding this. Its assertions are T026's. Withdrawn rather than deleted and **not renumbered**, so T030+ keep the identities other artifacts cite
 - [ ] ~~T029b~~ **withdrawn 2026-07-27 — T027 implements it in `equipment.py`.** A separate `manufacturer.py` would have made an eighth mandatory property-tier module and forced the seventh-module counts to be re-propagated across `plan.md` and `tasks.md` — which is exactly the half-propagation that produced finding C-010
 - [X] T029c [P] {FR-034} DV-028 — assert the catalog-overlap share is ≥ 60% over all lines and record the realized share in the ground-truth record, **separately from FR-032's share**: the two predicates select different lines and folding them into one number would let a shortfall in either hide behind the other — TST/test_equipment.py after:T027
-- [ ] T030 [US1] {FR-017} Emit the ground-truth record — σ_w, τ, both ratios, the decomposition and 12 vendor offsets — in PKG/truth.py ← T017:decompose_variance → exports: write_truth_record()
-- [ ] T031 [P] [US1] {FR-017} DV-017 — exactly 12 unique `vendor_id`s covering the roster and a `dataset_content_hash` equal to the fixture's — in TST/test_truth_record.py after:T030
-- [ ] T032 [P] [US1] {FR-001} Implement `procurement-generate` in PKG/generate.py — identities only via `read_roster()`, plus a source scan asserting no `PRJ-`/`VND-` literal ← T011:allocate_lines
-- [ ] T033 [US1] {FR-002,FR-009,FR-015,FR-027} [COMPLETES FR-009] Assemble the closed 13-key envelope in PKG/generate.py — all three `generation_inputs` carry their own `digest_kind` after:T032
-- [ ] T034 [US1] {FR-010,FR-013,FR-021} [COMPLETES FR-010] Wire the fail-fast shape gate and the write path (fixture, sidecar, truth record) in PKG/generate.py ← T007:dataset_content_hash after:T033
-- [ ] T035 [P] [US1] {FR-020} DV-023 — both stated total orders hold, two runs at one seed are byte-identical, no hash-ordered iteration in the write path — TST/test_generate_ordering.py after:T034
-- [ ] T036 [P] [US1] {FR-031} [COMPLETES FR-031] End-to-end test — all three artifacts emitted, six columns non-blank, `note` absent (DV-022) — TST/test_generate.py after:T034
-- [ ] T037 [US1] {FR-013,FR-017} [COMPLETES FR-013] Run `procurement-generate` and commit DAT/procurement-history.json, DAT/procurement-history.hash.json and GT/vendor-offsets.json after:T036
+- [X] T030 [US1] {FR-017} Emit the ground-truth record — σ_w, τ, both ratios, the decomposition and 12 vendor offsets — in PKG/truth.py ← T017:decompose_variance → exports: write_truth_record()
+- [X] T031 [P] [US1] {FR-017} DV-017 — exactly 12 unique `vendor_id`s covering the roster and a `dataset_content_hash` equal to the fixture's — in TST/test_truth_record.py after:T030
+- [X] T032 [P] [US1] {FR-001} Implement `procurement-generate` in PKG/generate.py — identities only via `read_roster()`, plus a source scan asserting no `PRJ-`/`VND-` literal ← T011:allocate_lines
+- [X] T033 [US1] {FR-002,FR-009,FR-015,FR-027} [COMPLETES FR-009] Assemble the closed 13-key envelope in PKG/generate.py — all three `generation_inputs` carry their own `digest_kind` after:T032
+- [X] T034 [US1] {FR-010,FR-013,FR-021} [COMPLETES FR-010] Wire the fail-fast shape gate and the write path (fixture, sidecar, truth record) in PKG/generate.py ← T007:dataset_content_hash after:T033
+- [X] T035 [P] [US1] {FR-020} DV-023 — both stated total orders hold, two runs at one seed are byte-identical, no hash-ordered iteration in the write path — TST/test_generate_ordering.py after:T034
+- [X] T036 [P] [US1] {FR-031} [COMPLETES FR-031] End-to-end test — all three artifacts emitted, six columns non-blank, `note` absent (DV-022) — TST/test_generate.py after:T034
+- [X] T037 [US1] {FR-013,FR-017} [COMPLETES FR-013] Run `procurement-generate` and commit DAT/procurement-history.json, DAT/procurement-history.hash.json and GT/vendor-offsets.json after:T036
 
 ---
 

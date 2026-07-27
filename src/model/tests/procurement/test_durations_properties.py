@@ -150,9 +150,11 @@ class TestAggregateTarget:
 
     @pytest.mark.parametrize("loops", [0, 1, 2, 3])
     def test_every_loop_count_produces_the_declared_leg_count(self, loops: int) -> None:
-        """`6+3L` events means 5 + 2L legs. The domain the plan names."""
+        """`6+3L` events means `5 + 3L` legs. A loop is three transitions — the two
+        named rework shares plus the return to `under_review` — and asserting
+        `2L` here is what let the mismatch survive to the end-to-end run."""
         rng = np.random.default_rng(SEED)
-        assert len(draw_line_durations(rng, 0.0, loops)) == len(FORWARD_SHARES) + 2 * loops
+        assert len(draw_line_durations(rng, 0.0, loops)) == len(FORWARD_SHARES) + 3 * loops
 
     def test_rework_lengthens_a_line(self) -> None:
         """Otherwise the rework legs are decorative and SC-023 is calibrated
