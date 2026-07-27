@@ -1,14 +1,25 @@
-phase: Phase 1 complete — Setup (Repository / Workspace Delta)
-completed: 5
-remaining: 70
+phase: Phase 2 complete — OBJ1 (Provider-Type-Free Traced Invocation Path)
+completed: 16
+remaining: 59
 blocked: none
-next: Phase 2 (OBJ1) T007-T017 — models, errors, lazy provider import, public
-      surface, orchestrator, then checks T013-T017. The four skeleton modules
-      placed by T002 (api.py, models.py, errors.py, compute/__init__.py) get
-      their real content there.
-notes: T004 withdrawn with evidence; T005/T006 verified already delivered by
-       another epic. Three import contracts live and KEPT. Local venvs were
-       rebuilt — console-script shims had pointed at a sibling checkout.
-       Project DB containers are currently absent; database-backed work needs
-       `docker compose up -d db` first.
+next: Phase 3 (OBJ2) T018-T025 — config loader with the 120 s deadline, schema
+      submission, validate-or-repair with the bounded single repair, the
+      terminal-state-to-outcome mapping, and the transport budget inside the
+      outer monotonic deadline. T021 and T022 attach to the seams T009 and T012
+      left; the orchestrator's invoke() marks their attachment points inline.
+notes: OBJ1 delivered. Four import contracts live and KEPT — the public-surface
+       contract was split in two (AD-009), because one contract with indirect
+       detection on forbade api -> orchestrator -> provider, the arrangement
+       OBJ1's own deliverables prescribe. Both halves have negative fixtures.
+       T013 negative-tested with a seeded annotation; T015 negative-tested with
+       a consumer naming an SDK type. mypy strict is green over src/ and runs
+       in CI as Type check (gateway).
+       Two defects found by the new checks rather than by review: CI synced the
+       gateway without its provider extra (OI-9), and `raise ... from None`
+       left __context__ populated against TR-064 (OI-10). Both closed.
+       api and model lockfiles were refreshed — the gateway manifest change
+       invalidated them and the serving image build failed on --locked.
+       Local shells need UV_NATIVE_TLS=1 exported; verify.yml already sets it
+       as job env, so no check carries a TLS flag of its own. Project DB
+       containers are still absent; Phase 4 needs `docker compose up -d db`.
 timestamp: 2026-07-26

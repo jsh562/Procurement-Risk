@@ -50,6 +50,23 @@ def _is_scannable(path: Path, fixture_root: Path | None) -> bool:
     return True
 
 
+def scannable_files(root: Path, fixture_root: Path | None = None) -> list[Path]:
+    """Every file the scan below will actually read.
+
+    Public because "named in exactly one file" is satisfied just as well by a
+    scan that reads one file as by one that reads the whole tree, and the two
+    are indistinguishable from the count alone. A caller that needs to know the
+    denominator is real — that a newly added package is inside it rather than
+    quietly excluded — asks here rather than reimplementing the filter and
+    asserting against a second copy of the rule.
+    """
+    return [
+        path
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and _is_scannable(path, fixture_root)
+    ]
+
+
 def scan_source_root(root: Path, name: str, fixture_root: Path | None = None) -> list[Mention]:
     """Return every source file under ``root`` naming ``name`` as a whole word.
 
@@ -60,9 +77,7 @@ def scan_source_root(root: Path, name: str, fixture_root: Path | None = None) ->
     """
     pattern = re.compile(rf"\b{re.escape(name)}\b")
     mentions: list[Mention] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or not _is_scannable(path, fixture_root):
-            continue
+    for path in scannable_files(root, fixture_root):
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):

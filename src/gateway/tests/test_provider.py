@@ -1,51 +1,96 @@
-"""TR-008: the single permitted provider import site.
+"""TR-001 / TR-003 / TR-004: the single permitted provider import site.
 
-The most architecturally load-bearing module in the repository had no test at
-all — its correctness rested on import-linter happening to import it while
-building a graph, which catches a syntax error and nothing else.
+Rewritten by T009. E001's version tested `client_type()`, which TR-004 removes —
+the placeholder existed to prove the import resolved before there was anything
+to invoke, and leaving it beside the real entry point would be the "second
+surface" that requirement forbids.
 
-This file deliberately never names the provider distribution. An earlier draft
-did, and the TR-010 source scan failed it: naming the client here would make
-this the second file in the repository to do so, which is exactly the property
-the scan exists to prevent. Consumers reach the client through this module's
-surface, so the test does too — the constraint improved the test.
+**This file deliberately never names the provider distribution.** E001's
+version carried the same constraint and the reason still holds: the TR-001
+source scan reads all of `/src`, tests included, and asserts exactly one file
+names the client. Naming it here would make this the second. Consumers reach
+the client through this module's surface, so the test does too — the constraint
+improved the test then and still does.
 """
 
 from __future__ import annotations
 
 import gateway.provider as provider
+from gateway.errors import GatewayConfigError, GatewayError, ProviderUnavailableError
 
 
-def test_the_module_exposes_a_client_class() -> None:
-    client = provider.client_type()
-    assert isinstance(client, type), f"expected a class, got {client!r}"
+def test_the_placeholder_accessor_is_gone() -> None:
+    """TR-004. The seam E001 left is replaced, not accompanied.
 
-
-def test_the_client_comes_from_a_module_this_boundary_imported() -> None:
-    """Membership, not a literal comparison.
-
-    Even an attribute access spelling the distribution out would make this the
-    second file naming it. Checking that the returned class's top-level module
-    appears in this module's own namespace is both name-free and a stronger
-    claim: it fails if `client_type` ever starts returning something the
-    gateway did not import.
+    Asserted on the module rather than on `__all__`, because an attribute that
+    is merely undeclared is still importable and still a second surface.
     """
-    client = provider.client_type()
-    top_level = client.__module__.split(".")[0]
-    assert top_level in vars(provider), (
-        f"client_type returned a class from {top_level!r}, which this boundary never imported"
+    assert not hasattr(provider, "client_type"), (
+        "client_type still exists; TR-004 requires the placeholder be removed "
+        "rather than left beside the invocation entry point"
     )
 
 
-def test_client_type_does_not_construct_a_client() -> None:
-    """Constructing one reads credentials from the environment.
+def test_the_module_loads_a_client_class() -> None:
+    client = provider.load_client_class()
+    assert isinstance(client, type), f"expected a class, got {client!r}"
 
-    E001 supplies none and TR-025 forbids introducing any, so returning the
-    type rather than an instance is deliberate. This pins that behaviour so a
-    later refactor cannot quietly turn it into a constructor call.
+
+def test_the_client_comes_from_the_distribution_this_boundary_declares() -> None:
+    """Membership, not a literal comparison.
+
+    Even an attribute access spelling the distribution out would make this the
+    second file naming it. Comparing against the name the module itself records
+    is both name-free here and a stronger claim: it fails if `load_client_class`
+    ever starts returning something the gateway did not import.
     """
-    result = provider.client_type()
-    assert isinstance(result, type), "client_type returned an instance, not a type"
+    client = provider.load_client_class()
+    top_level = client.__module__.split(".")[0]
+    assert top_level == provider._PROVIDER_DISTRIBUTION, (
+        f"load_client_class returned a class from {top_level!r}, which is not the "
+        f"distribution this boundary declares it imports"
+    )
+
+
+def test_the_import_is_not_performed_at_module_scope() -> None:
+    """TR-003. The property ADR-0014 turns from a claim into a test.
+
+    Read off the module's own namespace: a module-scope import binds the name
+    there, a function-local one does not. Without this the lazy import could
+    regress to module scope and every other test in this file would still pass,
+    because they all call the function that performs it.
+    """
+    assert provider._PROVIDER_DISTRIBUTION not in set(vars(provider)), (
+        "the provider SDK is bound at module scope; TR-003 requires the import "
+        "to happen inside the invocation entry so the package imports without "
+        "the `provider` extra installed"
+    )
+
+
+def test_loading_the_client_does_not_construct_one() -> None:
+    """Constructing one reads a credential from the environment.
+
+    The offline suite runs with none present (TR-023), so a boundary that
+    constructed eagerly would be untestable there — and would hold a credential
+    for longer than the one call that needs it.
+    """
+    result = provider.load_client_class()
+    assert isinstance(result, type), "load_client_class returned an instance, not a type"
+
+
+def test_the_missing_extra_error_is_gateway_owned() -> None:
+    """ADR-0014's accepted cost, typed so a caller can act on it.
+
+    `ProviderUnavailableError` is a configuration error, not a provider
+    failure: the fault is in how the environment was resolved, and it is
+    detectable before a request is built. A caller catching `GatewayError`
+    catches it; one catching `ImportError` does not, which is deliberate —
+    an SDK-shaped failure crossing this boundary is the coupling the boundary
+    exists to prevent.
+    """
+    assert issubclass(ProviderUnavailableError, GatewayConfigError)
+    assert issubclass(ProviderUnavailableError, GatewayError)
+    assert not issubclass(ProviderUnavailableError, ImportError)
 
 
 def test_the_default_model_is_pinned_at_the_boundary() -> None:
@@ -55,6 +100,6 @@ def test_the_default_model_is_pinned_at_the_boundary() -> None:
 
 
 def test_the_module_exports_a_stable_surface() -> None:
-    """E004 builds tracing, schema validation, and cost accounting on this
-    surface; a silent rename would break both consuming boundaries."""
-    assert set(provider.__all__) == {"DEFAULT_MODEL", "client_type"}
+    """`__all__` is the contract consumers read. TR-004 changes it, so it is
+    pinned rather than left to drift with whatever happens to be defined."""
+    assert set(provider.__all__) == {"DEFAULT_MODEL", "ProviderClient", "load_client_class"}

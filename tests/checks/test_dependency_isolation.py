@@ -146,6 +146,75 @@ def test_gateway_carries_no_web_framework() -> None:
     assert not intrusion, f"gateway resolved set carries a web framework: {sorted(intrusion)}"
 
 
+# --- E004 TR-029 / TR-075: what the gateway's resolution must not contain ----
+
+#: The OpenTelemetry family, matched by prefix rather than enumerated.
+#:
+#: A fixed list would name the four or five distributions that exist today and
+#: pass on the sixth. The family is open by construction — every instrumentation
+#: and exporter package is published under this prefix — so the prefix is the
+#: honest denominator.
+#:
+#: `opentelemetry-semantic-conventions` is deliberately **not** carved out.
+#: TR-075 permits borrowing the generative-AI convention's field *names*, which
+#: costs nothing and installs nothing; taking the package that defines them as a
+#: dependency is the beginning of a pipeline, which is the thing excluded.
+OPENTELEMETRY_PREFIX = "opentelemetry"
+
+
+def _telemetry_members(distributions: set[str]) -> set[str]:
+    return {name for name in distributions if name.startswith(OPENTELEMETRY_PREFIX)}
+
+
+def test_gateway_carries_no_opentelemetry_sdk() -> None:
+    """TR-075: the invocation record is the only telemetry this epic emits.
+
+    Asserted against the resolved set rather than the manifest, which is what
+    makes it cover TR-029's "or any extra" — an extra's packages appear in the
+    lockfile whether or not the default resolution installs them, so an SDK
+    added under `provider` would be caught here and invisible to a scan of the
+    base requirements.
+
+    The reason this is a dependency check and not a code review note: a gateway
+    that took the SDK would emit spans by configuration rather than by code,
+    and no assertion over `/src` would see it.
+    """
+    intrusion = _telemetry_members(locked_distributions("gateway"))
+    assert not intrusion, (
+        f"the gateway resolved set carries {sorted(intrusion)}. TR-075 makes the "
+        f"invocation record the only telemetry this epic emits: no spans, no "
+        f"metrics, no exporter, no propagator. The generative-AI convention "
+        f"supplies field names here, not a pipeline."
+    )
+
+
+@pytest.mark.parametrize("entry", PYTHON_ENTRIES)
+def test_no_python_entry_carries_an_opentelemetry_sdk(entry: str) -> None:
+    """The same exclusion across the repository, and it is not redundant.
+
+    The gateway declares no telemetry, but both boundaries declare the gateway
+    as a path dependency. An SDK arriving in `api` or `model` would sit one
+    import away from the module writing invocation records, and TR-075's claim
+    would become true of one entry and false of the process running it.
+    """
+    intrusion = _telemetry_members(locked_distributions(entry))
+    assert not intrusion, f"{entry} resolved set carries {sorted(intrusion)} (TR-075)"
+
+
+def test_the_telemetry_matcher_reports_a_planted_member() -> None:
+    """A prefix match over a set that never contains one passes forever.
+
+    Both the exporter and the SDK are planted, because the prefix is the entire
+    mechanism: if it were ever narrowed to an exact name, one of these would
+    survive and the checks above would keep reporting clean.
+    """
+    planted = {"opentelemetry-sdk", "opentelemetry-exporter-otlp", "pydantic", "psycopg"}
+    assert _telemetry_members(planted) == {
+        "opentelemetry-sdk",
+        "opentelemetry-exporter-otlp",
+    }
+
+
 @pytest.mark.parametrize("entry", PYTHON_ENTRIES)
 def test_first_party_names_are_excluded_from_every_derived_set(entry: str) -> None:
     """The exclusion that STF-001 and STF-002 were filed about."""

@@ -33,6 +33,7 @@ dev = [
     "coverage==7.15.2",
     "hypothesis>=6.122.3",
     "import-linter>=2.13",
+    "mypy>=1.14.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.0",
@@ -53,6 +54,32 @@ select = ["E", "F", "I", "UP", "B", "SIM", "S"]
 # never live (TR-060 requires a seeded positive case per sink), and they use
 # `assert` by construction.
 "tests/**" = ["S101", "S105", "S106"]
+
+# `project-instructions.md` v1.2.4. Scoped to this entry: the other two Python
+# entries are not type-checked yet, and claiming otherwise would be the kind of
+# unverifiable assertion the policy section exists to prevent.
+#
+# Strict here is affordable because the package is new and small. It is also
+# load-bearing rather than decorative: TR-002 forbids a provider SDK type
+# appearing anywhere in the public surface, and `disallow_any_explicit` plus
+# strict optionality is what stops that leaking in as an untyped escape hatch
+# after the import contracts have had their say.
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+strict = true
+warn_unreachable = true
+enable_error_code = [
+    "ignore-without-code",  # a bare `# type: ignore` hides the next error too
+    "redundant-expr",
+    "truthy-bool",
+]
+
+[[tool.mypy.overrides]]
+# Tests construct deliberately wrong values to prove validation rejects them,
+# so strict annotation of every fixture would fight the thing under test.
+module = "tests.*"
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -97,37 +124,51 @@ allow_indirect_imports = false
 
 # TR-002: the public surface is built from gateway-owned types only.
 #
-# This deliberately does NOT restate "the public surface must not import
+# Neither contract below restates "the public surface must not import
 # anthropic" — the `protected` contract above already forbids that for every
 # module in the repository except `gateway.provider`, so a second contract
 # saying it would be a tautology wearing a stronger contract's clothes.
 #
-# What it forbids instead is the public surface reaching `gateway.provider` at
-# all, directly or through an intermediate module. That is the edge the first
-# contract cannot see: `provider.py` legitimately imports the SDK, so anything
-# importing `provider` can receive an SDK object from it and re-expose it in a
-# signature without ever importing `anthropic` itself. Composition goes through
-# the orchestrator, which is not part of the public surface.
+# What they forbid instead is the public surface reaching `gateway.provider`.
+# That is the edge the first contract cannot see: `provider.py` legitimately
+# imports the SDK, so anything importing `provider` can receive an SDK object
+# from it and re-expose it in a signature without ever importing `anthropic`
+# itself.
 #
-# The remaining half — a leaked SDK type reported *by name* — cannot be a
-# contract at all, because contracts report module paths. That is
-# `tests/test_public_surface.py` (T013).
+# This is TWO contracts because the two halves of the public surface can afford
+# different strictness, and collapsing them into one would have to pick the
+# weaker setting for both.
 #
-# NOT ENABLED, and the reason is recorded rather than the contract quietly
-# dropped. Written as below, the `lint-imports` CLI aborts with
-# "Module 'gateway.api' does not exist" for every module in `source_modules`,
-# while the identical contract KEPTs when the same version's use case is
-# invoked in-process against a graph that demonstrably contains all of them.
-# Worse, the CLI **exits 0** on that abort — so enabling it would put a
-# contract in the config that never runs and never fails the build, which is
-# exactly the "coverage is a claim rather than a measurement" failure ADR-0007
-# exists to prevent. Until the CLI behaviour is understood, TR-002's
-# public-surface claim rests on the runtime check in T013, which is the
-# mechanism the plan already designates for reporting a leaked type by name.
+# `models` and `errors` define types and nothing else. No composition passes
+# through them, so no legitimate path takes them to the provider by any route,
+# and indirect detection stays ON — laundering through an intermediate module
+# is the evasion worth catching.
 #
+# `api` is the composition front door. TR-002's own deliverable puts `invoke()`
+# there and OBJ1's deliverables put an orchestration module "above both" that
+# composes the call, the validation, the computation and the record — so
+# `api -> orchestrator -> provider` is the designed arrangement, not a leak.
+# Indirect detection on `api` would forbid exactly that path and leave the
+# entry point with no way to reach the provider at all. Direct detection is
+# what remains meaningful: `api` may compose through the orchestrator and may
+# never touch the provider itself.
+#
+# Disclosed limit, and it is the reason T013 is not optional: with indirect
+# detection off, `api` re-exporting something the orchestrator obtained from
+# `provider` produces no forbidden edge here. That is a type leak, not an
+# import leak, and the remaining half — a leaked SDK type reported *by name* —
+# cannot be a contract at all, because contracts report module paths. That is
+# `tests/test_public_surface.py` (T013), which OBJ1 VC3 designates for it.
 [[tool.importlinter.contracts]]
-name = "The public surface does not reach the provider module"
+name = "The gateway-owned type modules do not reach the provider module"
 type = "forbidden"
-source_modules = ["gateway.api", "gateway.models", "gateway.errors"]
+source_modules = ["gateway.models", "gateway.errors"]
 forbidden_modules = ["gateway.provider"]
 allow_indirect_imports = false
+
+[[tool.importlinter.contracts]]
+name = "The public entry point does not import the provider module directly"
+type = "forbidden"
+source_modules = ["gateway.api"]
+forbidden_modules = ["gateway.provider"]
+allow_indirect_imports = true

@@ -1,13 +1,86 @@
 """Gateway-owned error types — the only exceptions this package raises.
 
-Skeleton placed by T002 so the public-surface import contract has a module to
-bind to. `import-linter` resolves `source_modules` eagerly and errors on a name
-that does not exist, so a contract written before its module is a contract that
-cannot run — and HINT-001 requires the contract to land *first*, because one
-added after the code it should have blocked cannot prove it would have blocked
-it. The hierarchy itself arrives with T008.
+TR-002 and TR-025. The hierarchy exists so a caller can distinguish *why* an
+invocation failed without catching a provider SDK exception, which would couple
+it to the provider as surely as accepting an SDK type would. `provider.py`
+normalizes every SDK exception into one of these before it escapes.
+
+The shape is deliberately wider than Phase 2 needs. Later phases raise on
+validation failure, on a fail-closed record write, and on a replay miss, and
+designing the hierarchy once is cheaper than reshaping it three times — a
+caller that has already written ``except GatewayError`` keeps working as the
+leaves arrive.
+
+Nothing here imports the provider SDK, at module scope or under
+``TYPE_CHECKING``: ``import-linter``'s ``exclude_type_checking_imports``
+defaults to false, so a guarded import violates the contract just as a real one
+does.
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+__all__ = [
+    "GatewayConfigError",
+    "GatewayError",
+    "ProviderError",
+    "ProviderUnavailableError",
+]
+
+
+class GatewayError(Exception):
+    """Base for every error this package raises.
+
+    A caller that catches this catches everything the gateway can raise, and
+    nothing the provider SDK can. That is the point: an SDK's exception types
+    are as much a part of its public surface as its return types, and letting
+    one escape would make every consumer depend on the provider.
+    """
+
+
+class GatewayConfigError(GatewayError):
+    """Configuration is missing, malformed, or contradictory.
+
+    Raised before any request is constructed, so it never costs a provider
+    call. TR-065 constrains the message: it may name the configuration key at
+    fault and never the value, because the values in question include a
+    credential.
+    """
+
+
+class ProviderError(GatewayError):
+    """A normalized provider failure.
+
+    Carries only what TR-025 permits to cross the boundary — a status, an error
+    type, and the provider's request identifier where it supplied one. The
+    original SDK exception is deliberately **not** chained: TR-064 forbids
+    retaining it as ``__cause__`` or ``__context__``, because a traceback
+    renders the chained exception's arguments and a provider error body can
+    echo request headers.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        error_type: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.error_type = error_type
+        self.request_id = request_id
+
+
+class ProviderUnavailableError(GatewayConfigError):
+    """The provider SDK is not installed.
+
+    Its own type rather than a bare ``ImportError`` so a caller can tell "you
+    did not install the extra" from "the provider rejected the call". It
+    inherits from the configuration error because that is what it is: the fault
+    is in how the environment was resolved, not in anything the provider did,
+    and it is detectable before a request is built. ADR-0014 accepts this as
+    the cost of making the SDK optional — a consumer that omits
+    ``gateway[provider]`` learns at first invocation rather than at dependency
+    resolution.
+    """
