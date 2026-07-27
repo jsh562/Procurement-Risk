@@ -93,11 +93,35 @@ class InvocationRequest(BaseModel):
     field a reader most needs to trace back.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     prompt: str = Field(min_length=1)
     model: str | None = None
     trace_id: Annotated[str | None, Field(default=None)] = None
+
+    output_schema: Annotated[type[BaseModel] | None, Field(default=None, exclude=True)] = None
+    """The schema every output is validated against before it is returned (TR-006).
+
+    **Optional, and its absence means something.** A caller that wants raw text
+    is legitimate, so `None` skips validation rather than failing — but it also
+    means the gateway is returning a value it has not checked, which is why the
+    invocation record's `outcome` cannot mean "schema-valid" on such a row.
+    Callers that care should supply one.
+
+    **Excluded from serialization, and it has to be** (TR-020). `fixture_key`
+    hashes `model_dump_json()`, and a class is not JSON. The schema still
+    reaches the key — through its *digest*, passed as `fixture_key`'s `schema`
+    argument, which is what TR-038 requires ("a digest over the full schema
+    definition including its post-decode validators, and MUST NOT accept either
+    as a caller-declared string"). So the hashed set still covers every declared
+    field; this one is covered by digest rather than by value, which is the
+    stronger of the two.
+
+    `arbitrary_types_allowed` is on for this field alone. A model *class* is not
+    a pydantic-native annotation, and the alternative — accepting a raw JSON
+    Schema mapping — was rejected in plan AD-010 for needing a validator
+    dependency to enforce post-decode what pydantic already enforces.
+    """
 
     @field_validator("trace_id")
     @classmethod

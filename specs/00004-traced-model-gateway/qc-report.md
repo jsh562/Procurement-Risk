@@ -1,6 +1,6 @@
 # QC Report — E004 Traced Model Gateway
 
-**Run 1 · 2026-07-27 · verdict: PASS**
+**Run 2 · 2026-07-27 · verdict: PASS**
 Governing document: `project-instructions.md` v1.2.4.
 Measured on the merged tree — main `79f4f68` merged into the branch first, so
 this describes what a merge would produce rather than what the branch produced
@@ -32,9 +32,9 @@ does not repeat the omission.
 
 | Gate | Threshold | Measured | Exit |
 |---|---|---|---|
-| Combined | 80 | **93%** (5427 statements, 280 missed) | 0 |
+| Combined | 80 | **94%** (5458 statements, 280 missed) | 0 |
 | `*/model/corpus/*` | 80 | **93%** | 0 |
-| Gateway entry (AD-007) | 85 | **95%** (908 statements, 33 missed) | — |
+| Gateway entry (AD-007) | 85 | **95%** (939 statements, 33 missed) | — |
 
 Combined from three data files, as CI does: `.coverage.model`,
 `.coverage.gateway`, `.coverage.checks`.
@@ -45,7 +45,7 @@ Combined from three data files, as CI does: `.coverage.model`,
 
 | Suite | Result |
 |---|---|
-| Gateway | 391 passed, 5 skipped |
+| Gateway | 401 passed, 5 skipped |
 | Root cross-entry | 211 passed |
 | Model | 1141 passed |
 
@@ -80,18 +80,36 @@ spends money. `test_provider_smoke.py` covers the reachable half (the gate, the
 credential handle, the guard exemption) and skips the call itself. This is the
 one criterion in the epic that no automated run can discharge, by design.
 
-**Schema-validated output is not threaded through `invoke()`.**
-`validate_or_repair` is implemented and tested (TR-005 through TR-008, 31 tests),
-but `InvocationRequest` carries no schema field, so every invocation currently
-classifies `valid` with zero repairs. The repair budget is verified as a unit
-and unexercised through the composed path. Closing it changes the request model
-and belongs with E013's first real caller.
-
 **The `record` arm is tested through an injected client, not a real one.** The
 transport budget, the fixture write, and the provenance sidecar are exercised;
 the SDK's own wire behaviour is not.
 
 ---
+
+## Closed since run 1
+
+**Schema-validated output now runs through `invoke()`.** Run 1 disclosed this as
+not-measured: `validate_or_repair` was implemented and unit-tested, but
+`InvocationRequest` carried no schema field and `_invoke` hardcoded zero repairs,
+so **TR-006 held in units and was violated by the public entry point on every
+call** — an unvalidated value reached the caller each time, and `repaired` and
+validation-`failed` were unreachable on real rows.
+
+Disclosure is not satisfaction, so it was closed rather than carried:
+
+- `InvocationRequest` gains an optional `output_schema`. Optional because a
+  caller wanting raw text is legitimate; when it is absent the gateway returns
+  the raw content and claims nothing about it.
+- `_invoke` calls `validate_or_repair` and uses the real repair count.
+- The failure path writes the row with `outcome='failed'` and
+  `error_type='validation_failed'` **before** raising (TR-008).
+- **A repair in `replay` resolves a second fixture**, keyed on the original
+  request plus the instruction that provoked it. The alternative — replay
+  cannot repair — was rejected because it would leave `repaired` unreachable in
+  the only mode continuous integration runs.
+
+Ten new tests in `test_invoke.py` cover valid, repaired, twice-failed, and
+no-schema, on both arms. `repaired` and `failed` are now reachable states.
 
 ## Corrections made during this epic, recorded because they were caught by checks
 

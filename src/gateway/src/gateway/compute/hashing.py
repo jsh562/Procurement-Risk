@@ -40,6 +40,7 @@ __all__ = [
     "digest",
     "fixture_key",
     "prompt_template_version",
+    "repair_fixture_key",
     "schema_version",
 ]
 
@@ -153,5 +154,34 @@ def fixture_key(
         "prompt_template_version": (
             prompt_template_version(template) if template is not None else None
         ),
+    }
+    return digest(canonical_json(payload))
+
+
+def repair_fixture_key(
+    request: BaseModel,
+    instruction: str,
+    *,
+    schema: type[BaseModel] | None = None,
+    template: str | None = None,
+) -> str:
+    """The key the *repair* response is stored under (TR-007, TR-019).
+
+    A repair is a second provider call, so it is a second fixture. Keying it on
+    the original request **plus the repair instruction** is what makes a
+    recorded repair replay as a repair rather than as a miss: the instruction
+    carries the failing field paths and validator messages, so two invocations
+    that failed the same way resolve the same repair, and two that failed
+    differently do not share one.
+
+    Folded in under a fixed marker so a repair key can never collide with the
+    original request's key — they are different calls and must not answer each
+    other. Without the marker, a request whose prompt happened to equal an
+    instruction would resolve the wrong one.
+    """
+    payload: dict[str, Any] = {
+        "kind": "repair",
+        "original": fixture_key(request, schema=schema, template=template),
+        "instruction": instruction,
     }
     return digest(canonical_json(payload))

@@ -203,6 +203,13 @@ Then review the diff before committing. What to look at:
 4. **The old fixture.** A regenerated key is a *new* file; the one it replaced
    is still there. Delete it in the same commit, or the store grows a copy for
    every prompt edit ever made.
+5. **Both files, if the invocation repaired.** A repair is a second provider
+   call, so it is a second fixture — keyed on the original request plus the
+   instruction that provoked it. Commit both or replay misses the repair and
+   the invocation fails where it previously succeeded. That keying is also why
+   `repaired` is reachable on a replay row at all: without it, the outcome
+   enumeration would only ever be exercised in `record` mode, which is the mode
+   continuous integration never runs.
 
 ### What never happens
 
