@@ -302,6 +302,21 @@ jobs:
       # and running them here as well as in the suite would be two places for one
       # rule to be stated.
       - name: Procurement dataset release gate
+        env:
+          # The same step-scoped literal the migration and coverage steps carry,
+          # and step-scoped for the reason stated there: a job-wide URL would
+          # point the web and image steps at a database too.
+          #
+          # Required even though none of the four checks below touches one.
+          # `tests/procurement/conftest.py::pytest_configure` turns `CI` set with
+          # `DATABASE_URL` unset into a hard abort *before collection*, so
+          # omitting this killed all four invocations on the first CI run — the
+          # release gate failing for a reason unrelated to anything it gates.
+          #
+          # `REQUIRE_DB: "0"` would also silence it and is the wrong fix: it
+          # makes a claim about the tier rather than about these four files, and
+          # would silently cover a future gate check that does need a database.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
         working-directory: src/model
         run: |
           uv run procurement-validate
