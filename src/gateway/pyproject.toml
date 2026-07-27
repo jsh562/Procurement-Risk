@@ -8,8 +8,20 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "anthropic>=0.120.0",
     "pydantic>=2.13.4",
+    "psycopg[binary]>=3.2.3",
+]
+
+# ADR-0014. The provider SDK is an extra, not a base dependency, so an
+# environment can exist in which this package imports and type-checks with no
+# provider installed. That environment is what makes TR-003's absent-provider
+# criterion an assertion rather than a claim — while the SDK was a hard
+# dependency, anything able to import the gateway also had it, and the harness
+# had nothing to test. `gateway.provider` imports it lazily, inside the
+# invocation function, because a module-scope import would defeat this.
+[project.optional-dependencies]
+provider = [
+    "anthropic>=0.120.0",
 ]
 
 [build-system]
@@ -19,6 +31,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "coverage==7.15.2",
+    "hypothesis>=6.122.3",
     "import-linter>=2.13",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
@@ -30,7 +43,16 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# `S` (flake8-bandit) is here because this package handles a credential and
+# builds SQL. It is the lint half of the security posture TR-024 and TR-060
+# specify; the scan half is a test.
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on redaction using synthetic credential-shaped values that are
+# never live (TR-060 requires a seeded positive case per sink), and they use
+# `assert` by construction.
+"tests/**" = ["S101", "S105", "S106"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,3 +77,57 @@ name = "Only the provider wrapper imports the model-provider client"
 type = "protected"
 protected_modules = ["anthropic"]
 allowed_importers = ["gateway.provider"]
+
+# TR-032: the computation boundary, extended over this entry. This is the first
+# real arithmetic in the repository — cost, content hashing, duration — and
+# `provider.py` must not reach it. `forbidden` with indirect detection ON is
+# deliberate and is the opposite choice from the contract above: laundering the
+# dependency through an intermediate module is exactly the evasion this exists
+# to catch. The orchestration module above both composes them instead.
+#
+# Disclosed limit: this catches import edges only. Arithmetic written inline
+# inside `provider.py` produces no edge and no failure — code review is the
+# only guard against that, and the plan records it as a residual.
+[[tool.importlinter.contracts]]
+name = "The provider-facing module does not reach the arithmetic modules"
+type = "forbidden"
+source_modules = ["gateway.provider"]
+forbidden_modules = ["gateway.compute"]
+allow_indirect_imports = false
+
+# TR-002: the public surface is built from gateway-owned types only.
+#
+# This deliberately does NOT restate "the public surface must not import
+# anthropic" — the `protected` contract above already forbids that for every
+# module in the repository except `gateway.provider`, so a second contract
+# saying it would be a tautology wearing a stronger contract's clothes.
+#
+# What it forbids instead is the public surface reaching `gateway.provider` at
+# all, directly or through an intermediate module. That is the edge the first
+# contract cannot see: `provider.py` legitimately imports the SDK, so anything
+# importing `provider` can receive an SDK object from it and re-expose it in a
+# signature without ever importing `anthropic` itself. Composition goes through
+# the orchestrator, which is not part of the public surface.
+#
+# The remaining half — a leaked SDK type reported *by name* — cannot be a
+# contract at all, because contracts report module paths. That is
+# `tests/test_public_surface.py` (T013).
+#
+# NOT ENABLED, and the reason is recorded rather than the contract quietly
+# dropped. Written as below, the `lint-imports` CLI aborts with
+# "Module 'gateway.api' does not exist" for every module in `source_modules`,
+# while the identical contract KEPTs when the same version's use case is
+# invoked in-process against a graph that demonstrably contains all of them.
+# Worse, the CLI **exits 0** on that abort — so enabling it would put a
+# contract in the config that never runs and never fails the build, which is
+# exactly the "coverage is a claim rather than a measurement" failure ADR-0007
+# exists to prevent. Until the CLI behaviour is understood, TR-002's
+# public-surface claim rests on the runtime check in T013, which is the
+# mechanism the plan already designates for reporting a leaked type by name.
+#
+[[tool.importlinter.contracts]]
+name = "The public surface does not reach the provider module"
+type = "forbidden"
+source_modules = ["gateway.api", "gateway.models", "gateway.errors"]
+forbidden_modules = ["gateway.provider"]
+allow_indirect_imports = false

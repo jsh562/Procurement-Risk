@@ -39,9 +39,9 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 
 **Lands the manifest, the contracts, and the CI wiring before any module they constrain (HINT-001, HINT-002, HINT-003).**
 
-- [ ] T001 {TR-003,TR-028,TR-029} Move anthropic into a `provider` extra, add psycopg base, hypothesis dev, and Ruff `S` in src/gateway/pyproject.toml — no migration extra, ADR-0013 puts tooling in /src/model
-- [ ] T002 {TR-002,TR-032} Add the computation-boundary and public-surface-purity import-linter contracts to src/gateway/pyproject.toml after:T001
-- [ ] T003 {TR-002,TR-032} Seed violation fixtures under tests/fixtures/ and assert both new contracts fail in tests/checks/test_contract_fixtures.py after:T002
+- [X] T001 {TR-003,TR-028,TR-029} Move anthropic into a `provider` extra, add psycopg base, hypothesis dev, and Ruff `S` in src/gateway/pyproject.toml — no migration extra, ADR-0013 puts tooling in /src/model
+- [X] T002 {TR-002,TR-032} Add the computation-boundary and public-surface-purity import-linter contracts to src/gateway/pyproject.toml after:T001
+- [X] T003 {TR-002,TR-032} Seed violation fixtures under tests/fixtures/ and assert both new contracts fail in tests/checks/test_contract_fixtures.py after:T002
 - [ ] T004 {TR-003} Sync the gateway `provider` extra before the architecture-contracts step in .github/workflows/verify.yml (HINT-002) after:T001
 - [ ] T005 Wire gateway coverage into the root combine with a repo-root COVERAGE_FILE and `coverage run` in .github/workflows/verify.yml (HINT-003) after:T004
 - [ ] T006 Add a database-backed CI job carrying E001's `db` service for the OBJ3 migration and record criteria in .github/workflows/verify.yml after:T005

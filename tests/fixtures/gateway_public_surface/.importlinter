@@ -1,0 +1,13 @@
+[importlinter]
+root_package = gateway_surface_fixture
+
+[importlinter:contract:gateway-public-surface]
+name = The public surface does not reach the provider module
+type = forbidden
+source_modules =
+    gateway_surface_fixture.api
+    gateway_surface_fixture.models
+    gateway_surface_fixture.errors
+forbidden_modules =
+    gateway_surface_fixture.provider
+allow_indirect_imports = False
