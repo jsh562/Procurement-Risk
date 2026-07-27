@@ -88,7 +88,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [ ] T015 {FR-024,FR-025} Declare the forbidden `import-linter` contract from `model.forecast` to `model.llm` and `gateway`, indirect detection on, in src/model/pyproject.toml
 - [ ] T016 {FR-001} Read `purchase_order_line` and `lifecycle_event` over the connection in PKG/read.py — never a re-derived copy → exports: read_lines_and_events()
 - [ ] T017 {FR-009} **RED** Failing serializer property tests in TST/test_serialize_properties.py — the digest is invariant to row order and `created_at`, and moves on any serialized value
-- [ ] T018 {FR-009,FR-014} **GREEN** Canonical row serialization and digests in PKG/serialize.py reusing `roster.reader.canonical_bytes` → exports: input_data_hash(), split_assignment_hash() after:T017
+- [ ] T018 {FR-009,FR-014} **GREEN** Canonical row serialization and digests in PKG/serialize.py, reusing `roster.reader` → exports: input_data_hash(), split_assignment_hash() after:T017
 - [ ] T019 [P] {FR-003,FR-004} **RED** Failing censoring property tests in TST/test_censoring_properties.py — censored iff no terminal event at the as-of date; elapsed; monotone in as-of
 - [ ] T020 {FR-003,FR-004} **GREEN** Implement the indicator and elapsed time at the as-of date in PKG/censoring.py → exports: censoring_indicator(), elapsed_days() after:T019
 - [ ] T021 {FR-005,FR-007} **RED** Failing split property tests in TST/test_split_properties.py — one side per line, ordinal contiguous from 1, both strata within one line, order-invariance
