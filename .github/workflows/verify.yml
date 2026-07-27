@@ -332,6 +332,14 @@ jobs:
       - name: Unit tests (gateway)
         env:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage.gateway
+          # E004 T032: `test_migrations.py` drives E003's runner at a throwaway
+          # database to verify TR-017's apply-from-empty and TR-050's
+          # re-runnable postcondition. Without this it skips — and a skipped
+          # tier reporting as a pass is the exact failure E003 measured and
+          # documented. `src/gateway/tests/conftest.py` turns the unset variable
+          # into a refusal to start, but only if a database was meant to be
+          # there, which is what this line says.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
         run: uv run --directory src/gateway coverage run -m pytest tests -q
 
       - name: Unit tests (web)

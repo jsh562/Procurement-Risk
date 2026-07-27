@@ -34,9 +34,32 @@ from gateway.errors import GatewayConfigError
 __all__ = [
     "DEADLINE_ENV_VAR",
     "DEFAULT_REQUEST_DEADLINE_SECONDS",
+    "OTEL_GENAI_SEMCONV_VERSION",
     "GatewayConfig",
     "load_config",
 ]
+
+#: TR-070. The OpenTelemetry generative-AI semantic-convention release the
+#: recorded column names follow. One of exactly three places this value is
+#: written, and the three must agree: here, the `COMMENT ON TABLE
+#: llm_invocation` mirror, and TR-070 itself. `test_field_naming.py` (T048)
+#: asserts the agreement, so a bump that updates one and forgets another fails
+#: the build rather than leaving a database whose comment describes a different
+#: convention from the code that wrote it.
+#:
+#: **Corrected from 1.36.0 to 1.37.0 by T026**, which is the verification
+#: TR-070 requires rather than a preference. The registry at tag `v1.36.0`
+#: defines `gen_ai.system`, not `gen_ai.provider.name` — the very attribute the
+#: pin was selected for. `v1.37.0` defines `gen_ai.provider.name` and marks
+#: `gen_ai.system` deprecated and replaced by it. 1.37.0 is the first release
+#: satisfying the criterion; picking a later one would have changed more than
+#: the evidence called for.
+#:
+#: Deliberately **not** readable from the environment. Every other value in this
+#: module is configuration; this one is a pin, and a pin an operator can move
+#: without a migration is not a pin — the column names in a migrated database
+#: would no longer follow the version the configuration claims.
+OTEL_GENAI_SEMCONV_VERSION: Final[str] = "1.37.0"
 
 #: TR-034 states the number. Held as a named constant rather than a literal
 #: default in the field, so the requirement's value is greppable and the two
@@ -65,6 +88,15 @@ class GatewayConfig(BaseModel):
         description=(
             "The outer bound on one invocation, covering every transport attempt "
             "TR-010 permits rather than each attempt separately."
+        ),
+    )
+
+    otel_genai_semconv_version: str = Field(
+        default=OTEL_GENAI_SEMCONV_VERSION,
+        description=(
+            "TR-070's pin, carried on the configuration so a caller can read "
+            "which convention release the recorded field names follow without "
+            "querying the database for its table comment."
         ),
     )
 

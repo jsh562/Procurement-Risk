@@ -168,7 +168,9 @@ def test_every_exported_name_is_reachable(no_provider_env: Path) -> None:
         "assert not missing, missing"
     )
     result = _run(no_provider_env, "-c", probe)
-    assert result.returncode == 0, f"a public name is unreachable without the extra:\n{result.stderr}"
+    assert result.returncode == 0, (
+        f"a public name is unreachable without the extra:\n{result.stderr}"
+    )
 
 
 def test_a_consumer_type_checks(no_provider_env: Path, tmp_path: Path) -> None:

@@ -7,6 +7,7 @@ import pytest
 from gateway.config import (
     DEADLINE_ENV_VAR,
     DEFAULT_REQUEST_DEADLINE_SECONDS,
+    OTEL_GENAI_SEMCONV_VERSION,
     GatewayConfig,
     load_config,
 )
@@ -85,3 +86,44 @@ def test_the_loader_does_not_consult_the_process_environment_when_given_one() ->
     `os.environ` for absent keys would make every test's result depend on the
     developer's shell."""
     assert load_config({}).request_deadline_seconds == DEFAULT_REQUEST_DEADLINE_SECONDS
+
+
+# --- TR-070 (T026): the pinned semantic-convention version -------------------
+
+
+def test_the_pin_is_the_version_verified_against_the_published_registry() -> None:
+    """T026's verification, frozen as an assertion.
+
+    1.36.0 was the original pin and it was wrong: that release defines
+    `gen_ai.system`, not `gen_ai.provider.name` — the attribute the pin was
+    chosen for. Pinned to the number rather than to the constant, which would
+    compare the constant to itself and pass at any value.
+    """
+    assert OTEL_GENAI_SEMCONV_VERSION == "1.37.0"
+    assert GatewayConfig().otel_genai_semconv_version == "1.37.0"
+
+
+def test_the_pin_is_not_readable_from_the_environment() -> None:
+    """A pin an operator can move without a migration is not a pin.
+
+    The column names in a migrated database follow whatever version was pinned
+    when `0102` was written; an environment variable that changed the claim
+    without changing the columns would make the configuration lie about the
+    schema.
+    """
+    config = load_config({"GATEWAY_OTEL_GENAI_SEMCONV_VERSION": "9.9.9"})
+    assert config.otel_genai_semconv_version == OTEL_GENAI_SEMCONV_VERSION
+
+
+def test_the_pin_is_a_concrete_version_not_a_placeholder() -> None:
+    """TR-070 requires a concrete version so OBJ3 VC7 has a fixed referent.
+
+    Shape-checked rather than pattern-matched loosely: `latest`, `main`, an
+    empty string or a bare major would each satisfy "is a string" while
+    defeating the requirement's whole purpose.
+    """
+    parts = OTEL_GENAI_SEMCONV_VERSION.split(".")
+    assert len(parts) == 3, f"not a three-part version: {OTEL_GENAI_SEMCONV_VERSION!r}"
+    assert all(part.isdigit() for part in parts), (
+        f"not a concrete numeric version: {OTEL_GENAI_SEMCONV_VERSION!r}"
+    )

@@ -1,33 +1,29 @@
-phase: Phase 3 complete — OBJ2 (Schema-Validated Output with Bounded Repair)
-completed: 24
-remaining: 51
+phase: Phase 4 in progress — OBJ3 (Invocation Record with Recomputable Cost)
+completed: 37
+remaining: 38
 blocked: none
-next: Phase 4 (OBJ3) T034-T049 — the Alembic revisions in E003's reserved
-      0100-0199 block, the compute package (pricing, hashing, timing), and the
-      record writer with its own connection and transaction. This is the first
-      phase that needs a database: `docker compose up -d db` before starting,
-      since the project's containers were removed.
-notes: OBJ2 delivered. The pieces exist and are individually tested; the
-      composition inside orchestrator.invoke() still raises NotImplementedError
-      because it needs the mode branch T051 supplies. That is deliberate — the
-      repair budget, the transport budget and the outcome mapping are each
-      decidable now, and none of them needs the branch to be correct.
-       Two decisions the phase forced, recorded as AD-010 and AD-011. The
-       caller's schema is a pydantic model class, not a raw mapping — a mapping
-       would need a JSON Schema validator dependency to enforce post-decode
-       what pydantic already enforces. And the retry loop takes an injected
-       RemainingTime callable rather than reading a clock, because TR-032 bars
-       provider.py from gateway.compute where TR-028 places duration
-       arithmetic; the callable is the only shape that breaks neither.
-       TR-005's unsupported-keyword set is derived from the SDK's own schema
-       transform rather than transcribed (OI-11). Confirmed empirically:
-       minimum, maximum and minLength reach the model only as description
-       prose, which is what makes the post-decode step load-bearing.
-       The TR-064 __context__ defect recurred in with_transport_budget and was
-       caught by T025 the same way T015 caught it in Phase 2. Closed at both
-       sites; the fix is placement (raise outside the handler), not `from None`.
-       Local shells need UV_NATIVE_TLS=1 exported; verify.yml sets it as job
-       env. verify.yml's own change is held on this branch as its own commit —
-       it is main-owned but depends on branch-owned manifest content, so it
-       cannot land on main ahead of the merge.
+next: T040-T050 — the record writer with its own connection and transaction
+      (T040, T041), the absent-cost warning and completion log line (T043),
+      the SQLite spool (T044) and its exactly-once drain (T045), then the
+      tests T046-T049 and the README procedures (T050). T042 verifies the
+      price-pin resolves before request construction.
+notes: T026-T039 delivered. Four migrations live in the 0100-0199 block and
+       apply from empty; the compute package is the first real arithmetic the
+       computation-boundary contract has had to protect, and a seeded direct
+       edge from provider.py to compute.pricing was confirmed to break it.
+       TR-070's pin was wrong and T026's mandated verification caught it:
+       semconv v1.36.0 defines gen_ai.system, not gen_ai.provider.name, the
+       attribute the pin was selected for. Corrected to 1.37.0 across all five
+       recording sites (OI-12).
+       E003's schema suite went red on 11 checks the moment these revisions
+       landed — all encoding "E003 is the sole author of this chain", which
+       ADR-0013 has made false. Rescoped to authorship on the user's decision
+       (OI-13), plus one genuine over-strictness in its constraint audit
+       (OI-14). E003 is green at 1072 passed, and an E003 revision creating
+       llm_invocation still fails as it should.
+       Two environment hazards hit this phase, both cross-checkout: the project
+       DB container and volume were removed by an external `down -v` mid-run,
+       and `procurement-api:e001` is an unqualified tag a sibling checkout had
+       rebuilt with an older gateway manifest, which failed the image check
+       until rebuilt here. Neither is a defect in this epic.
 timestamp: 2026-07-26
