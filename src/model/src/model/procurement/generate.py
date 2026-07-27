@@ -31,6 +31,7 @@ from model.procurement.allocate import (
     AllocatedLine,
     allocate_lines,
     rework_loop_allocation,
+    shrinkage,
 )
 from model.procurement.censor import (
     AS_OF_DATE,
@@ -40,14 +41,17 @@ from model.procurement.censor import (
     is_delivered_by,
 )
 from model.procurement.criticality import (
+    check_late_share,
     criticality_band,
     draw_slack_days,
     need_by_date,
     pressure_terciles,
+    tercile_cut_points,
 )
 from model.procurement.durations import (
     TIER_OFFSETS,
     category_expected_duration_days,
+    check_aggregate_duration,
     check_spread_band,
     decompose_spread,
     draw_line_durations,
@@ -355,17 +359,23 @@ def generate(root: Path | None = None) -> dict[str, Any]:
     """
     envelope, drawn, offsets = build_envelope()
 
+    figures = _realized_figures(envelope, drawn, offsets)
+
     _check_shape(drawn)
     _check_spread(drawn, offsets)
     _check_overlap(drawn)
     _check_bands([line["criticality"] for line in envelope["lines"]])
+    # DV-012 and DV-013. Both were computed for the datasheet and bounded by
+    # nothing until QC found them.
+    check_aggregate_duration(figures["median_days"], figures["p80_days"])
+    check_late_share(figures["late_count"], figures["delivered"])
 
     digest = dataset_content_hash(envelope)
     _write(root, envelope, digest, drawn, offsets)
 
     from model.procurement.datasheet import write_datasheet
 
-    write_datasheet(envelope, _realized_figures(envelope, drawn, offsets), root)
+    write_datasheet(envelope, figures, root)
     return envelope
 
 
@@ -379,7 +389,6 @@ def _realized_figures(
     """
     import numpy as _np
 
-    from model.procurement.criticality import pressure_terciles
     from model.procurement.equipment import (
         LineEquipment,
         catalog_overlap_share,
@@ -405,17 +414,48 @@ def _realized_figures(
     ratios = [
         line.slack_days / category_expected_duration_days(line.material_category) for line in drawn
     ]
-    ordered = sorted(ratios)
-    third = len(ordered) // 3
-    cuts = (ordered[third], ordered[2 * third])
+    cuts = tercile_cut_points(ratios)
 
     late = sum(
         1
-        for line, emitted in zip(drawn, lines, strict=True)
+        for emitted in lines
         if emitted["events"][-1]["to_state"] == "delivered"
         and emitted["events"][-1]["occurred_at"][:10] > emitted["need_by_date"]
     )
-    _ = pressure_terciles
+    # SC-024: a censored line already past its need-by at the as-of date is
+    # excluded from both sides of the late share, and counted separately.
+    overdue_censored = sum(
+        1
+        for emitted in lines
+        if emitted["events"][-1]["to_state"] != "delivered"
+        and AS_OF_DATE.isoformat() > emitted["need_by_date"]
+    )
+
+    delivered_totals = _np.array(
+        [
+            sum(line.leg_days)
+            for line, emitted in zip(drawn, lines, strict=True)
+            if emitted["events"][-1]["to_state"] == "delivered"
+        ],
+        dtype=float,
+    )
+
+    vendor_counts: dict[str, int] = {}
+    project_counts: dict[str, int] = {}
+    for line in drawn:
+        vendor_counts[line.allocated.vendor_id] = vendor_counts.get(line.allocated.vendor_id, 0) + 1
+        project_counts[line.allocated.project_id] = (
+            project_counts.get(line.allocated.project_id, 0) + 1
+        )
+    vendor_counts = dict(sorted(vendor_counts.items()))
+    project_counts = dict(sorted(project_counts.items()))
+
+    declared_loops = rework_loop_allocation(len(drawn))
+    observable = {1: 0, 2: 0, 3: 0}
+    for emitted in lines:
+        loops = max(0, (len(emitted["events"]) - 6) // 3)
+        if loops in observable:
+            observable[loops] += 1
 
     logs = [math.log(total) for total in totals]
     decomposition = decompose_spread(
@@ -434,6 +474,18 @@ def _realized_figures(
         "median_days": float(_np.median(totals)),
         "p80_days": float(_np.percentile(totals, 80)),
         "late_share": late / delivered if delivered else 0.0,
+        "late_count": late,
+        "overdue_censored": overdue_censored,
+        "censored_share": 1 - delivered / len(lines),
+        "delivered_median_days": float(_np.median(delivered_totals)),
+        "delivered_p80_days": float(_np.percentile(delivered_totals, 80)),
+        "vendor_counts": vendor_counts,
+        "project_counts": project_counts,
+        "vendor_count_sd": float(_np.std(list(vendor_counts.values()), ddof=0)),
+        "shrinkage_low": shrinkage(min(vendor_counts.values())),
+        "shrinkage_high": shrinkage(max(vendor_counts.values())),
+        "rework_histogram": [sum(1 for x in declared_loops if x == n) for n in (1, 2, 3)],
+        "observable_rework_histogram": [observable[n] for n in (1, 2, 3)],
         "rework_lines": sum(1 for line in drawn if line.rework_loops),
         "tercile_cuts": cuts,
     }

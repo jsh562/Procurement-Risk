@@ -148,7 +148,7 @@ class TestAggregateTarget:
         """They differ, and the difference is the point.
 
         `solve_pre_rework_mean` bisects over a converged population and returns
-        ~57.8. `T_PRE` is 62.0, calibrated against the 199 lines actually
+        ~57.8. `T_PRE` is 60.0, calibrated against the 199 lines actually
         emitted, where SC-023 is measured. Asserting them equal would force one
         of the two to be wrong; asserting the gap keeps both honest and fails if
         either drifts.

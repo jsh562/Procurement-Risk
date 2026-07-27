@@ -114,15 +114,18 @@ class TestLines:
                 assert column in line
 
     def test_non_blank_after_trimming_where_present(self, emitted) -> None:
-        """DV-004. `manufacturer` and `part_number` are `NULL` on the
-        non-overlapping complement by design, so the assertion is on the value
-        when there is one, not on its presence."""
+        """DV-004 — all six columns non-blank, with **no null guard**.
+
+        An earlier version skipped the assertion when a value was `None`,
+        justified by "manufacturer and part_number are NULL on the complement by
+        design". That stopped being true when the complement moved to a
+        category-mismatched catalog entry, and the guard would have let a null
+        manufacturer pass both this check and the presence check above."""
         _, envelope = emitted
         for line in envelope["lines"]:
             for column in DESCRIPTIVE:
-                value = line[column]
-                if value is not None:
-                    assert str(value).strip(" \t\n\r\f")
+                assert line[column] is not None, f"{column} is null"
+                assert str(line[column]).strip(" \t\n\r\f"), f"{column} is blank"
 
     def test_note_is_absent_from_every_event(self, emitted) -> None:
         """DV-022. `note` is `NULL` on every E005 event, so recording it would

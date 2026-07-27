@@ -32,7 +32,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import URL, Engine, create_engine, text
 
 from model.corpus.equipment import EQUIPMENT_MAP_INPUT_PATH
 from model.corpus.manifest import sha256_of_file
@@ -303,14 +303,25 @@ def _check_input_drift(envelope: Mapping[str, Any]) -> None:
             )
 
 
-def _engine(url: str | None = None) -> Engine:
-    resolved = url or get_database_url()
+def _engine(url: str | URL | None = None) -> Engine:
+    """Resolve the connection target, accepting either form.
+
+    `get_database_url()` returns a SQLAlchemy `URL`, not a string — the entry
+    point path went straight to `.startswith` and failed with an AttributeError
+    the first time it ran outside a test, because every test supplies a string.
+    Both forms are handled here rather than at each call site.
+    """
+    resolved = get_database_url() if url is None else url
+    if isinstance(resolved, URL):
+        if resolved.drivername == "postgresql":
+            resolved = resolved.set(drivername="postgresql+psycopg")
+        return create_engine(resolved, future=True)
     if resolved.startswith("postgresql://"):
         resolved = resolved.replace("postgresql://", "postgresql+psycopg://", 1)
     return create_engine(resolved, future=True)
 
 
-def load(fixture: Path | None = None, url: str | None = None) -> LoadOutcome:
+def load(fixture: Path | None = None, url: str | URL | None = None) -> LoadOutcome:
     """Load the committed fixture. One transaction; every refusal rolls back."""
     envelope = read_payload(fixture or paths.fixture_path())
     _check_input_drift(envelope)

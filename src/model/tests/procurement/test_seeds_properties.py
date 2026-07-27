@@ -72,12 +72,25 @@ class TestPurity:
         It would be an easy and undetectable mistake: every line has a vendor,
         including it would still produce unique keys, and the dataset would look
         correct. It would also mean a line's draws changed if the allocation
-        dealt it to a different vendor — which is positional derivation wearing
-        a different hat.
+        dealt it to a different vendor — positional derivation wearing a
+        different hat.
+
+        Asserted by *signature*, because the earlier version of this test called
+        `line_stream_key` twice with identical arguments and no vendor in either
+        call — an assertion that could not fail for any implementation.
         """
-        assert line_stream_key("PRJ-001", "PO-00001", 1) == line_stream_key(
-            "PRJ-001", "PO-00001", 1
-        )
+        import inspect
+
+        parameters = list(inspect.signature(line_stream_key).parameters)
+        assert parameters == ["project_id", "po_number", "line_number"]
+        assert "vendor" not in inspect.getsource(line_stream_key)
+
+        # And the allocation confirms it empirically: the same natural key can
+        # only ever belong to one vendor, so a vendor-dependent key would be
+        # indistinguishable here — which is precisely why the signature is the
+        # load-bearing assertion and this is the corroborating one.
+        keys = {line.natural_key: line.vendor_id for line in allocate_lines()}
+        assert len(set(keys.values())) > 1
 
     def test_the_key_fits_the_documented_width(self) -> None:
         """First eight digest bytes, big-endian — an unsigned 64-bit value."""

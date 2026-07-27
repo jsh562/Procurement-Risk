@@ -185,3 +185,28 @@ class TestQuantityFidelity:
         for value in stored:
             assert "." in value
             assert len(value.split(".")[1]) == 1
+
+
+class TestTheEntryPointResolvesItsOwnUrl:
+    """The path every test bypassed by supplying a string.
+
+    `get_database_url()` returns a SQLAlchemy `URL`, and the loader called
+    `.startswith` on it — an AttributeError the first time `procurement-load`
+    ran outside a test. Both forms are exercised here so the entry point and the
+    tests take the same route.
+    """
+
+    def test_a_url_object_is_accepted(self, database_url, pg_connection) -> None:
+        outcome = load(url=database_url)
+        assert outcome.lines_inserted > 0
+
+    def test_a_string_is_accepted(self, database_url, pg_connection) -> None:
+        outcome = load(url=str(database_url.render_as_string(hide_password=False)))
+        assert outcome.lines_inserted > 0
+
+    def test_main_resolves_from_the_environment(self, monkeypatch, database_url) -> None:
+        """`main()` takes no url at all — it must resolve one itself."""
+        from model.procurement.load import main
+
+        monkeypatch.setenv("DATABASE_URL", database_url.render_as_string(hide_password=False))
+        assert main() == 0

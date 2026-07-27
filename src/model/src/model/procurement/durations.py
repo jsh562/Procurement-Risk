@@ -53,14 +53,18 @@ __all__ = [
     "SIGMA_0",
     "SIGMA_C",
     "SIGMA_R",
+    "MEDIAN_TOLERANCE_DAYS",
+    "P80_TOLERANCE_DAYS",
     "SIGMA_W",
     "SPREAD_RATIO_BAND",
     "T_PRE",
     "TAU",
     "TIER_OFFSETS",
+    "AggregateDurationError",
     "SpreadBandError",
     "SpreadDecomposition",
     "category_expected_duration_days",
+    "check_aggregate_duration",
     "check_spread_band",
     "decompose_spread",
     "draw_line_durations",
@@ -96,6 +100,10 @@ SIGMA_C = 0.219
 #: FR-008's inclusive band on the spread ratio. The **category-adjusted** ratio
 #: is what is asserted against it (FR-036); the unadjusted one is recorded.
 SPREAD_RATIO_BAND = (0.12, 0.49)
+
+#: SC-023's tolerances on the aggregate, in days.
+MEDIAN_TOLERANCE_DAYS = 5.0
+P80_TOLERANCE_DAYS = 8.0
 
 #: Residual log spread — σ_w net of the category component.
 SIGMA_R = math.sqrt(SIGMA_W**2 - SIGMA_C**2)
@@ -363,6 +371,37 @@ class SpreadBandError(ValueError):
     handle: FR-036 requires the generator to fail rather than report the
     decomposition and pass.
     """
+
+
+def check_aggregate_duration(median_days: float, p80_days: float) -> None:
+    """DV-012 — the aggregate median and P80, **enforced** rather than printed.
+
+    Defined in `data-model.md` and listed in `plan.md` § Error Handling as a
+    fail-fast shape breach, and implemented nowhere until QC found it: the two
+    figures were computed, printed in the datasheet, and bounded by nothing. A
+    recorded number no check enforces is the Principle I failure this epic has
+    now produced three times.
+
+    Measured over the named population — every generated line's full duration as
+    drawn, **before** as-of truncation, rework included — not the delivered
+    subpopulation, which is shorter by construction.
+    """
+    if abs(median_days - MEDIAN_TARGET_DAYS) > MEDIAN_TOLERANCE_DAYS:
+        raise AggregateDurationError(
+            f"aggregate median is {median_days:.1f} days against a target of "
+            f"{MEDIAN_TARGET_DAYS:.0f} ± {MEDIAN_TOLERANCE_DAYS:.0f} (SC-023). Refusing "
+            f"rather than emitting a dataset whose headline duration misses the figure "
+            f"the product document publishes"
+        )
+    if abs(p80_days - P80_TARGET_DAYS) > P80_TOLERANCE_DAYS:
+        raise AggregateDurationError(
+            f"aggregate P80 is {p80_days:.1f} days against a target of "
+            f"{P80_TARGET_DAYS:.0f} ± {P80_TOLERANCE_DAYS:.0f} (SC-023)"
+        )
+
+
+class AggregateDurationError(ValueError):
+    """Raised when the realized aggregate misses SC-023's tolerances."""
 
 
 def check_spread_band(decomposition: SpreadDecomposition) -> None:

@@ -24,13 +24,17 @@ from model.procurement.durations import TIER_OFFSETS
 __all__ = [
     "BAND_TABLE",
     "PRESSURE_LEVELS",
+    "LATE_SHARE_BAND",
     "SLACK_MEAN",
     "SLACK_SD",
     "TIERS",
+    "LateShareError",
+    "check_late_share",
     "criticality_band",
     "draw_slack_days",
     "need_by_date",
     "pressure_terciles",
+    "tercile_cut_points",
     "tier_of",
 ]
 
@@ -57,6 +61,9 @@ PRESSURE_LEVELS = ("TIGHT", "MODERATE", "RELAXED")
 #: only 24.6% to 29.6% across the whole plausible range, because most lateness
 #: comes from duration variance rather than from slack.
 SLACK_MEAN = 0.13
+
+#: FR-011's inclusive band on the share of *delivered* lines missing need-by.
+LATE_SHARE_BAND = (0.25, 0.35)
 SLACK_SD = 0.10
 
 #: Nine cells, five distinct bands, every band reachable.
@@ -90,7 +97,7 @@ def tier_of(material_category: str) -> str:
 
 
 def draw_slack_days(generator: np.random.Generator, line_expected_duration_days: float) -> int:
-    """`max(0, round(expected × f))` with `f ~ Normal(0.15, 0.10)` truncated at 0.
+    """`max(0, round(expected × f))` with `f ~ Normal(0.13, 0.10)` truncated at 0.
 
     Truncating `f` rather than the day count is what makes zero slack an
     outcome of the distribution rather than a floor applied afterwards, which
@@ -105,6 +112,39 @@ def need_by_date(order_date: date, line_expected_duration_days: float, slack_day
     """Order date plus expected total duration plus slack, never earlier (FR-011)."""
     offset = max(0, round(line_expected_duration_days) + slack_days)
     return order_date + timedelta(days=offset)
+
+
+def tercile_cut_points(ratios: Sequence[float]) -> tuple[float, float]:
+    """The two boundaries `pressure_terciles` actually assigns at.
+
+    Derived from the same rank arithmetic rather than recomputed by index, so
+    the published cut points are the boundaries the bands were assigned at. An
+    earlier version computed `ordered[n//3]` independently in the generator and
+    published a value one position off the real boundary — a second
+    implementation of one rule, which is the defect class this epic keeps
+    finding.
+
+    Each boundary is reported as the midpoint of the two ratios it separates, so
+    a reader can classify a new line by comparison without re-deriving the rank.
+    """
+    count = len(ratios)
+    if count < len(PRESSURE_LEVELS):
+        raise ValueError(
+            f"cannot report tercile boundaries over {count} observation(s); "
+            f"{len(PRESSURE_LEVELS)} levels need at least that many"
+        )
+    ordered = sorted(ratios)
+    assigned = pressure_terciles(ordered)
+    boundaries: list[float] = []
+    for index in range(1, count):
+        if assigned[index] != assigned[index - 1]:
+            boundaries.append((ordered[index] + ordered[index - 1]) / 2)
+    if len(boundaries) != len(PRESSURE_LEVELS) - 1:
+        raise ValueError(
+            f"expected {len(PRESSURE_LEVELS) - 1} tercile boundaries, found {len(boundaries)}; "
+            f"the population is degenerate and the cut points would misdescribe it"
+        )
+    return (boundaries[0], boundaries[1])
 
 
 def pressure_terciles(ratios: Sequence[float]) -> list[str]:
@@ -127,6 +167,35 @@ def pressure_terciles(ratios: Sequence[float]) -> list[str]:
     for rank, index in enumerate(order):
         assigned[index] = PRESSURE_LEVELS[min(rank * len(PRESSURE_LEVELS) // count, 2)]
     return assigned
+
+
+class LateShareError(ValueError):
+    """Raised when the realized late-delivery share falls outside FR-011's band."""
+
+
+def check_late_share(late: int, delivered: int) -> None:
+    """DV-013 — FR-011's 25–35% band, **enforced** rather than printed.
+
+    The denominator is delivered lines only. A censored line is excluded from
+    both numerator and denominator even when already past its need-by date at
+    the as-of point, because "missed its need-by" is not observable for a line
+    whose delivery has not happened yet; the count of those is recorded
+    separately instead (SC-024).
+
+    Defined in `data-model.md` as DV-013 and implemented nowhere until QC found
+    it — the share was computed for the datasheet and bounded by nothing.
+    """
+    if delivered <= 0:
+        raise LateShareError("no delivered line to measure a late share over")
+    share = late / delivered
+    low, high = LATE_SHARE_BAND
+    if not low <= share <= high:
+        raise LateShareError(
+            f"{late} of {delivered} delivered lines missed their need-by date, a share of "
+            f"{share:.4f}, outside FR-011's [{low}, {high}] band. The slack distribution is "
+            f"what calibrates this; refusing rather than emitting a dataset whose "
+            f"late-delivery rate is not the one the requirement states"
+        )
 
 
 def criticality_band(material_category: str, pressure_level: str) -> int:

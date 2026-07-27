@@ -62,11 +62,18 @@ __all__ = [
 ]
 
 #: FR-014's seven sections, in order.
+#: **"Generation Process", not "Collection Process".** FR-014 is explicit that
+#: Generation Process replaces the collection section a gathered dataset would
+#: carry — labelling a wholly-generated dataset's provenance as *collection* is
+#: the retrieval/generation confusion the Data Provenance clause exists to
+#: prevent. `test_datasheet.py` asserts these names as literals rather than by
+#: importing this tuple: a check that iterates the implementation's own list
+#: cannot fail on a wrong name.
 SECTION_TITLES = (
     "Motivation",
     "Composition",
-    "Collection Process",
-    "Preprocessing",
+    "Generation Process",
+    "Preprocessing and Labeling",
     "Uses",
     "Distribution",
     "Maintenance",
@@ -160,7 +167,7 @@ ACTIVE_LIMITATIONS: tuple[LimitationRecord, ...] = (
         "Per-transition lognormal draws with declared apportionment shares are a modelling "
         "convenience, not an observed process.",
         f"Family, σ₀ = {SIGMA_0}, the apportionment {FORWARD_SHARES}, the whole-day rounding "
-        f"and the 1-day floor are all disclosed in § Collection Process.",
+        f"and the 1-day floor are all disclosed in § Generation Process.",
         "Transition-level timestamps from a real procurement system would replace the model "
         "with measurement.",
         "Production scale: fit per-transition distributions from the organisation's own "
@@ -297,6 +304,45 @@ def _category_disclosure() -> list[str]:
     return lines
 
 
+def _allocation_disclosure(realized: Mapping[str, Any]) -> list[str]:
+    """FR-003, FR-004, SC-002, SC-016 — the vectors and their realized dispersion.
+
+    FR-004 requires the declared per-vendor vector **and its realized dispersion**
+    in the datasheet, and FR-003 the realized per-project split. Neither was
+    emitted before: both were computed, both were used, and a reader of the
+    datasheet alone could recover neither.
+    """
+    vendors = realized["vendor_counts"]
+    projects = realized["project_counts"]
+    lines = [
+        "**Per-vendor line counts** (declared, not drawn — FR-004's 0.22–0.67 shrinkage span "
+        "is a consequence of these numbers):",
+        "",
+        "| Vendor | " + " | ".join(f"`{v}`" for v in vendors) + " |",
+        "|---|" + "---|" * len(vendors),
+        "| Lines | " + " | ".join(str(vendors[v]) for v in vendors) + " |",
+        "",
+        f"Realized dispersion: min {min(vendors.values())}, max {max(vendors.values())}, "
+        f"mean {sum(vendors.values()) / len(vendors):.1f}, "
+        f"standard deviation {realized['vendor_count_sd']:.2f}. "
+        f"Shrinkage at the endpoints: {realized['shrinkage_low']:.2f} to "
+        f"{realized['shrinkage_high']:.2f}.",
+        "",
+        "**Per-project line counts** (realized):",
+        "",
+        "| Project | " + " | ".join(f"`{p}`" for p in projects) + " |",
+        "|---|" + "---|" * len(projects),
+        "| Lines | " + " | ".join(str(projects[p]) for p in projects) + " |",
+        "",
+        f"**Rework allocation**, declared and realized as an equality (DV-009): "
+        f"{realized['rework_histogram']} lines at one, two and three loops. The fixture's "
+        f"*observable* histogram is {realized['observable_rework_histogram']}, because "
+        f"censoring truncates some chains before their later loops emit — expected, and "
+        f"recorded here so a reader counting loops in the artifact is not surprised.",
+    ]
+    return lines
+
+
 def _realized(envelope: Mapping[str, Any], realized: Mapping[str, Any]) -> list[str]:
     rows = [
         ("Line count", "190–210 (FR-003)", str(len(envelope["lines"]))),
@@ -342,8 +388,29 @@ def _realized(envelope: Mapping[str, Any], realized: Mapping[str, Any]) -> list[
         ),
         (
             "Late-delivery share",
-            "25–35% of delivered lines (FR-011)",
+            "25–35% of delivered lines, delivered-only denominator (FR-011, DV-013)",
             f"{realized['late_share']:.3f}",
+        ),
+        (
+            "Already-overdue censored lines",
+            "recorded separately, excluded from both sides of the late share (SC-024)",
+            str(realized["overdue_censored"]),
+        ),
+        (
+            "Censored share",
+            f"≥ {CENSORED_SHARE_FLOOR:.0%} (FR-010, SC-016)",
+            f"{realized['censored_share']:.3f}",
+        ),
+        (
+            "Delivered-only median duration",
+            "recorded beside the population figure so the censoring bias is visible, "
+            "not bounded (FR-007, SC-023)",
+            f"{realized['delivered_median_days']:.1f}",
+        ),
+        (
+            "Delivered-only P80 duration",
+            "same — untoleranced, disclosed (FR-007, SC-023)",
+            f"{realized['delivered_p80_days']:.1f}",
         ),
         (
             "Rework lines",
@@ -375,6 +442,8 @@ def render(envelope: Mapping[str, Any], realized: Mapping[str, Any]) -> str:
 
     parts += [f"## 2. {SECTION_TITLES[1]}", ""]
     parts += _realized(envelope, realized)
+    parts += ["", "### Declared allocation and its realized dispersion", ""]
+    parts += _allocation_disclosure(realized)
     parts += [
         "",
         f"Each line carries six descriptive fields, all present and non-blank. "

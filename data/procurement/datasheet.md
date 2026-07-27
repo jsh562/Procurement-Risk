@@ -19,12 +19,34 @@ It was created to support forecasting and identity-resolution work downstream, a
 | Spread ratio, unadjusted | recorded, not bounded (FR-036) | **0.2674** |
 | Aggregate median duration | 61 ± 5 days (SC-023) | **58.0** |
 | Aggregate P80 duration | 94 ± 8 days (SC-023) | **90.4** |
-| Late-delivery share | 25–35% of delivered lines (FR-011) | **0.263** |
+| Late-delivery share | 25–35% of delivered lines, delivered-only denominator (FR-011, DV-013) | **0.263** |
+| Already-overdue censored lines | recorded separately, excluded from both sides of the late share (SC-024) | **8** |
+| Censored share | ≥ 10% (FR-010, SC-016) | **0.121** |
+| Delivered-only median duration | recorded beside the population figure so the censoring bias is visible, not bounded (FR-007, SC-023) | **53.0** |
+| Delivered-only P80 duration | same — untoleranced, disclosed (FR-007, SC-023) | **84.0** |
 | Rework lines | 30% of N, declared (FR-006, DV-009) | **60** |
+
+### Declared allocation and its realized dispersion
+
+**Per-vendor line counts** (declared, not drawn — FR-004's 0.22–0.67 shrinkage span is a consequence of these numbers):
+
+| Vendor | `VND-001` | `VND-002` | `VND-003` | `VND-004` | `VND-005` | `VND-006` | `VND-007` | `VND-008` | `VND-009` | `VND-010` | `VND-011` | `VND-012` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Lines | 35 | 28 | 24 | 21 | 18 | 16 | 14 | 12 | 10 | 9 | 7 | 5 |
+
+Realized dispersion: min 5, max 35, mean 16.6, standard deviation 8.66. Shrinkage at the endpoints: 0.22 to 0.67.
+
+**Per-project line counts** (realized):
+
+| Project | `PRJ-001` | `PRJ-002` | `PRJ-003` | `PRJ-004` | `PRJ-005` |
+|---|---|---|---|---|---|
+| Lines | 40 | 40 | 40 | 40 | 39 |
+
+**Rework allocation**, declared and realized as an equality (DV-009): [42, 13, 5] lines at one, two and three loops. The fixture's *observable* histogram is [39, 11, 4], because censoring truncates some chains before their later loops emit — expected, and recorded here so a reader counting loops in the artifact is not surprised.
 
 Each line carries six descriptive fields, all present and non-blank. 69.8% of lines draw manufacturer and part number from E002's published catalog with the manufacturer's category list containing the line's own category; the complement draws a **category-mismatched** catalog entry, so the overlap share is a measurement that can fall below its floor rather than an artefact of construction.
 
-## 3. Collection Process
+## 3. Generation Process
 
 - **Generator identity and revision**: `model.procurement.generate` revision 1
 - **Root seed**: `20260416`
@@ -50,7 +72,7 @@ Each line carries six descriptive fields, all present and non-blank. 69.8% of li
 
 **Calendar**: order dates fall in [2025-06-16, 2026-02-16]; the as-of date is 2026-04-01. All three are committed constants — none is read from a clock, because a run-date default would move the content hash the day after generation while the recorded seed still looked honoured.
 
-## 4. Preprocessing
+## 4. Preprocessing and Labeling
 
 Two **distinctly named** duration quantities, which must never be written where the other is meant (FR-035):
 
@@ -73,7 +95,7 @@ Tier offsets are mean-zero at the declared line weights, so a category term cann
 
 Slack is **multiplicative** on the line's expected duration: `f ~ Normal(0.13, 0.1)` truncated at 0. Criticality is **derived** and slack is **drawn**, in that direction — there is no cycle.
 
-**Tercile cut points** over the realized dataset: 0.0707, 0.1650. Computed over the dataset as a whole rather than within each category, so the tier dimension of the table stays informative.
+**Tercile cut points** over the realized dataset: 0.0713, 0.1650. Computed over the dataset as a whole rather than within each category, so the tier dimension of the table stays informative.
 
 ## 5. Uses
 
@@ -130,7 +152,7 @@ The fixture is **not a corpus document** and carries **no corpus manifest entry*
 ### L-6 — The duration model is a stand-in for real lead-time behaviour
 
 - **Scope decision**: Per-transition lognormal draws with declared apportionment shares are a modelling convenience, not an observed process.
-- **Supporting evidence**: Family, σ₀ = 0.77, the apportionment (0.12, 0.2, 0.08, 0.46, 0.14), the whole-day rounding and the 1-day floor are all disclosed in § Collection Process.
+- **Supporting evidence**: Family, σ₀ = 0.77, the apportionment (0.12, 0.2, 0.08, 0.46, 0.14), the whole-day rounding and the 1-day floor are all disclosed in § Generation Process.
 - **Reversal trigger**: Transition-level timestamps from a real procurement system would replace the model with measurement.
 - **Production-scale alternative**: Production scale: fit per-transition distributions from the organisation's own lifecycle event log.
 
