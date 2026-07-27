@@ -353,8 +353,27 @@ jobs:
         working-directory: src/web
         run: npm run build
 
+      # The tag is resolved, never written out here. A literal in this step and
+      # a matching literal in the check helpers is two copies of one name, and
+      # the copies drift: the tag is daemon-wide, so on a machine holding
+      # several checkouts of this repository the second build silently
+      # re-points it and the first checkout's assertions then describe an image
+      # built from source it has never seen — passing, about the wrong artifact.
+      # `helpers/images.py` resolves a per-checkout tag and this step asks it
+      # for the same value the assertions will ask for.
+      #
+      # The label is what makes a stale or foreign image detectable rather than
+      # merely unlikely: `foreign_build()` refuses an image stamped with
+      # somebody else's checkout path, and an unstamped one is reported too,
+      # because unstamped is exactly what the old tooling produced.
       - name: Build serving image
-        run: docker build -f src/api/Dockerfile -t procurement-api:e001 src/
+        run: |
+          set -euo pipefail
+          TAG="$(uv run python -c 'from tests.checks.helpers.images import resolve_image_tag; print(resolve_image_tag())')"
+          echo "building $TAG from $PWD"
+          docker build \
+            --label "com.procurement.checkout=$PWD" \
+            -f src/api/Dockerfile -t "$TAG" src/
 
       - name: Cross-entry checks, image assertions, and supply chain
         env:

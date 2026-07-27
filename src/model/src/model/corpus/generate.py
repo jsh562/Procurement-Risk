@@ -81,6 +81,11 @@ from model.corpus.manifest import (
     roster_digest,
     write_manifest,
 )
+from model.corpus.manufacturers import (
+    format_part_number,
+    manufacturers_for_category,
+    printed_names,
+)
 from model.corpus.model import DocumentModel, FieldValue, Page, RenderDirective, document_model_hash
 from model.corpus.paths import (
     DEFAULT_CORPUS_ROOT,
@@ -124,7 +129,7 @@ __all__ = [
 #: collapsed into one value would make "clean layer" unrequestable.
 DEFAULT = object()
 
-# Taken from the closed three `manifest.py` holds rather than written out again.
+# Taken from the closed tuple `manifest.py` holds rather than written out again.
 CONFIG_INPUT_PATH = next(
     path for path in GENERATION_INPUT_PATHS if path.endswith("generation-config.json")
 )
@@ -342,10 +347,24 @@ class MaterialItem:
     category: str
     tag: str
     quantity: int
+    manufacturer_key: str
+    manufacturer_name: str
+    part_serial: int
 
     @property
     def section(self) -> str:
         return section_for_category(self.category)
+
+    @property
+    def part_number(self) -> str:
+        """Derived from the key, never stored beside it (FR-037).
+
+        Stored independently, a part number could disagree with the
+        manufacturer that issued it, and E009 blocks on the prefix — so the
+        disagreement would surface as a candidate pair that never matches
+        rather than as a corpus defect anyone could see.
+        """
+        return format_part_number(self.manufacturer_key, self.part_serial)
 
     @property
     def description(self) -> str:
@@ -453,14 +472,27 @@ def _items(
 ) -> tuple[MaterialItem, ...]:
     count = rng.randint(config.items_min, config.items_max)
     categories = rng.sample(CATEGORIES, count)
-    return tuple(
-        MaterialItem(
-            category=category,
-            tag=f"{project_index + 1}{index + 1:02d}-{rng.randint(10, 99)}",
-            quantity=rng.randint(1, 6),
+    items: list[MaterialItem] = []
+    for index, category in enumerate(categories):
+        tag = f"{project_index + 1}{index + 1:02d}-{rng.randint(10, 99)}"
+        quantity = rng.randint(1, 6)
+        # Which maker, then which of that maker's spellings. Two draws rather
+        # than one over a flattened list: every manufacturer is then equally
+        # likely regardless of how many aliases the catalogue happens to give
+        # it, so adding an alias does not silently reweight the layer.
+        key = rng.choice(manufacturers_for_category(category))
+        spellings = printed_names(key)
+        items.append(
+            MaterialItem(
+                category=category,
+                tag=tag,
+                quantity=quantity,
+                manufacturer_key=key,
+                manufacturer_name=spellings[rng.randrange(len(spellings))],
+                part_serial=rng.randrange(100_000),
+            )
         )
-        for index, category in enumerate(categories)
-    )
+    return tuple(items)
 
 
 def plan_layer(roster: Roster, config: GenerationConfig) -> tuple[DocumentPlan, ...]:
@@ -626,6 +658,23 @@ def _item_fields(plan: DocumentPlan) -> tuple[FieldEntry, ...]:
                 key="quantity",
                 value=plan.value_for("quantity", str(item.quantity)),
                 label=plan.label_for("quantity"),
+            )
+        )
+        # FR-037. Printed per item rather than once per document: a submittal
+        # covering three categories is covering three makers, and a single
+        # document-level manufacturer would join every line to the wrong one.
+        entries.append(
+            FieldEntry(
+                key="manufacturer",
+                value=plan.value_for("manufacturer", item.manufacturer_name),
+                label=plan.label_for("manufacturer"),
+            )
+        )
+        entries.append(
+            FieldEntry(
+                key="part_number",
+                value=plan.value_for("part_number", item.part_number),
+                label=plan.label_for("part_number"),
             )
         )
     return tuple(entries)

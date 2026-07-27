@@ -1,13 +1,14 @@
 {
   "entries": [
     {
-      "content_hash": "sha256:5e07a0b0afef39015475aec93db4e689b000dce0c39f70e0a1001f8a7d136562",
-      "document_model_hash": "sha256:d33aea91d4bda7bb3a0b1e2f3f103968e11bbda03bb9f2606508bb0ba2110547",
+      "content_hash": "sha256:0a7c633b0957ebfc6c1acf29378b0f82a134857ab34692b87b32d76887c877b6",
+      "document_model_hash": "sha256:b6e3055523d3769d2ac0605bfa05b14913ba01e1c8b0917d4965762656617d6f",
       "generation_date": "2026-07-26",
       "generation_inputs": {
         "data/corpus/synthetic/equipment-category-map.json": "sha256:9308c2060c8be392d98704a9cea9c9b557e2d5c5a0cbd742f93aad809f7bde6f",
-        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:cf6d580247728a308b884c09d3e03119e83626c53b60ace4bf8e388e716515f8",
-        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0"
+        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:2651a50db4d04a0390a3dbce184ae8077b791213e6505a30a71cf3dac16b2084",
+        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0",
+        "data/corpus/synthetic/manufacturer-catalog.json": "sha256:df7ee7affc9e355baeac5b1ae2180889bed76956bfed176bae620021caa4b6a9"
       },
       "generator_id": "model.corpus.generate/1",
       "irregularity_classes": [
@@ -25,13 +26,14 @@
       "seed": 20260726
     },
     {
-      "content_hash": "sha256:8aad1652cda64089cec51217d8a77b2a639d843e689617caf8560cc2a00238a0",
-      "document_model_hash": "sha256:75b1c1b9c888141cea1ffbf0c9027b70576d9a8478f412abb8b90b235b760c67",
+      "content_hash": "sha256:35a1603e9ed4ac5be6927227982d4d40ca88327a5ac219bb8a6028d33f7bd033",
+      "document_model_hash": "sha256:a834beeef274f79e4559075495eb18611289c6654ba18b24e78ed1e98ee9f4f0",
       "generation_date": "2026-07-26",
       "generation_inputs": {
         "data/corpus/synthetic/equipment-category-map.json": "sha256:9308c2060c8be392d98704a9cea9c9b557e2d5c5a0cbd742f93aad809f7bde6f",
-        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:cf6d580247728a308b884c09d3e03119e83626c53b60ace4bf8e388e716515f8",
-        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0"
+        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:2651a50db4d04a0390a3dbce184ae8077b791213e6505a30a71cf3dac16b2084",
+        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0",
+        "data/corpus/synthetic/manufacturer-catalog.json": "sha256:df7ee7affc9e355baeac5b1ae2180889bed76956bfed176bae620021caa4b6a9"
       },
       "generator_id": "model.corpus.generate/1",
       "irregularity_classes": [
@@ -49,13 +51,14 @@
       "seed": 20260726
     },
     {
-      "content_hash": "sha256:be36aeb9ef7a1c5b808f4681a4e8cd3df8dabe27167841c16cc78562acb6c39e",
-      "document_model_hash": "sha256:04bda24cb20c17612dc985d0a2cd9ec0f38200ccadfe25e8e233005953082c9b",
+      "content_hash": "sha256:545909b3a9da55eae8189d9ea9b5927810f2bc291608d4bd44c2cdc24e544111",
+      "document_model_hash": "sha256:f6e6e9e6161377a3cc3e1c8a40b4ae3772458fe03f3d3eab81b052c1e2cab911",
       "generation_date": "2026-07-26",
       "generation_inputs": {
         "data/corpus/synthetic/equipment-category-map.json": "sha256:9308c2060c8be392d98704a9cea9c9b557e2d5c5a0cbd742f93aad809f7bde6f",
-        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:cf6d580247728a308b884c09d3e03119e83626c53b60ace4bf8e388e716515f8",
-        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0"
+        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:2651a50db4d04a0390a3dbce184ae8077b791213e6505a30a71cf3dac16b2084",
+        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0",
+        "data/corpus/synthetic/manufacturer-catalog.json": "sha256:df7ee7affc9e355baeac5b1ae2180889bed76956bfed176bae620021caa4b6a9"
       },
       "generator_id": "model.corpus.generate/1",
       "irregularity_classes": [
@@ -73,13 +76,14 @@
       "seed": 20260726
     },
     {
-      "content_hash": "sha256:3adc3d0f1494728e0129076a8500896c6b109e162219d3b27e6b30af591705ba",
-      "document_model_hash": "sha256:80c328b2d31685c306b2c51f88c6783146e5cdccb11cb3e2e9c0d5bdc1276e48",
+      "content_hash": "sha256:b2952535a84c54de7ade0c2f37c817634b0caeeee62d9da32fffd10bb4df7188",
+      "document_model_hash": "sha256:f9ab636f31a166956688fcbe3f0cfef446385a473ebd8b3ac3c41f62ac507160",
       "generation_date": "2026-07-26",
       "generation_inputs": {
         "data/corpus/synthetic/equipment-category-map.json": "sha256:9308c2060c8be392d98704a9cea9c9b557e2d5c5a0cbd742f93aad809f7bde6f",
-        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:cf6d580247728a308b884c09d3e03119e83626c53b60ace4bf8e388e716515f8",
-        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0"
+        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:2651a50db4d04a0390a3dbce184ae8077b791213e6505a30a71cf3dac16b2084",
+        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0",
+        "data/corpus/synthetic/manufacturer-catalog.json": "sha256:df7ee7affc9e355baeac5b1ae2180889bed76956bfed176bae620021caa4b6a9"
       },
       "generator_id": "model.corpus.generate/1",
       "irregularity_classes": [
@@ -98,13 +102,14 @@
       "seed": 20260726
     },
     {
-      "content_hash": "sha256:c7f96770174c3b4aa9c15e08e6d148fcb9e966abb2b64156bc24df14b74a86e5",
-      "document_model_hash": "sha256:ef5607dad848eac0f9dc5d71d07e2dfd6013e2ff619fb28b7a069834d7f9818f",
+      "content_hash": "sha256:ad8434fdc0ffbd4ce37f2ee49570213b37a849fc93efad709dd348b28b8f35f6",
+      "document_model_hash": "sha256:444f08b524f6f42c6f8f4fc665f23fd782f2b73144072e390e4d97dd62d780d6",
       "generation_date": "2026-07-26",
       "generation_inputs": {
         "data/corpus/synthetic/equipment-category-map.json": "sha256:9308c2060c8be392d98704a9cea9c9b557e2d5c5a0cbd742f93aad809f7bde6f",
-        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:cf6d580247728a308b884c09d3e03119e83626c53b60ace4bf8e388e716515f8",
-        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0"
+        "data/corpus/synthetic/field-label-vocabulary.json": "sha256:2651a50db4d04a0390a3dbce184ae8077b791213e6505a30a71cf3dac16b2084",
+        "data/corpus/synthetic/generation-config.json": "sha256:621b8779616176ca0786be967310100142cbd7d7aa1cb8e227b5cfa1ad6c90c0",
+        "data/corpus/synthetic/manufacturer-catalog.json": "sha256:df7ee7affc9e355baeac5b1ae2180889bed76956bfed176bae620021caa4b6a9"
       },
       "generator_id": "model.corpus.generate/1",
       "irregularity_classes": [

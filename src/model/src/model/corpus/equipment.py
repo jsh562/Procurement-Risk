@@ -53,7 +53,7 @@ __all__ = [
     "unbacked_sections",
 ]
 
-# Taken from the closed three `manifest.py` holds rather than written out
+# Taken from the closed tuple `manifest.py` holds rather than written out
 # again, so the path named here and the key recorded in every SYNTHETIC entry
 # are the same string.
 EQUIPMENT_MAP_INPUT_PATH = next(
