@@ -68,10 +68,7 @@ def schema() -> Iterator[dict[str, dict[str, Any]]]:
         f"{TABLE} does not exist in the migrated schema. Every assertion below "
         f"would pass vacuously against an empty column set."
     )
-    yield {
-        row[0]: {"type": row[1], "nullable": row[2] == "YES", "default": row[3]}
-        for row in rows
-    }
+    yield {row[0]: {"type": row[1], "nullable": row[2] == "YES", "default": row[3]} for row in rows}
 
 
 @pytest.fixture(scope="module")
@@ -145,9 +142,7 @@ def test_no_column_carries_a_database_default(
     second identifier at reconcile time and break the spool's idempotency; a
     `DEFAULT now()` would stamp a spooled row with its reconcile time, making
     latency and cost analysis wrong by exactly the length of the outage."""
-    defaulted = {
-        name: column["default"] for name, column in schema.items() if column["default"]
-    }
+    defaulted = {name: column["default"] for name, column in schema.items() if column["default"]}
     assert not defaulted, (
         f"these columns are minted by the database rather than the gateway: "
         f"{defaulted}. Every value on the row is computed before the write "
@@ -194,9 +189,7 @@ def test_the_cost_pair_is_exclusive_or(check_definitions: dict[str, str]) -> Non
     implication would let a NULL cost be written with no explanation, which is
     the unexplained absence the requirement forbids."""
     definition = check_definitions["ck_llm_invocation__cost_xor_absent_reason"]
-    assert "<>" in definition, (
-        f"the cost pair is not an exclusive-or: {definition}"
-    )
+    assert "<>" in definition, f"the cost pair is not an exclusive-or: {definition}"
 
 
 def _quoted_values(definition: str) -> frozenset[str]:

@@ -75,8 +75,7 @@ def test_the_committed_fixture_store_is_clean() -> None:
     offenders = [
         path.relative_to(COMMITTED_FIXTURES).as_posix()
         for path in COMMITTED_FIXTURES.rglob("*")
-        if path.is_file()
-        and contains_credential_material(path.read_text(encoding="utf-8"), ENV)
+        if path.is_file() and contains_credential_material(path.read_text(encoding="utf-8"), ENV)
     ]
     assert not offenders, f"credential-shaped material in committed fixtures: {offenders}"
 
@@ -216,10 +215,7 @@ def test_this_suites_own_assertion_messages_carry_no_credential() -> None:
     imports_os = any(
         isinstance(node, ast.Import) and any(alias.name == "os" for alias in node.names)
         for node in ast.walk(tree)
-    ) or any(
-        isinstance(node, ast.ImportFrom) and node.module == "os"
-        for node in ast.walk(tree)
-    )
+    ) or any(isinstance(node, ast.ImportFrom) and node.module == "os" for node in ast.walk(tree))
     assert not imports_os, (
         "this file imports `os`; every scan here must run against an explicit "
         "empty mapping, or a machine holding a real credential could match it "

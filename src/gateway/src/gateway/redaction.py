@@ -91,9 +91,7 @@ def _configured_credential(env: Mapping[str, str] | None = None) -> str | None:
     return value or None
 
 
-def credential_findings(
-    text: str, env: Mapping[str, str] | None = None
-) -> list[str]:
+def credential_findings(text: str, env: Mapping[str, str] | None = None) -> list[str]:
     """Every credential-shaped span in `text`, by TR-060's two detectors.
 
     Returns the *matched substrings*, not their offsets, so a caller reporting a
@@ -117,9 +115,7 @@ def credential_findings(
     return findings
 
 
-def contains_credential_material(
-    text: str, env: Mapping[str, str] | None = None
-) -> bool:
+def contains_credential_material(text: str, env: Mapping[str, str] | None = None) -> bool:
     return bool(credential_findings(text, env))
 
 
@@ -142,9 +138,7 @@ def redact(value: Any, env: Mapping[str, str] | None = None) -> Any:
     if isinstance(value, str):
         return _redact_text(value, env)
     if isinstance(value, Mapping):
-        return {
-            redact(key, env): redact(item, env) for key, item in value.items()
-        }
+        return {redact(key, env): redact(item, env) for key, item in value.items()}
     if isinstance(value, str | bytes):  # pragma: no cover - bytes handled below
         return value
     if isinstance(value, Iterable) and not isinstance(value, str | bytes):

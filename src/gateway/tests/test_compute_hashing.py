@@ -47,8 +47,9 @@ json_values = st.recursive(
     | st.booleans()
     | st.integers(min_value=-(10**12), max_value=10**12)
     | st.text(max_size=40),
-    lambda children: st.lists(children, max_size=4)
-    | st.dictionaries(st.text(max_size=12), children, max_size=4),
+    lambda children: (
+        st.lists(children, max_size=4) | st.dictionaries(st.text(max_size=12), children, max_size=4)
+    ),
     max_leaves=12,
 )
 
@@ -252,12 +253,8 @@ def test_the_schema_version_is_stable_for_one_schema() -> None:
 def test_the_prompt_template_version_digests_the_resolved_text() -> None:
     """Resolved, not the template source: two templates that resolve to the same
     text produce the same call and must share a key."""
-    assert prompt_template_version("Summarise: X") == prompt_template_version(
-        "Summarise: X"
-    )
-    assert prompt_template_version("Summarise: X") != prompt_template_version(
-        "Summarise: Y"
-    )
+    assert prompt_template_version("Summarise: X") == prompt_template_version("Summarise: X")
+    assert prompt_template_version("Summarise: X") != prompt_template_version("Summarise: Y")
 
 
 def test_the_derived_versions_reach_the_fixture_key() -> None:

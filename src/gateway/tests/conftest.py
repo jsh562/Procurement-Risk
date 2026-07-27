@@ -136,6 +136,4 @@ def no_outbound_network(monkeypatch: pytest.MonkeyPatch) -> None:
         return wrapper
 
     monkeypatch.setattr(socket.socket, "connect", _guard("connect", real_connect))
-    monkeypatch.setattr(
-        socket.socket, "connect_ex", _guard("connect_ex", real_connect_ex)
-    )
+    monkeypatch.setattr(socket.socket, "connect_ex", _guard("connect_ex", real_connect_ex))

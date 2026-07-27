@@ -64,9 +64,7 @@ def resolve_trace_id(request: InvocationRequest) -> str:
     if supplied is None:
         return generate_trace_id()
     if not is_valid_trace_id(supplied):
-        raise ValueError(
-            "trace_id must be 32 lowercase hexadecimal characters and not all zero"
-        )
+        raise ValueError("trace_id must be 32 lowercase hexadecimal characters and not all zero")
     return supplied
 
 
@@ -161,9 +159,7 @@ class PinResolver(Protocol):
     def pin_resolves(self, version_id: str) -> bool: ...
 
 
-def require_resolvable_price_pin(
-    config: GatewayConfig, resolver: PinResolver
-) -> str:
+def require_resolvable_price_pin(config: GatewayConfig, resolver: PinResolver) -> str:
     """Refuse the invocation unless its price pin resolves (TR-048, VR-025).
 
     **Called before any provider request is constructed**, and the position is

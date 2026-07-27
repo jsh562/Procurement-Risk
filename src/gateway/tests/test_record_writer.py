@@ -113,17 +113,14 @@ def test_the_insert_names_exactly_the_closed_column_list() -> None:
     other fails here rather than at a write.
     """
     named = {
-        column
-        for column in COLUMNS
-        if f"%({column})s" in _INSERT_SQL and column in _INSERT_SQL
+        column for column in COLUMNS if f"%({column})s" in _INSERT_SQL and column in _INSERT_SQL
     }
     assert named == set(COLUMNS), (
         f"the INSERT and COLUMNS disagree: {sorted(set(COLUMNS) - named)} are in the "
         f"list but not both halves of the statement"
     )
     assert _INSERT_SQL.count("%(") == len(COLUMNS), (
-        f"the INSERT binds {_INSERT_SQL.count('%(')} parameters for "
-        f"{len(COLUMNS)} columns"
+        f"the INSERT binds {_INSERT_SQL.count('%(')} parameters for {len(COLUMNS)} columns"
     )
 
 
@@ -259,8 +256,7 @@ def test_a_malformed_row_is_rejected_by_the_named_constraint(
         writer.write(record)
 
     assert raised.value.constraint_name == constraint, (
-        f"expected {constraint!r} to reject the row, got "
-        f"{raised.value.constraint_name!r}"
+        f"expected {constraint!r} to reject the row, got {raised.value.constraint_name!r}"
     )
 
 
@@ -272,9 +268,7 @@ def test_the_write_failure_carries_no_driver_exception(writer: RecordWriter) -> 
     exception is dropped — including as `__context__`, which `raise ... from
     None` inside the handler would have left populated.
     """
-    record = InvocationRecord.model_construct(
-        **{**a_record().model_dump(), "outcome": "unknown"}
-    )
+    record = InvocationRecord.model_construct(**{**a_record().model_dump(), "outcome": "unknown"})
     with pytest.raises(RecordWriteError) as raised:
         writer.write(record)
 
@@ -304,9 +298,7 @@ def test_a_second_write_of_one_invocation_is_refused_by_default(
         writer.write(record)
 
 
-def test_the_drain_path_absorbs_the_same_conflict(
-    writer: RecordWriter, cleanup: list[str]
-) -> None:
+def test_the_drain_path_absorbs_the_same_conflict(writer: RecordWriter, cleanup: list[str]) -> None:
     """TR-052: exactly-once is a property of the effect, not of delivery."""
     record = a_record()
     cleanup.append(record.invocation_id)
@@ -340,9 +332,7 @@ def test_price_entries_come_back_scoped_to_the_pin(writer: RecordWriter) -> None
     """TR-039. The query owns which rows are visible; `resolve_price_entry`
     owns which of them wins."""
     entries = writer.price_entries(SEEDED_VERSION, "claude-sonnet-5")
-    assert len(entries) == 2, (
-        f"expected the two seeded effective-from rows, got {len(entries)}"
-    )
+    assert len(entries) == 2, f"expected the two seeded effective-from rows, got {len(entries)}"
     assert {entry.model_id for entry in entries} == {"claude-sonnet-5"}
     assert entries[0].rates.input_usd_per_mtok > 0
 

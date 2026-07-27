@@ -95,9 +95,7 @@ def test_cost_is_deterministic(counts: TokenCounts, price: PriceRates) -> None:
 
 @given(token_counts(), price_rates())
 @settings(max_examples=300)
-def test_cost_is_a_decimal_at_the_stored_scale(
-    counts: TokenCounts, price: PriceRates
-) -> None:
+def test_cost_is_a_decimal_at_the_stored_scale(counts: TokenCounts, price: PriceRates) -> None:
     """CD-3. `NUMERIC` in, `Decimal` out, with no binary float anywhere on the
     path — a float intermediate would make "exactly" a matter of tolerance, and
     the failure would appear only for the values that happen to be
@@ -302,9 +300,7 @@ def test_the_representable_maximum_itself_is_not_out_of_range() -> None:
 
 @given(token_counts(), price_rates())
 @settings(max_examples=300)
-def test_a_cost_survives_a_text_round_trip_exactly(
-    counts: TokenCounts, price: PriceRates
-) -> None:
+def test_a_cost_survives_a_text_round_trip_exactly(counts: TokenCounts, price: PriceRates) -> None:
     """CD-3 as the driver will exercise it. `NUMERIC` arrives from psycopg as a
     `Decimal`, and the comparison must hold at the stored scale with no binary
     intermediate — so the value must survive serialization without acquiring or
@@ -317,9 +313,7 @@ def test_a_cost_survives_a_text_round_trip_exactly(
 
 @given(token_counts(), price_rates())
 @settings(max_examples=200)
-def test_a_float_round_trip_is_not_relied_on(
-    counts: TokenCounts, price: PriceRates
-) -> None:
+def test_a_float_round_trip_is_not_relied_on(counts: TokenCounts, price: PriceRates) -> None:
     """The negative direction, and the reason CD-3 forbids a float path.
 
     This does not assert that float loses precision on every value — it does

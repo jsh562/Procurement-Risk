@@ -94,11 +94,7 @@ def aggregate_usage(attempts: Sequence[AttemptUsage]) -> AttemptUsage:
         )
     return AttemptUsage(
         input_tokens=sum(attempt.input_tokens for attempt in attempts),
-        cache_write_input_tokens=sum(
-            attempt.cache_write_input_tokens for attempt in attempts
-        ),
-        cache_read_input_tokens=sum(
-            attempt.cache_read_input_tokens for attempt in attempts
-        ),
+        cache_write_input_tokens=sum(attempt.cache_write_input_tokens for attempt in attempts),
+        cache_read_input_tokens=sum(attempt.cache_read_input_tokens for attempt in attempts),
         output_tokens=sum(attempt.output_tokens for attempt in attempts),
     )

@@ -191,8 +191,7 @@ def with_transport_budget(
             # TR-034: an expiry is a transport failure, so it is reported with
             # the attempts already spent rather than as its own category.
             raise ProviderError(
-                f"the per-request deadline expired after {attempt_number - 1} transport "
-                f"attempt(s)",
+                f"the per-request deadline expired after {attempt_number - 1} transport attempt(s)",
                 error_type="deadline_exceeded",
                 status=last_status,
             )

@@ -312,8 +312,7 @@ def upgrade() -> None:
     # question the identifier exists to answer, and it is not answerable at
     # speed from the recency index.
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_llm_invocation__trace_id "
-        "ON llm_invocation (trace_id)"
+        "CREATE INDEX IF NOT EXISTS ix_llm_invocation__trace_id ON llm_invocation (trace_id)"
     )
 
     # No index on `price_table_version_id`. Its only purpose would be to

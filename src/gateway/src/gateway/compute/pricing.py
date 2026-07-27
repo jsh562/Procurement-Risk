@@ -244,9 +244,7 @@ def resolve_price_entry(
     """
     as_of = pricing_date(pricing_timestamp)
     covering = [
-        entry
-        for entry in entries
-        if entry.model_id == model_id and entry.effective_from <= as_of
+        entry for entry in entries if entry.model_id == model_id and entry.effective_from <= as_of
     ]
     if not covering:
         return None

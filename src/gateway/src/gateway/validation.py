@@ -145,9 +145,7 @@ def _walk(original: Any, transformed: Any, pointer: str) -> list[ResidualConstra
         landed = "anyOf" if container == "oneOf" else container
         transformed_variants = transformed_map.get(landed) or []
         for index, variant in enumerate(variants):
-            counterpart = (
-                transformed_variants[index] if index < len(transformed_variants) else None
-            )
+            counterpart = transformed_variants[index] if index < len(transformed_variants) else None
             residuals.extend(_walk(variant, counterpart, f"{pointer}/{container}/{index}"))
 
     return residuals

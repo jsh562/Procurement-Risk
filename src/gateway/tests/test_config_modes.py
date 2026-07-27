@@ -146,9 +146,7 @@ def test_only_the_exact_value_enables_capture(value: str) -> None:
 
 
 def test_the_exact_value_enables_capture() -> None:
-    assert content_capture_enabled(
-        {CONTENT_CAPTURE_ENV_VAR: CONTENT_CAPTURE_ENABLED_VALUE}
-    )
+    assert content_capture_enabled({CONTENT_CAPTURE_ENV_VAR: CONTENT_CAPTURE_ENABLED_VALUE})
 
 
 def test_capture_is_scoped_to_log_output_alone() -> None:

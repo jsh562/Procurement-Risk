@@ -146,9 +146,7 @@ def test_the_opt_in_is_independent_of_mode_selection() -> None:
     """Structurally separate, not merely documented as separate: the opt-in
     check reads its own variable and never consults the mode."""
     assert provider_calls_permitted({PROVIDER_OPT_IN_ENV_VAR: "1"})
-    assert provider_calls_permitted(
-        {PROVIDER_OPT_IN_ENV_VAR: "1", MODE_ENV_VAR: REPLAY_MODE}
-    )
+    assert provider_calls_permitted({PROVIDER_OPT_IN_ENV_VAR: "1", MODE_ENV_VAR: REPLAY_MODE})
 
 
 # --- TR-023: replay refuses to run beside a credential ----------------------

@@ -35,9 +35,7 @@ from gateway.compute.timing import (
 #: `time.monotonic()` returns seconds as a float from an undefined origin. The
 #: range here spans a machine that has been up for years, because the origin
 #: being undefined is precisely what a naive implementation gets wrong.
-instants = st.floats(
-    min_value=0.0, max_value=3.0e8, allow_nan=False, allow_infinity=False
-)
+instants = st.floats(min_value=0.0, max_value=3.0e8, allow_nan=False, allow_infinity=False)
 
 counts = st.integers(min_value=0, max_value=10_000_000)
 
@@ -140,12 +138,8 @@ def test_usage_is_the_sum_across_every_attempt(sequence: list[AttemptUsage]) -> 
     total = aggregate_usage(sequence)
     assert total.input_tokens == sum(a.input_tokens for a in sequence)
     assert total.output_tokens == sum(a.output_tokens for a in sequence)
-    assert total.cache_write_input_tokens == sum(
-        a.cache_write_input_tokens for a in sequence
-    )
-    assert total.cache_read_input_tokens == sum(
-        a.cache_read_input_tokens for a in sequence
-    )
+    assert total.cache_write_input_tokens == sum(a.cache_write_input_tokens for a in sequence)
+    assert total.cache_read_input_tokens == sum(a.cache_read_input_tokens for a in sequence)
 
 
 def test_an_attempt_reporting_no_usage_contributes_zero() -> None:

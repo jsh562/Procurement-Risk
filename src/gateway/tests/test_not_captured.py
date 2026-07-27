@@ -108,9 +108,7 @@ def test_the_normalized_error_carries_three_scalars_and_no_content() -> None:
     identifier. None of the five can ride along, because there is nowhere for
     it to sit."""
     error = ProviderError("failed", status=429, error_type="transport_failed", request_id="req_1")
-    carried = {
-        name for name in vars(error) if not name.startswith("_")
-    }
+    carried = {name for name in vars(error) if not name.startswith("_")}
     assert carried == {"status", "error_type", "request_id"}
     assert _offending(carried) == []
 

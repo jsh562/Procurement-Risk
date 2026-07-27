@@ -126,13 +126,9 @@ _INSERT_SQL: Final[str] = """
 #: TR-052. The conflict target is the **primary key and nothing else**. Widening
 #: it would make the drain swallow a genuine constraint failure, which TR-054
 #: requires to be retained and surfaced rather than absorbed.
-_INSERT_IDEMPOTENT_SQL: Final[str] = (
-    _INSERT_SQL + " ON CONFLICT (invocation_id) DO NOTHING"
-)
+_INSERT_IDEMPOTENT_SQL: Final[str] = _INSERT_SQL + " ON CONFLICT (invocation_id) DO NOTHING"
 
-_RESOLVE_PIN_SQL: Final[str] = (
-    "SELECT 1 FROM price_table_version WHERE version_id = %(version_id)s"
-)
+_RESOLVE_PIN_SQL: Final[str] = "SELECT 1 FROM price_table_version WHERE version_id = %(version_id)s"
 
 #: TR-039 / CD-1. Scoped to the pinned version by the `WHERE`, so the lookup
 #: cannot reach outside it — `resolve_price_entry` then applies the selection
@@ -338,9 +334,7 @@ class RecordWriter:
         it is a configuration error on an invocation that never happened.
         """
         with self._own_transaction() as connection:
-            found = connection.execute(
-                _RESOLVE_PIN_SQL, {"version_id": version_id}
-            ).fetchone()
+            found = connection.execute(_RESOLVE_PIN_SQL, {"version_id": version_id}).fetchone()
         return found is not None
 
     def price_entries(self, version_id: str, model_id: str) -> list[PriceEntry]:

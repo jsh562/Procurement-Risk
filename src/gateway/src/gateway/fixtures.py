@@ -224,10 +224,7 @@ class FixtureStore:
         response_path.parent.mkdir(parents=True, exist_ok=True)
         response_path.write_text(content, encoding="utf-8")
         provenance_path.write_text(
-            json.dumps(
-                json.loads(provenance.model_dump_json()), indent=2, sort_keys=True
-            )
-            + "\n",
+            json.dumps(json.loads(provenance.model_dump_json()), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
 
@@ -248,9 +245,7 @@ class FixtureStore:
         return sorted(
             f"{path.parent.parent.name}:{path.name[: -len(_RESPONSE_SUFFIX)]}"
             for path in self.root.rglob(f"*{_RESPONSE_SUFFIX}")
-            if path.with_name(
-                path.name[: -len(_RESPONSE_SUFFIX)] + _PROVENANCE_SUFFIX
-            ).is_file()
+            if path.with_name(path.name[: -len(_RESPONSE_SUFFIX)] + _PROVENANCE_SUFFIX).is_file()
         )
 
     def orphans(self) -> list[Path]:

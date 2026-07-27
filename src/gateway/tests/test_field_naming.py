@@ -32,14 +32,7 @@ from gateway.record.writer import COLUMNS
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SPEC_PATH = REPO_ROOT / "specs" / "00004-traced-model-gateway" / "spec.md"
 MIGRATION_PATH = (
-    REPO_ROOT
-    / "src"
-    / "model"
-    / "src"
-    / "model"
-    / "schema"
-    / "versions"
-    / "0102_llm_invocation.py"
+    REPO_ROOT / "src" / "model" / "src" / "model" / "schema" / "versions" / "0102_llm_invocation.py"
 )
 
 #: The attributes the pinned release defines that this epic records. Held as

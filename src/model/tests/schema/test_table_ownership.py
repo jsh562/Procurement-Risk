@@ -114,6 +114,7 @@ def _revisions_creating(relation_name: str) -> list[Path]:
         )
     ]
 
+
 #: TR-036 / SC-017. Named, with the epic each belongs to, because the point of
 #: the requirement is the ownership boundary and not merely a count of tables.
 OTHER_EPIC_TABLES: dict[str, str] = {
@@ -280,9 +281,7 @@ def _undocumented(objects: list[tuple[str, str]], kinds: dict[str, str]) -> list
 @pytest.mark.parametrize(
     ("relation_name", "owner"), sorted(OTHER_EPIC_TABLES.items()), ids=sorted(OTHER_EPIC_TABLES)
 )
-def test_a_table_owned_by_another_epic_was_not_created_here(
-    relation_name: str, owner: str
-) -> None:
+def test_a_table_owned_by_another_epic_was_not_created_here(relation_name: str, owner: str) -> None:
     """TR-036 / SC-017: no revision *in this epic's block* creates this name.
 
     One test per name rather than one test over a set, so a failure reports

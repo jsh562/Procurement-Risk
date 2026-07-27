@@ -260,9 +260,7 @@ def test_a_write_failure_does_not_replace_the_original_error() -> None:
 
     error = GatewayValidationError("no valid value", field_paths=("score",))
     with pytest.raises(GatewayValidationError) as raised:
-        record_then_raise(
-            error, write=write, trace_id="b" * 32, outcome="failed", error_type=None
-        )
+        record_then_raise(error, write=write, trace_id="b" * 32, outcome="failed", error_type=None)
 
     assert "no valid value" in str(raised.value)
     notes = getattr(raised.value, "__notes__", [])
@@ -281,9 +279,7 @@ def test_the_write_failure_note_holds_no_reference_to_its_exception() -> None:
 
     error = GatewayValidationError("no valid value")
     with pytest.raises(GatewayValidationError) as raised:
-        record_then_raise(
-            error, write=write, trace_id="c" * 32, outcome="failed", error_type=None
-        )
+        record_then_raise(error, write=write, trace_id="c" * 32, outcome="failed", error_type=None)
 
     assert all(isinstance(note, str) for note in getattr(raised.value, "__notes__", []))
 

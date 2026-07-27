@@ -227,8 +227,7 @@ def test_this_epics_tables_exist_after_the_chain(migrated_once: str) -> None:
         present = {
             row[0]
             for row in connection.execute(
-                "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = 'public'"
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
             )
         }
     missing = EPIC_TABLES - present
@@ -253,9 +252,7 @@ def test_the_seed_landed_with_its_provenance(migrated_once: str) -> None:
         versions = connection.execute(
             "SELECT version_id, snapshot_date, source_url FROM price_table_version"
         ).fetchall()
-        entry_count = connection.execute(
-            "SELECT count(*) FROM price_table_entry"
-        ).fetchone()
+        entry_count = connection.execute("SELECT count(*) FROM price_table_entry").fetchone()
     assert len(versions) == 1, f"expected one seeded version, found {len(versions)}"
     _, snapshot_date, source_url = versions[0]
     assert snapshot_date is not None
@@ -274,8 +271,7 @@ def test_one_model_carries_two_effective_dates_in_one_version(migrated_once: str
     """
     with psycopg.connect(migrated_once) as connection:
         rows = connection.execute(
-            "SELECT model_id, count(*) FROM price_table_entry "
-            "GROUP BY model_id HAVING count(*) > 1"
+            "SELECT model_id, count(*) FROM price_table_entry GROUP BY model_id HAVING count(*) > 1"
         ).fetchall()
     assert rows, (
         "no seeded model carries more than one effective_from, so the within-"
@@ -293,9 +289,7 @@ def test_a_second_run_changes_neither_the_ledger_nor_the_schema(migrated_once: s
     before = _snapshot(migrated_once)
 
     second = _run_migrate(migrated_once)
-    assert second.returncode == 0, (
-        f"the second run failed:\n{second.stdout}\n{second.stderr}"
-    )
+    assert second.returncode == 0, f"the second run failed:\n{second.stdout}\n{second.stderr}"
 
     after = _snapshot(migrated_once)
     assert after == before, (
@@ -368,9 +362,7 @@ def test_the_re_runnable_scan_reads_statements_and_not_prose() -> None:
     assert statements, "no executed statements found in 0100"
     joined = " ".join(statements)
     assert "CREATE TABLE IF NOT EXISTS price_table_version" in joined
-    assert "docstring" not in joined.lower(), (
-        "the extractor is returning prose, not statements"
-    )
+    assert "docstring" not in joined.lower(), "the extractor is returning prose, not statements"
     # 0100's module docstring is the one that discusses the forbidden statement.
     assert "ALTER TABLE ADD CONSTRAINT" not in joined, (
         "the extractor picked up the module docstring, which explains why this "
@@ -416,9 +408,7 @@ def test_every_epic_revision_refuses_to_downgrade(revision: str) -> None:
     E003's suite, not this one.
     """
     tree = ast.parse(_revision_path(revision).read_text(encoding="utf-8"))
-    functions = {
-        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
-    }
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
     assert "downgrade" in functions, (
         f"{revision} defines no `downgrade`; Alembic calls that attribute when a "
         f"downgrade is requested, and a missing one fails with an unexplained "

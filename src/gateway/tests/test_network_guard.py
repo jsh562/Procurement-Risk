@@ -26,8 +26,9 @@ def test_an_outbound_connection_is_refused() -> None:
     cannot reach a network even if the guard were removed — the assertion is
     that it fails *for the guard's reason*, not that it fails.
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock, pytest.raises(
-        OutboundConnectionAttempted
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+        pytest.raises(OutboundConnectionAttempted),
     ):
         sock.connect(("example.invalid", 443))
 
@@ -36,8 +37,9 @@ def test_the_non_raising_variant_is_refused_too() -> None:
     """`connect_ex` returns an error code instead of raising, so a client using
     it would slip past a guard that covered only `connect` — and the suite would
     report zero outbound requests while making them."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock, pytest.raises(
-        OutboundConnectionAttempted
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+        pytest.raises(OutboundConnectionAttempted),
     ):
         sock.connect_ex(("example.invalid", 443))
 
@@ -45,8 +47,9 @@ def test_the_non_raising_variant_is_refused_too() -> None:
 def test_the_refusal_names_the_destination() -> None:
     """A guard that refused without saying where to would leave a developer
     grepping the suite for whatever made a request."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock, pytest.raises(
-        OutboundConnectionAttempted, match="example.invalid"
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+        pytest.raises(OutboundConnectionAttempted, match="example.invalid"),
     ):
         sock.connect(("example.invalid", 443))
 
@@ -74,7 +77,8 @@ def test_the_guard_is_in_force_for_this_test_without_being_requested() -> None:
     """Autouse, observed. This test declares no fixture and is still guarded —
     which is the property that makes SC-008 a claim about the suite rather than
     about the tests that remembered to ask."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock, pytest.raises(
-        OutboundConnectionAttempted
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+        pytest.raises(OutboundConnectionAttempted),
     ):
         sock.connect(("198.51.100.7", 443))

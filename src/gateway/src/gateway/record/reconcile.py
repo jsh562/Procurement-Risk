@@ -106,9 +106,7 @@ def drain_spool(spool: InvocationSpool, writer: RecordWriter) -> DrainResult:
     )
 
 
-def _reconcile_one(
-    spooled: SpooledRecord, spool: InvocationSpool, writer: RecordWriter
-) -> bool:
+def _reconcile_one(spooled: SpooledRecord, spool: InvocationSpool, writer: RecordWriter) -> bool:
     """Insert one spooled record and drop it. Returns whether it was reconciled.
 
     Every failure path here **retains** the row and returns False. None of them

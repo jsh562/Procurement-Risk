@@ -211,4 +211,3 @@ class InvocationSpool:
     def _depth(connection: sqlite3.Connection) -> int:
         row = connection.execute(_DEPTH_SQL).fetchone()
         return int(row[0]) if row else 0
-

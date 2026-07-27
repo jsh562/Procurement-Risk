@@ -195,9 +195,7 @@ def test_each_attempt_is_told_the_remaining_deadline() -> None:
     with pytest.raises(ProviderError):
         with_transport_budget(attempt, _seconds(120.0, 80.0, 40.0), retryable=_always)
 
-    assert seen == [120.0, 80.0, 40.0], (
-        f"attempts did not inherit the remaining deadline: {seen}"
-    )
+    assert seen == [120.0, 80.0, 40.0], f"attempts did not inherit the remaining deadline: {seen}"
 
 
 def test_the_budget_is_two_retries_and_three_attempts() -> None:

@@ -501,9 +501,7 @@ def test_revision_id_falls_inside_the_reserved_block(script: Script) -> None:
     )
 
     number = int(script.revision)
-    owner = next(
-        (owner for low, high, owner in DECLARED_BLOCKS if low <= number <= high), None
-    )
+    owner = next((owner for low, high, owner in DECLARED_BLOCKS if low <= number <= high), None)
 
     assert owner is not None, (
         f"revision {script.revision!r} is outside every declared block (TR-004). "
