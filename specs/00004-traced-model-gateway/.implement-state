@@ -1,28 +1,31 @@
-phase: Phase 4 complete — OBJ3 (Invocation Record with Recomputable Cost)
-completed: 48
-remaining: 27
+phase: Phase 5 complete — OBJ4 (Content-Hash Fixtures and Offline Replay)
+completed: 59
+remaining: 16
 blocked: none
-next: Phase 5 (OBJ4) T051-T059 — mode selection with no default and the
-      provider opt-in, the content-hash fixture store, provenance sidecars,
-      and offline replay. T051 unblocks orchestrator.invoke(), which still
-      raises NotImplementedError because the composition needs the mode branch.
-notes: OBJ3 delivered. The record writer holds its own connection and its own
-       transaction, verified with two live connections and a caller rollback.
-       The spool is a real SQLite file in every test; the database failures the
-       drain exists for are injected through the writer's connect seam, since
-       'refuse this one write then accept the next' is not something a live
-       server does on request.
-       Three self-referential test bugs found and fixed this phase, all the
-       same shape: a check that scanned source text matched the prose
-       explaining what it was looking for. Each is now an AST walk with a
-       control that plants a real violation.
-       A connect timeout was added to the writer — psycopg's default is no
-       timeout, which turns an unreachable database into a hung process and
-       defeats TR-034's deadline entirely. Found because the suite hung for
-       ten minutes when the container went down mid-run.
-       Environment: the project DB container was torn down by something outside
-       this session twice, once with its volume. `docker compose up -d db` then
-       `uv run --directory src/model migrate` restores it. The sibling
-       checkouts share the unqualified `procurement-api:e001` image tag and the
-       5434 port, so both are contended surfaces.
+next: Phase 6 (OBJ5) T062-T070 — credential redaction across the five egress
+      sinks, provider-exception normalization, and the credential-shaped
+      material scan. Then Phase 7 (OBJ6, P2) and Phase 8 polish.
+notes: OBJ4 delivered. Mode selection has no default and no fallback; the
+       provider opt-in is a separate control with a fixed form so a check can
+       assert its absence from CI. Replay refuses to run beside a credential —
+       refusing when the means of cheating is present is what makes the offline
+       claim structural rather than believed.
+       The network guard is the observation point SC-008's zero rests on. Its
+       public names live in netguard.py rather than the conftest: pytest
+       imports a conftest under its own module name, so a test catching the
+       exception by path caught a different class object and the guard read as
+       broken when it worked. The shape assertions are at the root; the
+       behavioural control is in the tier that installs the fixture.
+       Two checks from other epics caught real problems in this phase's work.
+       E001's supply-chain scan flagged a realistic fake credential in a test
+       literal — correctly, since the detector cannot tell a fake from a real
+       one, which is what makes it useful. And the single-naming-site scan
+       caught a comment in config.py that named the provider while explaining
+       the rule against naming it.
+       orchestrator.invoke() still raises NotImplementedError. Every piece it
+       composes now exists; joining them is Phase 6/8 work once redaction
+       lands, since the record path must not carry unredacted material.
+       Environment: the DB container was torn down externally three times this
+       session. `procurement-api:e001` is an unqualified tag the sibling
+       checkouts share and must be rebuilt here before the image check runs.
 timestamp: 2026-07-26

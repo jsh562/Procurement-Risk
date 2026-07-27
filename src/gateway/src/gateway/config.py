@@ -33,6 +33,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from gateway.errors import GatewayConfigError
 
 __all__ = [
+    "CREDENTIAL_ENV_VAR",
+    "MODES",
+    "MODE_ENV_VAR",
+    "PROVIDER_OPT_IN_ENV_VAR",
+    "PROVIDER_OPT_IN_PERMITTED_VALUE",
+    "RECORD_MODE",
+    "REPLAY_MODE",
+    "provider_calls_permitted",
+    "require_no_credential_in_replay",
+    "require_provider_opt_in",
+    "resolve_mode",
     "DATABASE_URL_ENV_VAR",
     "DEADLINE_ENV_VAR",
     "PRICE_TABLE_PIN_ENV_VAR",
@@ -88,6 +99,46 @@ DATABASE_URL_ENV_VAR: Final[str] = "DATABASE_URL"
 PRICE_TABLE_PIN_ENV_VAR: Final[str] = "GATEWAY_PRICE_TABLE_VERSION"
 
 SPOOL_PATH_ENV_VAR: Final[str] = "GATEWAY_SPOOL_PATH"
+
+#: TR-021. Exactly two, and **no default**. Not `record`, not `replay`, not
+#: "whichever the credential suggests" — a default here would mean an operator
+#: who configured nothing gets one of the two behaviours anyway, and the two
+#: differ by whether real money is spent.
+MODE_ENV_VAR: Final[str] = "GATEWAY_MODE"
+RECORD_MODE: Final[str] = "record"
+REPLAY_MODE: Final[str] = "replay"
+MODES: Final[frozenset[str]] = frozenset({RECORD_MODE, REPLAY_MODE})
+
+#: TR-063. The opt-in gating `record` mode, as **one named control with a fixed
+#: form**: permitted only when set to exactly `1`, with absence or any other
+#: value denying it.
+#:
+#: Deliberately separate from mode selection (TR-027), so reaching the provider
+#: takes two independent decisions rather than one. Selecting `record` by
+#: accident is a configuration slip; selecting it *and* setting this is a
+#: choice. The fixed form is what lets `tests/checks/test_ci_provider_gate_
+#: absent.py` assert the control's absence from every CI environment — an
+#: unfixed "some separate opt-in" is not something a check can look for.
+PROVIDER_OPT_IN_ENV_VAR: Final[str] = "GATEWAY_ALLOW_PROVIDER_CALLS"
+PROVIDER_OPT_IN_PERMITTED_VALUE: Final[str] = "1"
+
+#: The provider credential's variable. Named here so the `replay` guard can
+#: assert its **absence**; its *value* is never read by this module, never
+#: stored on the configuration, and never logged (TR-061).
+#:
+#: That this is the *only* mention of the provider's name outside
+#: `provider.py` is not incidental. `tests/checks/test_single_import_site.py`
+#: requires exactly one file in `/src` to name the distribution, matching
+#: case-sensitively as a whole word — so the uppercase spelling here is outside
+#: the match and this constant does not become a second naming site. The
+#: credential's variable name is fixed by the provider and cannot be spelled
+#: otherwise, which is why it is a constant here rather than a literal at each
+#: use.
+#:
+#: The first draft of this comment named the distribution in prose while
+#: explaining that rule, and the scan caught it — the same self-referential trap
+#: three of this epic's checks hit. Do not restate the rule using the word.
+CREDENTIAL_ENV_VAR: Final[str] = "ANTHROPIC_API_KEY"
 
 
 class GatewayConfig(BaseModel):
@@ -215,3 +266,99 @@ def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
         raise GatewayConfigError(
             f"{DEADLINE_ENV_VAR} must be greater than zero; got {raw!r}"
         ) from None
+
+
+def resolve_mode(env: Mapping[str, str] | None = None) -> str:
+    """The resolution mode, chosen explicitly or not at all (TR-021).
+
+    **No default and no implicit fallback.** The two modes differ by whether the
+    invocation spends real money, so an unset variable is a decision nobody
+    made rather than a decision to do the cheaper thing. Defaulting to `replay`
+    would be the safe-looking choice and would still be wrong: a `record`-mode
+    run that silently replayed would report costs and fixtures for calls it
+    never made.
+
+    Raises:
+        GatewayConfigError: No mode selected, or a value outside the two. Both
+            fail *before* any request is constructed, so neither costs a
+            provider call — an invocation with no mode never happens, which is
+            why it is outside TR-011's denominator.
+    """
+    source = os.environ if env is None else env
+    selected = (source.get(MODE_ENV_VAR) or "").strip()
+
+    if not selected:
+        raise GatewayConfigError(
+            f"{MODE_ENV_VAR} is not set. It has no default: `{RECORD_MODE}` reaches "
+            f"the provider and `{REPLAY_MODE}` resolves from committed fixtures, and "
+            f"guessing between them either spends money nobody authorised or "
+            f"reports results for calls that never happened (TR-021)."
+        )
+    if selected not in MODES:
+        raise GatewayConfigError(
+            f"{MODE_ENV_VAR} is {selected!r}, which is not one of "
+            f"{sorted(MODES)}. There is no nearest match and no fallback (TR-021)."
+        )
+    return selected
+
+
+def provider_calls_permitted(env: Mapping[str, str] | None = None) -> bool:
+    """Whether the `record`-mode opt-in is set to exactly its permitted value.
+
+    TR-063 fixes the form: `1` permits, and **absence or any other value
+    denies**. `true`, `yes`, `on` and `TRUE` all deny — deliberately, because a
+    control whose spelling is negotiable is one a check cannot assert the
+    absence of, and asserting its absence from every CI environment is half of
+    what this control is for.
+    """
+    source = os.environ if env is None else env
+    return source.get(PROVIDER_OPT_IN_ENV_VAR) == PROVIDER_OPT_IN_PERMITTED_VALUE
+
+
+def require_provider_opt_in(env: Mapping[str, str] | None = None) -> None:
+    """Refuse `record` mode unless opted in (TR-027, TR-063).
+
+    Raises:
+        GatewayConfigError: The opt-in is absent or malformed. Named, so an
+            operator learns which control to set — TR-065 permits naming the
+            key, and this one carries no credential material.
+    """
+    if not provider_calls_permitted(env):
+        raise GatewayConfigError(
+            f"{RECORD_MODE} mode reaches the provider and costs money, so it is "
+            f"gated behind {PROVIDER_OPT_IN_ENV_VAR}={PROVIDER_OPT_IN_PERMITTED_VALUE} "
+            f"— a control separate from mode selection, so reaching the provider "
+            f"takes two decisions rather than one (TR-027, TR-063)."
+        )
+
+
+def require_no_credential_in_replay(env: Mapping[str, str] | None = None) -> None:
+    """Refuse `replay` mode when a provider credential is present (TR-023).
+
+    **Why a present credential is a failure in a mode that never uses one.** It
+    is the only evidence available that the offline claim is being tested
+    offline. `replay` resolving from fixtures is easy to believe and hard to
+    verify — a gateway that quietly fell back to the provider would produce the
+    same results, faster, and cost money nobody was watching for. Refusing to
+    run at all when the means of cheating is present makes the claim structural.
+
+    The **absence** is checked; the value is never read (TR-061). A
+    developer machine holding a credential can still run the full offline suite
+    — the harness executes in a child environment with the variable removed
+    (`tests/conftest.py`), so the guard is satisfied by the harness rather than
+    by anyone remembering to unset their shell.
+
+    Raises:
+        GatewayConfigError: A credential is present. The message names the key
+            and never any part of the value, not even its length (TR-065).
+    """
+    source = os.environ if env is None else env
+    if (source.get(CREDENTIAL_ENV_VAR) or "").strip():
+        raise GatewayConfigError(
+            f"{REPLAY_MODE} mode refuses to run while {CREDENTIAL_ENV_VAR} is set "
+            f"in this process's environment. The mode resolves from committed "
+            f"fixtures and reaches no network, and its absence is the only "
+            f"evidence that the offline claim is being tested offline (TR-023). "
+            f"Run the harness in a child environment with the variable removed "
+            f"rather than unsetting it in your shell."
+        )
