@@ -1,7 +1,7 @@
 # QC Report: Public Corpus and Manifest
 
 **Feature**: `00002-public-corpus-and-manifest` | **Epic**: E002 | **Date**: 2026-07-27
-**Run**: Implement+QC loop, 3 iterations — judging the uncommitted FR-037 amendment | **Instructions**: `project-instructions.md` v1.2.4
+**Run**: Implement+QC loop (3 iterations), then a fourth full run at the branch tip — see the final section | **Instructions**: `project-instructions.md` v1.2.4
 **Coverage target**: 80 | **Required categories**: linting, coverage | **Profile**: standard
 **Tree under test**: branch `00002-public-corpus-and-manifest`, committed at `050d289` and then merged with `main` at instructions v1.2.4. The full-suite figures below were measured before that merge; the merge brought `project-instructions.md`, `specs/00003-core-data-schema/spec.md` and `tests/checks/test_dependency_isolation.py`, and the re-verification of the affected cross-entry checks is recorded at the end of this report.
 
@@ -189,3 +189,53 @@ Re-verified on the merged tree rather than assuming the earlier figures carried:
 The serving image was rebuilt to CI parity first, because a sibling checkout on this host shares the `procurement-api:e001` tag.
 
 The model, gateway, and web suites and the coverage gates were not re-run after the merge: the merge changed no file any of them reads — `specs/00003-core-data-schema/spec.md` is read only by E003's five hard-coded-path tests, which live in the model suite and passed against that same file before the merge because it was already at this revision on `main`. Stated rather than left implicit, so a reader knows which figures are pre-merge and why that is sound.
+
+## Fourth run — 2026-07-27, at the branch tip
+
+Run because two infrastructure commits landed after the loop closed and the figures above no longer described the tip. Verdict **PASS**, and the run found one defect of its own, recorded here with its fix rather than carried as advice.
+
+### What was measured
+
+| Suite | Result |
+|---|---|
+| Model unit (CI invocation, under coverage) | **1119 passed**, 0 failed, **0 skipped** |
+| Gateway | 5 passed |
+| Cross-entry checks (no deselect) | **162 passed**, 0 skipped |
+| Web | 3 passed; Next.js build clean |
+| `corpus-validate` | **64 rules, 64 passed, 0 failed, 0 skipped** |
+| Coverage, aggregate / `model.corpus` | **93% / 93%** against an 80% floor |
+| `manufacturers.py` alone | 100% |
+| SC-019 | 21/25 = 84%, all five classes present |
+| Lint, format, contracts, lockfiles | clean at every entry |
+
+One earlier invocation of the cross-entry suite reported 161 passed and **1 skipped**; a re-run reported 162 passed and none. The skip is `test_ports.py`'s documented guard, which gives up after 64 draws when the operating system will not hand back a port with enough headroom above it to run the exhausted-search case. It is a declared, announced skip rather than a silent one, and it is conditional on the host rather than on the code. Recorded because a skip that goes unexamined is how a suite comes to measure less than it claims.
+
+### T072 and T073 — the two host-resource fixes, verified
+
+Both were raised by QC rather than by a requirement, and both are now recorded as tasks. The audit confirmed independently:
+
+- **T072** — no bare `procurement-api:e001` remains as an operative value; the workflow derives the tag and stamps the label; four sibling checkout paths resolve to four distinct tags; `foreign_build()` behaves correctly against real Docker images in all four directions (foreign stamp, unstamped, absent, ours).
+- **T073** — with a migrated database up on 5436, the cross-entry suite runs and the database is **still healthy afterwards with `alembic_version` at 0010**, 14 tables intact and its volume present. The checks Compose project leaves no container behind, and its name is not the one Compose infers from the repository directory. Sibling checkouts' databases were untouched.
+
+### The defect this run found, and closed
+
+**`foreign_build()` was armed and never fired.** It existed, was tested, and was cited in a `verify.yml` comment claiming it "refuses an image stamped with somebody else's checkout path" — but no operative check invoked it. Every test of it monkeypatched both `_label` and `image_exists`, so no code path touching a real image ever executed; coverage corroborated exactly that, with the helper the lowest-covered file in the aggregate and both Docker-facing function bodies at zero.
+
+That is a claim nothing checks — the same failure this epic has now caught four times, and this instance was self-inflicted: the workflow comment asserting the detector was armed was written in the same commit that left it unwired.
+
+Closed by a provenance guard at the head of `test_image_contents.py`, which asserts the image exists **and separately** that this checkout built it. Existence is asserted first on purpose: a provenance check that treats "absent" as "fine" passes vacuously on a machine that never built the image, which is the precise shape of vacuity T066 had already found once in this epic.
+
+Demonstrated in both failing directions against real Docker, not under monkeypatch:
+
+```
+foreign stamp  -> AssertionError: qcprobe:foreign was built from
+                  S:/claudecode/KayaDemoProcurementRisk2, not …Risk3
+absent image   -> AssertionError: qcprobe:nonexistent does not exist;
+                  build it as the workflow does — docker build --label …
+our own image  -> passes
+```
+
+### Standing item, not this epic's
+
+`project-instructions.md` v1.2.4 names `mypy` as the Python type checker scoped to `/src/gateway` and requires no type errors before merge, but `mypy` appears in no dependency group, no `[tool.mypy]` section, and no workflow step. E002 touches no `/src/gateway` file, so the obligation does not reach it — the finding of inapplicability recorded above still holds after the two infrastructure commits. It is an unmet repository-level obligation that will bind E004, and it is named here so it is not rediscovered as new.
+

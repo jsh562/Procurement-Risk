@@ -11,6 +11,34 @@ from tests.checks.helpers.image_contents import (
     modeling_module_names,
     normalize,
 )
+from tests.checks.helpers.images import foreign_build, image_exists, resolve_image_tag
+
+
+def test_the_image_these_assertions_read_was_built_by_this_checkout() -> None:
+    """Every assertion below describes whatever image holds the tag. This says
+    whose it is.
+
+    The tag is per-checkout now, so a foreign image is unlikely rather than
+    impossible — `PRC_IMAGE_TAG` can point anywhere, and an image built before
+    the label existed carries no stamp. Without this, the detector in
+    `helpers/images.py` is armed and never fired, and every assertion in this
+    module would describe a foreign artifact while passing.
+
+    Existence is asserted first and separately. A provenance check that treats
+    "absent" as "fine" passes vacuously on a machine that never built the
+    image, which is precisely the shape of vacuity this module keeps finding.
+    """
+    tag = resolve_image_tag()
+    assert image_exists(tag), (
+        f"{tag} does not exist; build it as the workflow does — "
+        f'docker build --label "com.procurement.checkout=$PWD" '
+        f"-f src/api/Dockerfile -t {tag} src/"
+    )
+    foreign = foreign_build(tag)
+    assert foreign is None, (
+        f"{foreign}. Every assertion in this module would otherwise describe "
+        f"an image this checkout did not build."
+    )
 
 
 @pytest.fixture(scope="module")

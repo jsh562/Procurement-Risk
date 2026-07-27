@@ -15,8 +15,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.checks.helpers.images import resolve_image_tag
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-IMAGE_TAG = "procurement-api:e001"
+IMAGE_TAG = resolve_image_tag()
 SRC_ROOT = REPO_ROOT / "src"
 PYTHON_ENTRIES = ("api", "gateway", "model")
 
