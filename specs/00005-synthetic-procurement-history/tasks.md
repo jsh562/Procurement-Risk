@@ -59,9 +59,9 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 ## Phase 1: Setup (Repository / Workspace Delta)
 
-- [ ] T001 [P] Add `src/model/src/model/procurement` to coverage `source` and a `procurement` path entry in pyproject.toml — an unlisted package lands in the denominator uncounted
-- [ ] T002 [P] Declare the `procurement-generate`, `procurement-load` and `procurement-validate` console entry points in src/model/pyproject.toml
-- [ ] T003 [P] Pin `data/procurement/**/*.json` and `data/ground-truth/**/*.json` to `text eol=lf` in .gitattributes
+- [X] T001 [P] Add `src/model/src/model/procurement` to coverage `source` and a `procurement` path entry in pyproject.toml — an unlisted package lands in the denominator uncounted
+- [X] T002 [P] Declare the `procurement-generate`, `procurement-load` and `procurement-validate` console entry points in src/model/pyproject.toml
+- [X] T003 [P] Pin `data/procurement/**/*.json` and `data/ground-truth/**/*.json` to `text eol=lf` in .gitattributes
 
 ---
 

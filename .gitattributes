@@ -24,3 +24,15 @@ data/corpus/**/*.pdf  binary
 # other checks, and one convention for `data/` is easier to keep than two.
 data/roster/**/*.json text eol=lf
 data/roster/**/*.md   text eol=lf
+
+# E005's emitted artifacts. Like the roster, the dataset fixture is hashed over
+# a canonical re-serialization of its *parsed* content, so its digest survives a
+# line-ending rewrite by design (AD-001) — that property is the mechanism, and
+# pinning the file does not weaken it. Pinned anyway for the same two reasons:
+# the fixture and the ground-truth record are compared byte-for-byte by the
+# deterministic-ordering check (DV-023, two runs at one seed emit byte-identical
+# payloads), and one convention for everything under `data/` is easier to keep
+# than three. The datasheet is Markdown and is emitted by the same run.
+data/procurement/**/*.json   text eol=lf
+data/procurement/**/*.md     text eol=lf
+data/ground-truth/**/*.json  text eol=lf

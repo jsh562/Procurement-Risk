@@ -47,11 +47,19 @@ branch = true
 # its statements land in the denominator with no hits; see the step in
 # `.github/workflows/verify.yml`. All entries pin coverage==7.15.2 because
 # `combine` rejects a data-file version mismatch.
+#
+# `model.procurement` was added with E005 (T001). It is listed here *and* given
+# a `[tool.coverage.paths]` entry below because E003's QC proved the failure
+# mode: a package absent from `source` still reaches the denominator through
+# the model step's own data file, lands there with zero hits, and drags the
+# combined percentage down while measuring nothing. The two settings are one
+# change, not two.
 source = [
     "tests/checks/helpers",
     "src/model/src/model/roster",
     "src/model/src/model/schema",
     "src/model/src/model/corpus",
+    "src/model/src/model/procurement",
     "src/gateway/src/gateway",
 ]
 
@@ -67,6 +75,11 @@ schema = ["src/model/src/model/schema", "*/src/model/schema"]
 # the mapping is never consulted -- an accident that ends the moment anyone
 # sets `relative_files` or the step loses its explicit scope.
 corpus = ["src/model/src/model/corpus", "*/src/model/corpus"]
+# Added with E005, alongside the `source` entry above. Same reasoning as
+# `corpus`: the mapping is not consulted today because the model step passes an
+# explicit `--source` and the data file holds absolute paths, and it is written
+# anyway so the package is not the one that breaks when that stops being true.
+procurement = ["src/model/src/model/procurement", "*/src/model/procurement"]
 gateway = ["src/gateway/src/gateway", "*/src/gateway"]
 
 [tool.coverage.report]

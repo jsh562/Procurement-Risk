@@ -31,13 +31,23 @@ dependencies = [
 #
 # `migrate` arrived with the schema epic and the four corpus commands with the
 # corpus epic; they are unrelated jobs that happen to share one entry, so both
-# sets are declared here rather than either replacing the other.
+# sets are declared here rather than either replacing the other. The three
+# `procurement-*` commands arrived with E005 and follow the same split the
+# corpus epic established -- one verb per job, `<domain>-<verb>`, no subcommand
+# dispatcher -- so a workflow step names the job it runs.
+#
+# E005 adds no dependency: the generator draws with the NumPy already declared
+# above, the loader uses the declared psycopg, and everything else it needs is
+# stdlib or a package this entry already ships (`model.roster`, `model.corpus`).
 [project.scripts]
 migrate = "model.schema.cli:main"
 corpus-retrieve = "model.corpus.retrieve:main"
 corpus-generate = "model.corpus.generate:main"
 corpus-validate = "model.corpus.validate:main"
 corpus-reverify = "model.corpus.reverify:main"
+procurement-generate = "model.procurement.generate:main"
+procurement-load = "model.procurement.load:main"
+procurement-validate = "model.procurement.validate:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
