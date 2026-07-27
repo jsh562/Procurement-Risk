@@ -3,7 +3,7 @@ feature_branch: "00006-document-ingestion-and-extraction"
 created: "2026-07-27"
 input: "E006"
 spec_type: "product"
-spec_maturity: "draft"
+spec_maturity: "clarified"
 epic_id: "E006"
 epic_sources: "{PRD:CAP-002}{SAD:ADR-0008}"
 ---
@@ -14,7 +14,7 @@ epic_sources: "{PRD:CAP-002}{SAD:ADR-0008}"
 **Created**: 2026-07-27
 **Status**: Draft
 **Spec Type**: product
-**Spec Maturity**: draft
+**Spec Maturity**: clarified
 **Epic ID**: E006
 **Epic Sources**: {PRD:CAP-002}{SAD:ADR-0008}
 **Product Document**: `specs/prd.md`
@@ -50,7 +50,7 @@ Fifty-one corpus documents sit on disk as PDFs and a database sits empty beside 
 
 ### Edge Cases & Boundaries
 
-- A structural unit that exceeds the encoder's 256 word-piece window: the encoder truncates silently and still returns a well-formed vector, so a too-long chunk is indistinguishable from a complete one at query time. Splitting must continue down the structural hierarchy, and a leaf that still exceeds the window fails the run rather than embedding a head-only vector.
+- A structural unit that exceeds the encoder's 256 word-piece window: the encoder truncates silently and still returns a well-formed vector, so a too-long chunk is indistinguishable from a complete one at query time. Measured over the real layer, 476 of 9,020 leaf units breach a conservative proxy for the window and the largest is 592 words, so this is the common case rather than the exception. Splitting descends to the sentence, and only a single over-long sentence fails the run.
 - A field whose label ends one page and whose value begins the next — E002's `PAGE_SPLIT_FIELD` irregularity class. A chunk may not span pages, so this is a multi-source value with one contributing chunk per page, not a chunk that straddles the break.
 - A UFGS section written as an unedited master, carrying bracketed alternatives nobody has chosen yet. Chunk text preserves the brackets verbatim so a downstream reader can see the choice is open.
 - The PART 1 REFERENCES article: a dense list of ASTM designations that embeds poorly and looks near-identical across unrelated sections.
@@ -59,8 +59,9 @@ Fifty-one corpus documents sit on disk as PDFs and a database sits empty beside 
 - A manifest entry whose recorded content hash no longer matches the file on disk — the corpus changed underneath the run.
 - A field printed with an alternate label (`Mfr` rather than `Manufacturer`), or absent entirely — both are seeded irregularity classes and neither may be defaulted into a value.
 - Two documents in one resubmittal chain differing only by revision suffix, whose chunks retrieve as duplicates.
-- A run interrupted part-way: the extraction tables are append-only by privilege, so there is no in-place repair path.
-- The provider is unreachable, or a fixture is missing in replay: chunks are already written and extraction cannot proceed.
+- A run interrupted part-way: the extraction tables are append-only by privilege, so the run cannot delete what it wrote. Per-document transactions make this survivable — an abort rolls back only the document in flight and every earlier document stays whole.
+- The provider is unreachable, or a fixture is missing in replay: a named run-level failure, distinct from per-field extraction failure, since none of the seven per-field outcomes means the invocation could not be made.
+- A page carrying no detectable structural marker at all — 175 of them in the real layer — where the page itself becomes the terminal structural unit.
 
 ## User Scenarios & Testing *(mandatory for product specs only)*
 
@@ -76,12 +77,13 @@ Every document in the corpus is parsed and cut into chunks that follow the docum
 
 1. **Given** the 51-document corpus and an empty database, **When** the ingestion job runs, **Then** every document has a `document` row and every chunk carries a non-null document, document type, project, page number, and ordinal.
 2. **Given** a chunk, **When** its text is compared against an independent extraction of the page it names, **Then** the text is found on that page — checked for every chunk in the corpus, not a sample.
-3. **Given** a specification section whose article exceeds the encoder's input window, **When** the chunker processes it, **Then** the article is split at the next structural level down, and no chunk is embedded whose tail the encoder would discard.
-4. **Given** a structural unit that cannot be split small enough to fit the window, **When** the chunker reaches it, **Then** the run fails and names the unit, rather than storing a vector that represents only its beginning.
+3. **Given** a specification section whose article exceeds the encoder's input window, **When** the chunker processes it, **Then** the ladder descends — paragraph, subparagraph, sentence — until each fragment fits, and no chunk is embedded whose tail the encoder would discard.
+4. **Given** a single sentence that exceeds the window, **When** the chunker reaches it, **Then** the run fails and names it, because below a sentence there is nothing left to split; a leaf that is merely long does not fail the run.
 5. **Given** a real UFGS specification containing unresolved bracketed alternatives, **When** it is chunked, **Then** the bracket markup is preserved verbatim in the stored text.
 6. **Given** a completed run, **When** it is run again against unchanged inputs, **Then** the same chunk boundaries and ordinals are produced.
 7. **Given** a manifest entry whose recorded content hash no longer matches the file on disk, **When** the run reaches that document, **Then** the run fails and no rows are written for it.
-8. **Given** any chunk, **When** its page attribution is read, **Then** it names exactly one page — a field crossing a page break produces two chunks, never one chunk spanning the break.
+8. **Given** any chunk, **When** its page attribution is read, **Then** it names exactly one page — a structural unit crossing a page break is cut at the break into two chunks that each keep that unit's structural identifier, never one chunk spanning the break.
+10. **Given** a page on which no structural marker is detectable at all, **When** it is chunked, **Then** the page itself is the terminal structural unit, and the ingestion report names every document chunked that way with its count rather than leaving the fallback invisible.
 9. **Given** the ingestion report, **When** it is read, **Then** it names the shared-library project convention, the chunk-identity contract, and the zero-recognition-error upper bound.
 
 ### User Story 2 - Every extracted value points at its page (Priority: P1)
@@ -189,9 +191,9 @@ Running ingestion again does not duplicate what is already there, and correcting
 
 **Chunking**
 
-- **FR-012**: System MUST place every chunk boundary on a structural boundary the parser identified — specification section, part, article, or paragraph for the real layer; field block or item entry for the synthetic layer — and MUST place zero boundaries at a fixed character, word, or token offset.
+- **FR-012**: System MUST place every chunk boundary in one of three named classes — a structural boundary the parser identified, a page break, or a sentence boundary inside a leaf that exceeds the encoder window — and MUST place zero boundaries at a fixed character, word, or token offset. A fragment produced by a page or sentence boundary MUST keep the structural identifier of the unit it came from, so the fragment remains attributable to a structure even though the cut was not made at one.
 - **FR-013**: System MUST confine each chunk to a single page.
-- **FR-014**: System MUST measure chunk length in the embedding encoder's own tokenizer, MUST split a unit exceeding the window at the next structural level down, and MUST fail the run naming the offending unit rather than embed a chunk the encoder would silently truncate.
+- **FR-014**: System MUST measure chunk length in the embedding encoder's own tokenizer and MUST descend the boundary ladder — article, then paragraph, then subparagraph, then sentence — until a unit fits, rather than embedding a chunk the encoder would silently truncate. System MUST fail the run naming the unit only when a single sentence exceeds the window, since below that there is nothing left to split.
 - **FR-015**: System MUST record on each chunk the document, document type, project, page number, and a zero-based ordinal unique within its document, together with the specification section and heading where the document supplies them.
 - **FR-016**: System MUST store chunk text as it appears in the source, including unresolved bracketed alternatives in unedited specification masters, so a downstream reader can see that a choice has not been made.
 - **FR-017**: System MUST produce the same chunk boundaries and ordinals for the same inputs and chunker version, and MUST record the chunker version so a boundary change is attributable rather than mysterious.
@@ -236,9 +238,9 @@ Running ingestion again does not duplicate what is already there, and correcting
 
 **Re-running and correction**
 
-- **FR-041**: System MUST NOT update or delete an extracted value, a contributing-chunk record, or a failure record in place; a correction is a remove-and-reload of the affected document in the order the restricting foreign keys permit.
+- **FR-041**: System MUST NOT update an extracted value, a contributing-chunk record, or a failure record in place; a correction is a remove-and-reload of the whole affected document in the order the restricting foreign keys permit. The removal MUST be an operator procedure executed under the schema-owning role and MUST NOT be reachable from the ingestion job, since the application role's `UPDATE` and `DELETE` are revoked on those three tables deliberately and this epic does not weaken that.
 - **FR-042**: System MUST leave no document half-ingested when a run fails part-way.
-- **FR-043**: System MUST NOT create duplicate rows when re-run over unchanged inputs.
+- **FR-043**: System MUST define a run's inputs as the tuple of corpus manifest digests, chunker version, embedding model identity and revision, and extraction prompt and schema digest; MUST skip a document whose tuple is unchanged, creating no rows for it; and MUST remove-and-reload only the documents whose tuple differs. "Unchanged inputs" means that tuple and nothing looser, since a chunker upgrade under a corpus-only test would otherwise either silently skip or silently duplicate.
 
 **Execution environment**
 
@@ -257,6 +259,28 @@ Running ingestion again does not duplicate what is already there, and correcting
 - **FR-047**: System MUST record, without performing it, the amendment that computing confidence requires: E003's TR-081 fixes per-field confidence as "a self-reported score asserted by the extracting agent", and a deterministically computed score is not that. The non-calibration half of TR-081 survives unchanged and is restated in FR-031; the self-reported half does not. Amendments to registered documents serialize on the default branch, so this branch records the need and does not carry it out — and implementation MUST NOT begin until the amendment lands, because writing computed scores into a column the normative document describes as agent-asserted would mislead every reader who trusts that document.
 - **FR-051**: System MUST claim decision-record numbers ADR-0018 and ADR-0019 at epic start, alongside the migration block of FR-040, since decision-record numbers are allocated by scanning for the highest in use and a concurrent epic branching from the same baseline would otherwise allocate the same number and be equally right.
 
+**Measured rather than assumed**
+
+- **FR-053**: System MUST measure and record in the ingestion report the distribution of leaf-unit lengths across all 51 documents in the encoder's own tokenizer, together with the count of leaves that required a sentence-level split and the list of documents chunked at the page-terminal fallback. The 26 real specifications are structurally uncharacterized, so this distribution MUST be measured rather than inferred from the standard's format rules.
+- **FR-061**: System MUST record in the ingestion report the count of near-duplicate chunk clusters by cause — the dense reference-designation lists, agency variants of one MasterFormat number, and resubmittal chains differing only by revision suffix — counted both as exact matches on normalized text and above a declared similarity threshold, so retrieval inherits a measured figure rather than a surprise.
+
+**Run integrity**
+
+- **FR-054**: System MUST commit all rows for one document — its chunks, extracted values, contributing-chunk records, failures, and run associations — in a single transaction, in that order, so that an aborted run rolls back only the document in flight and needs no deletion privilege to clean up after itself.
+- **FR-055**: System MUST mark each ingestion run active or superseded, MUST keep at most one active run per document, and MUST require downstream readers to filter on the active run. System MUST state a retention bound for superseded runs and a purge procedure, since an unbounded set of generations grows the chunk table by a full corpus per chunker revision.
+- **FR-056**: System MUST treat a missing fixture in replay, or an unreachable provider, as a named run-level failure that aborts the run and is reported distinctly from per-field extraction failure. It MUST NOT be recorded under any of the seven per-field outcomes, none of which means the invocation could not be made; recording it as one would say the model produced something unusable when nothing was ever asked.
+
+**Extraction policy**
+
+- **FR-057**: System MUST compute confidence as 1.0 less declared deductions — 0.15 where the printed field label matched a known alternate rather than the canonical form, 0.10 where the value was assembled across a page break, and 0.25 where the invocation validated only after a repair — resolving alternate labels against the field-label vocabulary E002 committed rather than a list invented here. The floor is **0.80**, and MUST be stated as the combinations it excludes: any repaired invocation, and any value that is both alternate-labelled and page-split. Three signals over a discrete scale admit only eight distinct scores, so the floor is meaningful only when named by what it rejects.
+- **FR-058**: System MUST attempt only the declared transmittal field subset per chunk rather than all twenty-two vocabulary terms, roughly ten of which cannot appear on a transmittal at all, and MUST record a field absent from an entire document once per document rather than once per chunk. Attempting every term everywhere would fill the failure table with structural absences and make its figures unreadable.
+- **FR-062**: System MUST keep the printed text of a value as the evidence its citation points at, and MUST hold any coerced numeric form in the column the schema provides for it. Where the schema stores a canonical form that differs from the printed text — a date normalized to ISO-8601 — the printed form remains recoverable from the cited chunk, which holds the page text verbatim. Comparisons asserting agreement with the printed document therefore apply to text-kind values.
+- **FR-059**: System MUST associate every extracted value with the line item it belongs to, through an association this epic owns in its claimed migration block, keyed by value, document, and item ordinal. The value table carries no line-item key and this epic does not change it; without the association, a transmittal listing five items yields five manufacturers and five part numbers with nothing joining them, which is the association identity resolution matches on.
+
+**Measurement**
+
+- **FR-060**: System MUST publish per-field precision, recall, and F1 with Wilson 95% intervals, per field and per layer, beside the deterministic baseline's figures on the same documents. Recall MUST be denominated on the full set of fields the generator recorded as printed, not on the values that were stored — a denominator of stored values would make a stricter confidence floor register as better quality by discarding the hard cases.
+
 ### Key Entities *(include for product or technical specs if feature involves data)*
 
 - **Document**: One corpus PDF as a record — its identifier, type, project, title, layer, license basis, and layer-appropriate provenance. Real specifications attach to the shared-library project; synthetic transmittals attach to their own. The table exists; E006 populates it.
@@ -267,6 +291,7 @@ Running ingestion again does not duplicate what is already there, and correcting
 - **IngestionRun**: One execution of the pipeline — agent identity, provider model, chunker version, embedding model identity and revision, corpus manifest digests, resolution mode, start and finish. The record E006 owes because the schema deliberately left per-row agent identity out. New; every other entity here already has a table.
 - **RunOutput**: The association between an ingestion run and each chunk, extracted value, and failure it wrote. New, and owned by this epic rather than added as a column, because the three tables it links belong to a schema this epic does not own.
 - **BaselineExtraction**: What a deterministic template-driven extractor produced from the same transmittals, held so that every model figure can be reported against it rather than on its own.
+- **LineItem**: One proposed material or equipment entry on a transmittal, and the association binding the values read out of it — manufacturer, part number, quantity and the rest — into a single item. New, and owned by this epic, because the value table carries no line-item key and this epic does not change it. Survives an item entry being split across two chunks, which is what makes it worth a record rather than a convention.
 
 ## Assumptions & Risks *(mandatory)*
 
@@ -298,7 +323,7 @@ Each limitation below is recorded with its scope decision, the evidence behind i
 
 ## Implementation Signals *(mandatory)*
 
-- `NEW-ENTITY` — an ingestion-run record and the association records linking it to every chunk, value, and failure it wrote; the only entities in this epic without existing tables.
+- `NEW-ENTITY` — an ingestion-run record with active/superseded state, the association records linking it to every chunk, value, and failure it wrote, and a line-item association binding the values read out of one item entry; the only entities in this epic without existing tables.
 - `MIGRATION` — forward migrations in the newly claimed `0300`–`0399` block for those records, plus extension of the block partition the build asserts.
 - `NEW-CONFIG` — extension of the enumerated computation-boundary import contract to this epic's model-facing modules; unlike the repository-wide provider-import scan, that contract names its modules one by one and does not cover a new one until told to.
 - `NEW-WORKER` — an offline ingestion job invoked as a console entry point of the modeling entry, not as a service or a container job.
@@ -332,10 +357,10 @@ Each limitation below is recorded with its scope decision, the evidence behind i
 - **SC-021** [US5]: 100% of chunks, extracted values, and failure records resolve to exactly one ingestion run.
 - **SC-022** [US5]: Every ingestion run record names its agent identity, provider model, chunker version, embedding model identity and revision, corpus manifest digests, and resolution mode; zero fields are absent.
 - **SC-023** [US6]: A full ingestion run completes in continuous integration with zero provider calls and zero network access.
-- **SC-024** [US6]: Zero rows in the extraction tables are updated or deleted in place across any run or correction.
-- **SC-025** [US6]: Re-running ingestion over unchanged inputs adds zero chunk, extracted-value, or failure rows.
+- **SC-024** [US6]: Zero rows in the extraction tables are updated in place across any run or correction; deletion occurs only through the documented whole-document remove-and-reload executed under the schema-owning role, and zero deletions originate from the ingestion job.
+- **SC-025** [US6]: Re-running ingestion when every document's input tuple is unchanged adds zero chunk, extracted-value, or failure rows; a run in which a tuple differs reloads exactly the documents whose tuple differs and no others.
 - **SC-026** [US3]: Recomputing every stored confidence from the signals recorded with it reproduces the stored value exactly, and zero stored confidences originate from a model assertion.
-- **SC-027** [US2]: Zero identity assertions are made between two differently-spelled manufacturer names, and zero stored values differ from the generator's recorded pre-render text for their page — the same reference SC-013 names, compared over every stored value rather than a sample.
+- **SC-027** [US2]: Zero identity assertions are made between two differently-spelled manufacturer names, and zero text-kind values differ from the generator's recorded pre-render text — the same reference SC-013 names, compared over every text-kind value rather than a sample. A value assembled across a page break is compared against the concatenation of its contributing chunks' pre-render text in contributor order.
 - **SC-028** [US2]: The enumerated computation-boundary contract names every model-facing module this epic adds; contracts kept with zero broken.
 - **SC-029** [US2]: Every extraction quality figure is published beside the deterministic baseline's figure over the same documents, with the baseline labelled strong or weak and with an interval on the figure; zero figures are published without a baseline or without an interval.
 - **SC-030** [US1]: Zero documents are ingested whose recorded content hash differs from the file on disk, and a mismatch aborts the run with zero rows written for that document.
@@ -346,9 +371,17 @@ Each limitation below is recorded with its scope decision, the evidence behind i
 - **SC-035** [US6]: Zero ingestion code paths are reachable from a request-serving entry point.
 - **SC-036** [US1]: Zero document records exist for a PDF no manifest lists; 100% of document identifiers are the lower-cased file stem and satisfy the identifier format the schema requires; 100% of document types are drawn from the closed set the schema defines; and zero identifiers are shared by two documents.
 - **SC-037** [US1]: Zero pages yield different text under page attribution than under the corpus's own structural derivation, since both read the page under one set of extraction tolerances and one normalization form.
-- **SC-038** [US1]: Zero chunk boundaries fall at a fixed character, word, or token offset; 100% coincide with a structural boundary the parser identified.
+- **SC-038** [US1]: Zero chunk boundaries fall at a fixed character, word, or token offset; 100% fall in one of the three named boundary classes, and every fragment produced by a page or sentence boundary carries the structural identifier of the unit it came from.
 - **SC-039** [US3]: 100% of failure records carry a source chunk, an attempted page, a field name, a repair attempt count, and a diagnostic detail; zero carry an absent field among those five.
 - **SC-040** [US2]: 100% of numeric and date values were coerced from the printed text by deterministic code; zero typed values were accepted in the form the model returned them.
+- **SC-041** [US1]: Zero chunks exceed the encoder window; zero runs fail on an over-long leaf that a sentence-level split could have resolved; and the measured leaf-length distribution, the sentence-split count, and the page-terminal document list are published.
+- **SC-042** [US6]: An aborted run leaves zero half-ingested documents, and 100% of committed documents carry their complete row set — chunks, values, contributing chunks, failures, and run associations.
+- **SC-043** [US5]: At most one ingestion run is active per document at any time, and zero downstream reads return rows from more than one generation of the same document.
+- **SC-044** [US3]: A missing fixture in replay produces exactly one named run-level failure and zero per-field failure records, and the run does not report completion.
+- **SC-045** [US3]: 100% of stored confidences equal 1.0 less their declared deductions and are at or above the declared floor of 0.80; zero repaired invocations and zero values that are both alternate-labelled and page-split are stored.
+- **SC-046** [US2]: 100% of extracted values belong to exactly one line item, and a line item whose entry was split across two chunks remains one line item.
+- **SC-047** [US2]: Per-field precision, recall, and F1 are published per field and per layer with Wilson 95% intervals against the generator's full printed-field set, beside the baseline's figures; zero figures are denominated on stored values alone.
+- **SC-048** [US1]: Near-duplicate chunk cluster counts are published by cause, both as exact normalized-text matches and above the declared similarity threshold.
 
 ## Glossary *(include when spec introduces 2+ domain-specific terms)*
 
@@ -364,6 +397,8 @@ Each limitation below is recorded with its scope decision, the evidence behind i
 | Word piece | The sub-word unit the embedding encoder counts; its 256-unit window is a hard cap on chunk length and is not equivalent to a word or character budget. |
 | Page-split field | A field whose label ends one page and whose value begins the next — a seeded corpus irregularity, and the reason a value may draw on more than one chunk. |
 | Structure-aware chunking | Cutting a document at boundaries the document itself declares — section, part, article, paragraph — rather than at a fixed size. |
+| Boundary class | One of the three kinds of cut a chunk boundary may be: a structural boundary the parser identified, a page break, or a sentence boundary inside a leaf too long to embed. None of them is a fixed offset, and a fragment cut at a page or sentence boundary keeps the structural identifier of the unit it came from. |
+| Input tuple | What a run's inputs are defined to be for the purpose of deciding whether to re-ingest a document: corpus manifest digests, chunker version, embedding model identity and revision, and extraction prompt and schema digest. A change to any element makes the document's existing rows a superseded generation. |
 
 ## Clarifications
 
@@ -374,6 +409,26 @@ Each limitation below is recorded with its scope decision, the evidence behind i
 - Q: Which corpus layers get line-item extraction, as opposed to only being chunked and embedded? → A: The synthetic submittal transmittals only. All 51 documents are still parsed, chunked, and embedded. Real UFGS specifications are requirement prose containing unresolved bracketed alternatives, so asking a model for "the" value would fabricate a requirement the document does not state. Accepted cost: extraction accuracy is measured on generated material only, and must be published with that caveat.
 - Q: Where does the ingestion-run agent identity live, given the schema deliberately omits a per-row agent column? → A: A new ingestion-run table, claiming migration prefix block `0300`–`0399` and leaving `0200`–`0299` for the epic sharing this wave.
 - Q: Should per-field confidence be the model's own self-reported number, or computed from parse signals? → A: Computed deterministically from parse signals — label matched canonical or alternate, value printed or absent, single-chunk or page-split, validated first try or after a repair. Reproducible, explainable, and on the code side of "the model extracts, code computes"; the research finds self-reported confidence collapses toward all-positive at practical thresholds, which would make the chosen floor reject nothing. Consequence recorded rather than absorbed: E003's TR-081 fixes confidence as agent-asserted, so this needs an amendment, raised in FR-047 and not performed on this branch.
+### Session 2026-07-27 (Clarify)
+
+- Q: 476 of 9,020 leaf units in the real layer exceed the encoder window and 175 pages carry no structural marker at all, so no legal chunking existed. How should boundaries be made legal? → A: Three named boundary classes — structural, page break, and sentence within an oversized leaf — with each fragment keeping the structural identifier of the unit it came from, so a boundary is still never a fixed offset. The ladder descends article → paragraph → subparagraph → sentence; where no structural level is detectable the page is the terminal unit, named in the report with its count. The run fails only when a single sentence exceeds the window. The leaf-length distribution is measured and published rather than inferred (FR-012, FR-014, FR-053).
+- Q: SC-024 forbade the removal FR-041 defines as the only correction path, and an aborted run could not clean up after itself under append-only privilege. → A: All rows for one document commit in a single transaction in a stated order, so an abort rolls back only the document in flight and no deletion privilege is needed. Deletion happens solely through the documented whole-document remove-and-reload executed under the schema-owning role, never from the ingestion job (FR-041, FR-054, SC-024, SC-042).
+- Q: Does a chunker version change count as "changed inputs"? → A: A run's inputs are the tuple of corpus manifest digests, chunker version, embedding model identity and revision, and extraction prompt and schema digest. Runs carry active or superseded state, at most one is active per document, readers filter on active, and superseded runs have a stated retention bound and purge procedure (FR-043, FR-055, SC-025, SC-043).
+- Q: A missing fixture in replay has no home in the closed set of seven per-field outcomes. → A: It is a named run-level failure that aborts the run, reported distinctly from per-field extraction failure. Recording it under a per-field outcome would say the model produced something unusable when nothing was ever asked (FR-056, SC-044).
+- Q: A "line item" is this epic's output, but the value table has no line-item key — five items yield five manufacturers and five part numbers with nothing joining them. → A: An association this epic owns in its claimed migration block, keyed by value, document, and item ordinal. Chosen over treating the source chunk as the key because an over-long item entry split across two chunks would silently become two line items (FR-059, SC-046).
+- Q: What are the confidence weights and the floor? → A: 1.0 less declared deductions — alternate label 0.15, page-split assembly 0.10, repaired invocation 0.25 — resolved against E002's committed field-label vocabulary. Floor **0.80**, stated as the combinations it excludes: any repaired invocation, and any value both alternate-labelled and page-split. The floor was raised from the 0.70 originally proposed because 0.70 admits both combinations it claimed to exclude, each scoring exactly 0.75. The "value printed or absent" signal was dropped: an absent value is a failure record, not a stored value with a confidence, so it can never fire (FR-057, SC-045).
+- Q: Which fields are attempted, given roughly ten of the twenty-two vocabulary terms cannot appear on a transmittal? → A: Only the declared transmittal field subset, attempted per chunk, with a field absent from a whole document recorded once per document rather than once per chunk (FR-058).
+- Q: FR-050 requires an interval and a baseline but names no figures and no denominator. → A: Per-field precision, recall and F1 with Wilson 95% intervals, per field and per layer, beside the baseline. Recall is denominated on the generator's full printed-field set, not on stored values — a stored-value denominator would make a stricter confidence floor register as better quality (FR-060, SC-047).
+
+## Stress-Test Findings
+
+### Session 2026-07-27
+
+- **STF-001**: Constraint Impossibility (CRITICAL) — Affected: FR-012, FR-013, FR-014, SC-004, SC-031, SC-038, US1 — No legal chunking existed for a structural unit crossing a page break, and a too-long leaf aborted the run in a corpus the spec admits is structurally uncharacterized. Measured over all 26 real documents: 9,020 leaf units, 476 (5.3%) above a conservative word-count proxy for the encoder window, largest 592 words, and 175 pages carrying no structural marker at all. **Resolved**: three named boundary classes, a descent ladder ending at the sentence, page as terminal unit where nothing is detectable, run failure only for an over-long single sentence, and the distribution published.
+- **STF-002**: Cross-Requirement Contradiction (CRITICAL) — Affected: FR-005, FR-041, FR-042, FR-052, SC-024, SC-030, US6 — Append-only privilege made the no-half-ingested-document guarantee unachievable once a run aborted after extraction, and SC-024 forbade the removal FR-041 defines as the only correction path. Write ordering was never stated, so "half-ingested" had no test. **Resolved**: per-document transaction with a stated write order; SC-024 rewritten to forbid in-place update while permitting the documented remove-and-reload under the schema-owning role.
+- **STF-003**: Concurrent-Trigger Ambiguity (HIGH) — Affected: FR-017, FR-039, FR-041, FR-043, SC-005, SC-007, SC-021, SC-025, US5, US6 — A re-run at a new chunker version had to both produce different boundaries and write zero rows, nothing marked a run superseded, and the corpus would grow by a full chunk set per revision with no bound. **Resolved**: input tuple defined, active/superseded run state, one active run per document, readers filter on active, retention bound and purge procedure stated.
+- **STF-004**: Constraint Impossibility (HIGH) — Affected: FR-027, FR-049, SC-013, SC-020, SC-027, SC-040, US4 — A criterion quantified at zero over a population where an exception is guaranteed: a date printed `3/14/26` is stored canonically as ISO-8601, and a page-split value matches the pre-render text of neither page alone. **Resolved** without a question, since the schema already provides both a text and a numeric column: comparisons against printed text are scoped to text-kind values, the printed form stays recoverable from the cited chunk, and a page-split value is compared against the concatenation of its contributing chunks in contributor order.
+- **STF-005**: Boundary/Scale Stress (HIGH) — Affected: FR-034, FR-035, FR-037, FR-045, SC-012, SC-016, SC-023, US3 — A missing fixture or unreachable provider had no requirement and no outcome in the closed set of seven, none of which means the invocation could not be made. **Resolved**: a named run-level failure that aborts the run, distinct from per-field extraction failure.
 
 ## Compliance Check
 
@@ -400,3 +455,5 @@ Each limitation below is recorded with its scope decision, the evidence behind i
 
 1. **FR-047 blocks implementation.** E003's TR-081 declares `extracted_value.confidence` a score the extracting agent asserted about its own output, and `data-model.md` is normative for reader-facing semantics under {SAD:ADR-0017}. Writing computed scores into that column before the amendment lands would mislead any reader who trusts the governing document. The amendment lands on `main`; this branch only records the need.
 2. **`0200`–`0299` is left for E005 by this spec alone.** Nothing outside this document ratifies it, so the disjointness holds only if E005 reads E006's claim. Worth raising when E005 is specified.
+
+**Recorded after the 2026-07-27 clarification pass, and deliberately not a third condition:** E003's migration `0009` revokes `UPDATE` and `DELETE` on the three provenance tables from the application role, and TR-085 states no deletion path is declared for them at all. FR-041's remove-and-reload therefore cannot be executed by the ingestion job. This is resolved without an amendment, because no schema object changes: the removal is an operator procedure executed under the schema-owning role, and FR-054's per-document transaction means the ingestion job never needs deletion privilege to recover from its own abort. Raised to E003 as a note rather than an amendment request.
