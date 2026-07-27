@@ -32,8 +32,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Final, NoReturn, Protocol
 
+from pydantic import BaseModel
+
 from gateway import provider
-from gateway.compute.hashing import fixture_key
+from gateway.compute.hashing import fixture_key, repair_fixture_key
 from gateway.compute.pricing import (
     CostOutOfRangeError,
     TokenCounts,
@@ -50,7 +52,7 @@ from gateway.config import (
     require_provider_opt_in,
     resolve_mode,
 )
-from gateway.errors import GatewayConfigError, GatewayError
+from gateway.errors import GatewayConfigError, GatewayError, GatewayValidationError
 from gateway.fixtures import (
     FIXTURE_LOOKUP_ATTEMPTS,
     FixtureProvenance,
@@ -72,7 +74,7 @@ from gateway.record.writer import (
     log_invocation_complete,
     logger,
 )
-from gateway.validation import MAX_REPAIR_ATTEMPTS
+from gateway.validation import MAX_REPAIR_ATTEMPTS, validate_or_repair
 
 __all__ = [
     "Attempted",
@@ -407,9 +409,13 @@ def _invoke(request: InvocationRequest, resolution: Resolution) -> InvocationRes
     else:
         attempted = _resolve_from_fixtures(request, resolution)
 
-    repairs = 0
+    # TR-006: validated *before* it is returned, persisted, or logged. The
+    # failure branch below writes the row and raises rather than returning, so
+    # there is no path on which an unvalidated value reaches a caller.
+    validated, repairs, failure = _validate(request, attempted, resolution)
+
     duration_ms = elapsed_ms(started, resolution.monotonic())
-    outcome = classify_outcome(reached_valid_value=True, repair_attempt_count=repairs)
+    outcome = classify_outcome(reached_valid_value=failure is None, repair_attempt_count=repairs)
     cost, absent_reason = _price(attempted, pin, resolution)
 
     record = InvocationRecord(
@@ -433,9 +439,23 @@ def _invoke(request: InvocationRequest, resolution: Resolution) -> InvocationRes
         price_table_version_id=pin,
         pricing_timestamp=attempted.pricing_timestamp,
         outcome=outcome,
-        error_type=None,
+        error_type="validation_failed" if failure is not None else None,
         created_at=resolution.now(),
     )
+
+    if failure is not None:
+        # TR-008: the row is written *before* the error is raised, so a caller
+        # that catches this can rely on the row existing — and a paid call is
+        # never left with no trace of itself. The ordering is `record_then_raise`'s
+        # and is tested there against a fake writer.
+        log_invocation_complete(record)
+        record_then_raise(
+            failure,
+            write=lambda **_: _write_or_spool(record, resolution),
+            trace_id=trace_id,
+            outcome=outcome,
+            error_type="validation_failed",
+        )
 
     _write_or_spool(record, resolution)
     log_invocation_complete(record)
@@ -443,13 +463,24 @@ def _invoke(request: InvocationRequest, resolution: Resolution) -> InvocationRes
     return InvocationResult(
         invocation_id=invocation_id,
         trace_id=trace_id,
-        content=attempted.content,
+        # The validated value where one was produced, and the raw content only
+        # where the caller supplied no schema — in which case nothing claimed it
+        # was checked. `outcome` cannot mean "schema-valid" on such a row, which
+        # is why the absence of a schema is a caller decision rather than a
+        # default the gateway makes for them.
+        content=attempted.content if validated is None else validated.model_dump_json(),
         outcome=outcome,
         resolution_mode=resolution.mode,
     )
 
 
-def _reach_the_provider(request: InvocationRequest, resolution: Resolution) -> Attempted:
+def _reach_the_provider(
+    request: InvocationRequest,
+    resolution: Resolution,
+    *,
+    prompt_override: str | None = None,
+    is_repair: bool = False,
+) -> Attempted:
     """The `record` arm: build a request, call the provider, keep the response.
 
     Gated twice before anything leaves the process — the mode says `record` and
@@ -475,7 +506,7 @@ def _reach_the_provider(request: InvocationRequest, resolution: Resolution) -> A
         return client.messages.create(
             model=model,
             max_tokens=DEFAULT_MAX_TOKENS,
-            messages=[{"role": "user", "content": request.prompt}],
+            messages=[{"role": "user", "content": prompt_override or request.prompt}],
             timeout=timeout,
         )
 
@@ -486,7 +517,13 @@ def _reach_the_provider(request: InvocationRequest, resolution: Resolution) -> A
     recorded_at = resolution.now()
     resolved = _model_of(response, model)
 
-    key = fixture_key(request)
+    # A repair is its own fixture, keyed on the instruction that provoked it, so
+    # replaying this invocation later replays the repair rather than missing it.
+    key = (
+        repair_fixture_key(request, prompt_override or "", schema=request.output_schema)
+        if is_repair
+        else fixture_key(request, schema=request.output_schema)
+    )
     resolution.store.save(
         key,
         content,
@@ -531,7 +568,7 @@ def _resolve_from_fixtures(request: InvocationRequest, resolution: Resolution) -
     """
     require_no_credential_in_replay()
 
-    fixture = resolution.store.load(fixture_key(request))
+    fixture = resolution.store.load(fixture_key(request, schema=request.output_schema))
     return Attempted(
         content=fixture.content,
         usage=fixture.provenance.usage(),
@@ -689,3 +726,87 @@ def _gateway_revision() -> str:
         return "unknown"
     revision = result.stdout.strip()
     return revision if result.returncode == 0 and revision else "unknown"
+
+
+def _validate(
+    request: InvocationRequest, attempted: Attempted, resolution: Resolution
+) -> tuple[BaseModel | None, int, GatewayValidationError | None]:
+    """Validate the response, repairing at most once (TR-005 to TR-008).
+
+    Returns `(validated, repairs, failure)`. A failure is *returned* rather than
+    raised so the caller can write the row before raising — TR-008 fixes that
+    order, and raising here would make the natural implementation the wrong one.
+
+    **No schema means no validation, and that is a caller decision.** A caller
+    wanting raw text is legitimate. What the gateway must not do is pretend: the
+    row's `outcome` cannot mean "schema-valid" when nothing checked it, which is
+    why supplying a schema is the caller's call and not a default taken for them.
+
+    **The repair is arm-specific**, and the replay arm is the interesting one.
+    """
+    schema = request.output_schema
+    if schema is None:
+        return None, 0, None
+
+    if resolution.mode == RECORD_MODE:
+        repair = _repair_by_asking_again(request, resolution)
+    else:
+        repair = _repair_from_a_recorded_repair(request, resolution)
+
+    try:
+        validated, repairs = validate_or_repair(schema, attempted.content, repair)
+    except GatewayValidationError as exc:
+        # Returned, not raised. The row goes first (TR-008).
+        return None, MAX_REPAIR_ATTEMPTS, exc
+    return validated, repairs, None
+
+
+def _repair_by_asking_again(
+    request: InvocationRequest, resolution: Resolution
+) -> Callable[[str], str]:
+    """`record` mode: a repair is a second provider call.
+
+    It carries the failing field path and the validator message (TR-007), and it
+    is recorded as its own fixture — so replaying this invocation later replays
+    the repair too, rather than missing on it.
+
+    The second call gets its own transport budget, which is what TR-010's "per
+    model request" means: a repair is a different request, not a retry of the
+    first, and the two budgets must not consume each other.
+    """
+
+    def repair(instruction: str) -> str:
+        attempted = _reach_the_provider(
+            request, resolution, prompt_override=instruction, is_repair=True
+        )
+        return attempted.content
+
+    return repair
+
+
+def _repair_from_a_recorded_repair(
+    request: InvocationRequest, resolution: Resolution
+) -> Callable[[str], str]:
+    """`replay` mode: a repair resolves a *second* fixture.
+
+    There is no provider to ask, so the recorded repair is what stands in for
+    one. Keyed on the original request plus the instruction that provoked it, so
+    a recorded repair replays as a repair and two invocations that failed
+    differently do not share one.
+
+    **The alternative was to make replay unable to repair at all**, failing on a
+    fixture that no longer validates. That was rejected: it would make
+    `repaired` unreachable in the only mode continuous integration runs, so the
+    outcome enumeration would be exercised nowhere a check could see it.
+
+    A miss here raises `FixtureMissError` naming the repair key, which is the
+    actionable message — it means the original was recorded before the repair
+    path existed, or the schema changed, and either way the fix is to
+    regenerate.
+    """
+
+    def repair(instruction: str) -> str:
+        key = repair_fixture_key(request, instruction, schema=request.output_schema)
+        return resolution.store.load(key).content
+
+    return repair

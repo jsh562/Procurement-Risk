@@ -1,4 +1,4 @@
-E004 Traced Model Gateway — QC PASSED, run 1, 2026-07-27.
+E004 Traced Model Gateway — QC PASSED, run 2, 2026-07-27.
 Governing document: project-instructions.md v1.2.4.
 Measured on the merged tree (main 79f4f68 merged in), not the branch alone.
 
@@ -6,11 +6,11 @@ Required categories (profile `standard`):
   linting  — ruff check and ruff format clean at all four command sites,
              including the repository-root `ruff check .` that covers /tests;
              mypy strict clean; 7 import contracts kept, 0 broken; 3 locks consistent
-  coverage — 93% combined (5427 statements, 280 missed) against threshold 80,
+  coverage — 94% combined (5458 statements, 280 missed) against threshold 80,
              exit 0, combined from 3 files; corpus 93%, exit 0;
              gateway entry 95% against AD-007's 85%
 
-Tests: 391 gateway (5 skipped), 211 root cross-entry, 1141 model.
+Tests: 401 gateway (5 skipped), 211 root cross-entry, 1141 model.
 Objectives 6; validation criteria 43; success criteria 27.
 All 81 technical requirements cited in code or tests; 0 declared-but-uncited.
 tasks.md 73/75 [X], 2 withdrawn with recorded evidence.
@@ -19,12 +19,17 @@ Not measured here, recorded rather than implied:
   - OBJ6 VC2, one live provider invocation, needs a real credential and spends
     money. The smoke check covers the gate, the credential handle and the guard
     exemption, and skips the call. The 5 skips above are that file.
-  - Schema-validated output is not threaded through invoke(). validate_or_repair
-    is implemented and tested as a unit (31 tests), but InvocationRequest has no
-    schema field, so every invocation classifies `valid` with 0 repairs. Closing
-    it changes the request model and belongs with E013's first real caller.
   - The record arm is driven through an injected client; the SDK's own wire
     behaviour is not exercised.
+
+Closed since run 1, because disclosure is not satisfaction:
+  - Schema-validated output now runs through invoke(). Run 1 recorded it as
+    not-measured: validate_or_repair was unit-tested but unreachable from the
+    entry point, so TR-006 was violated on every call and `repaired` and
+    validation-`failed` were unreachable on real rows. InvocationRequest gains
+    an optional output_schema; the failure path writes the row before raising
+    (TR-008); a repair in replay resolves a second fixture keyed on the
+    instruction, so `repaired` is reachable in the mode CI runs. 10 new tests.
 
 Corrections this epic made that its own checks caught, not review:
   - TR-070 pinned semconv 1.36.0 for an attribute that release does not define.
