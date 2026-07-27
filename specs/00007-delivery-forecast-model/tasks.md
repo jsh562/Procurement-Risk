@@ -3,7 +3,7 @@
 **Input**: Design documents from `specs/00007-delivery-forecast-model/`
 **Prerequisites**: `plan.md`, `spec.md`, `data-model.md`, `research.md`, `checklists/` (data-integrity, testing, observability — all 115 items evaluated, so no checklist-completion task appears here)
 
-**Tests**: Included, and for **nine** modules **test-first is mandatory rather than optional**. `plan.md` § What qualifies admits `split.py`, `serialize.py`, `censoring.py`, `posterior.py`, `diagnostics.py`, `shrinkage.py`, `ablation.py`, `likelihood.py` and `compare.py` to the property tier — E005's three-clause rule applied as a *widening* filter over the Testing & Quality Policy's own naming, never as a ground for exclusion. Each is emitted as an ordered **RED → GREEN** pair: the property-test task must be observed failing before its implementation task begins, and the branch history carries a `test:` commit before the `feat:` commit for each pair, checkable before the squash merge. Every other module is test-after.
+**Tests**: Included, and for **ten** modules **test-first is mandatory rather than optional**. `plan.md` § What qualifies admits `split.py`, `serialize.py`, `censoring.py`, `posterior.py`, `diagnostics.py`, `shrinkage.py`, `ablation.py`, `likelihood.py`, `compare.py` and `design.py` to the property tier — E005's three-clause rule applied as a *widening* filter over the Testing & Quality Policy's own naming, never as a ground for exclusion. Each is emitted as an ordered **RED → GREEN** pair: the property-test task must be observed failing before its implementation task begins, and the branch history carries a `test:` commit before the `feat:` commit for each pair, checkable before the squash merge. Every other module is test-after.
 
 **Organization**: Grouped by user story (`US#`) per `spec_type: product`. Requirement tags are `FR-###`. `plan.md` § Requirement Coverage Map is the authority for requirement → component → file; § Success Criterion Coverage Map is the authority for criterion → validation rule → negative control; `data-model.md` § Validation Rules is the authority for which tier each `DV-###` lands in, through its **Enforcement point** and **Tier** columns.
 
@@ -33,7 +33,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 ## Brownfield Notes
 
-- **New package `model.forecast`, 18 modules, two console entry points** (`forecast-fit`, `forecast-reproduce`). No new third-party dependency: PyMC, ArviZ, NumPy and pandas are **already declared** in `src/model/pyproject.toml`, and the Plan audit verified this rather than accepting it (Assumption 5). A task that adds one is out of scope, not missing.
+- **New package `model.forecast`, 20 modules, two console entry points** (`forecast-fit`, `forecast-reproduce`). No new third-party dependency: PyMC, ArviZ, NumPy and pandas are **already declared** in `src/model/pyproject.toml`, and the Plan audit verified this rather than accepting it (Assumption 5). A task that adds one is out of scope, not missing.
 - **Reuse, do not re-author.** `model.roster.reader.canonical_bytes` and `content_hash` for canonical serialization — E005's AD-001 records that the rule set already lives in the repo twice and that a **third copy is the defect, not the fix**. `model.procurement.paths` for artifact path resolution. E003's `fn_is_sorted_ascending`, `fn_is_non_increasing` and `fn_all_within_unit_interval` are **called** by the new tables' checks and never re-declared — DV-026 is the assertion, and E007 declares exactly one function of its own.
 - **Four migrations, and `0300`'s parent is the head at landing.** E008 and E009 branch from the same Wave-4 baseline; if two of them each name `0103` the prefixes stay disjoint and the revision graph acquires two heads. Whichever lands second **re-parents, never renumbers**. The mechanism that catches a miss is the single-head and linearity check, not the block check (DV-033).
 - **Existing files touched**: `pyproject.toml` (coverage `source` **and** `paths`), `src/model/pyproject.toml` (two `[project.scripts]`, one `[tool.importlinter]` contract), `CHK/test_migration_ranges.py`, `SCH/test_migration_chain.py`, `SCH/test_forecast.py`, `SCH/test_constants_agreement.py`, `.github/workflows/verify.yml`.
@@ -104,7 +104,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 - [ ] T025 [US1] {FR-010,FR-011,FR-029} **RED** Failing posterior property tests in TST/test_posterior_properties.py — DV-004's grid identity, DV-003 by a second path, monotone conditioning
 - [ ] T026 [US1] {FR-010,FR-011,FR-029} **GREEN** Inverse-CDF conditioning, sort, grid and residual in PKG/posterior.py → exports: conditional_remaining_draws(), survival_grid() after:T025
-- [ ] T027 [US1] {FR-001,FR-002} Build the PyMC graph — one lognormal per transition, the vendor and category hierarchy, the rework sub-model — in PKG/model.py ← T024:log_contribution
+- [ ] T027 [US1] {FR-001,FR-002} Build the PyMC graph — one lognormal per transition, the vendor and category hierarchy, the rework sub-model — in PKG/model.py ← T024:log_contribution after:T115
 - [ ] T028 [US1] {FR-003} [COMPLETES FR-003] The graph's `logp` agrees with `likelihood.py` to floating tolerance over extreme σ, τ and a one-row vendor — TST/test_model_logp.py
 - [ ] T029 [US1] {FR-016} Seeded sampling at 4 chains × 1,000 draws with 1,000 tuning draws in PKG/sample.py, fitting the `train` side only
 - [ ] T030 [P] [US1] {FR-019} **RED** Failing shrinkage property tests in TST/test_shrinkage_properties.py — ρ monotone in nⱼ, triple ordered inside `[0,1]`, interval widens as nⱼ falls
@@ -118,7 +118,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [ ] T038 [US1] {FR-008} DV-001 / SC-001 — one `line_posterior` row per open line and `open_line_count` equal to that count — TST/test_open_population.py after:T035
 - [ ] T039 [US1] {FR-010,FR-011} DV-003 and DV-004 over stored `line_posterior` rows — SC-002 and SC-003 for the open population — TST/test_stored_arrays.py after:T035
 - [ ] T040 [US1] {FR-029} DV-005 / SC-027 — the longest-elapsed decile's median draw is no smaller than the shortest's, and no `survival[1]` below the floor — TST/test_conditioning.py
-- [ ] T041 [US1] {FR-002} [COMPLETES FR-002] DV-036 / SC-006 — `covariate_names` equals the design matrix's covariate set, over the input frame — TST/test_covariates.py
+- [ ] T041 [US1] {FR-002} DV-036 / SC-006 — `covariate_names` equals the design matrix's covariate set, over the input frame — TST/test_covariates.py
 - [ ] T042 [US1] {FR-019} DV-009 / SC-004 — exactly the twelve roster `vendor_id`s including a vendor with no training line, each triple ordered — TST/test_shrinkage_membership.py
 - [ ] T043 [US1] {FR-019} [COMPLETES FR-019] **NC-11** / DV-010 / SC-005 — a **strict** comparison between the two extremes, not a threshold — TST/test_shrinkage_properties.py after:T031
 - [ ] T044 [US1] {FR-030} DV-014 / SC-028 — every run this test emits carries the shape in `schema_constants` **read over the connection** (HINT-005) — TST/test_run_shape.py
@@ -135,10 +135,10 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [ ] T048 [US2] {FR-004} [COMPLETES FR-004] DV-029 / SC-007 — stored `is_censored` agrees with `lifecycle_event` by an independent path — TST/test_censoring_stored.py after:T035
 - [ ] T049 [P] [US2] {FR-033} **RED** Failing ablation property tests in TST/test_ablation_properties.py — the KM floor uses the training split alone and no held-out row moves it
 - [ ] T050 [US2] {FR-033} **GREEN** Kaplan–Meier floor against the naive completed-duration mean, and the realized delta, in PKG/ablation.py (AD-008) → exports: kaplan_meier_floor() after:T049
-- [ ] T051 [US2] {FR-033} Run the censoring-ignoring comparator over repeated seeds for the delta's interval in PKG/ablation.py — an **ablation comparator, never a baseline**
+- [ ] T051 [US2] {FR-033} Run the censoring-ignoring comparator over repeated seeds for the delta's interval in PKG/ablation.py — an **ablation comparator, never a baseline** after:T118
 - [ ] T052 [US2] {FR-033,FR-038} DV-020's report half — the ablation entry carries the delta, its interval, the derived floor **and a met-or-missed verdict**, in PKG/report.py
 - [ ] T053 [US2] {FR-033} **NC-6** — two cases: the censoring-ignoring fit's median is **shorter**, and a no-censoring input gives a delta at zero — TST/test_ablation_controls.py
-- [ ] T054 [US2] {FR-033} [COMPLETES FR-033] SC-008 — the delta sits at or above the floor, or is published as a four-part shortfall; never a single-seed pass — TST/test_ablation.py
+- [ ] T054 [US2] {FR-033} SC-008 — the delta sits at or above the floor, or is published as a four-part shortfall; never a single-seed pass — TST/test_ablation.py
 
 ---
 
@@ -146,25 +146,25 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 **Independent test**: confirm the stored split covers every line exactly once, is hashable, that no held-out line entered the design matrix, and that held-out delivered lines carry order-date-anchored predictions. **No integration task in this phase is `[P]`** — each drives the one live PostgreSQL on `${PRC_DB_PORT:-5434}`.
 
-- [ ] T055 [US3] {FR-008,FR-029} Draw **total** durations from each held-out line's own order date in PKG/posterior.py — no conditioning, same grid and residual path after:T026
-- [ ] T056 [US3] {FR-012,FR-034} [COMPLETES FR-034] Insert `held_out_prediction` inside transaction 1 in PKG/write.py — anchor, delivered flag, both label columns, insert-only
+- [ ] T055 [US3] {FR-008,FR-029} Draw **total** durations from each held-out line's own order date in PKG/posterior.py — no conditioning, same grid and residual path after:T026,T117
+- [ ] T056 [US3] {FR-012,FR-034} Insert `held_out_prediction` inside transaction 1 in PKG/write.py — anchor, delivered flag, both label columns, insert-only
 - [ ] T057 [US3] {FR-012} DV-002 / SC-013 — one prediction row per held-out delivered line and none for any other, each joinable to one run — TST/test_held_out_population.py
 - [ ] T058 [US3] {FR-012} DV-023 — a positive control that `fk_held_out_prediction__line_anchor` is present, so a dropped FK fails — TST/test_anchor_control.py
 - [ ] T059 [US3] {FR-012} [COMPLETES FR-012] **NC-5** / SC-002 — a planted row whose `anchor_date` differs from its line's `order_date` is rejected by the FK — TST/test_anchor_control.py
-- [ ] T060 [US3] {FR-010} [COMPLETES FR-010] DV-003 and DV-004 over stored `held_out_prediction` rows — the store no delivered constraint reaches — TST/test_stored_arrays.py
+- [ ] T060 [US3] {FR-010} DV-003 and DV-004 over stored `held_out_prediction` rows — the store no delivered constraint reaches — TST/test_stored_arrays.py
 - [ ] T061 [US3] {FR-011} [COMPLETES FR-011] DV-027 — pair `pg_constraint` definitions and assert all seven array invariants on both stores — TST/test_array_parity.py
-- [ ] T062 [US3] {FR-029} [COMPLETES FR-029] DV-040 — the stored held-out median lands inside a pre-published band around the training KM median — TST/test_held_out_semantic.py after:T050
+- [ ] T062 [US3] {FR-029} DV-040 — the stored held-out median lands inside a pre-published band around the training KM median — TST/test_held_out_semantic.py after:T050
 - [ ] T063 [US3] {FR-005} DV-006 / SC-009 — one row per line per run against `purchase_order_line`, ordinal contiguous from 1 in the canonical order — TST/test_split_completeness.py
 - [ ] T064 [US3] {FR-005} DV-007 / SC-010 — both strata on both sides, each realized proportion within one line of the declared fraction — TST/test_split_properties.py after:T022
 - [ ] T065 [US3] {FR-007} [COMPLETES FR-007] DV-008 / SC-011 — no held-out `po_line_id` in the fit's design matrix, recorded as a proxy — TST/test_training_isolation.py after:T029
 - [ ] T066 [US3] {FR-006} DV-028 / SC-012 — all four run-row scalars agree with their child rows, each a single SQL comparison — TST/test_run_scalars.py
 - [ ] T067 [US3] {FR-008} [COMPLETES FR-008] DV-030 — the three populations exhaustive and disjoint; no line holds rows in both stores (G-5) — TST/test_population_disjointness.py
-- [ ] T068 [US3] {FR-014} [COMPLETES FR-014] DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
+- [ ] T068 [US3] {FR-014} DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
 - [ ] T069 [US3] {FR-005} [COMPLETES FR-005] **NC-13** / AD-011 — a re-run gives the **same** `split_assignment_hash`, one mutated row a **different** one — TST/test_split_determinism.py
 - [ ] T070 [US3] {FR-028} DV-025 / SC-025 — the realized event count published **with** a statement of whether it supports the band's precision (L-3) — TST/test_report_event_count.py after:T036
 - [ ] T071 [US3] {FR-020,FR-027,FR-031} DV-024, DV-037 / SC-024, SC-029 — four parts on each limitation, the observation count stated, `L-1`–`L-4` present by identity — TST/test_limitations.py
 - [ ] T072 [US3] {FR-027} [COMPLETES FR-027] **NC-8** — a deliberately three-part limitation record **fails** the checker — TST/test_limitation_controls.py after:T071
-- [ ] T073 [US3] {FR-040} DV-041 / SC-035 — the emitted set is an **equality** against FR-040's three files, every report field in its declared schema — TST/test_emitted_set.py
+- [ ] T073 [US3] {FR-040} DV-041 / SC-035 — the emitted set is an **equality** against FR-040's three files, every report field in its declared schema — TST/test_emitted_set.py after:T098
 - [ ] T074 [US3] {FR-040} **NC-21** — a planted fourth file fails the equality and a planted unlisted field fails schema validation — TST/test_emitted_set_controls.py
 - [ ] T075 [US3] {FR-026} DV-021 / SC-026 — no emitted artifact carries a threshold or verdict, by the **closed-schema predicate**, never a term search — TST/test_no_verdict.py
 - [ ] T076 [US3] {FR-026} **NC-7** — a planted artifact containing a coverage threshold **fails** the absence check — TST/test_no_verdict_controls.py after:T075
@@ -220,12 +220,34 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 ## Phase 8: Polish & Cross-Cutting Concerns
 
 - [ ] T109 {FR-038} DV-039 / SC-034 — every measure with a criterion appears as measure, value, criterion **with direction** and verdict; wall-clock none — TST/test_reportable_unit.py after:T098
-- [ ] T110 {FR-038} [COMPLETES FR-038] **NC-20** — two planted entries fail: a value with no criterion, and a verdict against no criterion — TST/test_reportable_unit_controls.py
+- [ ] T110 {FR-038} **NC-20** — two planted entries fail: a value with no criterion, and a verdict against no criterion — TST/test_reportable_unit_controls.py
 - [ ] T111 [P] Verify `model.forecast` is counted in the root combined coverage report rather than landing in the denominator uncounted — .github/workflows/verify.yml after:T001
 - [ ] T112 [P] Confirm the model entry declares **no new dependency** for `model.forecast` and keep CHK/test_dependency_isolation.py green after:T002
 - [ ] T113 Add the release gate — emitted-set equality, import contract, migration-range remediation, reportable-unit checker — to .github/workflows/verify.yml after:T110
 
 ---
+
+## Appended After Analysis (pass A)
+
+Task IDs are never reused or renumbered, so the tenth red-green pair appends here rather than being inserted into Phase 2. **It is Foundational work and must run before T027** — the dependency edge, not the position in this file, is what orders it.
+
+- [ ] T114 {FR-001,FR-002} **RED** Property tests for the vendor and material-category index mapping and the pooling structure in TST/test_design_properties.py — a swapped vendor index must be detected, and the mapping must be a pure function of the roster order — A-002
+- [ ] T115 [COMPLETES FR-002] {FR-001,FR-002} **GREEN** Extract the index mapping and design-matrix construction from PKG/model.py into PKG/design.py after:T114 → exports: vendor_index(), category_index(), design_matrix()
+- [ ] T116 [COMPLETES FR-001] {FR-001} Rework T028 so the `logp` agreement oracle builds `likelihood.py`'s inputs from PKG/design.py rather than from the assembled graph — TST/test_model_logp.py after:T115
+- [ ] T117 [US1] {FR-010,FR-029} **RED** Property test for the held-out **total-duration** path in PKG/posterior.py, absent from T025's set — TST/test_posterior_properties.py — A-015
+- [ ] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015
+- [ ] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
+- [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
+- [ ] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
+- [ ] T122 {FR-039} **DV-042 / SC-038 / NC-24** — stdout carries exactly the `run_id` and nothing on refusal; every diagnostic on stderr; exit zero exactly on completion — TST/test_streams_and_exit.py after:T035
+- [ ] T123 [COMPLETES FR-014] {FR-014} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068
+- [ ] T124 {FR-041} SC-036 and SC-037 assertions, plus the pre-registration duty for any estimated band, asserted as a committed-constant check (G-11 bounds it) — TST/test_band_preregistration.py after:T077
+- [ ] T125 {FR-010} [COMPLETES FR-010] Assert the day-grid identity `survival[k] = count(draws > k)/draw_count` over emitted rows in **both** stores — TST/test_grid_identity.py after:T117
+- [ ] T126 {FR-029} [COMPLETES FR-029] Assert both recorded duration semantics over emitted rows: conditional-remaining for open lines, total-from-order-date for held-out — TST/test_duration_semantics.py after:T117
+
+**A-015**: T055 and T051 add behaviour to property-tier modules outside any pair. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
+
+**A-016**: the P1-viable claim had two counterexamples. SC-034 is tagged `[US1]` but was asserted only by T109/T110 in Phase 8 — T119 fixes that. SC-035's equality ranges over the reproduction report emitted by T098 in Phase 7 (P2); T073 now carries `after:T098`, and the P1 boundary note below records that SC-035 is **P1-scoped to the kinds a P1 cut emits**.
 
 ## Dependencies
 
@@ -246,7 +268,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 
 ### Mandatory red-green pairs
 
-`plan.md` § The test-first observable requires this list and this is it. **Nine** modules, nine ordered pairs. The test task must be observed **failing** before its implementation task begins, and the branch history must carry a `test:` commit before the `feat:` commit for each pair. **E005 closed at six of seven because two tasks landed in one commit** — the list exists so that is a checkable miss rather than an invisible one.
+`plan.md` § The test-first observable requires this list and this is it. **Ten** modules, ten ordered pairs. The test task must be observed **failing** before its implementation task begins, and the branch history must carry a `test:` commit before the `feat:` commit for each pair. **E005 closed at six of seven because two tasks landed in one commit** — the list exists so that is a checkable miss rather than an invisible one.
 
 | # | Module | RED (property test) | GREEN (implementation) | Phase |
 |---|---|---|---|---|
@@ -296,7 +318,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 - **The eight propagation obligations `P-1`–`P-8`** belong to other epics or to registered documents a feature branch may not amend — see § Brownfield Notes. A feature branch records the need and does not perform it, and may not route it to another feature branch.
 - **No project-initialization task.** E001 scaffolded the entries and the toolchain, E002 established the package shape, E003 delivered the schema and E005 delivered the data — all fixed input.
 - **No checklist-completion task.** All 115 items across data-integrity, testing and observability are evaluated and checked.
-- **P1 boundary**: Phases 1–6 (T001–T093) are the viable deliverable. Phase 7 (US5, P2) and Phase 8 are omittable without breaking a P1 criterion, though SC-018, SC-019, SC-021, SC-030 and SC-034 go unasserted without them.
+- **P1 boundary**: Phases 1–6 (T001–T093) plus the appended Foundational pair T114–T116 are the viable deliverable. Phase 7 (US5, P2) and Phase 8 are omittable, though SC-018, SC-019, SC-021 and SC-030 go unasserted without them. **Two exceptions were found at the Analyze gate (A-016), and an earlier revision of this line claimed no P1 criterion breaks.** *SC-034* is tagged `[US1]` — P1 — yet was asserted only by T109/T110 in Phase 8; **T119** adds a P1-side assertion over the run report. *SC-035* asserts a closed-kind equality over a set including the reproduction report, which T098 emits in Phase 7; under a P1-only cut the equality ranges over the kinds a P1 cut actually emits, and T073 now carries `after:T098` so the full-scope form is ordered correctly whenever Phase 7 is present.
 
 ## Validation Performed Before Write
 
@@ -314,7 +336,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | `0302` creates the unique key and the table in one revision | **yes** — T007 |
 | Coverage emitted as two edits | **yes** — T001 names the `source` list **and** the `[tool.coverage.paths]` entry |
 | Delivery tasks carry a `[US#]` label | **84 / 84** (T025–T108); Setup, Foundational and Polish carry none, as required |
-| No orphan `after:` reference | **0** — every `after:T###` names a lower, existing ID |
+| No orphan `after:` reference; graph acyclic | **0 orphans**, and no cycle. **But the "lower ID" invariant no longer holds and an earlier revision of this row asserted it.** The Analyze gate appended T114–T126, and four of their edges run from a lower-numbered task to a higher one — `T027→T115`, `T051→T118`, `T055→T117`, `T073→T098`. Task IDs are never reused or renumbered, so Foundational work discovered after decomposition necessarily lands at a high number. **Execution order is the dependency graph, not the ID order**, and the graph was verified acyclic by traversal rather than assumed acyclic by construction |
 | No `[P]` pair sharing a file; no `[P]` batch containing a task and its dependency | **0 violations after correction.** An earlier revision of this table asserted zero while T043 carried `[P]` against two of its own rules — it shares `TST/test_shrinkage_properties.py` with T030, and it sits inside the T038–T048 live-database range this document declares to hold no `[P]`. The marker is removed. The claim was false in the same breath as the rule it was claiming to satisfy, which is the failure mode a self-reported validation table is most prone to |
 | Every `← T###:Symbol` has a matching `→ exports:` on T### | **5 / 5** — T022←T020, T027←T024, T033←T032, T035←T033, T096←T095 |
 | No task line exceeds 200 characters | **pass** — measured, not asserted |
