@@ -72,6 +72,20 @@ _PROJECT_COUNTS_BY_RANK = (40, 40, 40, 40, 39)
 
 DECLARED_TOTAL = sum(_VENDOR_COUNTS_BY_RANK)
 
+#: Share of lines that pass through at least one rework loop, and how those
+#: lines split across one, two and three loops. **Declared, not drawn** — DV-009
+#: requires the realized allocation to *equal* the declared one, not merely be
+#: recorded near it, so a draw would put a criterion at the mercy of the seed.
+#:
+#: `L = round(0.30 × N)` = 60 at N = 199, split `(42, 13, 5)`. The three-loop
+#: stratum is protected at five: largest-remainder apportionment would round it
+#: away at smaller totals, and a rework depth that never occurs is a state
+#: machine path the dataset claims to exercise and does not.
+REWORK_LINE_SHARE = 0.30
+_REWORK_SPLIT_BY_LOOPS = (42, 13, 5)
+REWORK_MAX_LOOPS = len(_REWORK_SPLIT_BY_LOOPS)
+_THREE_LOOP_FLOOR = 5
+
 #: The cyclic purchase-order size pattern. Sizes above one exist so
 #: `line_number >= 2` is exercised against the delivered contiguity and
 #: natural-key constraints — a table of one-line orders would test neither.
@@ -221,6 +235,57 @@ def shrinkage(line_count: int) -> float:
             f"shrinkage is undefined at a line count of {line_count}; ρ requires n ≥ 1"
         )
     return TAU**2 / (TAU**2 + WITHIN_VENDOR_SIGMA**2 / line_count)
+
+
+def rework_loop_allocation(line_count: int = DECLARED_TOTAL) -> tuple[int, ...]:
+    """How many rework loops each line takes, as a declared per-stratum count.
+
+    Returns a tuple of length `line_count` whose entries are 0–3, ordered so
+    that looped lines come first. **Callers must not read positional meaning
+    into it** — the event walk pairs it with lines by natural-key order, which
+    is deterministic, and the calibration only needs the multiset.
+
+    `L = round(0.30 × N)` looped lines, split across one, two and three loops
+    by largest-remainder apportionment with the three-loop stratum protected at
+    five. Realized must *equal* declared (DV-009).
+
+    One definition, consumed twice: the event walk builds the chains from it and
+    the `T_PRE` calibration draws its population from it. Two statements of one
+    declared allocation is how the calibrated constant silently stops matching
+    the data it was calibrated for.
+    """
+    if line_count < 1:
+        raise AllocationError(f"cannot allocate rework across {line_count} lines")
+    looped = round(REWORK_LINE_SHARE * line_count)
+    if looped == 0:
+        return (0,) * line_count
+
+    declared = sum(_REWORK_SPLIT_BY_LOOPS)
+    exact = [count * looped / declared for count in _REWORK_SPLIT_BY_LOOPS]
+    counts = [int(value) for value in exact]
+    counts[-1] = max(counts[-1], min(_THREE_LOOP_FLOOR, looped))
+
+    remainder = looped - sum(counts)
+    order = sorted(range(len(counts)), key=lambda i: (-(exact[i] - int(exact[i])), i))
+    index = 0
+    while remainder != 0:
+        position = order[index % len(order)]
+        step = 1 if remainder > 0 else -1
+        if step == -1 and position == len(counts) - 1 and counts[position] <= _THREE_LOOP_FLOOR:
+            index += 1
+            continue
+        if step == -1 and counts[position] == 0:
+            index += 1
+            continue
+        counts[position] += step
+        remainder -= step
+        index += 1
+
+    allocation: list[int] = []
+    for loops, count in enumerate(counts, start=1):
+        allocation.extend([loops] * count)
+    allocation.extend([0] * (line_count - len(allocation)))
+    return tuple(allocation)
 
 
 @dataclass(frozen=True, slots=True)

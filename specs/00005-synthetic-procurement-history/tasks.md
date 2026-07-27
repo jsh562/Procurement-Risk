@@ -87,10 +87,10 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 - [X] T012 [P] [US1] {FR-003} Assert DV-001 (190–210 lines, 5 projects, 12 vendors from `read_roster().identifiers()`) and DV-003 in TST/test_allocate.py after:T011
 - [X] T013 [P] [US1] {FR-019} **RED** Failing seeds property tests in TST/test_seeds_properties.py — insert or reorder changes no other stream key; the key is pure in the natural key
 - [X] T014 [US1] {FR-019,FR-020} **GREEN** Implement the content-addressed `SeedSequence` spawn-key derivation in PKG/seeds.py after:T013 → exports: line_stream_key(), line_generator()
-- [ ] T015 [US1] {FR-007,FR-008,FR-036} **RED** Failing durations property tests in TST/test_durations_properties.py — the four relations in plan §Mandated properties (DV-011, DV-012)
-- [ ] T016 [US1] {FR-007,FR-035} **GREEN** Implement the lognormal draws, σ₀/T_pre solves, 1-day floor and vendor/tier offsets in PKG/durations.py after:T015 → exports: draw_line_durations()
-- [ ] T017 [US1] {FR-008,FR-036} Implement the vendor/category/residual decomposition and the category-adjusted band check in PKG/durations.py after:T016 → exports: decompose_variance()
-- [ ] T018 [P] [US1] {FR-036} [COMPLETES FR-036] **NC-6** — an unadjusted ratio in band whose category-adjusted ratio is outside it must fail, in TST/test_spread_ratio_control.py after:T017
+- [X] T015 [US1] {FR-007,FR-008,FR-036} **RED** Failing durations property tests in TST/test_durations_properties.py — the four relations in plan §Mandated properties (DV-011, DV-012)
+- [X] T016 [US1] {FR-007,FR-035} **GREEN** Implement the lognormal draws, σ₀/T_pre solves, 1-day floor and vendor/tier offsets in PKG/durations.py after:T015 → exports: draw_line_durations()
+- [X] T017 [US1] {FR-008,FR-036} Implement the vendor/category/residual decomposition and the category-adjusted band check in PKG/durations.py after:T016 → exports: decompose_variance()
+- [X] T018 [P] [US1] {FR-036} [COMPLETES FR-036] **NC-6** — an unadjusted ratio in band whose category-adjusted ratio is outside it must fail, in TST/test_spread_ratio_control.py after:T017
 - [ ] T019 [P] [US1] {FR-009} **RED** Failing censor property tests in TST/test_censor_properties.py — no instant past as-of, event 1 equals `order_date`, monotone delivered set (DV-008)
 - [ ] T020 [US1] {FR-009,FR-010} **GREEN** Implement the committed window and as-of truncation with DV-010's three floors asserted as one window in PKG/censor.py after:T019
 - [ ] T021 [P] [US1] {FR-010} **NC-5** — event-floor, censoring-floor and empty-non-terminal-state breaches all exit non-zero, no artifact written — TST/test_shape_floor_controls.py after:T020

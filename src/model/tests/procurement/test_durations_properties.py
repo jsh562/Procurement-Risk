@@ -35,10 +35,10 @@ import math
 import numpy as np
 import pytest
 
+from model.procurement.allocate import rework_loop_allocation
 from model.procurement.durations import (
     FORWARD_SHARES,
     MU_BASE,
-    REWORK_SHARES,
     SIGMA_0,
     SIGMA_C,
     SIGMA_R,
@@ -49,7 +49,6 @@ from model.procurement.durations import (
     category_expected_duration_days,
     decompose_spread,
     draw_line_durations,
-    line_expected_total_duration_days,
     solve_pre_rework_mean,
     solve_sigma_0,
     vendor_offsets,
@@ -59,14 +58,21 @@ SEED = 20260727
 
 
 def _population(n: int, seed: int, loops_of=None) -> np.ndarray:
-    """Total drawn duration per line over `n` lines, rework included."""
+    """Total drawn duration per line over `n` lines, rework included.
+
+    Loop counts come from `rework_loop_allocation` rather than an even spread.
+    An even 0–3 spread is 3.6× the declared rework, and calibrating against it
+    pulled `T_PRE` down to 46.7 — a constant fitted to a population the
+    generator does not produce.
+    """
     rng = np.random.default_rng(seed)
     vendors = vendor_offsets(tuple(f"V{i:02d}" for i in range(12)))
     offsets = list(vendors.values())
     categories = sorted(TIER_OFFSETS)
+    declared = rework_loop_allocation(n)
     totals = []
     for i in range(n):
-        loops = loops_of(i) if loops_of else (i % 4)
+        loops = loops_of(i) if loops_of else declared[i]
         offset = offsets[i % len(offsets)] + TIER_OFFSETS[categories[i % len(categories)]]
         totals.append(sum(draw_line_durations(rng, offset, loops)))
     return np.array(totals, dtype=float)
@@ -76,13 +82,24 @@ class TestDeclaredConstantsAreSolved:
     """Every constant is re-derived here, not compared against a transcription."""
 
     def test_sigma_r_is_the_stated_identity(self) -> None:
-        assert SIGMA_R == pytest.approx(math.sqrt(SIGMA_W**2 - SIGMA_C**2), rel=1e-9)
+        assert pytest.approx(math.sqrt(SIGMA_W**2 - SIGMA_C**2), rel=1e-9) == SIGMA_R
 
     def test_sigma_0_solves_its_stated_equation(self) -> None:
-        """(e^{σ₀²} − 1)·Σwₜ² = e^{σ_r²} − 1 over the five forward legs."""
-        lhs = (math.exp(SIGMA_0**2) - 1) * sum(w * w for w in FORWARD_SHARES)
-        assert lhs == pytest.approx(math.exp(SIGMA_R**2) - 1, rel=1e-9)
-        assert solve_sigma_0() == pytest.approx(SIGMA_0, abs=5e-5)
+        """(e^{σ₀²} − 1)·Σwₜ² = e^{σ_r²} − 1 over the five forward legs.
+
+        Two assertions at two precisions, deliberately. The *solve* is exact and
+        is checked as such; the *published* constant is the solve rounded to the
+        two decimals `data-model.md` states, so the equation holds at it only to
+        the precision that rounding leaves. Asserting the rounded value against
+        an exact identity would fail for a reason that is not an error — and
+        asserting only the loose form would let a genuinely wrong solve through.
+        """
+        exact = solve_sigma_0()
+        lhs = (math.exp(exact**2) - 1) * sum(w * w for w in FORWARD_SHARES)
+        assert lhs == pytest.approx(math.exp(SIGMA_R**2) - 1, rel=1e-12)
+        assert round(exact, 2) == SIGMA_0
+        published = (math.exp(SIGMA_0**2) - 1) * sum(w * w for w in FORWARD_SHARES)
+        assert published == pytest.approx(math.exp(SIGMA_R**2) - 1, rel=1e-3)
 
     def test_forward_shares_apportion_the_whole(self) -> None:
         assert sum(FORWARD_SHARES) == pytest.approx(1.0, abs=1e-12)
@@ -94,7 +111,7 @@ class TestDeclaredConstantsAreSolved:
         target, and the three intended figures fall out of it. A transcribed
         constant would satisfy nothing.
         """
-        assert MU_BASE == pytest.approx(math.log(61.0), rel=1e-12)
+        assert pytest.approx(math.log(61.0), rel=1e-12) == MU_BASE
         by_tier = {round(off, 2): None for off in TIER_OFFSETS.values()}
         assert set(by_tier) == {0.20, 0.00, -0.40}
         for offset, intended in ((0.20, 84.9), (0.00, 69.5), (-0.40, 46.6)):
@@ -165,9 +182,7 @@ class TestVendorOffsetIsAdditiveOnTheLogScale:
         """Applied to *every* transition, so the whole timeline scales by e^δ."""
         delta = multiple * TAU
         base = np.array(draw_line_durations(np.random.default_rng(SEED), 0.0, 2), dtype=float)
-        shifted = np.array(
-            draw_line_durations(np.random.default_rng(SEED), delta, 2), dtype=float
-        )
+        shifted = np.array(draw_line_durations(np.random.default_rng(SEED), delta, 2), dtype=float)
         unfloored = base > 1
         assert unfloored.any()
         ratios = shifted[unfloored] / base[unfloored]
@@ -194,7 +209,7 @@ class TestVarianceDecomposition:
     """Property 3 — the algebraic identity, and property 4 — an alternate implementation."""
 
     def test_the_components_satisfy_the_stated_identity(self) -> None:
-        assert SIGMA_C**2 + SIGMA_R**2 == pytest.approx(SIGMA_W**2, rel=1e-9)
+        assert pytest.approx(SIGMA_W**2, rel=1e-9) == SIGMA_C**2 + SIGMA_R**2
 
     def test_decomposition_components_sum_to_total_variance(self) -> None:
         rng = np.random.default_rng(SEED)
@@ -257,16 +272,47 @@ class TestVarianceDecomposition:
         result = decompose_spread(logs, vendors, categories)
 
         arr = np.asarray(logs, dtype=float)
-        grand = arr.mean()
-        expected_vendor = sum(
-            (arr[[i for i, x in enumerate(vendors) if x == v]].mean() - grand) ** 2
-            * sum(1 for x in vendors if x == v)
-            for v in sorted(set(vendors))
-        ) / len(arr)
-        assert result.vendor_variance == pytest.approx(expected_vendor, rel=1e-9)
+        grand = float(arr.mean())
+
+        def one_way(labels: list[str], values: np.ndarray) -> float:
+            centre = float(values.mean())
+            return (
+                sum(
+                    sum(1 for x in labels if x == g)
+                    * (float(values[[i for i, x in enumerate(labels) if x == g]].mean()) - centre)
+                    ** 2
+                    for g in sorted(set(labels))
+                )
+                / values.size
+            )
+
+        # Category enters first, so its component *is* the plain one-way figure.
+        assert result.category_variance == pytest.approx(one_way(categories, arr), rel=1e-9)
+
+        # The vendor component is the one-way figure over category residuals.
+        fitted = np.fromiter(
+            (
+                float(arr[[i for i, x in enumerate(categories) if x == c]].mean())
+                for c in categories
+            ),
+            dtype=float,
+            count=len(categories),
+        )
+        assert result.vendor_variance == pytest.approx(
+            one_way(vendors, arr - fitted + grand), rel=1e-9
+        )
         assert result.adjusted_ratio == pytest.approx(
             math.sqrt(result.vendor_variance) / math.sqrt(result.residual_variance), rel=1e-9
         )
+
+        if balanced:
+            # Orthogonal cross-tab: order of entry cannot matter, so the vendor
+            # component equals the plain one-way figure too.
+            assert result.vendor_variance == pytest.approx(one_way(vendors, arr), rel=0.05)
+        else:
+            # Maximally unbalanced: it must *not*, or category confounding is
+            # being credited to the vendor — the outcome FR-036 forbids.
+            assert result.vendor_variance < one_way(vendors, arr)
 
 
 class TestFR036Band:
@@ -285,8 +331,8 @@ class TestFR036Band:
         adjusted one. This test pins the arithmetic so the finding cannot be
         quietly absorbed by a later change to a constant.
         """
-        assert TAU / SIGMA_W == pytest.approx(0.24, abs=5e-4)
-        assert TAU / SIGMA_R == pytest.approx(0.2657, abs=5e-4)
+        assert pytest.approx(0.24, abs=5e-4) == TAU / SIGMA_W
+        assert pytest.approx(0.2657, abs=5e-4) == TAU / SIGMA_R
         assert 0.12 <= TAU / SIGMA_R <= 0.49
 
     def test_an_unadjusted_pass_with_an_adjusted_miss_is_detectable(self) -> None:
@@ -299,13 +345,26 @@ class TestFR036Band:
         rng = np.random.default_rng(SEED)
         logs, vendors, categories = [], [], []
         cats = sorted(TIER_OFFSETS)
-        for i in range(600):
+        tier_1 = next(c for c in cats if TIER_OFFSETS[c] == 0.20)
+        tier_3 = next(c for c in cats if TIER_OFFSETS[c] == -0.40)
+
+        # No vendor has any intrinsic effect. Their *mixes* differ: vendor 0 is
+        # almost all long-lead, vendor 3 almost all commodity. Any between-vendor
+        # signal here is category mix wearing a vendor's name.
+        for i in range(800):
             v = i % 4
-            c = cats[v * 5]  # each vendor carries exactly one, widely separated, category
-            logs.append(TIER_OFFSETS[c] * 6 + float(rng.normal(0, 0.02)))
+            long_lead_share = (3 - v) / 3
+            c = tier_1 if (i // 4) % 100 < long_lead_share * 100 else tier_3
+            logs.append(TIER_OFFSETS[c] + float(rng.normal(0, 0.05)))
             vendors.append(f"V{v:02d}")
             categories.append(c)
 
         result = decompose_spread(logs, vendors, categories)
-        assert result.unadjusted_ratio > result.adjusted_ratio
-        assert result.category_variance > result.residual_variance
+
+        # The naive figure sees vendor heterogeneity that is not there...
+        assert result.unadjusted_ratio > 0.12
+        # ...and removing the category term collapses it, so the run fails the
+        # band rather than passing for the wrong reason.
+        assert result.adjusted_ratio < result.unadjusted_ratio / 2
+        assert result.adjusted_ratio < 0.12
+        assert result.category_variance > result.vendor_variance
