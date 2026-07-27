@@ -283,7 +283,7 @@ jobs:
         # widened this line independently and the union is what is correct —
         # dropping either package would put it in the denominator uncovered and
         # drag the gate down while measuring nothing.
-        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus -m pytest tests -q
+        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement -m pytest tests -q
 
       # FR-017: corpus validation runs automatically, not on demand. The console
       # entry point is the same one a developer runs, so a green CI run and a
