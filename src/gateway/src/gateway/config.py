@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -32,7 +33,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from gateway.errors import GatewayConfigError
 
 __all__ = [
+    "DATABASE_URL_ENV_VAR",
     "DEADLINE_ENV_VAR",
+    "PRICE_TABLE_PIN_ENV_VAR",
+    "SPOOL_PATH_ENV_VAR",
     "DEFAULT_REQUEST_DEADLINE_SECONDS",
     "OTEL_GENAI_SEMCONV_VERSION",
     "GatewayConfig",
@@ -72,6 +76,19 @@ DEFAULT_REQUEST_DEADLINE_SECONDS: Final[float] = 120.0
 #: unrelated names.
 DEADLINE_ENV_VAR: Final[str] = "GATEWAY_REQUEST_DEADLINE_SECONDS"
 
+#: Deliberately **not** `GATEWAY_`-prefixed. This is E001's frozen variable, the
+#: one the migration runner and every entry already read; a second spelling for
+#: the same connection would let the gateway write records to one database while
+#: the migrations built another, and the two would agree right up until they did
+#: not.
+DATABASE_URL_ENV_VAR: Final[str] = "DATABASE_URL"
+
+#: The price-table pin (TR-048). Prefixed, because unlike the connection this is
+#: the gateway's own setting and no other entry has an opinion about it.
+PRICE_TABLE_PIN_ENV_VAR: Final[str] = "GATEWAY_PRICE_TABLE_VERSION"
+
+SPOOL_PATH_ENV_VAR: Final[str] = "GATEWAY_SPOOL_PATH"
+
 
 class GatewayConfig(BaseModel):
     """Everything the gateway needs to know before it builds a request.
@@ -97,6 +114,37 @@ class GatewayConfig(BaseModel):
             "TR-070's pin, carried on the configuration so a caller can read "
             "which convention release the recorded field names follow without "
             "querying the database for its table comment."
+        ),
+    )
+
+    database_url: str | None = Field(
+        default=None,
+        description=(
+            "Where the gateway opens its **own** connection (TR-035). Its own, "
+            "not a caller's: the record must commit in a transaction "
+            "independent of any the caller holds, so a caller rollback cannot "
+            "erase a trace of a call that was billed."
+        ),
+    )
+
+    price_table_version_id: str | None = Field(
+        default=None,
+        description=(
+            "The pinned price-table version every cost is computed against. "
+            "TR-048 requires it to resolve to an existing row *before* any "
+            "provider request is constructed — an unresolvable pin is a "
+            "configuration error on an invocation that never billed, rather "
+            "than a foreign-key failure on the write path after one did."
+        ),
+    )
+
+    spool_path: Path | None = Field(
+        default=None,
+        description=(
+            "The local append-only spool (TR-041), under the gateway's own "
+            "root. `None` means the default beside the working directory; the "
+            "field exists so a test can point it somewhere disposable without "
+            "the module reading an environment variable at import time."
         ),
     )
 
@@ -126,9 +174,22 @@ def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
     """
     source = os.environ if env is None else env
 
+    # Read once here rather than at each use. TR-065 bounds what a configuration
+    # error may say about the *credential* key; a database URL carries a
+    # password too, so it is never echoed in a message either — the key's name
+    # is permitted and the value is not.
+    database_url = (source.get(DATABASE_URL_ENV_VAR) or "").strip() or None
+    price_pin = (source.get(PRICE_TABLE_PIN_ENV_VAR) or "").strip() or None
+    spool = (source.get(SPOOL_PATH_ENV_VAR) or "").strip()
+    spool_path = Path(spool) if spool else None
+
     raw = source.get(DEADLINE_ENV_VAR)
     if raw is None:
-        return GatewayConfig()
+        return GatewayConfig(
+            database_url=database_url,
+            price_table_version_id=price_pin,
+            spool_path=spool_path,
+        )
 
     try:
         deadline = float(raw)
@@ -138,7 +199,12 @@ def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
         ) from None
 
     try:
-        return GatewayConfig(request_deadline_seconds=deadline)
+        return GatewayConfig(
+            request_deadline_seconds=deadline,
+            database_url=database_url,
+            price_table_version_id=price_pin,
+            spool_path=spool_path,
+        )
     except ValidationError:
         # Re-raised as a gateway-owned error rather than allowed to escape:
         # `ValidationError` is pydantic's type, and a caller catching

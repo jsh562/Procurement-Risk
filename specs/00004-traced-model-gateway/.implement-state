@@ -1,29 +1,28 @@
-phase: Phase 4 in progress — OBJ3 (Invocation Record with Recomputable Cost)
-completed: 37
-remaining: 38
+phase: Phase 4 complete — OBJ3 (Invocation Record with Recomputable Cost)
+completed: 48
+remaining: 27
 blocked: none
-next: T040-T050 — the record writer with its own connection and transaction
-      (T040, T041), the absent-cost warning and completion log line (T043),
-      the SQLite spool (T044) and its exactly-once drain (T045), then the
-      tests T046-T049 and the README procedures (T050). T042 verifies the
-      price-pin resolves before request construction.
-notes: T026-T039 delivered. Four migrations live in the 0100-0199 block and
-       apply from empty; the compute package is the first real arithmetic the
-       computation-boundary contract has had to protect, and a seeded direct
-       edge from provider.py to compute.pricing was confirmed to break it.
-       TR-070's pin was wrong and T026's mandated verification caught it:
-       semconv v1.36.0 defines gen_ai.system, not gen_ai.provider.name, the
-       attribute the pin was selected for. Corrected to 1.37.0 across all five
-       recording sites (OI-12).
-       E003's schema suite went red on 11 checks the moment these revisions
-       landed — all encoding "E003 is the sole author of this chain", which
-       ADR-0013 has made false. Rescoped to authorship on the user's decision
-       (OI-13), plus one genuine over-strictness in its constraint audit
-       (OI-14). E003 is green at 1072 passed, and an E003 revision creating
-       llm_invocation still fails as it should.
-       Two environment hazards hit this phase, both cross-checkout: the project
-       DB container and volume were removed by an external `down -v` mid-run,
-       and `procurement-api:e001` is an unqualified tag a sibling checkout had
-       rebuilt with an older gateway manifest, which failed the image check
-       until rebuilt here. Neither is a defect in this epic.
+next: Phase 5 (OBJ4) T051-T059 — mode selection with no default and the
+      provider opt-in, the content-hash fixture store, provenance sidecars,
+      and offline replay. T051 unblocks orchestrator.invoke(), which still
+      raises NotImplementedError because the composition needs the mode branch.
+notes: OBJ3 delivered. The record writer holds its own connection and its own
+       transaction, verified with two live connections and a caller rollback.
+       The spool is a real SQLite file in every test; the database failures the
+       drain exists for are injected through the writer's connect seam, since
+       'refuse this one write then accept the next' is not something a live
+       server does on request.
+       Three self-referential test bugs found and fixed this phase, all the
+       same shape: a check that scanned source text matched the prose
+       explaining what it was looking for. Each is now an AST walk with a
+       control that plants a real violation.
+       A connect timeout was added to the writer — psycopg's default is no
+       timeout, which turns an unreachable database into a hung process and
+       defeats TR-034's deadline entirely. Found because the suite hung for
+       ten minutes when the container went down mid-run.
+       Environment: the project DB container was torn down by something outside
+       this session twice, once with its volume. `docker compose up -d db` then
+       `uv run --directory src/model migrate` restores it. The sibling
+       checkouts share the unqualified `procurement-api:e001` image tag and the
+       5434 port, so both are contended surfaces.
 timestamp: 2026-07-26

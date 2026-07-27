@@ -17,12 +17,16 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Final
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 __all__ = [
     "TRACE_ID_PATTERN",
+    "CostAbsentReason",
+    "InvocationRecord",
     "InvocationRequest",
     "InvocationResult",
     "Outcome",
@@ -133,3 +137,116 @@ class InvocationResult(BaseModel):
     content: str
     outcome: Outcome
     resolution_mode: ResolutionMode
+
+
+type CostAbsentReason = str
+"""``no_covering_price_entry``, ``model_unresolved`` or ``cost_out_of_range`` —
+the closed set of reasons a written row may carry no cost (TR-016, TR-048). An
+unresolvable price pin is deliberately **not** a fourth value: TR-048 refuses it
+before any request is constructed, so it never reaches a row."""
+
+
+class InvocationRecord(BaseModel):
+    """One row of ``llm_invocation`` — TR-012's field list, closed.
+
+    **Closed in the sense TR-068 means it**: these are exactly the fields the
+    row carries, not a lower bound. Nothing is recorded outside this list, and
+    adding, removing, or renaming one is an amendment to TR-012 itself. That
+    closure is what makes E013's read contract *checkable* — a column in the
+    schema and absent here is a defect in one of the two, found by comparing
+    two sets rather than by reading both and hoping.
+
+    ``extra="forbid"`` is the closure as far as a type can carry it: a field
+    name that drifts from the column set is rejected at construction rather
+    than written and silently ignored. `tests/test_read_contract.py` carries
+    the rest, comparing this list against the migrated information schema.
+
+    Every value here is computed **before** the write. The database mints
+    nothing: no default, no generated column, no trigger. `invocation_id` and
+    `created_at` in particular are gateway-generated, because a spooled row
+    reconciled after an outage must carry its *invocation* time rather than its
+    reconcile time (TR-041, TR-043, TR-045).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    # Identity. Minted once per invocation, before the first write is
+    # attempted, and reused unchanged by the spool copy and by the row it
+    # reconciles into (TR-045). This is the uniqueness key behind TR-011's
+    # "exactly one row per invocation": a second row is unrepresentable because
+    # no second identifier is ever minted.
+    invocation_id: str
+    trace_id: str
+
+    # Convention-named (TR-013, TR-071), spelled from the pinned release.
+    gen_ai_provider_name: str
+    gen_ai_operation_name: str
+    gen_ai_request_model: str
+    gen_ai_response_model: str | None = None
+
+    # How the invocation was resolved, and from what (TR-037).
+    resolution_mode: ResolutionMode
+    fixture_key: str | None = None
+
+    # Usage, summed across every attempt rather than taken from the last
+    # (TR-040). Zero is a value; unknown is not.
+    gen_ai_usage_input_tokens: int = Field(ge=0)
+    gen_ai_usage_output_tokens: int = Field(ge=0)
+    cache_write_input_tokens: int = Field(ge=0)
+    cache_read_input_tokens: int = Field(ge=0)
+
+    # Wall clock across every attempt, from a monotonic clock (TR-056).
+    duration_ms: int = Field(ge=0)
+
+    # The only per-attempt information stored. No attempt-level outcome value
+    # exists anywhere (TR-042).
+    transport_attempt_count: int = Field(ge=1, le=3)
+    repair_attempt_count: int = Field(ge=0, le=1)
+
+    # Cost, or its absence with a stated reason — never zero as a stand-in
+    # (TR-016). The exclusive-or is enforced by the column pair's CHECK and
+    # again by the validator below, so a malformed pair fails before the write
+    # rather than as a constraint violation on an invocation already billed.
+    cost_usd: Decimal | None = None
+    cost_absent_reason: CostAbsentReason | None = None
+    price_table_version_id: str
+    pricing_timestamp: datetime
+
+    # Terminal classification (TR-009, TR-078) and its paired cause.
+    outcome: Outcome
+    error_type: str | None = None
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def _cost_is_present_or_explained(self) -> InvocationRecord:
+        """TR-016's exclusive-or, checked here as well as in the database.
+
+        Not redundant with the column `CHECK`. The constraint is the backstop;
+        this is the gate. A malformed pair caught here costs nothing, while the
+        same pair caught at the storage boundary costs a provider call whose
+        record cannot be written — the billed-but-untraced case the spool exists
+        to prevent, arrived at by a different route.
+        """
+        if (self.cost_usd is None) == (self.cost_absent_reason is None):
+            raise ValueError(
+                "exactly one of cost_usd and cost_absent_reason must be set: a "
+                "cost with a reason is contradictory, and an absent cost without "
+                "one is the unexplained absence TR-016 forbids"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _error_type_is_present_exactly_when_failed(self) -> InvocationRecord:
+        """The biconditional the column pair carries (TR-012, OBJ3 VC8).
+
+        Enforced in the same direction as the database so a row cannot be built
+        here that the write would reject — the two would otherwise disagree only
+        on the failure path, which is the path least likely to be exercised.
+        """
+        if (self.outcome == "failed") != (self.error_type is not None):
+            raise ValueError(
+                f"error_type must be present exactly when outcome is 'failed'; "
+                f"got outcome={self.outcome!r} with "
+                f"error_type={'set' if self.error_type else 'unset'}"
+            )
+        return self

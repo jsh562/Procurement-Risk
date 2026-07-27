@@ -25,7 +25,8 @@ from __future__ import annotations
 from typing import NoReturn, Protocol
 
 from gateway import provider
-from gateway.errors import GatewayError
+from gateway.config import PRICE_TABLE_PIN_ENV_VAR, GatewayConfig
+from gateway.errors import GatewayConfigError, GatewayError
 from gateway.models import (
     InvocationRequest,
     InvocationResult,
@@ -36,8 +37,10 @@ from gateway.models import (
 from gateway.validation import MAX_REPAIR_ATTEMPTS
 
 __all__ = [
+    "PinResolver",
     "RecordWriter",
     "classify_outcome",
+    "require_resolvable_price_pin",
     "record_then_raise",
     "resolve_trace_id",
 ]
@@ -145,6 +148,58 @@ def classify_outcome(*, reached_valid_value: bool, repair_attempt_count: int) ->
     if not reached_valid_value:
         return "failed"
     return "repaired" if repair_attempt_count > 0 else "valid"
+
+
+class PinResolver(Protocol):
+    """Whether a price-table version exists. Satisfied by `record.RecordWriter`.
+
+    A protocol rather than an import, so the precondition below can be tested
+    without a database — the *ordering* is the requirement, and a check that
+    needed a live server to exercise would be tested for the happy path only.
+    """
+
+    def pin_resolves(self, version_id: str) -> bool: ...
+
+
+def require_resolvable_price_pin(
+    config: GatewayConfig, resolver: PinResolver
+) -> str:
+    """Refuse the invocation unless its price pin resolves (TR-048, VR-025).
+
+    **Called before any provider request is constructed**, and the position is
+    the entire requirement. The same pin discovered at write time would be a
+    non-null foreign-key failure on a row for a call that had already been
+    billed — and a *recorded absence* is not available for it, because the row
+    cannot be written at all. That is why TR-048 closes the reasons cost may be
+    absent at exactly three, none of which is "the pin did not resolve": an
+    unresolvable pin never reaches a row.
+
+    Returns:
+        The resolved version identifier, so a caller cannot forget to use the
+        one that was checked.
+
+    Raises:
+        GatewayConfigError: No pin is configured, or the configured pin names no
+            version. Both are configuration errors on an invocation that never
+            billed. The message names the pin — it is an identifier a reader
+            needs and carries no credential material, unlike the connection URL
+            in the same configuration.
+    """
+    pin = config.price_table_version_id
+    if not pin:
+        raise GatewayConfigError(
+            f"{PRICE_TABLE_PIN_ENV_VAR} is not configured. Every recorded cost "
+            f"cites the price-table version it was computed against, so an "
+            f"invocation with no pin would produce a row nobody could audit."
+        )
+    if not resolver.pin_resolves(pin):
+        raise GatewayConfigError(
+            f"{PRICE_TABLE_PIN_ENV_VAR} names {pin!r}, which resolves to no "
+            f"price-table version. Refused before the provider request is built "
+            f"(TR-048), so this costs nothing — discovered at the record write "
+            f"it would have failed an invocation that had already been billed."
+        )
+    return pin
 
 
 class RecordWriter(Protocol):
