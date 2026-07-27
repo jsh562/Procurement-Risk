@@ -140,15 +140,15 @@ E001 scaffolded the four entries, the `uv` toolchain and the Compose `db` servic
 
 **Independent test**: regenerate from the recorded seed in the pinned environment and confirm the canonical serialization hashes to the committed value.
 
-- [ ] T051 [US3] {FR-021} Implement `procurement-validate` in PKG/validate.py — regenerate, recompute over the **parsed** payload, compare to the sidecar (DV-015) after:T037
-- [ ] T052 [US3] {FR-027} Add the symmetric input-drift check to PKG/validate.py — each input recomputed under its own `digest_kind`, refusing and naming the offender (DV-016) after:T051
-- [ ] T053 [P] [US3] {FR-027} [COMPLETES FR-027] **NC-4** unit half — a mutated roster and a mutated category map each produce a refusal naming that input, in TST/test_input_drift.py after:T052
-- [ ] T054 [P] [US3] {FR-022} Add the provenance-agreement check (DV-025) to PKG/validate.py — datasheet fields equal their envelope counterparts, `library_pin` equals the resolved version after:T052
-- [ ] T055 [US3] {FR-022} Add the scope-limit report to PKG/validate.py — the observed version an **injected** parameter defaulting to `numpy.__version__`, reported not claimed after:T054
-- [ ] T056 [P] [US3] {FR-022} **NC-10** — an injected observed version outside the pin produces the scope-limit report and no reproduction claim (SC-032), in TST/test_pin_scope_control.py after:T055
-- [ ] T057 [P] [US3] {FR-021} SC-012 — the digest reproduces under a fresh process, a changed absolute checkout path, hash seed, time zone and locale, in TST/test_reproduction_oracle.py after:T051
-- [ ] T058 [P] [US3] {FR-021} [COMPLETES FR-021] **NC-1** / SC-013 — a different `root_seed` yields a different digest, so the oracle can fail, in TST/test_reproduction_control.py after:T051
-- [ ] T059 [P] [US3] {FR-019} [COMPLETES FR-019] DV-024 / SC-014 — adding or moving one line changes no other line's generated values — TST/test_line_independence.py after:T034
+- [X] T051 [US3] {FR-021} Implement `procurement-validate` in PKG/validate.py — regenerate, recompute over the **parsed** payload, compare to the sidecar (DV-015) after:T037
+- [X] T052 [US3] {FR-027} Add the symmetric input-drift check to PKG/validate.py — each input recomputed under its own `digest_kind`, refusing and naming the offender (DV-016) after:T051
+- [X] T053 [P] [US3] {FR-027} [COMPLETES FR-027] **NC-4** unit half — a mutated roster and a mutated category map each produce a refusal naming that input, in TST/test_input_drift.py after:T052
+- [X] T054 [P] [US3] {FR-022} Add the provenance-agreement check (DV-025) to PKG/validate.py — datasheet fields equal their envelope counterparts, `library_pin` equals the resolved version after:T052
+- [X] T055 [US3] {FR-022} Add the scope-limit report to PKG/validate.py — the observed version an **injected** parameter defaulting to `numpy.__version__`, reported not claimed after:T054
+- [X] T056 [P] [US3] {FR-022} **NC-10** — an injected observed version outside the pin produces the scope-limit report and no reproduction claim (SC-032), in TST/test_pin_scope_control.py after:T055
+- [X] T057 [P] [US3] {FR-021} SC-012 — the digest reproduces under a fresh process, a changed absolute checkout path, hash seed, time zone and locale, in TST/test_reproduction_oracle.py after:T051
+- [X] T058 [P] [US3] {FR-021} [COMPLETES FR-021] **NC-1** / SC-013 — a different `root_seed` yields a different digest, so the oracle can fail, in TST/test_reproduction_control.py after:T051
+- [X] T059 [P] [US3] {FR-019} [COMPLETES FR-019] DV-024 / SC-014 — adding or moving one line changes no other line's generated values — TST/test_line_independence.py after:T034
 
 ---
 

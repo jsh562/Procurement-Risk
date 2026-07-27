@@ -78,6 +78,7 @@ __all__ = [
     "ROOT_SEED",
     "SEED_DERIVATION",
     "GenerationError",
+    "build_envelope",
     "generate",
     "main",
 ]
@@ -267,11 +268,28 @@ def _line_payload(line: _DrawnLine, band: int) -> dict[str, Any]:
     }
 
 
-def generate(root: Path | None = None) -> dict[str, Any]:
-    """Produce and write the fixture, its sidecar digest, and the truth record.
+def build_envelope(seed: int | None = None) -> tuple[dict[str, Any], list, Mapping[str, float]]:
+    """Draw the dataset and assemble the envelope. **No gates, no writes.**
 
-    Returns the envelope. Every refusal happens before the first write.
+    Split out of `generate` so a control can compare two seeds' digests without
+    satisfying DV-010 — an arbitrary seed usually will not, and SC-013's question
+    ("does a different seed produce a different digest?") is about the payload,
+    not about whether that payload would be admissible.
+
+    Returning the drawn lines alongside the envelope keeps the gates in
+    `generate` reading the same objects rather than recomputing them.
     """
+    global ROOT_SEED
+    original = ROOT_SEED
+    if seed is not None:
+        ROOT_SEED = seed
+    try:
+        return _build(original if seed is None else seed)
+    finally:
+        ROOT_SEED = original
+
+
+def _build(_seed: int) -> tuple[dict[str, Any], list, Mapping[str, float]]:
     roster = read_roster()
     category_keys = sorted(load_category_map())
     if set(category_keys) != set(TIER_OFFSETS):
@@ -293,11 +311,6 @@ def generate(root: Path | None = None) -> dict[str, Any]:
         criticality_band(line.material_category, level)
         for line, level in zip(drawn, pressure_terciles(ratios), strict=True)
     ]
-
-    _check_shape(drawn)
-    _check_spread(drawn, offsets)
-    _check_overlap(drawn)
-    _check_bands(bands)
 
     envelope = {
         "dataset_schema_version": DATASET_SCHEMA_VERSION,
@@ -331,6 +344,21 @@ def generate(root: Path | None = None) -> dict[str, Any]:
             )
         ],
     }
+
+    return envelope, drawn, offsets
+
+
+def generate(root: Path | None = None) -> dict[str, Any]:
+    """Produce and write the fixture, its sidecar digest, and the truth record.
+
+    Returns the envelope. Every refusal happens before the first write.
+    """
+    envelope, drawn, offsets = build_envelope()
+
+    _check_shape(drawn)
+    _check_spread(drawn, offsets)
+    _check_overlap(drawn)
+    _check_bands([line["criticality"] for line in envelope["lines"]])
 
     digest = dataset_content_hash(envelope)
     _write(root, envelope, digest, drawn, offsets)
