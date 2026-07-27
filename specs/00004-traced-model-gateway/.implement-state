@@ -1,25 +1,33 @@
-phase: Phase 2 complete — OBJ1 (Provider-Type-Free Traced Invocation Path)
-completed: 16
-remaining: 59
+phase: Phase 3 complete — OBJ2 (Schema-Validated Output with Bounded Repair)
+completed: 24
+remaining: 51
 blocked: none
-next: Phase 3 (OBJ2) T018-T025 — config loader with the 120 s deadline, schema
-      submission, validate-or-repair with the bounded single repair, the
-      terminal-state-to-outcome mapping, and the transport budget inside the
-      outer monotonic deadline. T021 and T022 attach to the seams T009 and T012
-      left; the orchestrator's invoke() marks their attachment points inline.
-notes: OBJ1 delivered. Four import contracts live and KEPT — the public-surface
-       contract was split in two (AD-009), because one contract with indirect
-       detection on forbade api -> orchestrator -> provider, the arrangement
-       OBJ1's own deliverables prescribe. Both halves have negative fixtures.
-       T013 negative-tested with a seeded annotation; T015 negative-tested with
-       a consumer naming an SDK type. mypy strict is green over src/ and runs
-       in CI as Type check (gateway).
-       Two defects found by the new checks rather than by review: CI synced the
-       gateway without its provider extra (OI-9), and `raise ... from None`
-       left __context__ populated against TR-064 (OI-10). Both closed.
-       api and model lockfiles were refreshed — the gateway manifest change
-       invalidated them and the serving image build failed on --locked.
-       Local shells need UV_NATIVE_TLS=1 exported; verify.yml already sets it
-       as job env, so no check carries a TLS flag of its own. Project DB
-       containers are still absent; Phase 4 needs `docker compose up -d db`.
+next: Phase 4 (OBJ3) T034-T049 — the Alembic revisions in E003's reserved
+      0100-0199 block, the compute package (pricing, hashing, timing), and the
+      record writer with its own connection and transaction. This is the first
+      phase that needs a database: `docker compose up -d db` before starting,
+      since the project's containers were removed.
+notes: OBJ2 delivered. The pieces exist and are individually tested; the
+      composition inside orchestrator.invoke() still raises NotImplementedError
+      because it needs the mode branch T051 supplies. That is deliberate — the
+      repair budget, the transport budget and the outcome mapping are each
+      decidable now, and none of them needs the branch to be correct.
+       Two decisions the phase forced, recorded as AD-010 and AD-011. The
+       caller's schema is a pydantic model class, not a raw mapping — a mapping
+       would need a JSON Schema validator dependency to enforce post-decode
+       what pydantic already enforces. And the retry loop takes an injected
+       RemainingTime callable rather than reading a clock, because TR-032 bars
+       provider.py from gateway.compute where TR-028 places duration
+       arithmetic; the callable is the only shape that breaks neither.
+       TR-005's unsupported-keyword set is derived from the SDK's own schema
+       transform rather than transcribed (OI-11). Confirmed empirically:
+       minimum, maximum and minLength reach the model only as description
+       prose, which is what makes the post-decode step load-bearing.
+       The TR-064 __context__ defect recurred in with_transport_budget and was
+       caught by T025 the same way T015 caught it in Phase 2. Closed at both
+       sites; the fix is placement (raise outside the handler), not `from None`.
+       Local shells need UV_NATIVE_TLS=1 exported; verify.yml sets it as job
+       env. verify.yml's own change is held on this branch as its own commit —
+       it is main-owned but depends on branch-owned manifest content, so it
+       cannot land on main ahead of the merge.
 timestamp: 2026-07-26

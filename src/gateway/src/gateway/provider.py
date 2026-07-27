@@ -27,9 +27,10 @@ them instead.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from typing import Any, Final, Protocol, runtime_checkable
 
-from gateway.errors import ProviderUnavailableError
+from gateway.errors import ProviderError, ProviderUnavailableError
 
 # Pinned here rather than at each call site so the model in use is a property
 # of the boundary, readable without grepping the callers.
@@ -41,7 +42,23 @@ DEFAULT_MODEL: Final[str] = "claude-opus-5"
 #: `/src`, tests included, and asserts exactly one file names it.
 _PROVIDER_DISTRIBUTION: Final[str] = "anthropic"
 
-__all__ = ["DEFAULT_MODEL", "ProviderClient", "load_client_class"]
+#: TR-010. Two retries, so three transport attempts, per model request. Both
+#: names exist because the requirement states both numbers and a reader
+#: checking the code against it should not have to do the arithmetic — that is
+#: exactly where an off-by-one hides.
+MAX_TRANSPORT_RETRIES: Final[int] = 2
+MAX_TRANSPORT_ATTEMPTS: Final[int] = MAX_TRANSPORT_RETRIES + 1
+
+__all__ = [
+    "DEFAULT_MODEL",
+    "MAX_TRANSPORT_ATTEMPTS",
+    "MAX_TRANSPORT_RETRIES",
+    "ProviderClient",
+    "RemainingTime",
+    "load_client_class",
+    "native_output_schema",
+    "with_transport_budget",
+]
 
 
 @runtime_checkable
@@ -57,6 +74,171 @@ class ProviderClient(Protocol):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+
+class RemainingTime(Protocol):
+    """How much of the invocation's deadline is left, in seconds.
+
+    A protocol taken as an argument rather than a clock consulted here, and
+    that is a structural requirement rather than a testing convenience. TR-032
+    forbids this module from reaching `gateway.compute`, where TR-028 places
+    all duration arithmetic — so a deadline computed here would either put
+    duration arithmetic in the module that must not hold it, or break the
+    contract to fetch it. Asking an injected callable does neither: the
+    orchestrator owns the clock, `gateway.compute` owns the subtraction, and
+    this module only ever compares a number to zero and hands it onward.
+
+    Returns a value that may be zero or negative, meaning the deadline has
+    passed. Not raising on expiry is deliberate — TR-034 makes expiry a
+    transport failure counted against TR-010's budget, and a callable that
+    raised would decide that classification here instead of at the retry loop
+    that owns it.
+    """
+
+    def __call__(self) -> float: ...
+
+
+def native_output_schema(schema: Any) -> Mapping[str, Any] | None:
+    """The caller's schema as the native structured-output mode will see it.
+
+    TR-005. Submission itself passes the caller's schema straight to the
+    client, which applies this transform internally — this function exists for
+    the *other* half of the requirement: the constraints the mode cannot
+    express are silently demoted to prose in the schema's description, and
+    `gateway.validation.residual_constraints` needs the transformed form to say
+    which ones those were.
+
+    Returns:
+        The transformed schema, or `None` when this SDK build does not expose
+        its transform.
+
+    **Best-effort, and the reason is disclosed rather than hidden.** The
+    transform lives behind a private module path, so an SDK upgrade may move or
+    rename it. `None` is returned rather than an exception because nothing
+    *enforced* depends on this: `validate_or_repair` validates against the
+    caller's schema in full, so every residual constraint is caught whether or
+    not it was named in advance. Losing this loses an explanation, not a check.
+
+    The fragility is nonetheless observed rather than tolerated —
+    `tests/test_validation_repair.py` asserts the transform is reachable, so an
+    upgrade that moves it fails a test instead of quietly returning `None`
+    forever.
+    """
+    transform: Callable[[Any], Mapping[str, Any]] | None = None
+    try:
+        from anthropic.lib._parse._transform import transform_schema
+    except (ImportError, ModuleNotFoundError):  # pragma: no cover - exercised by T015
+        pass
+    else:
+        transform = transform_schema
+
+    if transform is None:
+        return None
+    return transform(schema)
+
+
+def with_transport_budget(
+    attempt: Callable[[float], Any],
+    remaining: RemainingTime,
+    *,
+    retryable: Callable[[BaseException], bool],
+) -> tuple[Any, int]:
+    """Run one model request under TR-010's budget and TR-034's deadline.
+
+    Args:
+        attempt: Issues one request. Receives the seconds remaining, which it
+            passes to the client as that request's timeout — TR-034 forbids
+            delegating the deadline to the SDK's own default, and the way to
+            not delegate it is to state it on every call.
+        remaining: Seconds left in the invocation's deadline.
+        retryable: Whether a raised exception is worth another attempt. Injected
+            because deciding it requires knowing the SDK's exception types, and
+            a `retryable` written here would need them named in a second place.
+
+    Returns:
+        The successful attempt's return value and the number of transport
+        attempts consumed — 1 through `MAX_TRANSPORT_ATTEMPTS`. Recorded on the
+        invocation row (TR-010), which is why it is returned rather than
+        counted internally and discarded.
+
+    Raises:
+        ProviderError: Every attempt failed, or the deadline expired. Normalized
+            (TR-025) — no SDK exception escapes this module.
+
+    Two properties TR-010 states that the loop is shaped to hold:
+
+    **A request that succeeds first time issues exactly one request.** There is
+    no speculative second call and no warm-up; the loop's body runs once and
+    returns.
+
+    **The transport budget is independent of the repair budget.** This function
+    knows nothing about validation and `validate_or_repair` knows nothing about
+    transport, so neither budget can consume the other's — a repair is a fresh
+    call to this function with its own three attempts, which is what TR-010's
+    "per model request" means.
+
+    Deadline expiry is checked *before* each attempt rather than inferred from
+    a timeout afterwards. Checking after would spend an attempt discovering
+    time was already gone, and would make the attempt count depend on how long
+    the provider took to fail.
+    """
+    last_status: int | None = None
+    for attempt_number in range(1, MAX_TRANSPORT_ATTEMPTS + 1):
+        seconds_left = remaining()
+        if seconds_left <= 0:
+            # TR-034: an expiry is a transport failure, so it is reported with
+            # the attempts already spent rather than as its own category.
+            raise ProviderError(
+                f"the per-request deadline expired after {attempt_number - 1} transport "
+                f"attempt(s)",
+                error_type="deadline_exceeded",
+                status=last_status,
+            )
+
+        # Built inside the handler, raised outside it, for the same reason
+        # `load_client_class` does: `raise ... from None` here would clear
+        # `__cause__` and leave `__context__` holding the SDK exception, which
+        # TR-064 forbids as squarely as an explicit chain. A provider error body
+        # can echo request headers, so the difference is not academic — the
+        # traceback the normalization exists to keep clean would render it.
+        normalized: ProviderError | None = None
+        try:
+            return attempt(seconds_left), attempt_number
+        except ProviderError:
+            # Already normalized by an inner boundary; re-raising unchanged
+            # keeps one normalization rather than wrapping a wrapped error.
+            raise
+        except BaseException as exc:  # noqa: BLE001 - narrowed by `retryable`
+            if not retryable(exc) or attempt_number == MAX_TRANSPORT_ATTEMPTS:
+                normalized = _normalized(exc, attempt_number)
+
+        if normalized is not None:
+            raise normalized
+
+    raise AssertionError("unreachable: the loop returns or raises on every path")
+
+
+def _normalized(exc: BaseException, attempts: int) -> ProviderError:
+    """Turn an SDK exception into the gateway's own (TR-025, TR-064).
+
+    Only status, error type, and a provider-issued request identifier cross
+    this boundary. The original is neither chained nor stored: the caller
+    raises `from None` and this function copies three scalars out, so nothing
+    holds a reference that a traceback or a `repr` could render.
+
+    `getattr` rather than isinstance checks against SDK exception classes,
+    which would need the SDK named in a signature — the coupling TR-002
+    forbids. Reading three attributes off an object works on any exception
+    shape and needs no import.
+    """
+    status = getattr(exc, "status_code", None)
+    request_id = getattr(exc, "request_id", None)
+    return ProviderError(
+        f"the provider request failed after {attempts} transport attempt(s)",
+        status=status if isinstance(status, int) else None,
+        error_type="transport_failed",
+        request_id=request_id if isinstance(request_id, str) else None,
+    )
 
 
 def load_client_class() -> type[Any]:

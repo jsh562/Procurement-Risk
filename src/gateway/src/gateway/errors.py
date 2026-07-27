@@ -22,6 +22,7 @@ from __future__ import annotations
 __all__ = [
     "GatewayConfigError",
     "GatewayError",
+    "GatewayValidationError",
     "ProviderError",
     "ProviderUnavailableError",
 ]
@@ -70,6 +71,34 @@ class ProviderError(GatewayError):
         self.status = status
         self.error_type = error_type
         self.request_id = request_id
+
+
+class GatewayValidationError(GatewayError):
+    """The model produced no schema-valid value, and the repair budget is spent.
+
+    TR-008. Raised after the *second* failure, never the first — the first is
+    what the single repair attempt exists to answer. By the time this is
+    raised the invocation record has already been written with outcome
+    `failed`, which is the ordering TR-008 fixes: a caller that catches this
+    can rely on the row existing, and a paid call is never left with no trace
+    of itself.
+
+    Carries the failing field paths rather than the model's output. The output
+    is what failed validation, so returning it would be handing back the
+    unvalidated value TR-006 forbids — through the error rather than through
+    the return, which is the same value arriving by a quieter route.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        field_paths: tuple[str, ...] = (),
+        repair_attempt_count: int = 0,
+    ) -> None:
+        super().__init__(message)
+        self.field_paths = field_paths
+        self.repair_attempt_count = repair_attempt_count
 
 
 class ProviderUnavailableError(GatewayConfigError):
