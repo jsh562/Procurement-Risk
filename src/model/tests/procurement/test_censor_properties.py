@@ -30,7 +30,7 @@ class TestCommittedConstants:
         reproducing the day after generation while the seed still looks honoured."""
         assert ORDER_DATE_WINDOW.first == date(2025, 6, 16)
         assert ORDER_DATE_WINDOW.last == date(2026, 2, 16)
-        assert AS_OF_DATE == date(2026, 4, 1)
+        assert date(2026, 4, 1) == AS_OF_DATE
 
     def test_the_window_closes_before_the_snapshot(self) -> None:
         assert ORDER_DATE_WINDOW.first <= ORDER_DATE_WINDOW.last < AS_OF_DATE
@@ -124,9 +124,21 @@ class TestShapeFloors:
 
     def test_the_intended_shape_passes(self) -> None:
         """≈85% delivered at 199 lines, with ~10 events of margin over 160."""
-        check_shape_floors(line_count=199, delivered=170, non_terminal_occupancy={s: 1 for s in
-                           ("submitted", "under_review", "approved", "revise_and_resubmit",
-                            "released_for_fabrication", "shipped")})
+        check_shape_floors(
+            line_count=199,
+            delivered=170,
+            non_terminal_occupancy={
+                s: 1
+                for s in (
+                    "submitted",
+                    "under_review",
+                    "approved",
+                    "revise_and_resubmit",
+                    "released_for_fabrication",
+                    "shipped",
+                )
+            },
+        )
 
     def test_too_few_delivered_fails(self) -> None:
         with pytest.raises(ShapeFloorError, match="delivered"):
@@ -153,8 +165,17 @@ class TestShapeFloors:
 
     def test_the_three_bounds_are_asserted_jointly(self) -> None:
         """A breach of any one fails even when the other two hold."""
-        healthy = {s: 3 for s in ("submitted", "under_review", "approved",
-                                  "revise_and_resubmit", "released_for_fabrication", "shipped")}
+        healthy = {
+            s: 3
+            for s in (
+                "submitted",
+                "under_review",
+                "approved",
+                "revise_and_resubmit",
+                "released_for_fabrication",
+                "shipped",
+            )
+        }
         check_shape_floors(199, 170, healthy)
         for delivered in (150, 199):
             with pytest.raises(ShapeFloorError):

@@ -49,9 +49,15 @@ class TestBandTable:
     def test_the_table_matches_the_published_grid(self) -> None:
         """T1 5/4/3, T2 4/3/2, T3 3/2/1 — `data-model.md` prints it."""
         expected = {
-            ("T1", "TIGHT"): 5, ("T1", "MODERATE"): 4, ("T1", "RELAXED"): 3,
-            ("T2", "TIGHT"): 4, ("T2", "MODERATE"): 3, ("T2", "RELAXED"): 2,
-            ("T3", "TIGHT"): 3, ("T3", "MODERATE"): 2, ("T3", "RELAXED"): 1,
+            ("T1", "TIGHT"): 5,
+            ("T1", "MODERATE"): 4,
+            ("T1", "RELAXED"): 3,
+            ("T2", "TIGHT"): 4,
+            ("T2", "MODERATE"): 3,
+            ("T2", "RELAXED"): 2,
+            ("T3", "TIGHT"): 3,
+            ("T3", "MODERATE"): 2,
+            ("T3", "RELAXED"): 1,
         }
         assert dict(BAND_TABLE) == expected
 
@@ -101,9 +107,9 @@ class TestSlack:
 class TestNeedBy:
     def test_need_by_is_order_plus_expected_plus_slack(self) -> None:
         order = date(2025, 9, 1)
-        assert need_by_date(order, 70.0, 10) == date(2025, 9, 1) + __import__(
-            "datetime"
-        ).timedelta(days=80)
+        assert need_by_date(order, 70.0, 10) == date(2025, 9, 1) + __import__("datetime").timedelta(
+            days=80
+        )
 
     def test_need_by_is_never_earlier_than_the_order_date(self) -> None:
         """FR-011 states it explicitly, so a zero-or-negative expectation must
@@ -156,16 +162,37 @@ class TestTerciles:
 class TestMultiplicativeSlackKeepsTheTablePopulated:
     """Metamorphic — AD-009's stated reason for multiplicative slack."""
 
-    def test_scaling_a_category_leaves_the_tercile_assignment_unchanged(self) -> None:
-        """`ratio = slack / category_expected` reduces to ≈ `f × exp(b_v)`, which
-        is nearly independent of category — so scaling one category's expected
-        duration must not move its lines between terciles."""
+    def test_scaling_a_category_leaves_the_continuous_ratio_unchanged(self) -> None:
+        """`ratio = slack / category_expected` reduces exactly to `f`, which is
+        what makes it independent of category — AD-009's whole argument."""
         rng = np.random.default_rng(SEED)
-        fractions = rng.normal(SLACK_MEAN, SLACK_SD, 300).clip(min=0)
+        fractions = [float(f) for f in rng.normal(SLACK_MEAN, SLACK_SD, 300).clip(min=0)]
 
-        base = [round(70.0 * f) / 70.0 for f in fractions]
-        scaled = [round(140.0 * f) / 140.0 for f in fractions]
-        assert pressure_terciles(base) == pressure_terciles(scaled)
+        for expected in (46.6, 70.0, 84.9):
+            ratios = [(expected * f) / expected for f in fractions]
+            assert pressure_terciles(ratios) == pressure_terciles(fractions)
+
+    def test_whole_day_rounding_perturbs_the_assignment_only_at_the_margins(self) -> None:
+        """The exact invariance above survives integer days only approximately.
+
+        `slack_days` is a whole number, so the realized ratio is quantized at
+        `1/expected` — coarser for a short category than a long one. Lines
+        sitting within one day's worth of a cut point can therefore land in
+        different terciles at different category scales. Measured, that is
+        ~6% of lines across the T3-to-T1 span.
+
+        Asserted as a bound rather than as exact equality because the effect is
+        real and disclosing it is more useful than a test tuned to hide it. A
+        *large* divergence would mean the ratio had stopped being
+        category-independent, which is the failure this guards against.
+        """
+        rng = np.random.default_rng(SEED)
+        fractions = [float(f) for f in rng.normal(SLACK_MEAN, SLACK_SD, 300).clip(min=0)]
+
+        short = pressure_terciles([round(46.6 * f) / 46.6 for f in fractions])
+        long = pressure_terciles([round(84.9 * f) / 84.9 for f in fractions])
+        agreement = sum(a == b for a, b in zip(short, long, strict=True)) / len(fractions)
+        assert agreement > 0.90
 
     def test_additive_slack_would_collapse_the_table_onto_its_diagonal(self) -> None:
         """The failure AD-009 avoids, demonstrated rather than asserted in prose.
