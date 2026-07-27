@@ -21,10 +21,19 @@ from pathlib import Path
 import pytest
 import yaml
 
+from tests.checks.helpers.images import checkout_slug
 from tests.checks.helpers.ports import CONVENTIONAL, Resolution, resolve_host_port
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = REPO_ROOT / "docker-compose.yml"
+
+#: The Compose project this module owns, distinct from the one a developer gets
+#: by running `docker compose up` in the repository root. Derived from the
+#: checkout slug so four checkouts on one machine each own a different stack,
+#: and suffixed so that within one checkout the test stack and the development
+#: stack are still two things. `-checks` rather than `-test`: these are the
+#: repository-root cross-entry checks, and the directory says so.
+COMPOSE_PROJECT = f"{checkout_slug()}-checks"
 PERSISTENT = frozenset({"db", "api", "web"})
 JOBS = frozenset({"ingest", "fit"})
 
@@ -54,8 +63,22 @@ def published_binding(definition: dict, service: str) -> re.Match:
 def _compose(
     *args: str, check: bool = True, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess:
+    """Every compose call this module makes, scoped to its own project.
+
+    `-p` is the whole point. Without it Compose derives the project name from
+    the working directory, so this module's teardown — `down -v`, which removes
+    volumes as well as containers — reaches whatever a developer or a QC run
+    brought up under that same directory name, destroying the database *and*
+    its data. It did exactly that twice during E002's QC, silently invalidating
+    two runs before the pattern was recognised.
+
+    The same shape as the per-checkout image tag in `helpers/images.py`: the
+    contention was never over a scarce resource, only over an unnamespaced one,
+    so the fix is to own a namespace rather than to detect a collision. This
+    module now brings up and tears down a stack nothing else refers to.
+    """
     return subprocess.run(
-        ["docker", "compose", "-f", str(COMPOSE), *args],
+        ["docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(COMPOSE), *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -228,3 +251,44 @@ def test_each_job_runs_to_completion_and_leaves_nothing_behind(running_stack, jo
     leftover = {json.loads(line)["Service"] for line in after.splitlines() if line.strip()} & JOBS
     assert not leftover, f"job container survived the run: {sorted(leftover)}"
     assert len(after) <= len(before) + 200, "container count grew after a --rm run"
+
+
+def test_the_stack_this_module_tears_down_is_its_own() -> None:
+    """`down -v` must not be able to reach a stack this module did not start.
+
+    The failing direction is not simulable here — the assertion is over the
+    argv every compose call is built from, because the defect was that the
+    project name was *absent* and Compose inferred it from the working
+    directory. A run without `-p` destroys the developer's database and its
+    volume, and reports nothing.
+    """
+    assert REPO_ROOT.name.lower() != COMPOSE_PROJECT, (
+        "the checks project is the same name Compose infers from the "
+        "repository directory, so teardown reaches the development stack"
+    )
+    assert COMPOSE_PROJECT.startswith(checkout_slug()), (
+        "the project name does not identify this checkout, so two checkouts "
+        "on one machine would share a stack"
+    )
+
+
+def test_every_compose_invocation_names_the_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Asserted over the built argv rather than trusted to review.
+
+    One call site added later without `-p` reintroduces the whole defect, and
+    it would pass every other test in this module.
+    """
+    seen: list[list[str]] = []
+
+    def _capture(argv, **kwargs):
+        seen.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", _capture)
+    _compose("ps")
+    _compose("down", "-v", check=False)
+
+    assert seen, "no compose invocation was captured"
+    for argv in seen:
+        assert "-p" in argv, f"compose called without a project name: {argv}"
+        assert argv[argv.index("-p") + 1] == COMPOSE_PROJECT
