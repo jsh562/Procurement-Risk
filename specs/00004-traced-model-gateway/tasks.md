@@ -42,9 +42,9 @@ E001 scaffolded the four entries, the `uv` toolchain, the `import-linter` harnes
 - [X] T001 {TR-003,TR-028,TR-029} Move anthropic into a `provider` extra, add psycopg base, hypothesis dev, and Ruff `S` in src/gateway/pyproject.toml — no migration extra, ADR-0013 puts tooling in /src/model
 - [X] T002 {TR-002,TR-032} Add the computation-boundary and public-surface-purity import-linter contracts to src/gateway/pyproject.toml after:T001
 - [X] T003 {TR-002,TR-032} Seed violation fixtures under tests/fixtures/ and assert both new contracts fail in tests/checks/test_contract_fixtures.py after:T002
-- [ ] T004 {TR-003} Sync the gateway `provider` extra before the architecture-contracts step in .github/workflows/verify.yml (HINT-002) after:T001
-- [ ] T005 Wire gateway coverage into the root combine with a repo-root COVERAGE_FILE and `coverage run` in .github/workflows/verify.yml (HINT-003) after:T004
-- [ ] T006 Add a database-backed CI job carrying E001's `db` service for the OBJ3 migration and record criteria in .github/workflows/verify.yml after:T005
+- [ ] T004 {TR-003} WITHDRAWN 2026-07-26 — HINT-002's premise does not hold. Reproduced CI exactly (`uv sync --locked`, no extras, anthropic absent): the protected contract ran and correctly reported BROKEN on a seeded violation, because grimp resolves the import name from source rather than from the installed distribution. No change made, since its stated reason is false. CI staying extra-free is also what makes TR-003's absent-provider state the default there
+- [X] T005 Wire gateway coverage into the root combine with a repo-root COVERAGE_FILE and `coverage run` in .github/workflows/verify.yml (HINT-003) — already delivered by another epic; verify.yml's "Unit tests (gateway)" step sets COVERAGE_FILE to a repo-root path and runs under `coverage run`. Verified present, not re-implemented
+- [X] T006 Add a database-backed CI job carrying E001's `db` service for the OBJ3 migration and record criteria in .github/workflows/verify.yml — already delivered by another epic; the job declares the `db` service and sets DATABASE_URL, which E003's harness requires with no default. Verified present, not re-implemented
 
 ---
 

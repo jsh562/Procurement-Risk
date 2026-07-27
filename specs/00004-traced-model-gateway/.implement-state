@@ -1,0 +1,14 @@
+phase: Phase 1 complete — Setup (Repository / Workspace Delta)
+completed: 5
+remaining: 70
+blocked: none
+next: Phase 2 (OBJ1) T007-T017 — models, errors, lazy provider import, public
+      surface, orchestrator, then checks T013-T017. The four skeleton modules
+      placed by T002 (api.py, models.py, errors.py, compute/__init__.py) get
+      their real content there.
+notes: T004 withdrawn with evidence; T005/T006 verified already delivered by
+       another epic. Three import contracts live and KEPT. Local venvs were
+       rebuilt — console-script shims had pointed at a sibling checkout.
+       Project DB containers are currently absent; database-backed work needs
+       `docker compose up -d db` first.
+timestamp: 2026-07-26
