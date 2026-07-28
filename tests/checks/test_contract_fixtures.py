@@ -137,6 +137,7 @@ FIXTURE_FOR_CONTRACT = {
     "Only the provider wrapper imports the model-provider client": "provider_import",
     "Model-facing code does not reach the computation package": "computation_boundary",
     "Corpus code does not reach the model provider": "corpus_offline",
+    "Forecast code does not reach the model provider": "forecast_offline",
     "The provider-facing module does not reach the arithmetic modules": (
         "gateway_compute_boundary"
     ),

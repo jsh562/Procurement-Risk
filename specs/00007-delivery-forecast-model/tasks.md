@@ -83,10 +83,10 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T010 DV-026 — no second `CREATE FUNCTION` in the four revisions and `pg_proc` counted before and after the chain, in TST/test_function_inventory.py
 - [X] T011 **NC-12** — AD-007 verified: `0400` probes fail as outside, `0200`–`0299` passes as declared-but-unpopulated, part (a) alone leaves the suite red; DV-033/DV-034 green
 - [X] T012 Create the forecast fixtures — live PostgreSQL on `${PRC_DB_PORT:-5434}` at head `0303`, tmp report roots — in TST/conftest.py, following SCH/conftest.py
-- [ ] T013 [P] Create `PKG/__init__.py` and the artifact/report path resolution in PKG/paths.py → exports: run_report_path(), refusal_report_path()
-- [ ] T014 [P] {FR-005,FR-016,FR-028} Publish the constants in PKG/config.py — thresholds, four-chain minimum, `HELD_OUT_FRACTION`, `SPLIT_SEED`, day tolerance, monitored set (AD-006)
-- [ ] T015 {FR-024,FR-025} Declare the forbidden `import-linter` contract from `model.forecast` to `model.llm` and `gateway`, indirect detection on, in src/model/pyproject.toml
-- [ ] T016 {FR-001} Read `purchase_order_line` and `lifecycle_event` over the connection in PKG/read.py — never a re-derived copy → exports: read_lines_and_events()
+- [X] T013 [P] Create `PKG/__init__.py` and the artifact/report path resolution in PKG/paths.py → exports: run_report_path(), refusal_report_path()
+- [X] T014 [P] {FR-005,FR-016,FR-028} Publish the constants in PKG/config.py — thresholds, four-chain minimum, `HELD_OUT_FRACTION`, `SPLIT_SEED`, day tolerance, monitored set (AD-006)
+- [X] T015 {FR-024,FR-025} Declare the forbidden `import-linter` contract from `model.forecast` to `model.llm` and `gateway`, indirect detection on, in src/model/pyproject.toml
+- [X] T016 {FR-001} Read `purchase_order_line` and `lifecycle_event` over the connection in PKG/read.py — never a re-derived copy → exports: read_lines_and_events()
 - [ ] T017 {FR-009} **RED** Failing serializer property tests in TST/test_serialize_properties.py — the digest is invariant to row order and `created_at`, and moves on any serialized value
 - [ ] T018 {FR-009,FR-014} **GREEN** Canonical row serialization and digests in PKG/serialize.py, reusing `roster.reader` → exports: input_data_hash(), split_assignment_hash() after:T017
 - [ ] T019 [P] {FR-003,FR-004} **RED** Failing censoring property tests in TST/test_censoring_properties.py — censored iff no terminal event at the as-of date; elapsed; monotone in as-of
@@ -221,7 +221,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 - [ ] T109 {FR-038} DV-039 / SC-034 — every measure with a criterion appears as measure, value, criterion **with direction** and verdict; wall-clock none — TST/test_reportable_unit.py after:T098
 - [ ] T110 {FR-038} **NC-20** — two planted entries fail: a value with no criterion, and a verdict against no criterion — TST/test_reportable_unit_controls.py
-- [ ] T111 [P] Verify `model.forecast` is counted in the root combined coverage report rather than landing in the denominator uncounted — .github/workflows/verify.yml after:T001
+- [ ] T111 [P] Verify `model.forecast` is counted in the root combined coverage report rather than landing in the denominator uncounted — **`.github/workflows/verify.yml:307` carries an inline `--source=src/model/roster,schema,corpus,procurement` that overrides the root `pyproject.toml` list T001 extended, so `forecast` is uncounted in CI while `tests/forecast` still runs**; add it there too, or the two halves of T001 buy nothing on the only run that gates — .github/workflows/verify.yml after:T001
 - [ ] T112 [P] Confirm the model entry declares **no new dependency** for `model.forecast` and keep CHK/test_dependency_isolation.py green after:T002
 - [ ] T113 Add the release gate — emitted-set equality, import contract, migration-range remediation, reportable-unit checker — to .github/workflows/verify.yml after:T110
 

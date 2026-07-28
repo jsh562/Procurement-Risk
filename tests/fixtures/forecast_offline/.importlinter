@@ -1,0 +1,18 @@
+[importlinter]
+root_package = forecast_offline_fixture
+# The real contract names `gateway`, which sits outside its own root package;
+# import-linter refuses to name an external module as forbidden unless the graph
+# is built with external packages in it, so the fixture carries the same setting
+# or it would demonstrate a contract shaped differently from the one it stands in
+# for.
+include_external_packages = True
+
+[importlinter:contract:forecast-offline]
+name = Forecast code does not reach the model provider
+type = forbidden
+source_modules =
+    forecast_offline_fixture.forecast
+forbidden_modules =
+    forecast_offline_fixture.llm
+    anthropic
+allow_indirect_imports = False

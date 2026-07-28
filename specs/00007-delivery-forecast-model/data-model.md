@@ -636,7 +636,7 @@ Recorded here because each one constrains what the stored artifacts *mean*, not 
 | `forecast_split_assignment` | 199 rows per run | Trivial. The unique key's index is the whole access path. |
 | `line_posterior` | **~24 rows per run**, not ~200 | Only open lines are forecast. E003's scale table assumes ~200 rows per run, which overestimates by roughly eightfold — harmless, and recorded so a later reader does not size an index against it. |
 | `held_out_prediction` | ~44 rows per run, ~35 KB each | ~1.5 MB per run, compressed and stored out of line. |
-| `forecast_diagnostic` | three rows per monitored parameter plus three run-level rows — on the order of 80 rows per run | Trivial. |
+| `forecast_diagnostic` | three rows per monitored parameter plus three run-level rows — **on the order of 156 rows per run** | Trivial. **Revised during implementation.** An earlier figure of ~80 assumed AD-006's three scalar groups only. The monitored set was widened to include the per-vendor and per-material-category families, because excluding them would let a vendor whose offset never converged still have its shrinkage weight published under FR-019 — the gate would pass on the population parameters while the per-vendor number a reader acts on was never checked. Realized against the loaded dataset: 19 scalars + 12 vendors + 20 categories = 51 monitored parameters. |
 | `forecast_run` | One row per fit; a handful over the project's life | The fourteen added columns are all scalar except `vendor_shrinkage` (twelve members, three numbers each) and `covariate_names` (three elements). |
 | Concurrency | One writer, offline, never at request time | No partitioning, no advisory locking, no connection-pool tuning in scope. |
 

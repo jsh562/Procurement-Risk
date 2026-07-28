@@ -128,3 +128,18 @@ type = "forbidden"
 source_modules = ["model.corpus"]
 forbidden_modules = ["model.llm", "gateway"]
 allow_indirect_imports = false
+
+# FR-024, FR-025: the fit is offline on every path and no request-time entry
+# point may reach it. Stated as a build-gating contract rather than an
+# assertion, so the claim is enforced on every commit instead of re-argued per
+# review. `gateway` is named alongside `model.llm` because reaching the provider
+# through the shared client is the same violation by another route. Indirect
+# detection stays ON: laundering the dependency through an intermediate module
+# is the evasion. DV-022 is the assertion, NC-15 the planted failing direction,
+# and G-17 records what a static contract still does not reach.
+[[tool.importlinter.contracts]]
+name = "Forecast code does not reach the model provider"
+type = "forbidden"
+source_modules = ["model.forecast"]
+forbidden_modules = ["model.llm", "gateway"]
+allow_indirect_imports = false
