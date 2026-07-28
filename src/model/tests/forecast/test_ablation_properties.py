@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+
 from model.forecast.ablation import (
     AblationError,
     KaplanMeierFloor,
@@ -32,7 +33,6 @@ from model.forecast.ablation import (
     kaplan_meier_floor,
     realized_delta,
 )
-
 from model.forecast.censoring import censoring_indicator
 from model.forecast.read import LifecycleEventRow, LineRow
 from model.forecast.serialize import split_assignment_hash
@@ -40,17 +40,17 @@ from model.forecast.split import HELD_OUT, TRAIN, SplitAssignment, SplitResult
 from model.procurement.censor import AS_OF_DATE
 
 # ---------------------------------------------------------------------------
-# Why the `ablation` import sits in the third-party block
+# Why the `ablation` import moved into the first-party block
 # ---------------------------------------------------------------------------
 #
 # Ruff's isort decides first-party membership by looking for the module on
-# disk. `model/forecast/ablation.py` does not exist yet — that is this file's
-# whole point — so the import is classified third-party and `ruff check`
-# demands it there. **When T050 lands the module, ruff will reclassify it and
-# ask for it to be merged back** into the `model.*` block below; that is the
-# expected diff, not a regression. Run `ruff check --no-cache`, because the
-# cache keys on file content and will otherwise replay the classification made
-# while the module was absent.
+# disk. While this file was the red half, `model/forecast/ablation.py` did not
+# exist, so the import was classified third-party and `ruff check` demanded it
+# in the block above. **T050 landed the module and ruff reclassified it**, which
+# is the merge recorded here — the expected diff, not a regression. Run
+# `ruff check --no-cache` across that boundary, because the cache keys on file
+# content and would otherwise replay the classification made while the module
+# was absent.
 #
 # ---------------------------------------------------------------------------
 # The interface this file pins

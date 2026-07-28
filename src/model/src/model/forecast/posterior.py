@@ -160,8 +160,34 @@ def conditional_remaining_draws(
     # here, and forming it as `1 − F(e)` would round it away before it is used.
     conditioned = np.minimum(1.0 - survives_elapsed * (1.0 - drawn), _LARGEST_QUANTILE)
     total = np.exp(location + scale * _inv_cdf(conditioned))
+    remaining = total - elapsed
 
-    return np.sort(total - elapsed)
+    # The cap above is a precision guard, and past a certain elapsed time it stops
+    # being one. Once `S(e)` underflows, `1 − S(e)(1 − u)` rounds to exactly 1 for
+    # every `u`, the cap pins `F*` to one value, and `T` becomes a fixed ceiling
+    # independent of `e` — so `T − e` goes *negative*, unboundedly. Measured at the
+    # fit's own scale: every draw is negative from about 5,000 elapsed days, and
+    # −15,610 at 20,000. An earlier revision of the comment above called the capped
+    # result "finite and enormous, which is the honest answer for a line open that
+    # long"; it is neither enormous nor honest, it is a wrong sign.
+    #
+    # Refusing rather than clamping follows `likelihood.py`, which raises on a
+    # completed row at `t = 0` instead of returning `-inf`: a value that survives
+    # into the artifact resurfaces far from its cause. Here it would surface as
+    # `ck_line_posterior__draws_non_negative` rejecting a write, naming a
+    # constraint rather than the elapsed time that broke it.
+    if remaining.size and float(np.min(remaining)) <= 0.0:
+        worst = float(np.min(elapsed[remaining <= 0.0])) if elapsed.size else float("nan")
+        raise PosteriorError(
+            "the conditional remaining duration is not representable at "
+            f"elapsed_days={worst:g} for these parameters: the survival function "
+            "has underflowed, so every draw collapses to one capped quantile and "
+            "the remaining duration comes out non-positive. A draw must be "
+            "strictly positive -- re-basing is what produces a point mass at "
+            "zero, and this would produce worse."
+        )
+
+    return np.sort(remaining)
 
 
 def survival_grid(draws: ArrayLike, horizon_days: int) -> SurvivalGrid:

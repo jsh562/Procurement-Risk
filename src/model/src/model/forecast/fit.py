@@ -12,6 +12,8 @@ rollback (AD-010).
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import math
 import sys
 import time
 import uuid
@@ -24,6 +26,13 @@ import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Engine, create_engine
 
+from model.forecast.ablation import (
+    MINIMUM_ABLATION_SEEDS,
+    AblationError,
+    SeedResult,
+    kaplan_meier_floor,
+    realized_delta,
+)
 from model.forecast.censoring import CensoringError, censoring_indicator, elapsed_days
 from model.forecast.config import (
     CHAINS,
@@ -50,6 +59,7 @@ from model.forecast.model import (
     VENDOR_DIM,
     VENDOR_OFFSET,
     ModelError,
+    SojournFrame,
     build_model,
     covariate_names,
     training_frame,
@@ -57,7 +67,7 @@ from model.forecast.model import (
 from model.forecast.paths import ForecastPathError
 from model.forecast.posterior import PosteriorError, conditional_remaining_draws, survival_grid
 from model.forecast.read import LineRow, ReadError, read_lines_and_events
-from model.forecast.report import ReportError, write_run_report
+from model.forecast.report import AblationOutcome, ReportError, write_run_report
 from model.forecast.sample import SampleError, sample_posterior
 from model.forecast.serialize import SerializeError, input_data_hash
 from model.forecast.shrinkage import ShrinkageError, VendorShrinkage, vendor_shrinkage
@@ -69,7 +79,18 @@ from model.schema.url import DatabaseUrlNotConfiguredError, get_database_url
 if TYPE_CHECKING:  # pragma: no cover - imported for the annotation only
     import xarray as xr
 
-__all__ = ["FitError", "main", "run_fit"]
+__all__ = [
+    "ABLATION_CHAINS",
+    "ABLATION_DRAWS_PER_CHAIN",
+    "ABLATION_SEEDS",
+    "ABLATION_TUNING_DRAWS",
+    "FitError",
+    "aggregate_median_forecast",
+    "censoring_ablation",
+    "censoring_ignoring_frame",
+    "main",
+    "run_fit",
+]
 
 
 class FitError(RuntimeError):
@@ -87,6 +108,7 @@ class FitError(RuntimeError):
 #: raises. An unlisted exception is a defect and keeps its traceback, because a
 #: message-only report of a bug is a bug nobody can locate.
 _REPORTED_FAILURES: tuple[type[Exception], ...] = (
+    AblationError,
     CensoringError,
     ConfigError,
     DatabaseUrlNotConfiguredError,
@@ -380,6 +402,210 @@ def _vendor_shrinkage(
     return vendor_shrinkage(tau, sigma, training_line_counts, VENDOR_SHRINKAGE_HDI_PROBABILITY)
 
 
+# ---------------------------------------------------------------------------
+# The censoring ablation's seed loop (T051 — FR-033)
+# ---------------------------------------------------------------------------
+#
+# `ablation.py` owns the arithmetic and may reach neither the sampler nor the
+# graph — that prohibition is what makes AD-008's floor independent of the fit,
+# and it is asserted over that module's own imports. The loop that *produces*
+# the per-seed medians has to fit, so it lives here and hands its results back
+# across the boundary as values.
+
+#: The seeds the ablation is repeated over. **Committed constants, never drawn
+#: per run**, for the reason `SPLIT_SEED` is one: a per-run seed set would let a
+#: re-run resample until the delta cleared the floor, which is FR-028's
+#: prohibition reached by another route. Three rather than two, so a single
+#: outlying seed does not decide the reported median on its own.
+ABLATION_SEEDS: tuple[int, ...] = (20260731, 20260732, 20260733)
+
+#: The shape each ablation fit is run at — small, and **its own** rather than the
+#: run's. The ablation is six fits beside the run's one, and what it measures is
+#: a *difference* between two fits at the same shape and the same seed: the
+#: censoring term is either in the likelihood or it is not, and a longer chain
+#: estimates that difference more precisely rather than differently. The interval
+#: over repeated seeds is what reports the residual sampling noise, which is the
+#: whole reason FR-033 requires one.
+ABLATION_CHAINS = 2
+ABLATION_DRAWS_PER_CHAIN = 50
+ABLATION_TUNING_DRAWS = 200
+
+
+def censoring_ignoring_frame(frame: SojournFrame) -> SojournFrame:
+    """The comparator's frame: the same rows with the censoring contribution gone.
+
+    **An ablation comparator and never a baseline** (Principle VIII, FR-033).
+    It is this epic's own model with one term removed, so beating it says
+    something about that term and nothing about the model's standing against
+    anything a reader might otherwise use — and an ablation beaten by the full
+    model is the weakest comparison available, which is why the label travels
+    with it into the report.
+
+    Clearing `is_censored` is exactly what "omitting the censoring contribution"
+    means in `log_contribution_terms`: every row then takes the density branch,
+    so a line still open at the anchor enters the fit as though it had delivered
+    on the anchor date. The design matrix, the transition indices and the rows
+    themselves are untouched.
+
+    `is_decision` is cleared on precisely the rows that were censored, and that
+    is not a second ablation — it is what keeps this one to a single term.
+    `decision_rows` is `is_decision & ~is_censored`, so clearing the censoring
+    flag alone would hand the rework Bernoulli a censored decision point as an
+    observed "did not rework", inventing the branch the mixture exists to
+    marginalise over. Held fixed, the Bernoulli's data is the aware fit's, and
+    the two graphs differ in the censoring term and nowhere else.
+    """
+    return dataclasses.replace(
+        frame,
+        is_censored=np.zeros_like(frame.is_censored),
+        is_decision=frame.is_decision & ~frame.is_censored,
+    )
+
+
+def aggregate_median_forecast(rows: Sequence[LinePosteriorRow]) -> float:
+    """SC-008's measured quantity: the aggregate median forecast over open lines.
+
+    The nearest-rank median over every open line's conditional remaining draws,
+    pooled — `schema_constants.percentile_convention`, so the figure is a draw
+    the sampler produced rather than the midpoint of two it did not. Pooled
+    rather than a median of per-line medians, because the open lines sit at very
+    different elapsed times and the average of their medians is a summary of the
+    cohort's composition as much as of its forecast.
+    """
+    if not rows:
+        raise FitError(
+            "the aggregate median forecast was asked for over no line at all; SC-008 "
+            "compares a median over the open population, and an empty population has none"
+        )
+    pooled = np.sort(np.concatenate([row.draws for row in rows]))
+    return float(pooled[max(math.ceil(0.5 * pooled.size), 1) - 1])
+
+
+def censoring_ablation(
+    lines: Sequence[LineRow],
+    split: SplitResult,
+    vendor_ids: Sequence[str],
+    material_categories: Sequence[str],
+    as_of_date: date,
+    *,
+    horizon_days: int,
+    seeds: Sequence[int] = ABLATION_SEEDS,
+    chains: int = ABLATION_CHAINS,
+    draws: int = ABLATION_DRAWS_PER_CHAIN,
+    tune: int = ABLATION_TUNING_DRAWS,
+    cores: int = 1,
+    log: TextIO | None = None,
+) -> tuple[SeedResult, ...]:
+    """Fit both arms once per seed and return the paired aggregate medians.
+
+    Two fits per seed, **from the same seed**: the chain seeds and the
+    conditioning uniforms are respawned identically for each arm, so within a
+    seed the only thing that differs between the two runs is the censoring term
+    in the likelihood. Across seeds they differ in everything the sampler is
+    entitled to, which is what the reported interval measures.
+
+    The seed set is checked before anything is sampled. `realized_delta` refuses
+    a single seed and a repeated identifier anyway, but discovering that after
+    six fits would spend the cost and then decline to report it.
+    """
+    requested = tuple(seeds)
+    if len(requested) < MINIMUM_ABLATION_SEEDS or len(set(requested)) != len(requested):
+        raise AblationError(
+            f"the ablation was asked for seeds {requested}; FR-033 requires the delta to "
+            f"carry an interval over at least {MINIMUM_ABLATION_SEEDS} *distinct* repeated "
+            f"seeds, and a repeated identifier is one seed's outcome under two labels"
+        )
+    note = _notes(log) if log is not None else None
+
+    aware = training_frame(lines, split, vendor_ids, material_categories, as_of_date)
+    ignoring = censoring_ignoring_frame(aware)
+    open_lines = _open_lines(lines, as_of_date)
+    if not open_lines:
+        raise FitError(
+            f"no line is open at {as_of_date}, so the ablation has no forecast population to "
+            f"take an aggregate median over and SC-008's comparison has no operands"
+        )
+
+    results: list[SeedResult] = []
+    for seed in requested:
+        medians = [
+            _arm_median(
+                frame,
+                open_lines,
+                vendor_ids,
+                material_categories,
+                as_of_date,
+                horizon_days,
+                seed=seed,
+                chains=chains,
+                draws=draws,
+                tune=tune,
+                cores=cores,
+            )
+            for frame in (aware, ignoring)
+        ]
+        if note is not None:
+            note(
+                f"ablation seed {seed}: censoring-aware median {medians[0]:.2f} days against "
+                f"a censoring-ignoring {medians[1]:.2f}"
+            )
+        results.append(
+            SeedResult(
+                seed=seed,
+                censoring_aware_median=medians[0],
+                censoring_ignoring_median=medians[1],
+            )
+        )
+    return tuple(results)
+
+
+def _arm_median(
+    frame: SojournFrame,
+    open_lines: Sequence[LineRow],
+    vendor_ids: Sequence[str],
+    material_categories: Sequence[str],
+    as_of_date: date,
+    horizon_days: int,
+    *,
+    seed: int,
+    chains: int,
+    draws: int,
+    tune: int,
+    cores: int,
+) -> float:
+    """One arm of one seed: sample, condition every open line, summarise.
+
+    The entropy is respawned from `seed` inside this function rather than passed
+    in already split, so the two arms of a seed are handed byte-identical chain
+    seeds and byte-identical conditioning uniforms. Splitting once outside and
+    reusing the generator would advance it between the arms and put sampler
+    noise into the difference the ablation reports.
+    """
+    streams = np.random.SeedSequence(seed).spawn(2)
+    chain_seeds = [
+        int(child.generate_state(1, dtype=np.uint32)[0])
+        for child in streams[_SAMPLER_STREAM].spawn(chains)
+    ]
+    idata = sample_posterior(
+        build_model(frame),
+        random_seed=chain_seeds,
+        chains=chains,
+        draws=draws,
+        tune=tune,
+        cores=cores,
+    )
+    rows = _line_posteriors(
+        open_lines,
+        _posterior_dataset(idata),
+        vendor_ids,
+        material_categories,
+        as_of_date,
+        horizon_days,
+        np.random.default_rng(streams[_CONDITIONING_STREAM]),
+    )
+    return aggregate_median_forecast(rows)
+
+
 def run_fit(
     engine: Engine,
     *,
@@ -523,10 +749,38 @@ def run_fit(
     run_id = write_artifact_set(engine, manifest, split.assignments, line_posteriors)
     note(f"wrote {len(line_posteriors)} line_posterior row(s) and published run {run_id}")
 
+    # The floor is derived here, from the training split and the input rows alone
+    # — no posterior, no trace, nothing this run fitted (AD-008). It could as
+    # easily be derived before the sampler ran; what makes the ordering
+    # structural rather than conventional is that `ablation.py` cannot reach a
+    # fitted quantity at all.
+    floor = kaplan_meier_floor(lines, split, as_of_date)
+    note(
+        f"censoring floor {floor.floor:.4f} from a Kaplan-Meier median of "
+        f"{floor.kaplan_meier_median:.1f} days against a naive completed mean of "
+        f"{floor.naive_completed_mean:.1f}, over {floor.training_line_count} training line(s)"
+    )
+    delta = realized_delta(
+        censoring_ablation(
+            lines,
+            split,
+            vendors,
+            categories,
+            as_of_date,
+            horizon_days=shape.horizon_days,
+            log=log,
+        )
+    )
+    note(
+        f"realized ablation delta {delta.delta:.4f} over seeds {list(delta.seeds)}, interval "
+        f"[{delta.interval_low:.4f}, {delta.interval_high:.4f}]"
+    )
+
     report = write_run_report(
         manifest,
         procurement_input=procurement_input,
         training_line_counts=training_counts,
+        ablation=AblationOutcome(delta=delta, floor=floor),
         fixture_digest_agrees=fixture.digest_matches_published,
         report_root=report_root,
     )

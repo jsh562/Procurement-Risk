@@ -16,6 +16,11 @@ from dataclasses import dataclass
 from datetime import UTC, date
 from pathlib import Path
 
+from model.forecast.ablation import (
+    FLOOR_INTERVAL_PROBABILITY,
+    KaplanMeierFloor,
+    RealizedDelta,
+)
 from model.forecast.censoring import terminal_event
 from model.forecast.config import CHAINS_MIN
 from model.forecast.manifest import VENDOR_SHRINKAGE_HDI_PROBABILITY, RunManifest
@@ -28,6 +33,7 @@ from model.forecast.read import ProcurementInput
 from model.forecast.shrinkage import VendorShrinkage
 
 __all__ = [
+    "ABLATION_COMPARATOR_LABEL",
     "EMITTED_REPORT_KINDS",
     "LIMITATION_IDENTIFIERS",
     "LIMITATION_PARTS",
@@ -36,6 +42,7 @@ __all__ = [
     "SECTION_FIELDS",
     "SECTION_TITLES",
     "SHRINKAGE_SUPPORT_THRESHOLD",
+    "AblationOutcome",
     "LimitationRecord",
     "ReportError",
     "check_limitations",
@@ -61,16 +68,19 @@ class ReportError(ValueError):
 # The closed schema (FR-040)
 # ---------------------------------------------------------------------------
 
-#: The sections, in order. **The censoring ablation is deliberately absent**: it
-#: is FR-033's measure, computed by `ablation.py`, and a section rendered before
-#: there is anything to put in it would be a declared field carrying a
-#: placeholder — which is the one way a closed schema stops being a check. The
-#: task that computes the delta appends its section here.
+#: The sections, in order. **The censoring ablation was deliberately absent
+#: until there was something to put in it**: it is FR-033's measure, computed by
+#: `ablation.py`, and a section rendered ahead of that would have been a declared
+#: field carrying a placeholder — which is the one way a closed schema stops
+#: being a check. T050 and T051 landed the floor and the delta, so the section is
+#: here now and the renderer requires both: the entry cannot be emitted empty and
+#: cannot be skipped.
 SECTION_TITLES: tuple[str, ...] = (
     "Run Identity",
     "Input Provenance",
     "Sampling Shape",
     "Split and Held-Out Evidence",
+    "Censoring Ablation",
     "Per-Vendor Shrinkage",
     "Horizon and Extrapolation",
     "Limitations",
@@ -120,6 +130,16 @@ SECTION_FIELDS: dict[str, tuple[str, ...]] = {
         "Training lines",
         "Open lines forecast",
         "Realized held-out uncensored event count",
+    ),
+    "Censoring Ablation": (
+        "Comparator",
+        "Realized delta",
+        "Interval",
+        "Seeds",
+        "Per-seed deltas",
+        "Decision criterion",
+        "Criterion derivation",
+        "Verdict",
     ),
     "Per-Vendor Shrinkage": (
         "Credible level",
@@ -182,6 +202,19 @@ REGISTERED_COVERAGE_BAND = (0.73, 0.87)
 #: gap between it and what a 0.25 split of this dataset actually realizes.
 REGISTERED_UNCENSORED_EVENT_ASSUMPTION = 120
 
+#: Principle VIII's label, carried into the report rather than left to the
+#: reader. The censoring-ignoring fit is this epic's own model with one term
+#: removed, so it is **an ablation comparator and never a baseline** — an
+#: ablation beaten by the full model is the weakest comparison available, and a
+#: reader who took it for a baseline would read a much stronger claim than the
+#: one this run makes (FR-033's coverage row).
+ABLATION_COMPARATOR_LABEL = (
+    "censoring-ignoring fit — **an ablation comparator, not a baseline**. It is this run's own "
+    "model with the censoring contribution removed and nothing else changed, so beating it is "
+    "evidence about that term alone and is not a claim about this model against any alternative "
+    "a reader might otherwise use (Principle VIII)."
+)
+
 #: `spec.md` § Published Constants: the vendor-claim observation floor is "the
 #: smallest training-line count at which realized shrinkage reaches **0.5**" —
 #: the point at which a vendor's estimate stops being majority-borrowed from the
@@ -189,6 +222,101 @@ REGISTERED_UNCENSORED_EVENT_ASSUMPTION = 120
 #: determine the count and a number chosen after seeing them is the move FR-028
 #: prohibits for bands.
 SHRINKAGE_SUPPORT_THRESHOLD = 0.5
+
+
+# ---------------------------------------------------------------------------
+# The censoring ablation (T052 — FR-033, FR-038)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class AblationOutcome:
+    """The realized delta and the floor it is judged against, in one record.
+
+    One object rather than two arguments, for the reason FR-033 states outright:
+    "a delta and an interval with no bar next to them do not resolve to the
+    demonstration SC-008 claims". A caller able to supply the measurement without
+    the criterion would eventually publish one without the other, and the floor
+    is the entire reason the comparison counts as one.
+
+    The two arrive from different places on purpose — the floor from
+    `kaplan_meier_floor`, which cannot reach a fitted quantity, and the delta
+    from repeated pairs of fits — and they are commensurable because both are
+    relative shortenings of the same censoring-aware figure.
+    """
+
+    delta: RealizedDelta
+    floor: KaplanMeierFloor
+
+    @property
+    def met(self) -> bool:
+        """Whether the realized delta reaches the independently derived floor.
+
+        The comparison is a floor, so the direction is "at or above". Stated as a
+        property rather than recomputed at each use, so the verdict rendered in
+        the report and any verdict a caller draws are the same comparison.
+        """
+        return self.delta.delta >= self.floor.floor
+
+
+def _ablation_section(outcome: AblationOutcome) -> list[str]:
+    """FR-038's unit for SC-008: measure, value, criterion with direction, verdict.
+
+    All four parts, in one place. The delta with the interval the repeated seeds
+    produced; the floor **beside it** rather than elsewhere in the document, with
+    the direction spelled out, because a value and a bar do not resolve to a
+    verdict for a reader who does not already know which is which; and the
+    verdict itself, which is the part this epic's own history records going
+    missing.
+
+    A missed floor is rendered as a published shortfall and not as a defect
+    (SC-008's stated disposition, Principle VII): the delta's magnitude is an
+    empirical property of this dataset's censoring level rather than of the
+    estimator, and the registered coverage band's shortfall in § Limitations is
+    the precedent for publishing a number the data does not reach.
+    """
+    delta, floor = outcome.delta, outcome.floor
+    verdict = (
+        f"**met** — the realized delta {delta.delta:.4f} is at or above the derived floor "
+        f"{floor.floor:.4f}."
+        if outcome.met
+        else (
+            f"**missed** — the realized delta {delta.delta:.4f} falls below the derived floor "
+            f"{floor.floor:.4f}, a shortfall of {floor.floor - delta.delta:.4f}. Published as a "
+            f"shortfall rather than treated as a defect: the margin is an empirical property of "
+            f"this input's censoring level, not of the estimator, and the floor is not adjusted "
+            f"to meet it (Principle VII)."
+        )
+    )
+    return [
+        f"- **Comparator**: {ABLATION_COMPARATOR_LABEL}",
+        f"- **Realized delta**: {delta.delta:.4f} — the aggregate median forecast over open "
+        f"lines is that fraction shorter under the comparator than under the full fit, "
+        f"`(aware − ignoring) / aware`. Signed, so a comparator that came out *longer* reads "
+        f"as a negative number rather than as a large positive one.",
+        f"- **Interval**: [{delta.interval_low:.4f}, {delta.interval_high:.4f}] — the range the "
+        f"repeated seeds produced, not a normal approximation around them. Never a single-seed "
+        f"pass (FR-033).",
+        f"- **Seeds**: {', '.join(str(seed) for seed in delta.seeds)} — {len(delta.seeds)} "
+        f"repetitions, each one pair of fits differing only in the censoring term.",
+        f"- **Per-seed deltas**: "
+        f"{', '.join(f'{per_seed:.4f}' for per_seed in delta.per_seed_deltas)}, aligned with "
+        f"the seeds above so the summary can be checked rather than taken.",
+        f"- **Decision criterion**: at or above a floor of {floor.floor:.4f} — a **floor**, so "
+        f"the passing direction is upward. Interval "
+        f"[{floor.interval_low:.4f}, {floor.interval_high:.4f}] at "
+        f"{FLOOR_INTERVAL_PROBABILITY:.2f}; the Kaplan–Meier median is itself an estimate, and "
+        f"a bare number for it would be the shape Principle II refuses.",
+        f"- **Criterion derivation**: the input's own censoring bias, measured on the "
+        f"**training split alone** ({floor.training_line_count} lines) and **before and "
+        f"independently of the fit** — a Kaplan–Meier median of "
+        f"{floor.kaplan_meier_median:.1f} days against a naive completed-duration mean of "
+        f"{floor.naive_completed_mean:.1f} days over the same rows, "
+        f"`(median − mean) / median`. Non-parametric and never back-solved from the fitted "
+        f"model, which would compare a measurement against a derivation of the same quantity "
+        f"(AD-008, FR-033).",
+        f"- **Verdict**: {verdict}",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -626,6 +754,7 @@ def render_run_report(
     *,
     procurement_input: ProcurementInput,
     training_line_counts: Mapping[str, int],
+    ablation: AblationOutcome,
     fixture_digest_agrees: bool = True,
 ) -> str:
     """The whole run report, as Markdown under the declared schema.
@@ -633,6 +762,11 @@ def render_run_report(
     Deterministic: no clock read and no environment read. Every figure comes from
     the manifest the same write stored or from the input rows the fit read, so the
     report and the run row cannot disagree about what happened.
+
+    `ablation` is required and carries no default. A default would be a declared
+    section rendered from something nobody measured, which is the placeholder the
+    closed schema exists to exclude — and DV-020's report half is the assertion
+    that the entry is there.
     """
     maximum_observed_days = maximum_observed_duration_days(procurement_input, manifest.as_of_date)
     weights = manifest.vendor_shrinkage
@@ -651,6 +785,7 @@ def render_run_report(
         "Input Provenance": _provenance_section(manifest, fixture_digest_agrees),
         "Sampling Shape": _shape_section(manifest),
         "Split and Held-Out Evidence": _split_section(manifest),
+        "Censoring Ablation": _ablation_section(ablation),
         "Per-Vendor Shrinkage": _shrinkage_section(
             weights, training_line_counts, observation_floor
         ),
@@ -707,6 +842,7 @@ def write_run_report(
     *,
     procurement_input: ProcurementInput,
     training_line_counts: Mapping[str, int],
+    ablation: AblationOutcome,
     fixture_digest_agrees: bool = True,
     report_root: Path | str | None = None,
 ) -> Path:
@@ -720,6 +856,7 @@ def write_run_report(
         manifest,
         procurement_input=procurement_input,
         training_line_counts=training_line_counts,
+        ablation=ablation,
         fixture_digest_agrees=fixture_digest_agrees,
     )
     target = run_report_path(manifest.run_id, report_root)

@@ -134,10 +134,10 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 - [ ] T048 [US2] {FR-004} [COMPLETES FR-004] DV-029 / SC-007 — stored `is_censored` agrees with `lifecycle_event` by an independent path — TST/test_censoring_stored.py after:T035
 - [X] T049 [P] [US2] {FR-033} **RED** Failing ablation property tests in TST/test_ablation_properties.py — the KM floor uses the training split alone and no held-out row moves it
-- [ ] T050 [US2] {FR-033} **GREEN** Kaplan–Meier floor against the naive completed-duration mean, and the realized delta, in PKG/ablation.py (AD-008) → exports: kaplan_meier_floor() after:T049
-- [ ] T051 [US2] {FR-033} Run the censoring-ignoring comparator over repeated seeds for the delta's interval in PKG/ablation.py — an **ablation comparator, never a baseline** after:T118
-- [ ] T052 [US2] {FR-033,FR-038} DV-020's report half — the ablation entry carries the delta, its interval, the derived floor **and a met-or-missed verdict**, in PKG/report.py
-- [ ] T053 [US2] {FR-033} **NC-6** — two cases: the censoring-ignoring fit's median is **shorter**, and a no-censoring input gives a delta at zero — TST/test_ablation_controls.py
+- [X] T050 [US2] {FR-033} **GREEN** Kaplan–Meier floor against the naive completed-duration mean, and the realized delta, in PKG/ablation.py (AD-008) → exports: kaplan_meier_floor() after:T049
+- [X] T051 [US2] {FR-033} Run the censoring-ignoring comparator over repeated seeds for the delta's interval in PKG/ablation.py — an **ablation comparator, never a baseline** after:T118
+- [X] T052 [US2] {FR-033,FR-038} DV-020's report half — the ablation entry carries the delta, its interval, the derived floor **and a met-or-missed verdict**, in PKG/report.py
+- [X] T053 [US2] {FR-033} **NC-6** — two cases: the censoring-ignoring fit's median is **shorter**, and a no-censoring input gives a delta at zero — TST/test_ablation_controls.py
 - [ ] T054 [US2] {FR-033} SC-008 — the delta sits at or above the floor, or is published as a four-part shortfall; never a single-seed pass — TST/test_ablation.py
 
 ---
