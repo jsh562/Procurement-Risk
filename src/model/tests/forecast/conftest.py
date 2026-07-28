@@ -77,6 +77,7 @@ basename local to the tier instead of global to the entry.
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import shutil
@@ -105,11 +106,14 @@ from model.forecast.config import (
 from model.forecast.manifest import RunManifest
 from model.forecast.model import SojournFrame, training_frame
 from model.forecast.read import ProcurementInput, read_lines_and_events
+from model.forecast.reproduce import Reproduction, run_reproduce
 from model.forecast.serialize import input_data_hash
 from model.forecast.shrinkage import VendorShrinkage
 from model.forecast.split import TRAIN, SplitAssignment, SplitResult, assign_split
 from model.forecast.write import CLEAR_ACTIVE_RUN_SQL, LinePosteriorRow, set_active_run
+from model.procurement import paths as procurement_paths
 from model.procurement.load import load
+from model.procurement.serialize import read_payload, write_payload
 from model.schema.cli import build_config
 from model.schema.url import (
     DATABASE_URL_ENV_VAR,
@@ -317,6 +321,44 @@ def db_session(engine: Engine, schema_at_head: str) -> Iterator[Session]:
 # --------------------------------------------------------------------------
 # Emitted-artifact roots
 # --------------------------------------------------------------------------
+
+
+#: The fixture field a moved-provenance root mutates. A provenance label rather
+#: than a line: the break FR-023 describes is the file changing without its
+#: sidecar, and a label is the smallest change that moves the digest while
+#: leaving the payload a valid fixture whose layer the job can still read.
+MUTATED_FIXTURE_FIELD = "generator_revision"
+FIXTURE_MUTATION_MARKER = "-moved-for-dv-016"
+
+
+@pytest.fixture(scope="package")
+def moved_fixture_root(tmp_path_factory) -> Path:
+    """A repository root whose fixture no longer digests to its published value.
+
+    The fixture, its digest sidecar and the datasheet are copied out of the
+    checkout and only the fixture is rewritten, which is exactly the break
+    FR-023 describes: the file moved and the sidecar did not. The committed
+    artifacts are never touched — a test that mutated them in place would leave
+    the repository holding a corrupted data file if it failed midway.
+
+    Shared by both jobs' warning cases, `test_fixture_digest.py` for the fit and
+    `test_provenance_warning.py` for the reproduction, because DV-016 is one
+    break observed on two paths and building it twice would be two opinions
+    about what "moved" means.
+    """
+    root = tmp_path_factory.mktemp("moved-fixture-root")
+    source = procurement_paths.procurement_dir(procurement_paths.REPO_ROOT)
+    target = procurement_paths.procurement_dir(root)
+    target.mkdir(parents=True, exist_ok=True)
+    for name in (procurement_paths.HASH_FILENAME, procurement_paths.DATASHEET_FILENAME):
+        shutil.copy2(source / name, target / name)
+
+    payload = read_payload(source / procurement_paths.FIXTURE_FILENAME)
+    payload[MUTATED_FIXTURE_FIELD] = (
+        f"{payload[MUTATED_FIXTURE_FIELD]}{FIXTURE_MUTATION_MARKER}"
+    )
+    write_payload(target / procurement_paths.FIXTURE_FILENAME, payload)
+    return root
 
 
 @pytest.fixture
@@ -618,6 +660,59 @@ def emitted_run(
             written = set(connection.execute(ALL_RUN_IDS_SQL).scalars()) - pre_existing
         for run_id in written:
             discard_run(engine, run_id)
+
+
+# --------------------------------------------------------------------------
+# One real reproduction of that run, emitted once and shared (US5)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class ReproducedRun:
+    """One `forecast-reproduce` of the tier's shared run, with its stderr kept.
+
+    The whole `Reproduction` is carried rather than only the verdict, because
+    every assertion in US5 is about a different part of it: T103 the per-line
+    agreement and the provenance equality, T104 the same comparison against a
+    perturbed store, T105 the draw-digest claim's scope, T073 the file it wrote.
+    The diagnostics are kept because FR-023's warning disposition is reported on
+    the stream and in the file and nowhere else (G-16).
+    """
+
+    reproduction: Reproduction
+    diagnostics: str
+    report_root: Path
+
+
+@pytest.fixture(scope="package")
+def reproduced_run(
+    engine: Engine, emitted_run: EmittedRun, tmp_path_factory
+) -> ReproducedRun:
+    """The tier's shared reproduction: one re-fit of `emitted_run`, at its shape.
+
+    **Package-scoped because it is a second fit at the committed shape**, which
+    is the expensive thing in this tier and is what FR-022's comparison requires
+    two of. Every US5 assertion reads this one result; a per-test reproduction
+    would multiply the tier's cost by the number of questions asked about it.
+
+    Driven in-process rather than through the console script, and the reason is
+    the perturbation control: NC-17 needs the same re-fit compared against a
+    *mutated* store, and a subprocess would have to sample a third time to
+    produce one. What the console entry point adds over this call is its argument
+    parsing and its exit-status mapping, and `test_reproduction_controls.py`
+    asserts both against the outcome this fixture returns.
+
+    Writes nothing to any store: the job reads, samples in memory and emits one
+    file, so no cleanup is owed and `forecast_run` is left as it was found.
+    """
+    log = io.StringIO()
+    root = tmp_path_factory.mktemp("reproduction-reports")
+    reproduction = run_reproduce(
+        engine, emitted_run.run_id, report_root=root, log=log
+    )
+    return ReproducedRun(
+        reproduction=reproduction, diagnostics=log.getvalue(), report_root=root
+    )
 
 
 # --------------------------------------------------------------------------

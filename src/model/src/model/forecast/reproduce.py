@@ -421,11 +421,14 @@ def _moved_inputs(
     discover the next. Each carries the two-field set — the precondition and its
     realized value — which is FR-023's "which hash moved and both values".
 
-    The split is checked **twice, against two independent recomputations**. One
-    is taken over the stored `forecast_split_assignment` rows, which is DV-017's
-    own form and the only one that moves when an assignment row is edited; the
-    other re-derives the assignment from the input under AD-011's three
-    determinants, which is what would move if the derivation itself changed.
+    The split is checked against two recomputations, and only one of them is
+    independent of the row hash. The first is taken over the stored
+    `forecast_split_assignment` rows — DV-017's own form, and the only one that
+    moves when an assignment row is edited. The second re-derives the assignment
+    from the input under AD-011's three determinants, and is **suppressed when
+    the row hash has moved**: the split is keyed on that hash, so it necessarily
+    re-derives differently, and reporting it would name a consequence beside the
+    cause and leave a reader unable to tell which input actually moved.
     """
     unmet: list[UnmetPrecondition] = []
     if observed_row_hash != recorded.input_data_hash:
@@ -456,7 +459,10 @@ def _moved_inputs(
                 ),
             )
         )
-    if rederived_split_hash != recorded.split_assignment_hash:
+    if (
+        observed_row_hash == recorded.input_data_hash
+        and rederived_split_hash != recorded.split_assignment_hash
+    ):
         unmet.append(
             UnmetPrecondition(
                 precondition=(

@@ -22,7 +22,6 @@ so it is still inside the work tree and the run's code revision resolves.
 from __future__ import annotations
 
 import io
-import shutil
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -41,7 +40,7 @@ from model.forecast.paths import run_report_path
 from model.forecast.read import read_lines_and_events
 from model.forecast.serialize import input_data_hash
 from model.procurement import paths as procurement_paths
-from model.procurement.serialize import dataset_content_hash, read_payload, write_payload
+from model.procurement.serialize import dataset_content_hash, read_payload
 
 #: Module-level SQL, never assembled from values (Ruff S608).
 RUN_DIGESTS_SQL = text(
@@ -61,13 +60,6 @@ MOVE_ONE_ROW_SQL = text(
                         ORDER BY project_id, po_number, line_number LIMIT 1)
     """
 )
-
-#: The fixture field the mutation moves. A provenance label rather than a line:
-#: the break DV-016 describes is the file changing without its sidecar, and a
-#: label is the smallest change that moves the digest while leaving the payload a
-#: valid fixture the job can still read its layer from.
-MUTATED_FIELD = "generator_revision"
-MUTATION_MARKER = "-moved-for-dv-016"
 
 #: What a moved *row* looks like: a suffix on one line's description, which is
 #: inside the compared-content projection the row hash is defined over.
@@ -101,32 +93,6 @@ class WarnedRun:
     report: Path
     observed_digest: str
     published_digest: str
-
-
-@pytest.fixture(scope="module")
-def moved_fixture_root(tmp_path_factory) -> Path:
-    """A repository root whose fixture no longer digests to its published value.
-
-    The fixture, its digest sidecar and the datasheet are copied out of the
-    checkout and only the fixture is rewritten, which is exactly the break FR-023
-    describes: the file moved and the sidecar did not. The committed artifacts are
-    never touched — a test that mutated them in place would leave the repository
-    holding a corrupted data file if it failed midway.
-    """
-    root = tmp_path_factory.mktemp("moved-fixture-root")
-    source = procurement_paths.procurement_dir(procurement_paths.REPO_ROOT)
-    target = procurement_paths.procurement_dir(root)
-    target.mkdir(parents=True, exist_ok=True)
-    for name in (
-        procurement_paths.HASH_FILENAME,
-        procurement_paths.DATASHEET_FILENAME,
-    ):
-        shutil.copy2(source / name, target / name)
-
-    payload = read_payload(source / procurement_paths.FIXTURE_FILENAME)
-    payload[MUTATED_FIELD] = f"{payload[MUTATED_FIELD]}{MUTATION_MARKER}"
-    write_payload(target / procurement_paths.FIXTURE_FILENAME, payload)
-    return root
 
 
 @pytest.fixture(scope="module")
