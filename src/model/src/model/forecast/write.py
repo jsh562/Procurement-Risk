@@ -1,12 +1,20 @@
 """Two transactions, per AD-010: the artifact set, then the pointer.
 
-Transaction 1 inserts the run row, the split assignments and the artifact rows;
-transaction 2 sets `is_active`. Splitting the pointer off is what lets a run be
-written and reviewed before it becomes the one downstream readers see, which is
-what makes FR-015's "explicit, never implied by recency" operable. Both arrays
-of an artifact row are columns of **one** row written by **one** statement, so no
-reader can observe them in disagreement (FR-013). Artifact rows are inserted once
-and never updated — `UPDATE` was withheld from the grant deliberately (FR-034).
+Transaction 1 inserts the run row, the split assignments and **both** artifact
+populations; transaction 2 sets `is_active`. Splitting the pointer off is what
+lets a run be written and reviewed before it becomes the one downstream readers
+see, which is what makes FR-015's "explicit, never implied by recency" operable.
+Both arrays of an artifact row are columns of **one** row written by **one**
+statement, so no reader can observe them in disagreement (FR-013). Artifact rows
+are inserted once and never updated — `UPDATE` was withheld from the grant
+deliberately (FR-034).
+
+The two populations are two statements against two tables in one transaction,
+per {SAD:ADR-0018}: `line_posterior` holds open lines anchored at the run's
+as-of date, `held_out_prediction` holds held-out lines that already delivered,
+anchored per row at each line's own order date. Everything they share — the
+array shapes, the digest agreement — is checked by one function here, so the
+duplication ADR-0018 accepts in the schema is not repeated in the writer.
 """
 
 from __future__ import annotations
@@ -15,6 +23,7 @@ import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import date, datetime
 
 import numpy as np
 from numpy.typing import NDArray
@@ -27,9 +36,13 @@ from model.forecast.split import SplitAssignment
 __all__ = [
     "ACTIVATE_RUN_SQL",
     "CLEAR_ACTIVE_RUN_SQL",
+    "HELD_OUT_ANCHOR_CONVENTION",
+    "HELD_OUT_DURATION_SEMANTIC",
+    "HELD_OUT_PREDICTION_INSERT",
     "LINE_POSTERIOR_INSERT",
     "RUN_INSERT",
     "SPLIT_ASSIGNMENT_INSERT",
+    "HeldOutPredictionRow",
     "LinePosteriorRow",
     "WriteError",
     "insert_artifact_set",
@@ -122,6 +135,49 @@ LINE_POSTERIOR_INSERT = text(
     """
 )
 
+#: The two labels `held_out_prediction` records **per row**, and the only two
+#: values `ck_held_out_prediction__anchor_convention` and
+#: `…__duration_semantic` admit. Per row rather than on the run, unlike the open
+#: population's `forecast_run.open_line_draw_semantic`: each population records
+#: its anchor and its semantic where the population lives, and this one's anchor
+#: is a per-line date. Named here, beside the statement that writes them, so the
+#: label and the column it lands in are one fact.
+#:
+#: Neither is evidence on its own — both are single-value checks a re-anchored
+#: implementation satisfies identically — which is why DV-040 measures the
+#: semantic over the stored draws and `fk_held_out_prediction__line_anchor`
+#: proves the anchor.
+HELD_OUT_ANCHOR_CONVENTION = "line_order_date"
+HELD_OUT_DURATION_SEMANTIC = "total_duration_from_line_order_date"
+
+#: The second artifact population, written in the same transaction as the first
+#: (`data-model.md` § Write order, step 4). One row per held-out **delivered**
+#: line, and the same one-statement shape `LINE_POSTERIOR_INSERT` has, so FR-013
+#: holds on this store for the same structural reason: `draws` and `survival` are
+#: two NOT NULL columns of one row.
+#:
+#: `line_is_closed` is bound to a literal `true` rather than carried on the row.
+#: The value the writer could supply is not evidence of anything — what makes it
+#: true is `fk_held_out_prediction__line_anchor`, which resolves
+#: `(po_line_id, anchor_date, line_is_closed)` against the delivered
+#: `purchase_order_line` key, so a prediction naming an open line or a wrong
+#: order date has no referent. A column the writer chose freely would be the
+#: comment the foreign key exists to replace.
+HELD_OUT_PREDICTION_INSERT = text(
+    """
+    INSERT INTO held_out_prediction (
+        run_id, po_line_id, draw_count, horizon_days,
+        anchor_date, line_is_closed, anchor_convention, duration_semantic,
+        draws, survival, residual_tail_mass, draw_digest
+    )
+    VALUES (
+        :run_id, :po_line_id, :draw_count, :horizon_days,
+        :anchor_date, true, :anchor_convention, :duration_semantic,
+        :draws, :survival, :residual_tail_mass, :draw_digest
+    )
+    """
+)
+
 #: Transaction 2, first half. `WHERE is_active` rather than a `run_id` predicate:
 #: `ix_forecast_run__single_active` makes at most one row match, so this clears
 #: whichever run was live without the writer having to know which it was.
@@ -152,6 +208,30 @@ class LinePosteriorRow:
     draw_digest: bytes
 
 
+# `eq=False` for the same reason `LinePosteriorRow` carries it.
+@dataclass(frozen=True, slots=True, eq=False)
+class HeldOutPredictionRow:
+    """One held-out delivered line's gradeable prediction, as the store holds it.
+
+    `anchor_date` is the line's **own** `order_date` and is carried rather than
+    derived here, because the writer has no line to read it from — what proves it
+    is the composite foreign key, which resolves the anchor against
+    `purchase_order_line` and fails outright on a value that is not that line's.
+
+    `draws` are **total** durations from that anchor, never remaining ones. The
+    two are interchangeable to every constraint on this table, so nothing in this
+    module can tell them apart; `posterior.total_duration_draws` is where the
+    quantity is fixed and DV-040 is where it is measured.
+    """
+
+    po_line_id: uuid.UUID
+    anchor_date: date
+    draws: NDArray[np.float64]
+    survival: NDArray[np.float64]
+    residual_tail_mass: float
+    draw_digest: bytes
+
+
 def _float_list(values: NDArray[np.float64] | Sequence[float], where: str) -> list[float]:
     """A one-dimensional array as the `double precision[]` the driver adapts.
 
@@ -175,7 +255,9 @@ def _float_list(values: NDArray[np.float64] | Sequence[float], where: str) -> li
     return [float(value) for value in array]
 
 
-def _checked_posterior(row: LinePosteriorRow, manifest: RunManifest) -> dict[str, object]:
+def _checked_artifact(
+    row: LinePosteriorRow | HeldOutPredictionRow, manifest: RunManifest, store: str
+) -> dict[str, object]:
     """One artifact row's bind parameters, with every shape proved before the write.
 
     Checked here rather than left to the constraints, because a constraint
@@ -184,26 +266,32 @@ def _checked_posterior(row: LinePosteriorRow, manifest: RunManifest) -> dict[str
     same function that produced it, which is not an independent check and is not
     claimed as one — it catches a row paired with another row's digest, which is
     the failure a shared code path can still make.
+
+    **One function over both stores, and that is DV-027's discipline applied to
+    the writer.** The seven array invariants are declared twice in the schema
+    because a new table cannot inherit them; they are checked once here, so a
+    strengthening cannot land on one population and miss the other.
     """
-    draws = _float_list(row.draws, f"line {row.po_line_id} draws")
-    survival = _float_list(row.survival, f"line {row.po_line_id} survival")
+    draws = _float_list(row.draws, f"{store} line {row.po_line_id} draws")
+    survival = _float_list(row.survival, f"{store} line {row.po_line_id} survival")
     if len(draws) != manifest.draw_count:
         raise WriteError(
-            f"line {row.po_line_id} carries {len(draws)} draws against the run's recorded "
-            f"draw_count of {manifest.draw_count}; `ck_line_posterior__draws_length` compares "
-            f"the array against this run's own value, proved by the shape foreign key"
+            f"{store} line {row.po_line_id} carries {len(draws)} draws against the run's "
+            f"recorded draw_count of {manifest.draw_count}; `ck_{store}__draws_length` "
+            f"compares the array against this run's own value, proved by the shape foreign key"
         )
     if len(survival) != manifest.horizon_days:
         raise WriteError(
-            f"line {row.po_line_id} carries a {len(survival)}-day grid against the run's "
-            f"horizon of {manifest.horizon_days}; the grid runs k = 1..horizon_days with no "
-            f"S(0) element"
+            f"{store} line {row.po_line_id} carries a {len(survival)}-day grid against the "
+            f"run's horizon of {manifest.horizon_days}; the grid runs k = 1..horizon_days "
+            f"with no S(0) element"
         )
     if draw_digest(row.draws) != row.draw_digest:
         raise WriteError(
-            f"line {row.po_line_id}'s draw digest does not cover its own draws. The run's "
-            f"`artifact_hash` is taken over these digests, so storing one that belongs to a "
-            f"different row would make the artifact hash a value recorded rather than derived"
+            f"{store} line {row.po_line_id}'s draw digest does not cover its own draws. The "
+            f"run's `artifact_hash` is taken over these digests, so storing one that belongs "
+            f"to a different row would make the artifact hash a value recorded rather than "
+            f"derived"
         )
     return {
         "run_id": manifest.run_id,
@@ -217,6 +305,30 @@ def _checked_posterior(row: LinePosteriorRow, manifest: RunManifest) -> dict[str
     }
 
 
+def _checked_prediction(row: HeldOutPredictionRow, manifest: RunManifest) -> dict[str, object]:
+    """A held-out row's bind parameters: the shared shape, plus the two labels.
+
+    The anchor is passed through unexamined on purpose. Nothing this module could
+    compare it against would be independent — the writer never read the line — so
+    a check here would be the writer agreeing with itself. The foreign key is the
+    check, and it resolves against the delivered table rather than against a value
+    in this process.
+    """
+    if isinstance(row.anchor_date, datetime) or not isinstance(row.anchor_date, date):
+        raise WriteError(
+            f"line {row.po_line_id}'s anchor is a {type(row.anchor_date).__name__}; "
+            f"`held_out_prediction.anchor_date` is a `date` and the composite foreign key "
+            f"compares values, so an instant would fail to reference at all rather than "
+            f"reference something looser"
+        )
+    return {
+        **_checked_artifact(row, manifest, "held_out_prediction"),
+        "anchor_date": row.anchor_date,
+        "anchor_convention": HELD_OUT_ANCHOR_CONVENTION,
+        "duration_semantic": HELD_OUT_DURATION_SEMANTIC,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Transaction 1 — the artifact set
 # ---------------------------------------------------------------------------
@@ -227,20 +339,30 @@ def insert_artifact_set(
     manifest: RunManifest,
     split_assignments: Sequence[SplitAssignment],
     line_posteriors: Sequence[LinePosteriorRow],
+    held_out_predictions: Sequence[HeldOutPredictionRow] = (),
 ) -> uuid.UUID:
     """Every statement of transaction 1, issued in the order the keys force.
 
     The run row first, because every other row is its child; then the split
-    assignments, which every line has; then the open population's artifacts. The
+    assignments, which every line has; then **both** artifact populations. The
     ordering is not a policy choice and carries no guarantee of its own — inside
     one transaction it has no external visibility. What the *transaction* carries
     is that a failure at any point rolls all of it back together, which is what
-    makes SC-015's enumeration across stores hold with no per-store mechanism.
+    makes SC-015's enumeration across stores hold with no per-store mechanism —
+    and splitting the artifacts into two stores is precisely why that enumeration
+    has to name every store rather than one (ADR-0018 § Consequences/Negative).
 
     Issues no `COMMIT`. The caller owns the transaction boundary, so this function
-    can be extended by the tasks that add `held_out_prediction` and
-    `forecast_diagnostic` to the same transaction without either of them needing
-    to know how it was opened.
+    can be extended by the task that adds `forecast_diagnostic` to the same
+    transaction without it needing to know how the transaction was opened.
+
+    `held_out_predictions` defaults to empty rather than being required, because
+    the population it describes is a *measurement* of the split rather than a
+    structural necessity: a run whose held-out side happened to hold no delivered
+    line writes no row here and is well formed. Whether the population the run
+    actually has was written is DV-002's question and DV-028's, both asserted
+    over the stored rows against the run row's own counts — not something this
+    function can answer, since it is handed the rows rather than the lines.
     """
     if not split_assignments:
         raise WriteError(
@@ -265,6 +387,23 @@ def insert_artifact_set(
             f"`open_line_count` of {manifest.open_line_count}; DV-001 compares the two, and "
             f"the count column is what a reader trusts without running the query"
         )
+    held_out_lines = {row.po_line_id for row in held_out_predictions}
+    if len(held_out_lines) != len(held_out_predictions):
+        raise WriteError(
+            "two held-out predictions name one line; `pk_held_out_prediction` is "
+            "`(run_id, po_line_id)`, so the second insert would be refused after the first "
+            "had already been issued"
+        )
+    both = held_out_lines & {row.po_line_id for row in line_posteriors}
+    if both:
+        raise WriteError(
+            f"{len(both)} line(s) carry an artifact row in **both** stores under one run — "
+            f"first {sorted(map(str, both))[0]}. The two populations are structurally "
+            f"disjoint on the held-out side only (`ck_held_out_prediction__line_delivered` "
+            f"plus the anchor foreign key); the other direction is G-5, and nothing in the "
+            f"schema refuses an order-date-anchored row written into `line_posterior`. "
+            f"DV-030 asserts it over the stored rows; this refuses it before the write"
+        )
 
     connection.execute(RUN_INSERT, manifest.row_parameters())
     connection.execute(
@@ -282,8 +421,16 @@ def insert_artifact_set(
     )
     connection.execute(
         LINE_POSTERIOR_INSERT,
-        [_checked_posterior(row, manifest) for row in line_posteriors],
+        [_checked_artifact(row, manifest, "line_posterior") for row in line_posteriors],
     )
+    # Step 4 of `data-model.md` § Write order, and `executemany` is skipped
+    # entirely on an empty sequence rather than issuing a statement with no
+    # parameter sets, which psycopg refuses.
+    if held_out_predictions:
+        connection.execute(
+            HELD_OUT_PREDICTION_INSERT,
+            [_checked_prediction(row, manifest) for row in held_out_predictions],
+        )
     return manifest.run_id
 
 
@@ -349,6 +496,7 @@ def write_artifact_set(
     manifest: RunManifest,
     split_assignments: Sequence[SplitAssignment],
     line_posteriors: Sequence[LinePosteriorRow],
+    held_out_predictions: Sequence[HeldOutPredictionRow] = (),
 ) -> uuid.UUID:
     """Write one run's artifact set, then publish it. Two transactions (AD-010).
 
@@ -364,7 +512,9 @@ def write_artifact_set(
     that writes it has not run.
     """
     with _unit_of_work(target) as connection:
-        run_id = insert_artifact_set(connection, manifest, split_assignments, line_posteriors)
+        run_id = insert_artifact_set(
+            connection, manifest, split_assignments, line_posteriors, held_out_predictions
+        )
     with _unit_of_work(target) as connection:
         set_active_run(connection, run_id)
     return run_id

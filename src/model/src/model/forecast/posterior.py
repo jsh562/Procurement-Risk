@@ -1,16 +1,26 @@
-"""Conditional remaining draws, the canonical sort, the grid and its residual.
+"""Two draw paths and one grid: the anchor is what tells them apart.
 
-FR-010, FR-011, FR-029. AD-002 draws an open line's remainder by **inverse-CDF
-conditioning** — `F* = F(e) + u·(1 − F(e))`, `T = F⁻¹(F*)`, stored as `T − e`.
+FR-010, FR-011, FR-029, {SAD:ADR-0018}. **Open lines** take AD-002's inverse-CDF
+conditioning — `F* = F(e) + u·(1 − F(e))`, `T = F⁻¹(F*)`, stored as `T − e`.
 Never rejection, whose acceptance rate `1 − F(e)` collapses on exactly the
 longest-open lines the forecast exists for; never re-basing a total draw, which
 puts a point mass of size `F(e)` at zero and still satisfies every delivered
 constraint. Strict positivity of every returned draw is what separates the two.
 
+**Held-out delivered lines** take the other path: `T = F⁻¹(u)`, the **total**
+duration from the line's own order date, which is the quantity its observed
+outcome can be graded against. It takes no elapsed time — the signature is where
+that is enforced, because a run's as-of date reaching this quantity is the
+mis-anchoring `fk_held_out_prediction__line_anchor` cannot see. The two paths
+coincide at `e = 0` and nowhere else, and are otherwise interchangeable to every
+constraint on either store, so DV-040 measures the difference rather than
+labelling it.
+
 The grid runs `k = 1..horizon_days` with a strict `>`, so there is no `S(0)`
-element and a draw landing exactly on day `k` has delivered. `residual_tail_mass`
-is counted by binary search over the order statistics rather than read off the
-grid's tail, which is what makes DV-003 an agreement between two paths.
+element and a draw landing exactly on day `k` has delivered. It is anchor-blind
+and serves both populations unchanged. `residual_tail_mass` is counted by binary
+search over the order statistics rather than read off the grid's tail, which is
+what makes DV-003 an agreement between two paths.
 """
 
 from __future__ import annotations
@@ -27,6 +37,7 @@ __all__ = [
     "SurvivalGrid",
     "conditional_remaining_draws",
     "survival_grid",
+    "total_duration_draws",
 ]
 
 
@@ -89,6 +100,42 @@ def _positive_scale(sigma: ArrayLike) -> NDArray[np.float64]:
     return scale
 
 
+def _open_interval_uniforms(uniforms: ArrayLike) -> NDArray[np.float64]:
+    """The draw quantiles, proved non-empty and strictly inside `(0, 1)`.
+
+    Shared by both draw paths, because both invert the same CDF and both are
+    ruined by the same two endpoints. Factored rather than repeated so a
+    strengthening cannot land on one population only — the discipline ADR-0018
+    § Consequences/Negative names for the array invariants, applied here to the
+    arithmetic that produces them.
+    """
+    drawn = np.atleast_1d(np.asarray(uniforms, dtype=float))
+    if drawn.size == 0:
+        raise PosteriorError(
+            "no uniforms were passed; a line with no draws has no posterior, and an empty "
+            "array would reach `survival_grid` as a division by zero rather than as a "
+            "named refusal"
+        )
+    if not np.all(np.isfinite(drawn)) or np.any(drawn <= 0.0) or np.any(drawn >= 1.0):
+        raise PosteriorError(
+            "every uniform must lie strictly inside `(0, 1)`; `F⁻¹(0)` is zero and `F⁻¹(1)` "
+            "is infinite, and an infinite draw sorts last, passes the non-negativity check "
+            "and turns the residual into 1 on a line nothing is wrong with"
+        )
+    return drawn
+
+
+def _finite_location(mu: ArrayLike) -> NDArray[np.float64]:
+    """The log-location, proved finite before it reaches an exponential."""
+    location = np.asarray(mu, dtype=float)
+    if not np.all(np.isfinite(location)):
+        raise PosteriorError(
+            "the lognormal log-location must be finite; a NaN or an infinity here produces "
+            "a whole draw vector of NaN that no stored constraint attributes to its cause"
+        )
+    return location
+
+
 def _survival(
     elapsed: NDArray[np.float64], mu: NDArray[np.float64], sigma: NDArray[np.float64]
 ) -> NDArray[np.float64]:
@@ -120,28 +167,11 @@ def conditional_remaining_draws(
     array and `schema_constants.percentile_convention` reads `draws[ceil(p·n)]` —
     the canonical order is what makes a percentile a lookup rather than a scan.
     """
-    drawn = np.atleast_1d(np.asarray(uniforms, dtype=float))
-    location = np.asarray(mu, dtype=float)
+    drawn = _open_interval_uniforms(uniforms)
+    location = _finite_location(mu)
     scale = _positive_scale(sigma)
     elapsed = np.asarray(elapsed_days, dtype=float)
 
-    if drawn.size == 0:
-        raise PosteriorError(
-            "no uniforms were passed; a line with no draws has no posterior, and an empty "
-            "array would reach `survival_grid` as a division by zero rather than as a "
-            "named refusal"
-        )
-    if not np.all(np.isfinite(drawn)) or np.any(drawn <= 0.0) or np.any(drawn >= 1.0):
-        raise PosteriorError(
-            "every uniform must lie strictly inside `(0, 1)`; `F⁻¹(0)` is zero and `F⁻¹(1)` "
-            "is infinite, and an infinite draw sorts last, passes the non-negativity check "
-            "and turns the residual into 1 on a line nothing is wrong with"
-        )
-    if not np.all(np.isfinite(location)):
-        raise PosteriorError(
-            "the lognormal log-location must be finite; a NaN or an infinity here produces "
-            "a whole draw vector of NaN that no stored constraint attributes to its cause"
-        )
     if not np.all(np.isfinite(elapsed)):
         raise PosteriorError(
             "the elapsed time must be finite; NaN and infinity are not elapsed times, and "
@@ -188,6 +218,43 @@ def conditional_remaining_draws(
         )
 
     return np.sort(remaining)
+
+
+def total_duration_draws(
+    uniforms: ArrayLike, mu: ArrayLike, sigma: ArrayLike
+) -> NDArray[np.float64]:
+    """One **total** duration per uniform, ascending, from the line's order date.
+
+    `T = F⁻¹(u)` and nothing else: the held-out population has already delivered,
+    so there is no elapsed time to survive and no mass to condition away. The
+    absent parameter is the point — a run's as-of date cannot enter this quantity
+    through an argument that does not exist, and that is the half of the anchor
+    `fk_held_out_prediction__line_anchor` proves nothing about (DV-040, FR-029).
+
+    Ascending, because `ck_held_out_prediction__draws_sorted` requires it and the
+    percentile convention reads `draws[ceil(p·n)]` on this store exactly as it
+    does on the other. Every argument broadcasts: each posterior draw carries its
+    own `(μ, σ)`.
+    """
+    drawn = _open_interval_uniforms(uniforms)
+    location = _finite_location(mu)
+    scale = _positive_scale(sigma)
+
+    drawn, location, scale = np.broadcast_arrays(drawn, location, scale)
+    total = np.exp(location + scale * _inv_cdf(drawn))
+
+    # An overflow to infinity is unreachable at any parameters a fit produces and
+    # is refused anyway rather than clipped: an infinite draw sorts last, passes
+    # `ck_held_out_prediction__draws_non_negative`, and turns the row's residual
+    # into 1 on a line whose observed outcome the harness is about to grade.
+    if not np.all(np.isfinite(total)):
+        raise PosteriorError(
+            "a total duration came out non-finite for these parameters; the draw is "
+            "`exp(mu + sigma*z)` and an infinity here means the log-scale location or "
+            "spread is far outside anything a fit produces. A stored infinity would sort "
+            "last, satisfy every array check and make the residual 1"
+        )
+    return np.sort(total)
 
 
 def survival_grid(draws: ArrayLike, horizon_days: int) -> SurvivalGrid:

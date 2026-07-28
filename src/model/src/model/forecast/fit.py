@@ -44,6 +44,7 @@ from model.forecast.config import (
 )
 from model.forecast.design import DesignError, category_index, vendor_index
 from model.forecast.manifest import (
+    POPULATION_RANK_HELD_OUT_PREDICTION,
     POPULATION_RANK_LINE_POSTERIOR,
     VENDOR_SHRINKAGE_HDI_PROBABILITY,
     ArtifactDigest,
@@ -65,14 +66,24 @@ from model.forecast.model import (
     training_frame,
 )
 from model.forecast.paths import ForecastPathError
-from model.forecast.posterior import PosteriorError, conditional_remaining_draws, survival_grid
+from model.forecast.posterior import (
+    PosteriorError,
+    conditional_remaining_draws,
+    survival_grid,
+    total_duration_draws,
+)
 from model.forecast.read import LineRow, ReadError, read_lines_and_events
 from model.forecast.report import AblationOutcome, ReportError, write_run_report
 from model.forecast.sample import SampleError, sample_posterior
 from model.forecast.serialize import SerializeError, input_data_hash
 from model.forecast.shrinkage import ShrinkageError, VendorShrinkage, vendor_shrinkage
-from model.forecast.split import TRAIN, SplitError, SplitResult, assign_split
-from model.forecast.write import LinePosteriorRow, WriteError, write_artifact_set
+from model.forecast.split import HELD_OUT, TRAIN, SplitError, SplitResult, assign_split
+from model.forecast.write import (
+    HeldOutPredictionRow,
+    LinePosteriorRow,
+    WriteError,
+    write_artifact_set,
+)
 from model.procurement.lifecycle import state_sequence
 from model.schema.url import DatabaseUrlNotConfiguredError, get_database_url
 
@@ -134,12 +145,22 @@ _REPORTED_FAILURES: tuple[type[Exception], ...] = (
 _SMALLEST_UNIFORM = float(np.nextafter(0.0, 1.0))
 _LARGEST_UNIFORM = float(np.nextafter(1.0, 0.0))
 
-#: How the run's root entropy is split. Two children: one whose grandchildren
+#: How the run's root entropy is split. Three children: one whose grandchildren
 #: seed the sampler's chains, one that seeds the per-draw uniforms of the
-#: inverse-CDF conditioning. Spawned rather than derived by arithmetic, which is
-#: the property `forecast_run.seed_entropy` is stored as text to preserve.
+#: inverse-CDF conditioning, and one for the held-out population's total-duration
+#: draws. Spawned rather than derived by arithmetic, which is the property
+#: `forecast_run.seed_entropy` is stored as text to preserve.
+#:
+#: The held-out population takes a **stream of its own** rather than continuing
+#: the conditioning one. `SeedSequence.spawn` keys its children by position, so
+#: children 0 and 1 are the same objects whether two or three are spawned — which
+#: means adding this population moves no open line's draws, and FR-022's
+#: reproduction of a run recorded before it existed is unaffected. Sharing one
+#: generator would instead have made every open line's draws depend on how many
+#: held-out lines the split happened to produce.
 _SAMPLER_STREAM = 0
 _CONDITIONING_STREAM = 1
+_HELD_OUT_STREAM = 2
 
 
 # ---------------------------------------------------------------------------
@@ -281,21 +302,109 @@ def _open_lines(lines: Sequence[LineRow], as_of_date: date) -> tuple[LineRow, ..
     return tuple(line for line in lines if censoring_indicator(line, as_of_date))
 
 
-def _rework_loops(line: LineRow, as_of_date: date) -> int:
-    """How many rework loops the line has already taken at the anchor.
+#: The state a line passes through once per rework loop. Counted from the events
+#: themselves rather than from a stored figure: E003 keeps no approval-cycle
+#: column precisely because it is derivable, and deriving it here uses the same
+#: rule `model.py` uses to build the fit's own rework covariate.
+_REWORK_STATE = "revise_and_resubmit"
 
-    Counted from the events themselves rather than from a stored figure: E003
-    keeps no approval-cycle column precisely because it is derivable, and
-    deriving it here uses the same rule `model.py` uses to build the fit's own
-    rework covariate.
+
+def _rework_loops(line: LineRow, as_of_date: date) -> int:
+    """How many rework loops the line has already taken **at the anchor**.
+
+    Dated, because an open line's forward path is the one it has left to walk
+    from where it stands on the as-of date, and a loop it has not taken yet is
+    not in it.
     """
-    rework_state = "revise_and_resubmit"
     return sum(
         1
         for event in line.events
-        if event.to_state == rework_state
+        if event.to_state == _REWORK_STATE
         and event.occurred_at.astimezone(UTC).date() <= as_of_date
     )
+
+
+def _walked_rework_loops(line: LineRow) -> int:
+    """How many rework loops the line took **in total**, with no date cut-off.
+
+    The held-out population's counterpart, and the difference is the anchor
+    again. Its draws are a total duration from the line's own order date over
+    the whole path it actually walked, so a loop is in that path whenever it
+    happened — cutting the count at the run's as-of date would put the run's
+    anchor back inside a quantity anchored on the line's, which is the
+    mis-anchoring {SAD:ADR-0018} separates the two stores to prevent. The two
+    counts coincide on this dataset, whose closure column and dated indicator
+    agree at the committed anchor; they are written separately because the
+    agreement is a property of the data rather than of the rule.
+    """
+    return sum(1 for event in line.events if event.to_state == _REWORK_STATE)
+
+
+# `eq=False` because every field is an array or a mapping over one.
+@dataclasses.dataclass(frozen=True, slots=True, eq=False)
+class _TotalDurationLaw:
+    """The fitted total-duration law, read once and evaluated per line.
+
+    **One parent for both populations**, which is the whole reason it is a type
+    rather than two inlined blocks. An open line's conditional remainder and a
+    held-out line's total duration are the *same* distribution consumed two
+    ways; deriving it twice would let the two drift into two laws, and no stored
+    constraint on either store compares them.
+    """
+
+    mu_sojourn: NDArray[np.float64]
+    sigma_sojourn: NDArray[np.float64]
+    vendor_offsets: NDArray[np.float64]
+    category_offsets: NDArray[np.float64]
+    vendor_at: Mapping[str, int]
+    category_at: Mapping[str, int]
+
+    def for_line(
+        self, line: LineRow, rework_loops: int
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """`(mu, sigma)` per posterior draw for this line's total duration.
+
+        The caller supplies the loop count rather than the anchor, because the
+        two populations count loops differently and that difference is theirs to
+        state rather than this object's to guess.
+        """
+        group = self.vendor_offsets[:, self.vendor_at[line.vendor_id]] + (
+            self.category_offsets[:, self.category_at[line.material_category]]
+        )
+        return _total_duration_lognormal(
+            self.mu_sojourn, self.sigma_sojourn, group, _leg_positions(rework_loops)
+        )
+
+
+def _total_duration_law(
+    posterior: xr.Dataset, vendors: Sequence[str], categories: Sequence[str]
+) -> _TotalDurationLaw:
+    """The posterior's four variables, flattened over chains and indexed by name."""
+    mu_sojourn = _flattened(posterior, "mu_sojourn", "transition")
+    if mu_sojourn.shape[1] != len(TRANSITION_KEYS):
+        raise FitError(
+            f"the posterior carries {mu_sojourn.shape[1]} transition-level locations against "
+            f"{len(TRANSITION_KEYS)} legal edges; the leg index would then name a "
+            f"parameter that belongs to a different transition"
+        )
+    return _TotalDurationLaw(
+        mu_sojourn=mu_sojourn,
+        sigma_sojourn=_flattened(posterior, "sigma_sojourn", "transition"),
+        vendor_offsets=_flattened(posterior, VENDOR_OFFSET, VENDOR_DIM),
+        category_offsets=_flattened(posterior, "category_offset", CATEGORY_DIM),
+        vendor_at=vendor_index(vendors),
+        category_at=category_index(categories),
+    )
+
+
+def _uniforms(count: int, rng: np.random.Generator) -> NDArray[np.float64]:
+    """One independent uniform per posterior draw, strictly inside `(0, 1)`.
+
+    AD-004's published basis condition: each stored draw carries its own
+    inverse-CDF randomness, so the predictive sequence is decorrelated and its
+    effective sample size is not the parameter ESS.
+    """
+    return np.clip(rng.random(count), _SMALLEST_UNIFORM, _LARGEST_UNIFORM)
 
 
 def _line_posteriors(
@@ -313,24 +422,8 @@ def _line_posteriors(
     time, so every stored value is a **remaining** duration and strictly
     positive. Never a re-based total draw — that puts a point mass of size `F(e)`
     at exactly zero and still satisfies every delivered constraint (HINT-004).
-
-    One independent uniform per posterior draw, which is what AD-004's published
-    basis condition describes: each stored draw carries its own residual and
-    inverse-CDF randomness, so the predictive sequence is decorrelated and its
-    effective sample size is not the parameter ESS.
     """
-    mu_sojourn = _flattened(posterior, "mu_sojourn", "transition")
-    sigma_sojourn = _flattened(posterior, "sigma_sojourn", "transition")
-    vendor_offsets = _flattened(posterior, VENDOR_OFFSET, VENDOR_DIM)
-    category_offsets = _flattened(posterior, "category_offset", CATEGORY_DIM)
-    if mu_sojourn.shape[1] != len(TRANSITION_KEYS):
-        raise FitError(
-            f"the posterior carries {mu_sojourn.shape[1]} transition-level locations against "
-            f"{len(TRANSITION_KEYS)} legal edges; the leg index below would then name a "
-            f"parameter that belongs to a different transition"
-        )
-    vendor_at = vendor_index(vendors)
-    category_at = category_index(categories)
+    law = _total_duration_law(posterior, vendors, categories)
 
     rows: list[LinePosteriorRow] = []
     for line in open_lines:
@@ -341,18 +434,78 @@ def _line_posteriors(
                 f"date {as_of_date}; a line that has not been ordered yet has no elapsed time "
                 f"to condition on and no remaining duration to forecast"
             )
-        group = vendor_offsets[:, vendor_at[line.vendor_id]] + (
-            category_offsets[:, category_at[line.material_category]]
+        mu, sigma = law.for_line(line, _rework_loops(line, as_of_date))
+        draws = conditional_remaining_draws(
+            _uniforms(mu.size, rng), mu, sigma, float(elapsed)
         )
-        mu, sigma = _total_duration_lognormal(
-            mu_sojourn, sigma_sojourn, group, _leg_positions(_rework_loops(line, as_of_date))
-        )
-        uniforms = np.clip(rng.random(mu.size), _SMALLEST_UNIFORM, _LARGEST_UNIFORM)
-        draws = conditional_remaining_draws(uniforms, mu, sigma, float(elapsed))
         grid = survival_grid(draws, horizon_days)
         rows.append(
             LinePosteriorRow(
                 po_line_id=line.po_line_id,
+                draws=draws,
+                survival=grid.survival,
+                residual_tail_mass=grid.residual_tail_mass,
+                draw_digest=draw_digest(draws),
+            )
+        )
+    return tuple(rows)
+
+
+def _held_out_delivered(lines: Sequence[LineRow], split: SplitResult) -> tuple[LineRow, ...]:
+    """The population `held_out_prediction` holds: held out **and** delivered.
+
+    Membership is the split side and the loader's `is_closed` **column**, not
+    `censoring.py`'s dated indicator — deliberately, and for a structural reason
+    rather than a stylistic one. `fk_held_out_prediction__line_anchor` references
+    `(po_line_id, order_date, is_closed)`, so the column is what every stored row
+    is proved against; selecting on a different reading of "delivered" would
+    build rows the foreign key then refuses. `manifest.py` counts
+    `held_out_uncensored_event_count` the same way, which is what makes DV-028's
+    comparison of the two a comparison rather than a coincidence.
+
+    Returned in the input's canonical order, which `read.py` established, so the
+    rows are built in a fixed sequence and the conditioning stream is consumed
+    deterministically.
+    """
+    held_out = {
+        assignment.po_line_id
+        for assignment in split.assignments
+        if assignment.split_side == HELD_OUT
+    }
+    return tuple(line for line in lines if line.po_line_id in held_out and line.is_closed)
+
+
+def _held_out_predictions(
+    held_out_lines: Sequence[LineRow],
+    posterior: xr.Dataset,
+    vendors: Sequence[str],
+    categories: Sequence[str],
+    horizon_days: int,
+    rng: np.random.Generator,
+) -> tuple[HeldOutPredictionRow, ...]:
+    """One gradeable prediction per held-out delivered line, anchored at its order date.
+
+    **No as-of date in the signature.** The quantity is a total duration from the
+    line's own order date, so the run's anchor has no part in it, and the surest
+    way to keep it out is to have nothing to pass it through — the same reason
+    `total_duration_draws` takes no elapsed time. The anchor that *is* recorded
+    is `line.order_date`, and `fk_held_out_prediction__line_anchor` is what
+    proves the stored value is that line's rather than a plausible date.
+
+    The grid and residual are the same `survival_grid` the open population uses:
+    it is anchor-blind, and a second implementation would be a second convention.
+    """
+    law = _total_duration_law(posterior, vendors, categories)
+
+    rows: list[HeldOutPredictionRow] = []
+    for line in held_out_lines:
+        mu, sigma = law.for_line(line, _walked_rework_loops(line))
+        draws = total_duration_draws(_uniforms(mu.size, rng), mu, sigma)
+        grid = survival_grid(draws, horizon_days)
+        rows.append(
+            HeldOutPredictionRow(
+                po_line_id=line.po_line_id,
+                anchor_date=line.order_date,
                 draws=draws,
                 survival=grid.survival,
                 residual_tail_mass=grid.residual_tail_mass,
@@ -665,9 +818,9 @@ def run_fit(
     )
 
     # Spawned **once**: `SeedSequence.spawn` advances an internal counter, so
-    # calling it twice would hand out four children and make which two were used
+    # calling it twice would hand out six children and make which three were used
     # depend on the order the calls happened to be written in.
-    streams = np.random.SeedSequence(seed_entropy).spawn(2)
+    streams = np.random.SeedSequence(seed_entropy).spawn(3)
     chain_seeds = [
         int(child.generate_state(1, dtype=np.uint32)[0])
         for child in streams[_SAMPLER_STREAM].spawn(chains)
@@ -716,11 +869,38 @@ def run_fit(
         np.random.default_rng(streams[_CONDITIONING_STREAM]),
     )
 
+    held_out_lines = _held_out_delivered(lines, split)
+    held_out_predictions = _held_out_predictions(
+        held_out_lines,
+        posterior,
+        vendors,
+        categories,
+        shape.horizon_days,
+        np.random.default_rng(streams[_HELD_OUT_STREAM]),
+    )
+    note(
+        f"{len(held_out_predictions)} held-out line(s) have already delivered and carry a "
+        f"gradeable prediction anchored at their own order date"
+    )
+
     training_counts = _training_line_counts(split, lines, vendors)
     weights = _vendor_shrinkage(posterior, training_counts)
+    # Across **two** populations, not within one: `population_rank` is what
+    # orders them, and it is recomputable from the stored rows alone by joining
+    # each artifact row to `forecast_split_assignment` (DV-031). A hash taken
+    # over one store would be a digest of half the artifact set that no reader
+    # could tell from a digest of all of it.
     artifact_hash = artifact_hash_over(
-        ArtifactDigest(POPULATION_RANK_LINE_POSTERIOR, ordinal, row.draw_digest)
-        for ordinal, row in _in_canonical_order(line_posteriors, split)
+        [
+            *(
+                ArtifactDigest(POPULATION_RANK_LINE_POSTERIOR, ordinal, row.draw_digest)
+                for ordinal, row in _in_canonical_order(line_posteriors, split)
+            ),
+            *(
+                ArtifactDigest(POPULATION_RANK_HELD_OUT_PREDICTION, ordinal, row.draw_digest)
+                for ordinal, row in _in_canonical_order(held_out_predictions, split)
+            ),
+        ]
     )
 
     # A plain connection, and not either of the two transactions
@@ -746,8 +926,13 @@ def run_fit(
             repo_root=repo_root,
             fixture=fixture,
         )
-    run_id = write_artifact_set(engine, manifest, split.assignments, line_posteriors)
-    note(f"wrote {len(line_posteriors)} line_posterior row(s) and published run {run_id}")
+    run_id = write_artifact_set(
+        engine, manifest, split.assignments, line_posteriors, held_out_predictions
+    )
+    note(
+        f"wrote {len(line_posteriors)} line_posterior row(s) and "
+        f"{len(held_out_predictions)} held_out_prediction row(s), and published run {run_id}"
+    )
 
     # The floor is derived here, from the training split and the input rows alone
     # — no posterior, no trace, nothing this run fitted (AD-008). It could as
@@ -788,20 +973,26 @@ def run_fit(
     return run_id
 
 
-def _in_canonical_order(
-    line_posteriors: Sequence[LinePosteriorRow], split: SplitResult
-) -> list[tuple[int, LinePosteriorRow]]:
+def _in_canonical_order[Row: (LinePosteriorRow, HeldOutPredictionRow)](
+    artifact_rows: Sequence[Row], split: SplitResult
+) -> list[tuple[int, Row]]:
     """Each artifact row paired with its line's `canonical_ordinal`, ascending.
 
     The ordinal comes from the split assignment rather than from the order the
     rows were built in, which is what makes the artifact hash recomputable from
     the stored rows alone: a reader joins each row's `(run_id, po_line_id)` to
     `forecast_split_assignment` and reproduces this sequence (DV-031).
+
+    Quantified over either population, because the ordinal is a property of the
+    *line* and both stores key on one. Only `population_rank` distinguishes them,
+    and that is the caller's to supply. The two row types are named in the
+    constraint rather than left to a protocol, so a third store cannot join them
+    by accident.
     """
     ordinals = {
         assignment.po_line_id: assignment.canonical_ordinal for assignment in split.assignments
     }
-    missing = [row.po_line_id for row in line_posteriors if row.po_line_id not in ordinals]
+    missing = [row.po_line_id for row in artifact_rows if row.po_line_id not in ordinals]
     if missing:
         raise FitError(
             f"{len(missing)} artifact row(s) name a line with no split assignment — first "
@@ -809,7 +1000,7 @@ def _in_canonical_order(
             f"unassigned line leaves the digest's input undefined"
         )
     return sorted(
-        ((ordinals[row.po_line_id], row) for row in line_posteriors), key=lambda pair: pair[0]
+        ((ordinals[row.po_line_id], row) for row in artifact_rows), key=lambda pair: pair[0]
     )
 
 
