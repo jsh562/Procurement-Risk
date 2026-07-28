@@ -1,0 +1,82 @@
+Implementation complete: 2026-07-28
+Feature: 00006-document-ingestion-and-extraction
+Branch: 00006-document-ingestion-and-extraction
+Final implementation revision: 2fd211f
+
+95 of 97 tasks complete. Two are blocked and are recorded, not hidden.
+
+## What was delivered
+
+Six user stories across 97 tasks. The corpus becomes citable chunks through
+one committed page reader and a three-class boundary ladder; every extracted
+value carries the page it was printed on; an untrustworthy value is absent
+rather than wrong; a value split across a page break keeps both pages; every
+value names the run that produced it; and re-ingesting is safe, skipping
+documents whose per-document input tuple is unchanged.
+
+Five migrations in block 0300-0399, chaining from E003/E004's head at 0103.
+Zero columns, constraints or indexes were added to the six E003-owned tables,
+and their catalog entries are asserted identical at 0103 and at head.
+
+The pipeline runs from the `ingest` console entry. On a clean database it
+wrote 6,391 chunks across the 26 real specifications, then aborted on the
+first synthetic transmittal with `fixture_missing`, leaving 24 `not_reached`.
+A second run skipped all 26 as unchanged. Both outcomes are the designed
+behaviour and are published by the disposition ledger rather than inferred.
+
+## Task count, stated exactly
+
+- T001-T080, T082-T088, T090-T097: complete.
+- **T081 - extraction fixtures: BLOCKED.** Not complete, and deliberately not
+  marked complete. Its runbook half is done; zero fixtures are committed.
+- **T089 - regenerated ingestion report: BLOCKED**, transitively on T081.
+
+Five tasks were added during implementation rather than deferred by the
+decomposition: T093-T096 closed assembly gaps the task list never contained
+(nothing invoked `extract_fields`; report items 8, 14 and 21 had no builder
+against a closed 21-item list), and T097 drove the write and extraction stages
+from the console entry, which was nobody's task. Recorded in tasks.md Phase 8.
+
+## Why the two blocked tasks cannot be closed here
+
+Two independent causes, either of which alone is sufficient.
+
+1. A fixture is a recorded provider response. None can be produced without
+   network access and a provider credential, neither of which is available.
+
+2. **No fixture could be replayed even if recorded.**
+   `gateway.compute.hashing.fixture_key` digests `request.model_dump_json()`
+   and `trace_id` is a declared field on `InvocationRequest` carrying no
+   `exclude=True`, so the correlation identifier is part of the key. FR-070
+   mints one trace id per run, so the same request keys differently on every
+   run. Verified directly on the committed code: two requests differing only
+   in trace id give sha256:667b82331c676441... and sha256:b32df59be116cbd7...
+   This is E004's defect, it survived E004's QC because `resolve_trace_id`
+   mints an id when the caller supplies none (so E004's own tests key with
+   trace_id null and stay stable), and E006 is the first caller obliged to
+   supply one. It is left unfixed because it belongs to a shipped, QC-passed
+   epic and fixing it does not by itself unblock T081.
+
+Two further E004 findings are recorded in tasks.md: `DEFAULT_FIXTURE_ROOT`
+resolves relative to the installed package and lands inside `.venv` when
+reached through the model entry, and the gateway rejects the
+`postgresql+psycopg://` spelling that `ingest.writer` normalizes before use.
+
+## Verification at 2fd211f
+
+- Model suite: 2,392 passed, 0 skipped, 0 failed
+- Repository checks: 238 passed
+- ruff check and ruff format --check: clean at repository root and src/model
+- lint-imports: green in all three entries; the four architecture checks named
+  individually in T091 each verified
+- Per-package coverage, each measured alone under --fail-under=80:
+  ingest 89%, llm 95%, compute 92%
+- Encoder parity over 21 probes: min cosine 1.000000000, max absolute
+  per-dimension difference 1.704e-07, against bounds of 0.999999 and 1e-5
+  declared before the comparison
+
+Note for whoever runs these: `DATABASE_URL` must carry the password from
+docker-compose.yml, or roughly 520 schema tests silently skip rather than
+fail. `UV_NATIVE_TLS=1` is required on a host running TLS-inspecting
+antivirus, or six tests in tests/checks/test_gateway_no_provider_env.py error
+on certificate verification.
