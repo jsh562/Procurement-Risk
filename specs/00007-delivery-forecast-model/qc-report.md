@@ -1,9 +1,35 @@
 # QC Report: Delivery Forecast Model
 
-**Feature**: E007 · **Branch**: `00007-delivery-forecast-model` · **Date**: 2026-07-28 · **Iterations**: 2
+**Feature**: E007 · **Branch**: `00007-delivery-forecast-model` · **Date**: 2026-07-28 · **Iterations**: 3
 **Governing**: `project-instructions.md` v1.2.4 · **QC profile**: standard · **Required categories**: linting, coverage · **Coverage target**: 80
 
-## Overall Verdict: **PASS** (iteration 2)
+## Overall Verdict: **PASS** (confirmed at iteration 3)
+
+### Iteration 3 — confirmation re-run
+
+Invoked with the working tree **clean at the iteration-2 commit**, so `CHANGED_FILES` was empty and there was nothing to scope to. Rather than restate the prior numbers, every required category was re-executed from scratch. All figures below are **freshly measured**, not carried forward.
+
+| Check | Result | Fresh? |
+|---|---|---|
+| `src/model` suite, under coverage | **2569 passed** (19m30s) | measured |
+| `src/gateway` suite | **402 passed**, 5 skipped | measured |
+| root `tests/checks` (orchestration excluded) | 194 passed / 13 failed / 8 errors — **exactly** the recorded pre-existing baseline | measured |
+| `ruff check --no-cache` × 4 entries | clean | measured |
+| `ruff format --check` × 4 entries | clean — gateway 43, api 4, model 223, root 422 | measured |
+| `lint-imports` × 3 entries | **8 kept, 0 broken** | measured |
+| `mypy src` (gateway) | no issues in 18 source files | measured |
+| Coverage, model entry | **92%** against an 80 floor | measured |
+| `model/forecast` counted | **21 measured / 21 on disk**, no zero-hit module | measured |
+
+**Story verification was not re-run, and that is a scoping decision rather than an omission.** The workflow re-verifies only FAILED or PARTIAL work items; none remain after iteration 2, and no source file changed between the two runs. Its iteration-2 verdicts — US1–US5 all PASSED, 42/42 criteria — stand on that basis.
+
+**Browser probe: not applicable.** `plan.md` § API Surface Summary is `N/A — no API surface`; this epic is an offline console job with no rendered UI, no navigation and no browser integration, so `BROWSER_RUNTIME_REQUIRED` is false and no `manual-test.md` is owed.
+
+The `model/forecast` counting check matters and was repeated deliberately: E003's QC established that a package absent from the coverage source lands in the denominator uncounted and reads as a pass. All 21 modules carry real hits — lowest `paths.py` 73%, `write.py` 74% (refusal branches), `manifest.py` 79%.
+
+---
+
+## Verdict at iteration 2: PASS
 
 Iteration 1 returned FAIL with two ERROR and four WARNING findings. All six were fixed and **independently re-verified in code**, with the database-backed evidence executed rather than inferred. The iteration-1 detail below is kept in full — a QC report that overwrites the failure it found leaves nothing to check the fix against.
 
