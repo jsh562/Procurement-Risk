@@ -284,3 +284,17 @@ DEFAULT_FIXTURE_ROOT` and it is **not** configurable — see
 `src/model/fixtures/README.md`, which records why this epic's fixtures are
 committed to the gateway's store rather than beside this entry, and what would
 have to change for them to move.
+
+## `tools/` — the one-off scripts behind `data/encoder/`
+
+`tools/` holds the three scripts that produced the committed encoder artifact,
+its probe set, and its parity reference. Nothing imports them, no test runs
+them, and they are not packaged — they sit beside `src/`, not inside it, so the
+`uv_build` src-layout backend does not see them.
+
+They lived at `/tools` at the repository root until E006's QC, which is outside
+the source root `project-instructions.md` §Source Code Layout requires. The
+policy's single exception is `/tests`, and these are not tests:
+`tools/build_probes.py` imports `model.ingest.documents`,
+`model.ingest.manifest_reader` and `model.ingest.parse`, so this entry already
+owned them. `tools/README.md` records what each produced and how to re-run it.

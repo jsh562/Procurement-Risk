@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import ast
 import os
+import shutil
 import subprocess
+import sys
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -47,6 +49,14 @@ DATABASE_URL_ENV_VAR = "DATABASE_URL"
 #: from the directory, because the point is to assert *these* landed — a check
 #: reading the directory would pass on a directory that had lost one.
 EPIC_REVISIONS = ("0100", "0101", "0102", "0103")
+
+#: The inclusive filename-prefix block {SAD:ADR-0013} assigns to E004, as
+#: numbers. Held separately from the tuple above so the two can disagree: a
+#: revision renumbered out of the block leaves `EPIC_REVISIONS` naming a file
+#: that is gone, and a foreign revision numbered *into* the block appears in the
+#: block scan without being named. Both are failures below, and neither is
+#: visible from the tuple alone.
+EPIC_BLOCK = (100, 199)
 
 #: The tables this epic owns. `data-model.md` fixes the count at three Postgres
 #: tables and says "Nothing else"; the spool is SQLite and not here.
@@ -82,6 +92,65 @@ def _revision_path(revision: str) -> Path:
     assert matches, f"revision {revision} is missing from {VERSIONS_DIR}"
     assert len(matches) == 1, f"revision {revision} has {len(matches)} files: {matches}"
     return matches[0]
+
+
+def _declared(path: Path, name: str) -> str | None:
+    """A revision module's module-level `revision` / `down_revision` literal.
+
+    Read from the source for the same reason `test_every_epic_revision_refuses_
+    to_downgrade` parses rather than imports: a revision module opens with
+    `from alembic import op`, and the gateway entry deliberately does not resolve
+    alembic ({SAD:ADR-0016}).
+
+    Both spellings are accepted because the annotation is a convention rather
+    than a guarantee — a revision written without one would otherwise be read as
+    declaring nothing at all, which is a silent pass.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target: str | None = node.target.id
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            target = node.targets[0].id
+        else:
+            continue
+        if target != name or node.value is None:
+            continue
+        assert isinstance(node.value, ast.Constant), (
+            f"{path.name} declares `{name}` as something other than a literal; "
+            f"this reader cannot follow it and would otherwise skip the revision"
+        )
+        value = node.value.value
+        assert value is None or isinstance(value, str), (
+            f"{path.name} declares `{name}` as {value!r}, which is neither a revision id nor None"
+        )
+        return value
+    raise AssertionError(f"{path.name} declares no module-level `{name}`")
+
+
+def _ancestry(head: str) -> list[str]:
+    """The chain the ledger's head stands on, oldest first.
+
+    Walked back through `down_revision` from the applied head rather than read
+    off the directory: the directory holds every revision *file*, and what the
+    assertions below need is the subset a migrated database actually ran.
+    """
+    chain: list[str] = []
+    seen: set[str] = set()
+    current: str | None = head
+    while current is not None:
+        assert current not in seen, (
+            f"the revision graph loops at {current!r}; walked {chain} from head {head!r}"
+        )
+        seen.add(current)
+        chain.append(current)
+        current = _declared(_revision_path(current), "down_revision")
+    chain.reverse()
+    return chain
 
 
 def _executed_statements(path: Path) -> list[str]:
@@ -234,14 +303,198 @@ def test_this_epics_tables_exist_after_the_chain(migrated_once: str) -> None:
     assert not missing, f"this epic's revisions did not create {sorted(missing)}"
 
 
-def test_the_ledger_head_is_this_epics_last_revision(migrated_once: str) -> None:
-    """E004's block is applied last, so its final revision is the head. If it
-    were not, a later chain had been grafted on and the block claim of TR-018
-    has been broken somewhere this file cannot see."""
+def test_this_epics_block_is_applied_whole_and_contiguous(migrated_once: str) -> None:
+    """TR-018's block claim, asserted as a property of E004's four revisions
+    rather than of whatever happens to be last in the directory.
+
+    **What this used to assert, and why that was wrong.** It read the ledger and
+    demanded the head equal `0103` — E004's final revision — on the reasoning
+    that "E004's block is applied last, so its final revision is the head". That
+    reasoning held only while E004 was the newest epic. It is not what TR-018
+    says: TR-018 confines E004's revisions to `0100`-`0199`, and says nothing
+    about E004 being the end of the chain. E006 authored `0300`-`0304` on top of
+    `0103`, exactly as the block scheme intends, and the assertion failed the
+    build for a chain that is correct. A check that fails when the design works
+    is not enforcing the design.
+
+    **What it asserts instead**, all four against the chain a migrated database
+    actually ran:
+
+    1. one head, so there is one chain to talk about;
+    2. every one of E004's four revisions is in it — a lost or renumbered
+       revision is missing here;
+    3. they are consecutive, so no later epic has been interleaved into the
+       middle of E004's block;
+    4. the revisions the chain carries inside `0100`-`0199` are *exactly* those
+       four, in order — which is the block claim itself, and what fails if one is
+       renumbered out of the block or a foreign revision is numbered into it.
+
+    E004 no longer being last is now the expected case rather than a failure, and
+    the chain descending from `0103` is asserted by (2): the walk starts at the
+    applied head, so a revision present in it is an ancestor of that head.
+    """
     _, ledger = _snapshot(migrated_once)
-    assert ledger == [EPIC_REVISIONS[-1]], (
-        f"expected the head to be {EPIC_REVISIONS[-1]!r}, found {ledger}"
+    assert len(ledger) == 1, (
+        f"the ledger records {ledger}; a chain with more than one head means "
+        f"`migrate` applied one of several branches and everything below "
+        f"describes whichever it picked"
     )
+    chain = _ancestry(ledger[0])
+
+    missing = [revision for revision in EPIC_REVISIONS if revision not in chain]
+    assert not missing, (
+        f"this epic's revisions {missing} are not in the applied chain. Head "
+        f"{ledger[0]!r} stands on {chain}"
+    )
+
+    positions = [chain.index(revision) for revision in EPIC_REVISIONS]
+    assert positions == list(range(positions[0], positions[0] + len(EPIC_REVISIONS))), (
+        f"this epic's revisions are not contiguous in the applied chain: they sit "
+        f"at {positions} of {chain}. Something has been chained into the middle of "
+        f"the block TR-018 reserves"
+    )
+
+    low, high = EPIC_BLOCK
+    in_block = [revision for revision in chain if low <= int(revision) <= high]
+    assert in_block == list(EPIC_REVISIONS), (
+        f"the applied chain carries {in_block} inside the {low:04d}-{high:04d} block "
+        f"{{SAD:ADR-0013}} reserves for E004, and this epic authored "
+        f"{list(EPIC_REVISIONS)}. Either one of ours was renumbered out of the block "
+        f"or another epic numbered a revision into it"
+    )
+
+
+# --- the negative control for the assertion above ---------------------------
+#
+# The old head assertion could fail, loudly and wrongly, so nobody had to ask
+# whether it could fail at all. The restatement is broader and quieter, and a
+# broad quiet check is exactly the kind that rots into one that passes on
+# anything. These three plant the damage TR-018 exists to catch and require the
+# assertion to report it.
+#
+# Damage is planted in a *copy* of the revision directory under pytest's own
+# basetemp, never in the real one: the real directory is the modelling entry's
+# and a check of this epic has no business editing it, even transiently.
+
+#: `NNNN_name.py` — E003's convention, and what makes a copy filterable.
+REVISION_GLOB = "[0-9][0-9][0-9][0-9]_*.py"
+
+
+def _copy_of_the_revision_directory(tmp_path: Path) -> Path:
+    target = tmp_path / "versions"
+    target.mkdir()
+    for path in VERSIONS_DIR.glob(REVISION_GLOB):
+        shutil.copy2(path, target / path.name)
+    assert len(list(target.glob(REVISION_GLOB))) >= len(EPIC_REVISIONS), (
+        f"the copy at {target} holds fewer revisions than this epic authored"
+    )
+    return target
+
+
+def _only(directory: Path, revision: str) -> Path:
+    matches = sorted(directory.glob(f"{revision}_*.py"))
+    assert len(matches) == 1, f"{revision} has {len(matches)} files in {directory}"
+    return matches[0]
+
+
+def _repoint(directory: Path, revision: str, new_parent: str) -> None:
+    path = _only(directory, revision)
+    text = path.read_text(encoding="utf-8")
+    old = f'down_revision: str | Sequence[str] | None = "{_declared(path, "down_revision")}"'
+    assert old in text, f"{path.name} does not spell its parent the way this helper expects"
+    path.write_text(
+        text.replace(old, f'down_revision: str | Sequence[str] | None = "{new_parent}"'),
+        encoding="utf-8",
+    )
+
+
+def _renumber(directory: Path, revision: str, new_revision: str) -> None:
+    path = _only(directory, revision)
+    text = path.read_text(encoding="utf-8")
+    old = f'revision: str = "{revision}"'
+    assert old in text, f"{path.name} does not spell its id the way this helper expects"
+    renamed = directory / path.name.replace(f"{revision}_", f"{new_revision}_", 1)
+    renamed.write_text(text.replace(old, f'revision: str = "{new_revision}"'), encoding="utf-8")
+    path.unlink()
+
+
+def _head_of(directory: Path) -> str:
+    revisions = {
+        _declared(path, "revision"): _declared(path, "down_revision")
+        for path in directory.glob(REVISION_GLOB)
+    }
+    pointed_at = {parent for parent in revisions.values() if parent is not None}
+    heads = sorted(revision for revision in revisions if revision not in pointed_at)
+    assert len(heads) == 1, f"the doctored directory has {len(heads)} heads: {heads}"
+    head = heads[0]
+    assert head is not None
+    return head
+
+
+def _damage(directory: Path, kind: str) -> None:
+    if kind == "renumbered_out_of_the_block":
+        # `0102` moved into E005's block. The four files still exist and the
+        # chain still resolves — only the block claim is broken.
+        _renumber(directory, "0102", "0202")
+        _repoint(directory, "0103", "0202")
+    elif kind == "one_revision_dropped":
+        _repoint(directory, "0103", "0101")
+        _only(directory, "0102").unlink()
+    elif kind == "a_foreign_revision_inside_the_block":
+        # Another epic numbering into `0100`-`0199`, chained through the middle
+        # of E004's four. Breaks contiguity and the block scan at once.
+        (directory / "0150_foreign.py").write_text(
+            'revision: str = "0150"\ndown_revision: str | Sequence[str] | None = "0101"\n',
+            encoding="utf-8",
+        )
+        _repoint(directory, "0102", "0150")
+    else:  # pragma: no cover - the parametrisation below is closed
+        raise AssertionError(f"unknown damage {kind!r}")
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["renumbered_out_of_the_block", "one_revision_dropped", "a_foreign_revision_inside_the_block"],
+)
+def test_the_block_assertion_reports_a_damaged_block(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+) -> None:
+    """Each of the three ways TR-018's block claim breaks, planted and caught.
+
+    The real assertion function is called rather than a re-implementation of it,
+    with two seams redirected: `VERSIONS_DIR` at the doctored copy, and
+    `_snapshot` at the head that copy resolves to. Nothing else is stubbed, so
+    what runs is the same walk and the same four assertions.
+    """
+    directory = _copy_of_the_revision_directory(tmp_path)
+    _damage(directory, kind)
+
+    module = sys.modules[__name__]
+    monkeypatch.setattr(module, "VERSIONS_DIR", directory)
+    head = _head_of(directory)
+    monkeypatch.setattr(module, "_snapshot", lambda url: ([], [head]))
+
+    with pytest.raises(AssertionError):
+        test_this_epics_block_is_applied_whole_and_contiguous("not a database url")
+
+
+def test_the_block_assertion_passes_over_an_undamaged_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The positive control the three above need to mean anything.
+
+    Without it, a copy helper that produced an unreadable directory would make
+    every damage case "fail correctly" for the wrong reason, and the negative
+    controls would be evidence about the copier.
+    """
+    directory = _copy_of_the_revision_directory(tmp_path)
+
+    module = sys.modules[__name__]
+    monkeypatch.setattr(module, "VERSIONS_DIR", directory)
+    head = _head_of(directory)
+    monkeypatch.setattr(module, "_snapshot", lambda url: ([], [head]))
+
+    test_this_epics_block_is_applied_whole_and_contiguous("not a database url")
 
 
 def test_the_seed_landed_with_its_provenance(migrated_once: str) -> None:

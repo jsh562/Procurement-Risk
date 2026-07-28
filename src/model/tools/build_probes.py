@@ -1,7 +1,8 @@
 """Build the committed two-layer parity probe set (T027, FR-019).
 
 Selection is mechanical and recorded on every probe: document, page, and line
-range. Run from `src/model` through the entry's own environment.
+range. Run through the modelling entry's own environment, from `src/model`:
+`uv run --directory src/model python tools/build_probes.py`.
 """
 
 from __future__ import annotations
@@ -13,8 +14,12 @@ from model.ingest.documents import build_documents
 from model.ingest.manifest_reader import iter_entries
 from model.ingest.parse import read_pages
 
-REPO = Path(__file__).resolve()
-OUT = Path("S:/claudecode/KayaDemoProcurementRisk2/data/encoder/probes.json")
+# `src/model/tools/build_probes.py` -> the checkout root. Derived rather than
+# written out: this file used to hold one checkout's absolute path, and three
+# checkouts of this repository share a disk — running it from either of the
+# other two rewrote the first one's committed artifact.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+OUT = REPO_ROOT / "data" / "encoder" / "probes.json"
 
 records = build_documents(iter_entries())
 real = [r for r in records if r.source_kind == "REAL"]

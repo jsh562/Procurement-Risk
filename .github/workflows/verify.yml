@@ -98,6 +98,22 @@ jobs:
   verify:
     runs-on: ubuntu-latest
 
+    # `project-instructions.md` v1.2.5: scratch stays inside the checkout.
+    #
+    # Identical to the three lines the `reproduce` job below carries, and the
+    # asymmetry between the two jobs is what made this a finding rather than a
+    # preference — one job honoured the rule and the other, the one running
+    # every build, lint, sync and test step in the repository, did not. This is
+    # the layer that covers everything pytest's `--basetemp` cannot: `uv`'s
+    # build and unpack scratch, `npm`'s, `docker build`'s context staging, and
+    # the unsigned feature-probe executables a compiler emits while resolving a
+    # source distribution — the exact class of artifact the amendment was
+    # raised by.
+    env:
+      TMPDIR: ${{ github.workspace }}/.tmp
+      TEMP: ${{ github.workspace }}/.tmp
+      TMP: ${{ github.workspace }}/.tmp
+
     # The model entry's schema tests assert constraint rejection, index presence,
     # and deferred-constraint behaviour at commit. All three are enforced by the
     # server, so there is nothing a fake or an in-process engine could stand in
@@ -145,6 +161,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Before the first tool runs, because `TMPDIR` pointing at a directory
+      # that does not exist is worse than not setting it: a runner starts with
+      # no `.tmp/` (it is gitignored, so the checkout does not create one) and
+      # the first tool to open a temporary file would fail with a path error
+      # that names neither this variable nor the rule behind it.
+      - name: Create the checkout's scratch directory
+        run: mkdir -p "$TMPDIR"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5

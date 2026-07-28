@@ -16,7 +16,9 @@ import torch
 import transformers
 from sentence_transformers import SentenceTransformer
 
-ENCODER = Path("S:/claudecode/KayaDemoProcurementRisk2/data/encoder")
+# `src/model/tools/build_reference.py` -> the checkout root. Derived rather
+# than written out, for the reason recorded in `build_probes.py`.
+ENCODER = Path(__file__).resolve().parents[3] / "data" / "encoder"
 MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
 REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 

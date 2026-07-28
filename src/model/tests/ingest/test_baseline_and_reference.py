@@ -110,6 +110,60 @@ def test_the_reference_reports_printed_fields_not_distinct_names(reference: Refe
     assert counts["submittal_number"] == len(reference.documents)
 
 
+#: The seven field keys the generator prints on every transmittal that
+#: `field_vocabulary` has no term for. Named here rather than derived from the
+#: mapping's complement, because the point of the assertion is that these exact
+#: seven reach report item 14 — a complement would agree with whatever the
+#: mapping happened to omit.
+PRINTED_WITHOUT_TERM = frozenset(
+    {
+        "contract_number",
+        "project_identifier",
+        "vendor_name",
+        "descriptor_code",
+        "approving_authority",
+        "revision_suffix",
+        "date_received",
+    }
+)
+
+
+def test_the_printed_fields_with_no_vocabulary_term_are_counted_for_the_report(
+    reference: ReferenceSet,
+) -> None:
+    """FR-058's escape hatch reaching the population it exists for.
+
+    Seven field keys per transmittal have no vocabulary term at all, so nothing
+    can be stored for them under any name. `printed_terms` filters them out —
+    correctly, because recall's denominator admits only fields extraction could
+    have reached (FR-060) — and that filtering also removed them from report
+    item 14, which published zero unattempted-but-printed fields on a corpus
+    that prints **170** of them.
+
+    170 rather than 7 x 25: `MISSING_OR_BLANK_FIELD` is one of the five
+    irregularity classes the synthetic layer carries, and a blanked field is not
+    a printed one. The shortfall is asserted rather than rounded away, because a
+    count of 175 here would mean the blank-field class had stopped firing.
+
+    Two mappings rather than one, and this asserts both halves: the recall
+    denominator is unchanged, and the second population is countable.
+    """
+    termless = reference.printed_without_term()
+    assert set(termless) == PRINTED_WITHOUT_TERM
+    assert sum(termless.values()) == 170
+    assert all(count <= len(reference.documents) for count in termless.values())
+    assert any(count < len(reference.documents) for count in termless.values()), (
+        "a key printed on every document without exception would mean no transmittal "
+        "carries `MISSING_OR_BLANK_FIELD` on one of these seven"
+    )
+
+    printed = reference.printed_counts()
+    assert not (set(printed) & PRINTED_WITHOUT_TERM), (
+        "FR-060: recall's denominator admits only fields a value could have been stored for"
+    )
+    assert set(printed) == set(VOCABULARY_BY_GENERATOR_KEY.values())
+
+
 def test_an_unknown_document_is_refused_rather_than_scored_against_its_chunk(
     reference: ReferenceSet,
 ) -> None:

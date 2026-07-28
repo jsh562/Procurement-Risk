@@ -1,7 +1,7 @@
 # Analysis Report — E006 Document Ingestion and Extraction
 
 **Date**: 2026-07-27 · **Artifacts**: `spec.md` (74 FR, 58 SC), `plan.md` (14 AD), `tasks.md` (91 tasks), `data-model.md`, three ADRs
-**Governing document**: `project-instructions.md` v1.2.4 — matches the plan's recorded audit version, so no re-run is owed
+**Governing document at the time of this report**: `project-instructions.md` v1.2.4 — matched the plan's recorded audit version, so no re-run was owed *then*. **Superseded.** v1.2.5 landed on `main` on 2026-07-28 and merged into this branch at `fead821`; the gate was re-run against it the same day and the result is recorded in the section at the foot of this file and in `plan.md` §Instructions Check. The findings table below is left exactly as it was written on 2026-07-27
 **Verdict**: **1 CRITICAL, 9 HIGH, 12 MEDIUM.** No zero-coverage requirement, no missing artifact. Every defect is a stated-versus-actual mismatch rather than a design fault.
 
 ---
@@ -66,3 +66,23 @@
 - Requirement coverage: **100%**
 - Findings: **22** itemised (1 CRITICAL, 9 HIGH, 12 MEDIUM) plus a LOW overflow
 - Blocking for Implement: **A-01 is a disclosed deviation, not a blocker.** A-02, A-03 and A-10 would break a build or a schedule and should be fixed first
+
+---
+
+## Compliance re-run — `project-instructions.md` v1.2.5
+
+**Date**: 2026-07-28 · **Trigger**: Governance — "a feature whose recorded compliance audit names a superseded version MUST re-run its compliance gate before passing its next phase gate". The audit above named v1.2.4; v1.2.5 was amended 2026-07-28 and merged into this branch at `fead821`. The next gate is QC.
+
+**Method**: v1.2.5 re-read in full and every clause re-checked against the files on this branch, rather than the v1.2.4→v1.2.5 diff applied to the earlier verdict. The amendment is one clause — Development Workflow gains **Temporary Files** — but a delta-only re-run would have found neither A-24 nor A-25, which are older than the amendment and were simply never checked.
+
+**Verdict**: **3 further violations, all repaired on this branch.** No principle changed verdict; the three sit in Development Workflow, Source Code Layout and CI Requirements.
+
+| ID | Category | Sev | Location | Summary | Disposition |
+|---|---|---|---|---|---|
+| A-23 | Instructions | **CRITICAL** | root `pyproject.toml` `[tool.pytest.ini_options]`; `.github/workflows/verify.yml` `verify` job | v1.2.5's Temporary Files rule unenforced at the root tier, at two layers. The root pinned no `--basetemp` while all three entries did, and it hosts `tests/checks/test_gateway_no_provider_env.py` — the only pytest code in the repository that builds a **virtual environment**. The `verify` job set no `TMPDIR`/`TEMP`/`TMP` while the `reproduce` job set all three. Live rather than theoretical: a `no-provider-env0` directory dated 2026-07-28 sits in `%LOCALAPPDATA%\Temp\pytest-of-<user>/pytest-15` | **Fixed.** `addopts = "--basetemp=.tmp/pytest"` at the root; the three variables set on the `verify` job with a `mkdir -p "$TMPDIR"` step ahead of the first tool |
+| A-24 | Instructions | **CRITICAL** | `/tools/{build_probes,build_reference,fetch_encoder}.py` | Source outside `/src` under `ENFORCE_SRC_ROOT`, whose single exception is `/tests` for cross-entry verification. These are neither tests nor cross-entry — `build_probes.py` imports `model.ingest.documents`, `manifest_reader` and `parse` | **Fixed.** Moved to `src/model/tools/`, beside `src/model/src/` so it stays unpackaged, uncollected and un-imported. Two of the three also held one checkout's absolute path, which on a disk holding several checkouts rewrote the wrong tree's artifact; both now derive the root from `__file__` |
+| A-25 | Instructions | HIGH | `src/gateway/tests/test_migrations.py` | CI Requirements — "all tests passing". The **Unit tests (gateway)** step was red on this branch: the file asserted the Alembic head equals `0103`, which stopped being true when this epic chained `0300`–`0304` onto it. The assertion enforces E004's TR-018 block claim and could not simply be deleted | **Fixed.** Restated against what TR-018 says — E004's four revisions present in the applied chain, contiguous, and exactly what that chain carries inside `0100`–`0199` — with four negative controls planting a renumbered, a dropped and a foreign revision |
+
+**Wording gap, recorded as an amendment request and not performed** (Governance serializes amendments onto the default branch): v1.2.5's Temporary Files clause enumerates "`--basetemp` pinned there in **each entry's** pytest configuration". The root cross-entry harness is not one of the four entries, which is how it became the one Python tier without the pin while hosting the one venv-building test. The clause's general obligation — *every command* directs scratch into `.tmp/` — already covers it, so this is under-specification rather than a licence.
+
+**Re-confirmed unchanged**: all eight principles; Technology Stack; Data Provenance; Governance, where ADR-0020's Checklist-phase allocation (A-01) stands as a disclosed, irreversible deviation.

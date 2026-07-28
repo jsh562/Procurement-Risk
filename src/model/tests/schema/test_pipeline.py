@@ -44,6 +44,8 @@ from gateway.fixtures import FixtureMissError
 from sqlalchemy import URL
 
 from model.corpus.paths import DEFAULT_CORPUS_ROOT
+from model.ingest import publish
+from model.ingest.chunker import ChunkerError
 from model.ingest.cli import (
     EXIT_ABORTED,
     EXIT_OK,
@@ -58,6 +60,7 @@ from model.ingest.cli import (
 )
 from model.ingest.documents import DocumentRecord, build_documents
 from model.ingest.manifest_reader import iter_entries
+from model.ingest.report import REPORT_CONTENTS, REPORT_PATH, RESULTS_MANIFEST_PATH
 from model.ingest.runs import read_run_state
 from model.ingest.writer import connect
 from model.schema.cli import main as migrate
@@ -99,6 +102,24 @@ def _records(count: int) -> tuple[DocumentRecord, ...]:
     records = _transmittals()[:count]
     assert len(records) == count, "the committed corpus holds fewer transmittals than this test"
     return records
+
+
+@lru_cache(maxsize=1)
+def _specification() -> DocumentRecord:
+    """One committed real specification, for the tests that need both layers.
+
+    FR-053 publishes every chunking figure **per layer as well as pooled**, and
+    a percentile over an empty layer is not published — so a report over a
+    transmittal-only corpus is a report with items 8 and 9 missing, correctly.
+    A test asserting that all twenty-one items can be emitted therefore has to
+    enumerate a document on each layer, which is also what every real run does.
+    """
+    found = next(
+        record
+        for record in build_documents(tuple(iter_entries()))
+        if record.document_type == "specification"
+    )
+    return found
 
 
 def _scope(attempted: tuple[DocumentRecord, ...], excluded: tuple[DocumentRecord, ...] = ()):
@@ -152,7 +173,18 @@ def _run(
     records: tuple[DocumentRecord, ...],
     scope: ExtractionScope,
     invoke: OneValueThenNothing,
+    *,
+    report_root: Path,
 ) -> RunOutcome:
+    """One run, with its report directed into the test's own scratch.
+
+    `report_root` is not optional here on purpose. `run_ingestion` now publishes
+    the report as its last step (FR-071), and the default root is the checkout —
+    so a test that let the default stand would replace the committed
+    `ingestion-report.md` and `results-manifest.json` with figures computed over
+    a two-document corpus, on a machine where the tests happened to make every
+    item buildable. Requiring the argument makes that impossible to forget.
+    """
     return run_ingestion(
         connection,
         records=records,
@@ -161,6 +193,7 @@ def _run(
         trace_id=TRACE_ID,
         manifest_digests=MANIFEST_DIGESTS,
         invoke=invoke,
+        report_root=report_root,
     )
 
 
@@ -171,6 +204,7 @@ def _run(
 
 def test_a_complete_run_writes_values_finishes_and_accounts_for_every_document(
     migrated: psycopg.Connection,
+    tmp_path: Path,
 ) -> None:
     """FR-044 end to end, and FR-022's excluded side inside the same run.
 
@@ -183,7 +217,9 @@ def test_a_complete_run_writes_values_finishes_and_accounts_for_every_document(
     connection = migrated
     records = _records(2)
     invoke = OneValueThenNothing()
-    outcome = _run(connection, records, _scope(records[:1], records[1:]), invoke)
+    outcome = _run(
+        connection, records, _scope(records[:1], records[1:]), invoke, report_root=tmp_path
+    )
 
     assert outcome.complete and outcome.exit_code == EXIT_OK
     assert outcome.ledger.counts == {
@@ -238,6 +274,7 @@ def test_a_complete_run_writes_values_finishes_and_accounts_for_every_document(
 
 def test_a_second_run_over_an_unchanged_corpus_writes_nothing_and_still_completes(
     migrated: psycopg.Connection,
+    tmp_path: Path,
 ) -> None:
     """FR-043's skip, from the entry rather than from `plan_documents` alone.
 
@@ -248,10 +285,22 @@ def test_a_second_run_over_an_unchanged_corpus_writes_nothing_and_still_complete
     """
     connection = migrated
     records = _records(2)
-    first = _run(connection, records, _scope(records[:1], records[1:]), OneValueThenNothing())
+    first = _run(
+        connection,
+        records,
+        _scope(records[:1], records[1:]),
+        OneValueThenNothing(),
+        report_root=tmp_path,
+    )
     assert first.complete
 
-    second = _run(connection, records, _scope(records[:1], records[1:]), OneValueThenNothing())
+    second = _run(
+        connection,
+        records,
+        _scope(records[:1], records[1:]),
+        OneValueThenNothing(),
+        report_root=tmp_path,
+    )
     assert second.complete and second.exit_code == EXIT_OK
     assert second.ledger.counts == {
         "ingested": 0,
@@ -271,6 +320,7 @@ def test_a_second_run_over_an_unchanged_corpus_writes_nothing_and_still_complete
 
 def test_a_missing_fixture_aborts_the_run_and_leaves_the_earlier_document_durable(
     migrated: psycopg.Connection,
+    tmp_path: Path,
 ) -> None:
     """The partial run, which is what a fixture-less `replay` actually is.
 
@@ -283,7 +333,7 @@ def test_a_missing_fixture_aborts_the_run_and_leaves_the_earlier_document_durabl
     connection = migrated
     records = _records(3)
     invoke = OneValueThenNothing(raise_on=2)
-    outcome = _run(connection, records, _scope(records), invoke)
+    outcome = _run(connection, records, _scope(records), invoke, report_root=tmp_path)
 
     assert not outcome.complete and outcome.exit_code == EXIT_ABORTED
     assert outcome.failure is not None and outcome.failure.kind == "fixture_missing"
@@ -339,6 +389,7 @@ def test_the_attempted_vocabulary_is_read_from_the_database(
 
 def test_a_resident_generation_this_run_may_not_replace_is_refused_before_the_record(
     migrated: psycopg.Connection,
+    tmp_path: Path,
 ) -> None:
     """{SAD:ADR-0020}: the unattended run refuses rather than half-writing.
 
@@ -349,7 +400,9 @@ def test_a_resident_generation_this_run_may_not_replace_is_refused_before_the_re
     """
     connection = migrated
     records = _records(1)
-    assert _run(connection, records, _scope(records), OneValueThenNothing()).complete
+    assert _run(
+        connection, records, _scope(records), OneValueThenNothing(), report_root=tmp_path
+    ).complete
 
     # A different manifest digest moves nothing — the digest is not in the input
     # tuple — so the tuple is moved through the member that is: the run's
@@ -362,7 +415,7 @@ def test_a_resident_generation_this_run_may_not_replace_is_refused_before_the_re
             ("submittal_status",),
         )
     with pytest.raises(OrchestrationError, match="FR-055"):
-        _run(connection, records, _scope(records), OneValueThenNothing())
+        _run(connection, records, _scope(records), OneValueThenNothing(), report_root=tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +471,13 @@ def test_the_console_entry_runs_the_pipeline_and_exits_three_on_a_partial_run(
     corpus.mkdir()
     _one_document_corpus(corpus)
 
+    # `main` takes no report root — an operator's run writes the committed
+    # artifacts, which is the whole of FR-071 — so the root itself is repointed
+    # for the duration of this test. Without it a one-document run that happened
+    # to build all twenty-one items would overwrite `ingestion-report.md` with
+    # figures over one transmittal.
+    monkeypatch.setattr(publish, "_REPO_ROOT", tmp_path / "checkout")
+
     # Set through `monkeypatch` so teardown restores them: `main` writes
     # `GATEWAY_MODE` into `os.environ` itself, and a test that left it set would
     # hand the next one a resolution mode it never chose.
@@ -459,3 +519,190 @@ def test_the_console_entry_runs_the_pipeline_and_exits_three_on_a_partial_run(
         cursor.execute("SELECT run_failure_kind, finished_at, resolution_mode FROM ingestion_run")
         row = cursor.fetchone()
     assert row == ("fixture_missing", None, REPLAY_MODE)
+
+
+# ---------------------------------------------------------------------------
+# FR-071 — the report driver, which had no production caller at all
+# ---------------------------------------------------------------------------
+
+
+def test_a_complete_run_emits_the_report_and_the_results_manifest(
+    migrated: psycopg.Connection,
+    tmp_path: Path,
+) -> None:
+    """`build_report` reaching a file, which is what it never did.
+
+    `report.py` is 3,977 lines behind twenty-one section builders and
+    `REPORT_PATH` was declared and never written — the module says so itself:
+    "this module writes no file". `results_manifest` had zero call sites. This
+    is the assertion that the whole publish layer now runs from the run that
+    produces the numbers, over a two-document corpus small enough to be a test
+    and real enough that every figure in it is measured.
+
+    Twenty-one items and no placeholders: the enumeration and the exclusion, the
+    chunk counts and the leaf-length distribution over what this run cut, the
+    near-duplicate clusters over the vectors it committed, the printed fields
+    nobody attempted, the confidence distribution, the attempt and invocation
+    ledgers, precision and recall against the verified reference set beside the
+    baseline's, the disposition ledger, and the three censuses built from the
+    rest.
+
+    **One document on each layer**, because FR-053 publishes every chunking
+    figure per layer as well as pooled and a percentile over an empty layer is
+    not published — so a transmittal-only corpus is a corpus whose report is
+    correctly two items short.
+    """
+    connection = migrated
+    transmittal = _records(1)
+    records = (_specification(), *transmittal)
+    outcome = _run(
+        connection,
+        records,
+        _scope(transmittal, (_specification(),)),
+        OneValueThenNothing(),
+        report_root=tmp_path,
+    )
+    assert outcome.complete
+
+    publication = outcome.publication
+    assert publication is not None, "the run must not finish without saying what it published"
+    assert publication.emitted, publication.rendered()
+    assert publication.gaps == ()
+    assert publication.items_published == tuple(range(1, 22))
+
+    report = tmp_path / REPORT_PATH
+    manifest = tmp_path / RESULTS_MANIFEST_PATH
+    assert report.is_file() and manifest.is_file()
+
+    rendered = report.read_text(encoding="utf-8")
+    assert f"**Run**: `{outcome.run_id}`" in rendered
+    for item in REPORT_CONTENTS:
+        assert f"## {item.number}. {item.title}" in rendered
+
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["run_id"] == str(outcome.run_id)
+    assert payload["figures"], "FR-074: the manifest carries every figure the report publishes"
+    labels = [figure["label"] for figure in payload["figures"]]
+    assert len(labels) == len(set(labels)), (
+        "FR-074: the manifest is keyed on the label, so a duplicate makes a reproduction "
+        "unable to say which of the two moved"
+    )
+    for figure in payload["figures"]:
+        assert figure["tolerance"] and figure["unit"] and figure["layer"]
+
+
+def test_a_partial_run_names_every_item_that_has_no_data_instead_of_emitting_nothing(
+    migrated: psycopg.Connection,
+    tmp_path: Path,
+) -> None:
+    """FR-071's refusal, published rather than silent.
+
+    With no fixtures committed (T081) a `replay` run aborts at the first
+    transmittal, so the items needing extracted values have nothing to publish
+    and `build_report` refuses the incomplete content list. That refusal is
+    correct. What was missing is that it reached nobody: no file appeared, and
+    nothing said why. The refusal now names which items, what obliges each, why
+    each has no data, and what stopped the run.
+
+    The items that need no extracted value are still built — the assertion below
+    that sixteen of the twenty-one were published is what stops the driver from
+    quietly short-circuiting on the first gap and never exercising them. This is
+    the same shape the full-corpus `replay` run produces: 26 specifications
+    ingested, the first transmittal `rolled_back` on `fixture_missing`, and five
+    items with no data.
+    """
+    connection = migrated
+    transmittal = _records(1)
+    records = (_specification(), *transmittal)
+    outcome = _run(
+        connection,
+        records,
+        _scope(transmittal, (_specification(),)),
+        OneValueThenNothing(raise_on=1),
+        report_root=tmp_path,
+    )
+
+    publication = outcome.publication
+    assert publication is not None
+    assert not publication.emitted
+    assert not (tmp_path / REPORT_PATH).exists()
+    assert not (tmp_path / RESULTS_MANIFEST_PATH).exists()
+
+    missing = {gap.item for gap in publication.gaps}
+    assert missing == {6, 7, 10, 12, 13}, (
+        "only the items needing an extracted value are missing on a fixture-blocked run"
+    )
+    assert len(publication.items_published) == 16, (
+        "the items needing no extracted value are assembled from real data, not skipped "
+        "once the refusal is known"
+    )
+    rendered = publication.rendered()
+    assert "report not emitted" in rendered
+    assert "fixture_missing" in rendered, "the refusal names what stopped the run"
+    for gap in publication.gaps:
+        assert gap.obliged_by, "every named gap says what obliges the item it names"
+        assert gap.reason.strip()
+
+
+# ---------------------------------------------------------------------------
+# FR-056 / FR-014 — the oversized sentence, recorded under its own kind
+# ---------------------------------------------------------------------------
+
+
+def test_an_oversized_sentence_is_recorded_as_one_of_the_closed_five(
+    migrated: psycopg.Connection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FR-014's abort reaching `ingestion_run.run_failure_kind` (FR-042, FR-056).
+
+    `oversized_sentence` is one of the five kinds the column admits and it was
+    never written by anything. The chunker raised with the document, page and
+    structural unit interpolated into prose; the orchestrator caught it as an
+    unclassified preparation failure, marked the document `rolled_back`, and
+    wrote no kind at all — so a classified abort read as `in_flight` forever.
+
+    The failure is injected at `prepare_document` rather than by finding a
+    document with an oversized sentence, because the committed corpus has none:
+    every real specification chunks legally, which is what FR-053's measured
+    profile reports. What is under test is the routing, and the routing is
+    driven by the three attributes the real raise site now sets — asserted
+    against that raise site in `tests/ingest/test_chunking.py`.
+    """
+    connection = migrated
+    records = _records(1)
+    failing_id = records[0].document_id
+
+    def refuse(record: DocumentRecord, pages: object = None):
+        raise ChunkerError(
+            f"FR-014: {record.document_id} page 3 unit 'a-2-1' holds a single sentence",
+            document_id=record.document_id,
+            page_number=3,
+            structural_unit="a-2-1",
+        )
+
+    monkeypatch.setattr("model.ingest.writer.prepare_document", refuse)
+    outcome = _run(
+        connection, records, _scope(records), OneValueThenNothing(), report_root=tmp_path
+    )
+
+    assert not outcome.complete and outcome.exit_code == EXIT_ABORTED
+    assert outcome.failure is not None
+    assert outcome.failure.kind == "oversized_sentence"
+    assert outcome.failure.document_id == failing_id
+    assert outcome.ledger.counts["rolled_back"] == 1
+
+    assert read_run_state(connection, outcome.run_id) == "aborted", (
+        "a classified abort does not read as `in_flight`"
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT run_failure_kind, run_failure_detail FROM ingestion_run WHERE run_id = %s",
+            (str(outcome.run_id),),
+        )
+        row = cursor.fetchone()
+    assert row is not None
+    kind, detail = row
+    assert kind == "oversized_sentence"
+    assert failing_id in detail, "FR-056 names the document in flight"
+    assert "page 3" in detail and "'a-2-1'" in detail, "and the page and structural unit"

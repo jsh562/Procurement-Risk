@@ -87,7 +87,46 @@ class ChunkerError(ValueError):
     One type for every failure. The failure that actually occurs in practice is
     FR-014's: a single sentence above the encoder window, which cannot be split
     further by any named boundary class and must not be embedded truncated.
+
+    **The oversized-sentence case carries its three subjects as attributes, not
+    only inside its message** (FR-056). `oversized_sentence` is one of the five
+    run-level kinds `ck_ingestion_run__failure_kind_domain` admits, and
+    `ingest.cli.oversized_sentence` requires exactly the document, the page and
+    the structural unit to construct one. Interpolating them into prose and
+    nothing else left the orchestrator with a sentence it could not take those
+    three values back out of, so it recorded the abort as unclassified, wrote no
+    `run_failure_kind`, and the run read as `in_flight` forever — a classified
+    abort published as an unclassified one, which is what FR-042 and FR-056
+    exist to prevent. They are `None` for every other failure this type carries,
+    which is how a caller tells the classified case from the rest.
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        document_id: str | None = None,
+        page_number: int | None = None,
+        structural_unit: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.document_id = document_id
+        self.page_number = page_number
+        self.structural_unit = structural_unit
+
+    @property
+    def is_oversized_sentence(self) -> bool:
+        """Whether this carries FR-014's three subjects, all of them.
+
+        All three or none: `ingest.cli.oversized_sentence` takes three required
+        arguments, so a failure carrying two of them cannot be classified and
+        must not look as though it can.
+        """
+        return (
+            self.document_id is not None
+            and self.page_number is not None
+            and self.structural_unit is not None
+        )
 
 
 @dataclass(frozen=True)
@@ -306,7 +345,10 @@ class _Emitter:
                     f"{unit.identifier!r} holds a single sentence of {pieces} content "
                     f"word pieces, above the {CONTENT_TOKEN_BUDGET} budget. It cannot be "
                     "divided by any named boundary class and is not embedded truncated: "
-                    f"{sentence.text[:120]!r}"
+                    f"{sentence.text[:120]!r}",
+                    document_id=self._record.document_id,
+                    page_number=unit.page_number,
+                    structural_unit=unit.identifier,
                 )
             if packed and packed_pieces + pieces > CONTENT_TOKEN_BUDGET:
                 flush()

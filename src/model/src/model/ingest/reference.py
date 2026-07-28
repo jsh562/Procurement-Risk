@@ -95,6 +95,15 @@ REAL_LAYER_NOT_MEASURED = (
 #: nothing can be stored for a field the schema has no name for, so counting one
 #: as a miss would denominate recall on a population extraction could not have
 #: reached.
+#:
+#: **Excluding them from recall's denominator is not the same as excluding them
+#: from the report** (FR-058). All seven are printed on nearly every transmittal
+#: — 170 printed fields over the committed 25, short of 7 x 25 only where
+#: `MISSING_OR_BLANK_FIELD` blanked one — so "a printed field falling outside the
+#: subset" describes them exactly, and the requirement says such a field is
+#: published as unattempted-but-printed rather than absorbed. `ReferenceSet.printed_without_
+#: term` counts them for report item 14; `printed_counts` still does not, which
+#: is what keeps the two populations apart.
 VOCABULARY_BY_GENERATOR_KEY: Mapping[str, str] = MappingProxyType(
     {
         "manufacturer": "manufacturer",
@@ -125,11 +134,21 @@ class ReferenceField:
     could not represent a blanked field could not score the documents that have
     one. A blank field is **not** a printed field for recall's purposes, which
     is what `printed_terms` below encodes.
+
+    `generator_key` is the field-label vocabulary key the printed label resolved
+    to, kept beside `vocabulary_term` rather than discarded once the term was
+    looked up. The seven keys with no term — the contract number, project
+    identifier, vendor name, descriptor code, approving authority, revision
+    suffix and receipt date — are printed on nearly every transmittal, and
+    FR-058 requires them published as unattempted-but-printed. Dropping the key left
+    nothing downstream able to name them, so item 14 could not report what it
+    exists to report. It is `None` where the label resolved to no key at all.
     """
 
     printed_label: str
     value: str
     vocabulary_term: str | None
+    generator_key: str | None = None
 
     @property
     def is_printed(self) -> bool:
@@ -163,6 +182,28 @@ class ReferenceDocument:
                 field.vocabulary_term
                 for field in self.fields
                 if field.vocabulary_term is not None and field.is_printed
+            )
+        )
+
+    def printed_generator_keys(self) -> tuple[str, ...]:
+        """Generator keys this document printed that have **no** vocabulary term.
+
+        Sorted, and not deduplicated away from their count, for the reason
+        `printed_terms` is not: the unit is the printed field.
+
+        These are the fields FR-058 calls "printed but falling outside the
+        subset". They are outside it in the strongest sense available — the
+        schema has no term to store them under at all — which is why they are
+        rightly absent from recall's denominator and wrongly absent from item
+        14, where the requirement puts them.
+        """
+        return tuple(
+            sorted(
+                field.generator_key
+                for field in self.fields
+                if field.generator_key is not None
+                and field.vocabulary_term is None
+                and field.is_printed
             )
         )
 
@@ -221,6 +262,23 @@ class ReferenceSet:
         for document in self.documents.values():
             for term in document.printed_terms():
                 counts[term] = counts.get(term, 0) + 1
+        return dict(sorted(counts.items()))
+
+    def printed_without_term(self) -> Mapping[str, int]:
+        """Printed fields per generator key that has **no** vocabulary term.
+
+        Item 14's second population (FR-058). Deliberately *not* merged into
+        `printed_counts`: that mapping is recall's denominator and admits only
+        fields extraction could have stored, while these are fields extraction
+        could not have stored under any name. Publishing them in one mapping
+        would put a term nothing can be stored for into a denominator, which is
+        the direction FR-060 forbids; omitting them entirely is what FR-058
+        forbids. Two mappings is the only shape that satisfies both.
+        """
+        counts: dict[str, int] = {}
+        for document in self.documents.values():
+            for key in document.printed_generator_keys():
+                counts[key] = counts.get(key, 0) + 1
         return dict(sorted(counts.items()))
 
 
@@ -353,6 +411,7 @@ def _reference_fields(fields: Iterable[object]) -> tuple[ReferenceField, ...]:
                     if generator_key is not None
                     else None
                 ),
+                generator_key=generator_key,
             )
         )
     return tuple(resolved)

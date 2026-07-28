@@ -40,9 +40,11 @@ from model.ingest.cli import (
     EXIT_ABORTED,
     EXIT_OK,
     EXIT_REFUSED,
+    PROVIDER_CLIENT,
     OrchestrationError,
     RunLevelFailure,
     RunOutcome,
+    _run_level_failure,
     build_disposition_ledger,
     build_revision,
     build_run_identity,
@@ -84,6 +86,11 @@ from model.ingest.runs import (
     input_tuple_for,
 )
 from model.ingest.writer import DocumentOutcome
+from model.llm.extraction import (
+    RUN_FAILURE_FIXTURE_MISSING,
+    RUN_FAILURE_PROVIDER_UNREACHABLE,
+    ExtractionRunFailure,
+)
 from model.llm.prompts import prompt_template_digest
 from model.llm.schemas import TRANSMITTAL_FIELD_SUBSET, output_schema_digest
 
@@ -466,6 +473,74 @@ def test_a_per_field_outcome_cannot_be_recorded_as_a_run_level_kind() -> None:
 def test_a_failure_with_no_detail_is_refused() -> None:
     with pytest.raises(OrchestrationError, match="FR-056"):
         RunLevelFailure(kind="provider_unreachable", detail="   ")
+
+
+def test_a_gateway_run_level_abort_is_routed_through_the_constructor_for_its_kind() -> None:
+    """FR-056's mapping wired rather than coincidental.
+
+    `_ExtractionStep` used to build a bare `RunLevelFailure` from the gateway's
+    own `kind` and `detail`. That produced the right column value and made the
+    two constructors that *require* each kind's subject unreachable from the
+    path that actually aborts — so nothing held `fixture_missing` to naming the
+    resolution key, and a gateway reporting a sixth kind would have written it
+    straight through `RunLevelFailure`'s domain check with no subject at all.
+    """
+    key = f"sha256:{'d' * 64}"
+    miss = _run_level_failure(
+        ExtractionRunFailure(RUN_FAILURE_FIXTURE_MISSING, "no fixture under x", subject=key),
+        "prj-001-t0001-r0",
+    )
+    assert miss.kind == "fixture_missing"
+    assert key in miss.detail, "FR-056 fixes the resolution key as this kind's subject"
+    assert "no fixture under x" in miss.detail, "and the gateway's own account is kept, not lost"
+    assert miss.document_id == "prj-001-t0001-r0"
+
+    unreachable = _run_level_failure(
+        ExtractionRunFailure(RUN_FAILURE_PROVIDER_UNREACHABLE, "TimeoutError: read timed out"),
+        "prj-001-t0002-r0",
+    )
+    assert unreachable.kind == "provider_unreachable"
+    assert PROVIDER_CLIENT in unreachable.detail
+    assert INGEST_PROVIDER_MODEL in unreachable.detail
+    assert "TimeoutError" in unreachable.detail
+
+
+def test_a_kind_no_invocation_can_produce_is_refused_rather_than_passed_through() -> None:
+    """The other three of the five arise before any invocation.
+
+    `RunLevelFailure` would accept `corpus_digest_mismatch` from the extraction
+    path without complaint — its own check is only that the value is one of the
+    five — and a digest mismatch reported by an invocation is a defect in the
+    mapping rather than a corpus that changed mid-run.
+    """
+    with pytest.raises(OrchestrationError, match="FR-056"):
+        _run_level_failure(
+            ExtractionRunFailure("corpus_digest_mismatch", "the file moved"), "prj-001-t0001-r0"
+        )
+
+
+def test_the_unreachable_subject_names_the_route_and_not_the_distribution() -> None:
+    """The one restated literal this module must **not** have.
+
+    `tests/checks/test_single_import_site.py` permits exactly one source file in
+    the repository to name the provider distribution, and that file is
+    `gateway/provider.py`. A first draft of `provider_unreachable`'s subject
+    restated it here and the check refused the run — correctly: a second copy of
+    the provider's name is exactly the drift the single-import-site rule exists
+    to prevent, and unlike the four gateway *controls* this module restates,
+    there is no public name to check a copy against.
+
+    So the subject is what this job can state from its own knowledge: every
+    invocation leaves through the shared gateway client, which is the route it
+    observed failing. The provider's own diagnosis rides along as the cause.
+    """
+    assert PROVIDER_CLIENT == "gateway"
+    failure = provider_unreachable(
+        provider=PROVIDER_CLIENT, model=INGEST_PROVIDER_MODEL, cause="ConnectionError: refused"
+    )
+    assert PROVIDER_CLIENT in failure.detail
+    assert INGEST_PROVIDER_MODEL in failure.detail
+    assert "ConnectionError: refused" in failure.detail
 
 
 # ---------------------------------------------------------------------------

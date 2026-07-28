@@ -26,6 +26,7 @@ from model.ingest.chunker import (
     ChunkerError,
     chunk_pages,
 )
+from model.ingest.cli import oversized_sentence
 from model.ingest.documents import DocumentRecord
 from model.ingest.parse import ParsedPage, read_pages
 from model.ingest.segment import SEGMENTER_VERSION, sentences
@@ -249,6 +250,53 @@ def test_a_single_over_long_sentence_fails_the_run_naming_the_unit() -> None:
     with pytest.raises(ChunkerError, match="FR-014") as raised:
         chunk_pages(record(), [page(1, "PART 2 PRODUCTS", "2.1 BOILERS", undivided)])
     assert "2.1" in str(raised.value)
+
+
+def test_the_oversized_sentence_carries_its_three_subjects_as_attributes() -> None:
+    """FR-056: the failure is classifiable, not only readable.
+
+    `oversized_sentence` is one of the five kinds
+    `ck_ingestion_run__failure_kind_domain` admits, and `cli.oversized_sentence`
+    requires the document, the page and the structural unit to construct one.
+    Interpolating them into prose and nothing else left the orchestrator holding
+    a sentence it could not take those three values back out of, so it recorded
+    the abort as unclassified and wrote no `run_failure_kind` — a classified
+    abort reading as `in_flight` forever.
+
+    Asserted here, at the raise site, rather than only where the run records it:
+    the routing is driven by these attributes, and a raise site that stopped
+    setting them would leave the routing correct and unreachable.
+    """
+    undivided = " ".join(["designation"] * 900)
+    with pytest.raises(ChunkerError) as raised:
+        chunk_pages(record("ufgs-26-05-13"), [page(4, "PART 2 PRODUCTS", "2.1 BOILERS", undivided)])
+
+    error = raised.value
+    assert error.is_oversized_sentence
+    assert error.document_id == "ufgs-26-05-13"
+    assert error.page_number == 4
+    assert error.structural_unit == "2.1"
+
+    failure = oversized_sentence(
+        document_id=error.document_id,
+        page_number=error.page_number,
+        structural_unit=error.structural_unit,
+    )
+    assert failure.kind == "oversized_sentence"
+    assert failure.recorded_detail.startswith("document in flight ufgs-26-05-13:")
+    assert "page 4" in failure.recorded_detail and "'2.1'" in failure.recorded_detail
+
+
+def test_a_chunker_failure_that_is_not_the_oversized_sentence_carries_no_subjects() -> None:
+    """All three attributes or none — two of them cannot construct the failure.
+
+    `ChunkerError` covers more than FR-014's case, and the others have no member
+    among FR-056's five. A caller must be able to tell them apart without
+    reading the message, which is exactly what the old code could not do.
+    """
+    error = ChunkerError("FR-015: ordinals are not contiguous from zero")
+    assert not error.is_oversized_sentence
+    assert (error.document_id, error.page_number, error.structural_unit) == (None, None, None)
 
 
 def test_the_chunker_version_carries_the_segmenter_version() -> None:

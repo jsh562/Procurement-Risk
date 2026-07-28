@@ -25,7 +25,9 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Audited against**: `project-instructions.md` **v1.2.4** (last amended 2026-07-26) · **Audit date**: 2026-07-27
+**Audited against**: `project-instructions.md` **v1.2.5** (last amended 2026-07-28) · **Audit date**: 2026-07-28 · **Re-run**, superseding the v1.2.4 audit recorded here on 2026-07-27
+
+**Why the gate was re-run.** v1.2.5 landed on `main` and merged into this branch at `fead821` while the epic was in flight, adding a **Temporary Files** rule to Development Workflow. Governance requires a feature whose recorded audit names a superseded version to re-run its compliance gate before passing its next phase gate, and this branch's next gate is QC. The table below is the result of re-reading v1.2.5 in full and re-checking every clause against the files — not of applying the diff. **Three sections changed verdict; all three are repaired on this branch** and are marked *repaired at QC* with what was wrong.
 
 | Principle / Section | Gate | Status |
 |---|---|---|
@@ -39,12 +41,19 @@
 | VIII. Honest Opponents | Deterministic template extractor over the same transmittals, labelled strong or weak | PASS — `ingest/baseline.py`; FR-050 |
 | Technology Stack | ONNX Runtime is the stack's declared inference runtime and is what this encoder uses; the precision term is **FP32**, fixed by ADR-0012's ~80 MB full-precision weight budget and by AD-014 — the stack's INT8 clause is ADR-0006's reranker term and is not evidence for this encoder; PostgreSQL 16 + pgvector; no second datastore of record | PASS — see ADR-0018 and AD-014 |
 | Testing & Quality Policy | Deterministic computation modules take **both** mandates: strict test-first (red-green-refactor) **and** property-based tests; architecture contracts gate the build; new packages enter the coverage denominator | PASS — see Testing Strategy; the coverage `--source` list is an enumeration that overrides rather than merges, so it is a real change, not "configured" |
-| Source Code Layout | All code under `/src/model`; cross-entry checks under `/tests`; no fifth entry | PASS |
-| Development Workflow | Branch matches `#####-feature-name`; Conventional Commits; the migration-block partition stays green | PASS — but claiming block `0300`–`0399` is **not** a one-line append; see AD-013 and Complexity Tracking |
+| Source Code Layout | All code under `/src/model`; cross-entry checks under `/tests`; no fifth entry | **PASS — repaired at QC.** Was FAIL: `/tools`, this epic's three encoder-provenance scripts, sat at the repository root. `ENFORCE_SRC_ROOT` grants exactly one exception and it is `/tests`, for cross-entry verification no entry owns; these are neither. Moved to `src/model/tools/` — `build_probes.py` imports `model.ingest.documents`, `manifest_reader` and `parse`, so the modelling entry already owned them — and placed beside `src/model/src/`, so `uv_build`'s src layout does not package them, `testpaths` does not collect them, and `import-linter`'s `model` graph never sees them. `git ls-files '*.py' '*.ts' '*.tsx'` now resolves entirely under `/src` and `/tests` |
+| Development Workflow | Branch matches `#####-feature-name`; Conventional Commits; the migration-block partition stays green; **Temporary Files (new in v1.2.5)**: scratch into the checkout's gitignored `.tmp/`, `--basetemp` pinned, no environment or build created outside the checkout; CI Requirements: lint clean, no type errors, all tests passing | **PASS — repaired at QC**, on the new clause at two layers and on CI Requirements at a third. (a) The root `pyproject.toml` pinned no `--basetemp` while all three entries did — and the only pytest code in the repository that builds a **virtual environment**, `tests/checks/test_gateway_no_provider_env.py`, runs under it. Live, not theoretical: a `no-provider-env0` directory dated 2026-07-28 was found under `%LOCALAPPDATA%\Temp\pytest-of-<user>/pytest-15`. (b) `verify.yml`'s `verify` job set no `TMPDIR`/`TEMP`/`TMP` while its `reproduce` job set all three, so every `uv sync`, `npm ci`, `docker build` and `tempfile` call in the job that runs the whole suite resolved to the runner's system temp. (c) CI Requirements — the **Unit tests (gateway)** step was red on this branch; see the note below. Claiming block `0300`–`0399` is still **not** a one-line append; see AD-013 and Complexity Tracking |
 | Data Provenance | Layer, license basis, and layer-appropriate provenance carried unchanged; no fabricated retrieval provenance | PASS — FR-004 |
 | Governance | Migration block `0300`–`0399` and ADR-0018/0019 claimed at epic start; **ADR-0020 claimed during the Checklist phase**, not at epic start — allocated by scanning for the highest number in use, disclosed rather than back-dated; TR-081 amendment recorded, not performed | **DEVIATION (disclosed)** — PASS on FR-040 and FR-047; ADR-0020's timing deviates from the claim-at-epic-start clause and is not reversible (FR-051). Confirm before merge that no concurrent wave epic allocated 0020 |
 
 **Re-check after design**: PASS. Two boundary crossings are recorded in Complexity Tracking rather than waved through.
+
+**Re-run notes (v1.2.5, 2026-07-28)**
+
+- **The gateway test step was red, and had been since `0300` landed.** `src/gateway/tests/test_migrations.py` asserted the Alembic head equals `0103`, E004's final revision, on the reasoning that E004's block is applied last. That reasoning expired the moment this epic chained `0300`–`0304` onto `0103`. The assertion is restated rather than removed — TR-018 confines E004 to `0100`–`0199` and says nothing about being last, so it now asserts E004's four revisions are present in the applied chain, contiguous, and exactly the revisions that chain carries inside the block. Four negative controls plant a renumbered revision, a dropped one, and a foreign revision inside the block, and require each to be reported.
+- **The Temporary Files clause enumerates "each entry's pytest configuration", and the root tier is not an entry.** That is how the root `pyproject.toml` came to be the one Python tier without a pinned `--basetemp` while hosting the only venv-building test in the repository. The general obligation in the same clause — *every command* directs scratch into `.tmp/` — covers it, so this is a wording gap rather than a licence, and it is repaired here by pinning the root anyway. **Recorded as an amendment request, not performed**: Governance serializes amendments onto the default branch and a feature branch records the need.
+- **Coverage denominator.** `[tool.coverage.paths]` mapped six packages and not `ingest`, `llm` or `compute`, the three this epic added and the three `verify.yml` asserts an individual 80% floor over. Added, together with the matching `[tool.coverage.run] source` entries, per the "one change, not two" rule already recorded beside `model.procurement`.
+- **Unchanged and still deviating**: ADR-0020's Checklist-phase allocation (row below). Nothing in v1.2.5 touches Governance, and the deviation stands as disclosed.
 
 ## Architecture
 
@@ -288,6 +297,7 @@ src/model/
 ~ pyproject.toml                   # deps + `ingest` console script (T004); baseline-independence forbidden contract (T008, FR-050)
 + README.md                        # the three operator runbooks: T082 (FR-041), T083 (FR-064), T084 (FR-055) + fixture re-record trigger (T081)
 + fixtures/                        # committed extraction fixtures for `replay` mode (T081, FR-045)
+~ tools/                           # fetch_encoder, build_probes, build_reference — the provenance of data/encoder/. Moved here from /tools at QC: the repository root is outside ENFORCE_SRC_ROOT and /tests is its only exception, while build_probes.py imports model.ingest.*. Beside src/, so unpackaged and un-imported
 
 src/model/tests/
 + ingest/                          # chunker, tokens, segment, documents, failures, page split

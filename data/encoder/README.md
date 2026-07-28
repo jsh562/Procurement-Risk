@@ -64,15 +64,26 @@ why ADR-0018 makes the tolerance mandatory rather than diligent.
 
 ## Re-recording these files (a one-off, never a run-time step)
 
+The scripts that produced everything here live in **`src/model/tools/`**, with
+their own README. They moved there from `/tools` at E006's QC: the repository
+root is outside the source root `project-instructions.md` §Source Code Layout
+requires, whose one exception is `/tests`. `build_probes.py` imports
+`model.ingest.*`, so the modelling entry owns all three, and they are run
+through its environment — `uv run --directory src/model python tools/<script>.py`.
+
 1. Fetch each file in `digests.json` from
    `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/<revision>/<path>`
    — `onnx/model.onnx` is stored here as `model.onnx` and `1_Pooling/config.json`
-   as `pooling_config.json`.
+   as `pooling_config.json`. `src/model/tools/fetch_encoder.py` does this and
+   prints the digest of each file as it arrives.
 2. Rebuild `probes.json` from the corpus through `model.ingest.parse.read_pages`,
-   recording document, page and line range per probe.
+   recording document, page and line range per probe —
+   `src/model/tools/build_probes.py`.
 3. Recompute `parity-reference.json` in a throwaway environment holding
-   `sentence-transformers` at the recorded versions. That environment is not a
-   repository dependency and nothing imports it.
+   `sentence-transformers` at the recorded versions —
+   `src/model/tools/build_reference.py`. That environment is not a repository
+   dependency, nothing imports it, and it is built under the checkout's own
+   gitignored `.tmp/` (`project-instructions.md` v1.2.5).
 4. Recompute `digests.json` over every file in this directory.
 5. Re-run `src/model/tests/ingest/test_encoder_parity.py`. A change of revision
    changes every published retrieval figure, so it is a run-record change and not

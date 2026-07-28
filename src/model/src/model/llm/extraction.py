@@ -143,12 +143,21 @@ class ExtractionRunFailure(ExtractionError):
     `kind` is one of the five `ck_ingestion_run__failure_kind_domain` admits, so
     a caller writes the column rather than mapping an exception type to a string
     of its own devising.
+
+    `subject` is the fact FR-056 obliges *that kind* to name, carried as a value
+    rather than only interpolated into `detail`. For `fixture_missing` it is the
+    resolution key that missed — `FixtureMissError.key`, which the gateway
+    already computes and which a caller would otherwise have to parse back out
+    of a sentence. It is `None` for `provider_unreachable`, whose subject is the
+    provider and model the *job* addressed rather than anything the gateway
+    reports about them, and the caller supplies those from its own record.
     """
 
-    def __init__(self, kind: str, detail: str) -> None:
+    def __init__(self, kind: str, detail: str, *, subject: str | None = None) -> None:
         super().__init__(f"{kind}: {detail}")
         self.kind = kind
         self.detail = detail
+        self.subject = subject
 
 
 class ExtractionSchemaViolation(ExtractionError):
@@ -263,6 +272,7 @@ def _classify(error: GatewayError) -> ExtractionError:
             RUN_FAILURE_FIXTURE_MISSING,
             f"{error}. FR-045 requires fixtures to be re-recorded whenever the prompt "
             f"text or an output schema constraint changes; the key covers both.",
+            subject=error.key,
         )
     return ExtractionRunFailure(
         RUN_FAILURE_PROVIDER_UNREACHABLE,

@@ -62,6 +62,15 @@ hook, before that transaction opens, so `data-model.md` §Write Order steps 0a�
 are untouched and extraction gets no pass of its own over the database. What
 this module adds is the ordering and the two closures around it: the run-level
 failure and the disposition ledger.
+
+**The run publishes its own account, and that step had no caller either**
+(FR-071, T098). After the run record is closed, `publish.publish_report`
+assembles all twenty-one items of FR-071's closed content list from this run's
+data and writes the report and the results manifest — or, where an item has no
+data, returns a **named** refusal saying which items, what obliges each, and why.
+It is called after the closure rather than before it so the report describes a
+resolved run, and it raises nothing: the documents are committed and durable,
+and what is at stake is only whether their account can be published.
 """
 
 from __future__ import annotations
@@ -78,7 +87,7 @@ from typing import Final
 from uuid import UUID, uuid4
 
 from model.corpus.manifest import LAYER_REAL, LAYER_SYNTHETIC
-from model.ingest.chunker import CHUNKER_VERSION
+from model.ingest.chunker import CHUNKER_VERSION, ChunkerError
 from model.ingest.documents import DocumentRecord
 from model.ingest.embed import embedding_identity
 from model.ingest.extract import (
@@ -86,6 +95,7 @@ from model.ingest.extract import (
     ExtractionStageResult,
     run_extraction_stage,
 )
+from model.ingest.publish import PublicationOutcome, RunEvidence, publish_report
 from model.ingest.report import (
     ATTEMPT_UNIT,
     COUNTING_UNITS,
@@ -120,7 +130,12 @@ from model.ingest.runs import (
     write_run_record,
 )
 from model.ingest.writer import DocumentOutcome, PreparedDocument, WriterError
-from model.llm.extraction import ExtractionRunFailure, Invoker
+from model.llm.extraction import (
+    RUN_FAILURE_FIXTURE_MISSING,
+    RUN_FAILURE_PROVIDER_UNREACHABLE,
+    ExtractionRunFailure,
+    Invoker,
+)
 from model.llm.prompts import prompt_template_digest
 from model.llm.schemas import FieldTerm, attempted_terms, output_schema_digest
 
@@ -142,6 +157,7 @@ __all__ = [
     "EXTRACTED_DOCUMENT_TYPE",
     "INVOCATION_UNIT",
     "PRICE_TABLE_PIN_ENV_VAR",
+    "PROVIDER_CLIENT",
     "PROVIDER_MODEL",
     "PROVIDER_OPT_IN_ENV_VAR",
     "PROVIDER_OPT_IN_PERMITTED_VALUE",
@@ -157,6 +173,8 @@ __all__ = [
     "InvocationLedger",
     "InvocationReconciliation",
     "OrchestrationError",
+    "PublicationOutcome",
+    "RunEvidence",
     "RunLevelFailure",
     "RunOutcome",
     "RunTrace",
@@ -175,6 +193,7 @@ __all__ = [
     "main",
     "oversized_sentence",
     "provider_unreachable",
+    "publish_report",
     "reconcile_invocations",
     "require_price_table_pin",
     "resolve_resolution_mode",
@@ -584,6 +603,14 @@ def count_attempts(
     against the rows that work produced, and a loop that skipped a chunk would
     decrement its own expectation along with it. This computes the expectation
     from the corpus shape instead, so a skip shows up as a discrepancy.
+
+    **This is the `attempted` side of `report.AttemptLedger` and only that
+    side.** The three resolutions — stored, failed, correct negative (FR-069 as
+    amended 2026-07-28) — are enumerated by `extract.run_extraction_stage` from
+    what it actually produced. Keeping the two derivations apart is what makes
+    the ledger's published `unaccounted` a comparison rather than a restatement:
+    a total computed by summing the resolutions would balance by construction
+    and would publish a zero that measured nothing.
     """
     fields = set(attempted_fields)
     if not fields:
@@ -715,7 +742,9 @@ def oversized_sentence(
     )
 
 
-def fixture_missing(*, resolution_key: str, document_id: str | None = None) -> RunLevelFailure:
+def fixture_missing(
+    *, resolution_key: str, document_id: str | None = None, cause: str | None = None
+) -> RunLevelFailure:
     """FR-045's abort. The subject is the resolution key that missed.
 
     The key rather than the prompt, because the key is what a re-record run is
@@ -723,25 +752,92 @@ def fixture_missing(*, resolution_key: str, document_id: str | None = None) -> R
     second, so a changed prompt or output-schema constraint resolves to a
     different key and therefore to a miss — which is the signal that the
     fixtures must be re-recorded (`src/model/README.md`).
+
+    `cause` is the gateway's own account of the miss, appended rather than
+    substituted. It names the store root the lookup ran against, which the key
+    alone does not, and dropping it to route through this constructor would
+    trade one fact for another.
     """
     return RunLevelFailure(
         kind="fixture_missing",
         detail=(
             f"no committed fixture for resolution key {resolution_key}; the prompt text or "
             f"an output schema constraint has moved and the fixtures must be re-recorded"
+            + (f" — {cause}" if cause else "")
         ),
         document_id=document_id,
     )
 
 
 def provider_unreachable(
-    *, provider: str, model: str, document_id: str | None = None
+    *, provider: str, model: str, document_id: str | None = None, cause: str | None = None
 ) -> RunLevelFailure:
-    """The fifth kind. The subject is the provider and the model addressed."""
+    """The fifth kind. The subject is the provider and the model addressed.
+
+    `cause` carries the gateway's own diagnosis — the exception type and its
+    message — for the reason `fixture_missing`'s does: the provider and the
+    model say *what* was addressed, and only the cause says what happened when
+    it was.
+    """
     return RunLevelFailure(
         kind="provider_unreachable",
-        detail=f"provider {provider!r} addressing model {model!r} could not be reached",
+        detail=(
+            f"provider {provider!r} addressing model {model!r} could not be reached"
+            + (f" — {cause}" if cause else "")
+        ),
         document_id=document_id,
+    )
+
+
+def _run_level_failure(error: ExtractionRunFailure, document_id: str) -> RunLevelFailure:
+    """Route a gateway run-level abort through the constructor for its kind.
+
+    Args:
+        error: what `model.llm.extraction` raised. Its `kind` is one of the two
+            FR-056 members an invocation can produce, and its `subject` is the
+            fact that kind is obliged to name — the resolution key for a fixture
+            miss, and `None` for an unreachable provider, whose subject is this
+            job's own provider and model rather than anything the gateway
+            reported.
+        document_id: the document in flight.
+
+    Returns:
+        The failure, built by `fixture_missing` or `provider_unreachable`.
+
+    Raises:
+        OrchestrationError: the gateway reported a kind outside the two an
+            invocation can produce. Refused rather than passed through:
+            `RunLevelFailure` would accept `corpus_digest_mismatch` from here
+            without complaint, because its own check is only that the value is
+            one of the five — and a digest mismatch reported by an invocation is
+            a defect in the mapping, not a corpus that changed mid-run.
+
+    **Why this exists at all.** The abort was previously classified by copying
+    the gateway's `kind` and `detail` straight into a bare `RunLevelFailure`.
+    That produced the right column value on today's code and made FR-056's
+    mapping a coincidence rather than a wiring: the two constructors that
+    *require* each kind's subject had no caller on the path that actually
+    aborts, so nothing held `fixture_missing` to naming a resolution key.
+    """
+    if error.kind == RUN_FAILURE_FIXTURE_MISSING:
+        return fixture_missing(
+            resolution_key=error.subject or "unreported by the gateway",
+            document_id=document_id,
+            cause=error.detail,
+        )
+    if error.kind == RUN_FAILURE_PROVIDER_UNREACHABLE:
+        return provider_unreachable(
+            provider=PROVIDER_CLIENT,
+            model=PROVIDER_MODEL,
+            document_id=document_id,
+            cause=error.detail,
+        )
+    raise OrchestrationError(
+        f"FR-056: an extraction invocation reported run-level kind {error.kind!r}, which is "
+        f"outside the two an invocation can produce "
+        f"({RUN_FAILURE_FIXTURE_MISSING!r}, {RUN_FAILURE_PROVIDER_UNREACHABLE!r}). The other "
+        f"three of the closed five arise on the intake path, before any invocation, and each "
+        f"has a constructor requiring a subject an invocation does not hold."
     )
 
 
@@ -979,6 +1075,25 @@ PRICE_TABLE_PIN_ENV_VAR: Final[str] = "GATEWAY_PRICE_TABLE_VERSION"
 #: name while addressing another is exactly the unattributable figure Principle I
 #: excludes.
 PROVIDER_MODEL: Final[str] = "claude-opus-5"
+
+#: What this job addresses the model *through*, and the `provider` half of
+#: FR-056's `provider_unreachable` subject — the model alone says what was
+#: addressed but not by what route.
+#:
+#: **The provider distribution's own name is deliberately not written here.**
+#: `tests/checks/test_single_import_site.py` permits exactly one source file in
+#: the repository to name it, and that file is `gateway/provider.py`, which owns
+#: the client; a second copy in this module is precisely the drift the
+#: single-import-site rule exists to prevent, and the check refuses it. There is
+#: also no public name to import — `gateway.provider` holds it privately, and
+#: `model.ingest` may not import `gateway` at all.
+#:
+#: So the subject is the one this job can state truthfully from its own
+#: knowledge: every invocation of this run leaves through `model.llm.extraction`
+#: into the shared gateway client, and "the gateway could not reach the model"
+#: is what a run that fails here has actually observed. The provider's own
+#: diagnosis travels beside it as the failure's `cause`.
+PROVIDER_CLIENT: Final[str] = "gateway"
 
 #: FR-038's build revision, when the job runs outside a checkout. Read first, so
 #: a container or a runner without `git` on PATH can state what built it; the
@@ -1304,12 +1419,15 @@ class _ExtractionStep:
             )
         except ExtractionRunFailure as error:
             # FR-056, classified here because this is where the closed five
-            # live. The gateway's own detail is kept rather than recomposed: it
-            # already names the resolution key that missed, which is the subject
-            # the requirement fixes for `fixture_missing`.
-            self.failure = RunLevelFailure(
-                kind=error.kind, detail=error.detail, document_id=document_id
-            )
+            # live — and classified **through the constructor for the kind**
+            # rather than by copying the gateway's `kind` and `detail` into a
+            # bare `RunLevelFailure`. The bare construction type-checked and
+            # produced the right column value, so the mapping held by
+            # coincidence: nothing made `fixture_missing` the function that
+            # requires the resolution key, and a gateway that ever reported a
+            # sixth kind would have written it straight through
+            # `RunLevelFailure`'s domain check with no subject at all.
+            self.failure = _run_level_failure(error, document_id)
             raise WriterError(
                 f"FR-056: extraction of {document_id} aborted the run with "
                 f"{error.kind!r}; no generation is written for it and the run-level failure "
@@ -1346,6 +1464,12 @@ class RunOutcome:
     failures_written: int = 0
     chunks_written: int = 0
     extractions: tuple[ExtractionStageResult, ...] = ()
+    #: What the report driver did (FR-071). Present on every outcome the
+    #: pipeline produces, emitted or refused, because "no report was written"
+    #: and "nobody tried to write one" are the two states this epic spent three
+    #: components failing to tell apart. `None` only where the run never reached
+    #: the publish step at all.
+    publication: PublicationOutcome | None = None
 
     @property
     def complete(self) -> bool:
@@ -1378,6 +1502,7 @@ def run_ingestion(
     policy: ConfidencePolicy = DECLARED_POLICY,
     promote: bool = False,
     invoke: Invoker | None = None,
+    report_root: Path | None = None,
 ) -> RunOutcome:
     """Write the run record, then every document, then the finish or the abort.
 
@@ -1394,6 +1519,11 @@ def run_ingestion(
             project's declaration for the reason `write_run_record` states.
         promote: whether this run may replace resident generations.
         invoke: the gateway entry point, for tests. `None` is the traced path.
+        report_root: where the report and the results manifest are written
+            (FR-071, FR-074). `None` is the checkout, which is the ordinary
+            path; a test passes a temporary directory, so a test run cannot
+            replace the committed artifacts with figures from a two-document
+            corpus.
 
     Returns:
         The run's outcome: the disposition ledger, and the failure where one was
@@ -1424,14 +1554,19 @@ def run_ingestion(
     **A document whose preparation fails is `rolled_back`, not `not_reached`.**
     It was the document in flight when the run aborted, which is what FR-073's
     `rolled_back` means; the outcome is synthesized here because the writer
-    never saw it. Its cause is **not** recorded on the run record, and that is a
-    stated gap rather than an oversight: FR-056's five have no member for a
-    parse failure or a containment miss, `oversized_sentence` is reported by the
-    chunker as prose rather than as the page-and-unit pair the record must name,
-    and inventing a kind to fill the column would put a value outside the closed
-    set into the column whose whole content is that the set is closed. Such a
-    run reads as `in_flight` — one of `runs.RUN_STATES`' three, disclosed there
-    for exactly this — and exits 3 with the cause on stderr.
+    never saw it.
+
+    **One preparation failure is classified and the rest are not.** FR-014's
+    oversized sentence is one of FR-056's closed five, and `ChunkerError` now
+    carries the document, the page and the structural unit as attributes — so it
+    is routed through `oversized_sentence` and recorded on `ingestion_run` under
+    its kind. Every other preparation failure — a parse failure, a containment
+    miss — has **no member** among the five, and that remains a stated gap
+    rather than an oversight: inventing a kind to fill the column would put a
+    value outside the closed set into the column whose whole content is that the
+    set is closed. Such a run reads as `in_flight` — one of `runs.RUN_STATES`'
+    three, disclosed there for exactly this — and exits 3 with the cause on
+    stderr.
     """
     import psycopg
 
@@ -1476,16 +1611,23 @@ def run_ingestion(
     )
     pending = [plan for plan in plans if plan.reloads]
     in_flight: list[str] = []
+    # The report's chunking figures (items 8 and 9) range over what this run
+    # cut, and the generator that cuts it is consumed by the writer — so the
+    # chunkings are recorded as they pass rather than re-derived afterwards,
+    # which would chunk the corpus a second time to describe the first.
+    evidence = RunEvidence()
 
     def prepared_documents() -> Iterator[tuple[PreparedDocument, str]]:
         for plan in pending:
             in_flight.append(plan.document_id)
             prepared = prepare_document(by_id[plan.document_id])
             in_flight.pop()
+            evidence.record(prepared.record, prepared.chunking)
             yield prepared, plan.digest
 
     outcomes: list[DocumentOutcome] = []
     unclassified: str | None = None
+    preparation_failure: RunLevelFailure | None = None
     try:
         # An explicit loop rather than `list.extend`, so the outcomes yielded
         # before a preparation failure are kept by a statement rather than by
@@ -1503,7 +1645,23 @@ def run_ingestion(
     except (WriterError, ValueError) as error:
         # Preparation, which happens in the generator and therefore outside the
         # writer's own handler. The document is named as the one in flight.
+        #
+        # **One of these is classified and the rest are not** (FR-056). FR-014's
+        # oversized sentence is one of the closed five, and the chunker now
+        # carries the document, page and structural unit `oversized_sentence`
+        # requires as attributes rather than only inside its message — so the
+        # abort is recorded on `ingestion_run` under its kind instead of leaving
+        # the run reading `in_flight` forever with no `run_failure_kind` at all.
+        # A parse failure or a containment miss still has no member among the
+        # five and is still reported as `unclassified`, which is the stated gap
+        # this branch's docstring describes.
         unclassified = f"{type(error).__name__}: {error}"
+        if isinstance(error, ChunkerError) and error.is_oversized_sentence:
+            preparation_failure = oversized_sentence(
+                document_id=str(error.document_id),
+                page_number=int(error.page_number or 0),
+                structural_unit=str(error.structural_unit),
+            )
         if in_flight:
             outcomes.append(
                 DocumentOutcome(
@@ -1522,12 +1680,15 @@ def run_ingestion(
     detail = unclassified or next(
         (outcome.error for outcome in outcomes if not outcome.committed), None
     )
+    # Extraction's failure wins where both exist, which they cannot: the writer
+    # stops at the first failure, so a run reaches at most one abort.
+    failure = step.failure or preparation_failure
     try:
-        if step.failure is not None:
+        if failure is not None:
             # After `write_generations` has returned, on the autocommit
             # connection, in a transaction of its own (HINT-002, FR-056).
             # `record_run_failure` refuses anything else.
-            abort_run(connection, run_id, step.failure)
+            abort_run(connection, run_id, failure)
         elif detail is None:
             finish_run(connection, run_id)
     except (RunError, psycopg.Error) as error:
@@ -1539,16 +1700,113 @@ def run_ingestion(
         # one for a run that was refused before writing anything.
         detail = f"the run's own record was not closed: {type(error).__name__}: {error}"
 
+    # FR-071, and the twenty-two requirements whose publish obligation runs
+    # through it. **After the run record is closed**, so the report describes a
+    # resolved run rather than one still in flight, and so a failure here cannot
+    # cost the run its own account of itself. `publish_report` raises nothing: a
+    # section it cannot build becomes a named gap, and a run whose gaps are
+    # non-empty emits no report and says which items and why.
+    publication = publish_report(
+        connection,
+        run_id=str(run_id),
+        trace_id=identity.run_trace_id,
+        records=records,
+        layers=documents_by_layer(records),
+        exclusion=exclusion_section(run_id=str(run_id), scope=scope),
+        disposition_counts=ledger.counts,
+        enumerated=ledger.population,
+        evidence=evidence,
+        extractions=tuple(step.results),
+        attempted_fields=[term.name for term in fields],
+        policy=policy,
+        attempted_invocations=_attempted_invocations(scope, evidence),
+        attempted_extractions=_attempted_extractions(scope, evidence, fields, step.results),
+        aborted_at=_aborted_at(failure, detail),
+        root=report_root,
+    )
+
     return RunOutcome(
         run_id=run_id,
         ledger=ledger,
-        failure=step.failure,
+        failure=failure,
         detail=detail,
         values_written=sum(outcome.values_written for outcome in outcomes),
         failures_written=sum(outcome.failures_written for outcome in outcomes),
         chunks_written=sum(outcome.chunks_written for outcome in outcomes),
         extractions=tuple(step.results),
+        publication=publication,
     )
+
+
+def _chunks_by_document(evidence: RunEvidence) -> dict[str, int]:
+    """Chunk count per document this run chunked, for the two ledgers.
+
+    Taken from the chunkings the run actually cut rather than from the corpus,
+    because a document the run never reached issued no invocation and attempted
+    no field — counting it would put an expectation in the ledger against work
+    that was never begun, and the ledger would report a defect on every partial
+    run.
+    """
+    return {chunking.document_id: len(chunking.chunks) for _, chunking in evidence.chunkings}
+
+
+def _attempted_invocations(scope: ExtractionScope, evidence: RunEvidence) -> int:
+    """FR-070's `attempted` side, over the documents extraction reached.
+
+    `attempted_invocation_count` refuses an attempted document with no chunk
+    count, which is right for a complete run and wrong for a partial one: a
+    transmittal the run never reached has no chunk count because it was never
+    chunked. The scope is therefore narrowed to what was chunked, and the
+    reconciliation ranges over the run's own work rather than over a corpus it
+    did not finish.
+    """
+    counts = _chunks_by_document(evidence)
+    reached = ExtractionScope(
+        attempted=tuple(record for record in scope.attempted if record.document_id in counts),
+        excluded=scope.excluded,
+    )
+    if not reached.attempted:
+        return 0
+    return attempted_invocation_count(reached, counts)
+
+
+def _attempted_extractions(
+    scope: ExtractionScope,
+    evidence: RunEvidence,
+    fields: Sequence[FieldTerm],
+    results: Sequence[ExtractionStageResult],
+) -> int:
+    """FR-069's attempt total, derived from the corpus shape (`count_attempts`).
+
+    Derived here and **not** summed from the resolutions the stage enumerated,
+    which is what makes `AttemptLedger.unaccounted` a comparison of two
+    derivations rather than a restatement of one.
+    """
+    counts = _chunks_by_document(evidence)
+    reached = {
+        result.document_id: counts[result.document_id]
+        for result in results
+        if result.document_id in counts
+    }
+    if not reached or not fields:
+        return 0
+    del scope  # the partition is already reflected in which documents have results
+    return count_attempts(
+        chunks_by_document=reached,
+        attempted_fields=[term.name for term in fields],
+        absent_fields_by_document={
+            result.document_id: result.absent_fields
+            for result in results
+            if result.document_id in reached
+        },
+    )
+
+
+def _aborted_at(failure: RunLevelFailure | None, detail: str | None) -> str | None:
+    """What stopped the run, in one phrase, for the report driver's refusal."""
+    if failure is not None:
+        return f"{failure.kind} ({failure.document_id or 'no document in flight'})"
+    return detail
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1718,6 +1976,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"ingest: written chunks={outcome.chunks_written} values={outcome.values_written} "
         f"failures={outcome.failures_written} invocations={outcome.invocations}"
     )
+    if outcome.publication is not None:
+        # FR-071's outcome, emitted or refused, and never silence. A refusal
+        # names the items, what obliges each, and why each has no data — which is
+        # the difference between a report that was not written and a report
+        # nobody tried to write.
+        print(f"ingest: {outcome.publication.rendered()}")
     if outcome.failure is not None:
         print(
             f"ingest: aborted — {outcome.failure.kind}: {outcome.failure.recorded_detail}",

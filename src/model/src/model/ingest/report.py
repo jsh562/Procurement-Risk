@@ -82,6 +82,7 @@ __all__ = [
     "CHUNK_DEVIATION_CAUSES",
     "CHUNK_ESTIMATE_MAXIMUM",
     "CHUNK_ESTIMATE_MINIMUM",
+    "CORRECT_NEGATIVE_MEANING",
     "COUNTING_UNITS",
     "DECLARED_BASELINE_CRITERION",
     "DECLARED_BASELINE_LABEL",
@@ -100,6 +101,7 @@ __all__ = [
     "INVOCATION_UNIT",
     "LAYERS",
     "NEAR_DUPLICATE_CAUSES",
+    "NO_VOCABULARY_TERM_REASON",
     "PERCENTILE_POINTS",
     "PROBE_SET_ARTIFACT",
     "REPORT_CONTENTS",
@@ -176,6 +178,13 @@ COUNTING_UNITS: tuple[str, ...] = (ATTEMPT_UNIT, INVOCATION_UNIT, DOCUMENT_UNIT)
 #: FR-071: one artifact, at a fixed path, regenerated in full. Relative to the
 #: repository root, which is where the caller resolves it — this module writes
 #: no file, so nothing here depends on a working directory.
+#:
+#: **The caller is `model.ingest.publish`**, which assembles the twenty-one
+#: sections from a run's own data, resolves this path against the checkout, and
+#: writes it. Named here because the path was declared and never written for the
+#: whole of this epic's implementation: `build_report` had no production caller,
+#: so the module's "this module writes no file" was true of the repository as
+#: well as of the module.
 REPORT_PATH = Path("specs/00006-document-ingestion-and-extraction/ingestion-report.md")
 
 #: FR-072's three kinds, closed. A census carries a population and a count and
@@ -1054,13 +1063,19 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
             layer=layer,
         )
 
+    # Every label carries its layer. FR-053 publishes each of these figures three
+    # times — REAL, SYNTHETIC and pooled — and `results_manifest` is keyed on the
+    # label, so three figures sharing one label make a reproduction unable to say
+    # which of the three moved. It refuses the duplicate at construction, which
+    # is why nothing but a layer-qualified label lets this section into a
+    # manifest at all. Item 8 already qualified its own for the same reason.
     figures: list[Figure] = []
     for layer in LAYERS:
         measured = profile.by_layer[layer]
         percentiles = measured.percentiles
         figures.append(
             Figure(
-                label="Leaf length — median (p50)",
+                label=f"Leaf length — median (p50) — {layer}",
                 value=percentiles[50],
                 scope=scope(layer, "content word piece"),
                 note=(
@@ -1072,7 +1087,7 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
         for point in PERCENTILE_POINTS[1:]:
             figures.append(
                 Figure(
-                    label=f"Leaf length — p{point}",
+                    label=f"Leaf length — p{point} — {layer}",
                     value=percentiles[point],
                     scope=scope(layer, "content word piece"),
                     note="nearest rank, one-based, no interpolation",
@@ -1080,7 +1095,7 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
             )
         figures.append(
             Figure(
-                label="Leaf length — maximum",
+                label=f"Leaf length — maximum — {layer}",
                 value=max(measured.leaf_lengths),
                 scope=scope(layer, "content word piece"),
                 note="against the 254-piece content budget",
@@ -1088,7 +1103,7 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
         )
         figures.append(
             Figure(
-                label="Leaves requiring a sentence-level split",
+                label=f"Leaves requiring a sentence-level split — {layer}",
                 value=measured.leaves_split_into_sentences,
                 scope=scope(layer, "leaf unit"),
                 note="a leaf split into k chunks counts once",
@@ -1097,7 +1112,7 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
         for boundary_class in BOUNDARY_CLASSES:
             figures.append(
                 Figure(
-                    label=f"Chunks closed by a {boundary_class} boundary",
+                    label=f"Chunks closed by a {boundary_class} boundary — {layer}",
                     value=measured.boundary_class_counts[boundary_class],
                     scope=scope(layer, "chunk"),
                     note="a class holding no boundaries is published as a zero",
@@ -1105,7 +1120,7 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
             )
         figures.append(
             Figure(
-                label="Documents chunked at the page-terminal fallback",
+                label=f"Documents chunked at the page-terminal fallback — {layer}",
                 value=measured.page_terminal_documents,
                 scope=scope(layer, "document"),
                 note="a page with no structural marker; each document's count is below",
@@ -2536,8 +2551,8 @@ def failure_breakdown_section(*, run_id: str, counts: Mapping[str, int], attempt
     if total > attempts:
         raise ReportError(
             f"FR-069: {total} failures against {attempts} attempts. Every attempt resolves "
-            f"to exactly one stored value or one failure, so failures cannot exceed "
-            f"attempts — the ledger does not reconcile."
+            f"to exactly one stored value, one failure, or one correct negative, so "
+            f"failures cannot exceed attempts — the ledger does not reconcile."
         )
 
     labels = FigureScope(
@@ -2638,22 +2653,51 @@ class InvocationLedger:
         return self.repaired / self.total
 
 
+#: The third resolution FR-069 admits, in the words item 13 publishes it under.
+#: Held as a constant so the requirement's amendment, the ledger's field name and
+#: the report's prose are one sentence rather than three paraphrases.
+CORRECT_NEGATIVE_MEANING: str = (
+    "no value offered for a field not printed on that chunk. The model is invoked per "
+    "chunk over the whole declared field subset, so for a field printed on chunk 1 of 10 "
+    "the other nine chunks correctly return nothing — those nine attempts resolved, and "
+    "resolved correctly. They are not stored values and they are not failures, and "
+    "counting them as unaccounted for made the ledger unable to balance on any real run."
+)
+
+
 @dataclass(frozen=True)
 class AttemptLedger:
     """FR-069's ledger, at the **attempt** unit.
 
     An attempt is one field on one chunk, except a field absent from a whole
     document, which is one attempt for that document. Every attempt resolves to
-    exactly one stored value or one failure record, with zero unaccounted for —
-    which is what `unaccounted` measures rather than assumes.
+    exactly one stored value, one failure record, **or one correct negative**,
+    with zero unaccounted for.
+
+    **The third resolution is an amendment to FR-069 dated 2026-07-28, not a
+    loosening of it.** The binary the requirement first stated could not balance
+    on any real run and the arithmetic says why: the model is invoked per chunk
+    over the whole field subset, so a field printed on one chunk of ten is
+    correctly absent from the other nine, and those nine attempts had no
+    admissible resolution. `unaccounted` was therefore large and non-zero
+    whenever anything was extracted at all — a ledger reporting a defect on
+    every correct run reports nothing. `unaccounted` is still computed and still
+    published, and it is still signed: what changed is that a **genuine**
+    imbalance is now the only thing it can show.
+
+    `stored` and `failed` are counted in **attempt units, not in rows**. A chunk
+    printing one field for two line items stores two values against one attempt;
+    counting rows would put more resolutions in the ledger than there were
+    attempts, under a column whose header says `attempt`.
     """
 
     attempted: int
     stored: int
     failed: int
+    correct_negatives: int = 0
 
     def __post_init__(self) -> None:
-        if min(self.attempted, self.stored, self.failed) < 0:
+        if min(self.attempted, self.stored, self.failed, self.correct_negatives) < 0:
             raise ReportError("FR-069: attempt counts are non-negative")
         if self.attempted <= 0:
             raise ReportError(
@@ -2664,15 +2708,15 @@ class AttemptLedger:
 
     @property
     def resolved(self) -> int:
-        return self.stored + self.failed
+        return self.stored + self.failed + self.correct_negatives
 
     @property
     def unaccounted(self) -> int:
-        """Attempts that resolved to neither a stored value nor a failure.
+        """Attempts that resolved to none of the three.
 
         Signed deliberately: a negative value means more resolutions than
-        attempts, which is a different defect from a lost attempt and would be
-        hidden by an absolute difference.
+        attempts — one attempt unit resolved twice — which is a different defect
+        from a lost attempt and would be hidden by an absolute difference.
         """
         return self.attempted - self.resolved
 
@@ -2746,14 +2790,19 @@ def attempt_ledger_section(
         f"| failed | {invocations.failed} | invocation |\n"
         f"| **total** | {invocations.total} | invocation |\n"
         f"| repaired rate | {invocations.repaired_rate:.4f} | proportion of invocations |\n\n"
-        f"**Attempt-level** (FR-069). Every attempt resolves to exactly one stored value or "
-        f"one failure record, with zero unaccounted for. The unaccounted count is published "
-        f"whether or not it is zero: a ledger that printed only its verdict would be a "
-        f"claim about itself.\n\n"
+        f"**Attempt-level** (FR-069, amended 2026-07-28). Every attempt resolves to exactly "
+        f"one stored value, one failure record, **or one correct negative**, with zero "
+        f"unaccounted for. The unaccounted count is published whether or not it is zero: a "
+        f"ledger that printed only its verdict would be a claim about itself.\n\n"
+        f"**A correct negative is {CORRECT_NEGATIVE_MEANING}**\n\n"
+        f"The counts below are **attempt units, not rows**. A chunk printing one field for "
+        f"two line items stores two values against one attempt, and a table headed `attempt` "
+        f"that counted rows would show more resolutions than there were attempts.\n\n"
         f"| Term | Count | Unit |\n|---|---|---|\n"
         f"| attempted | {attempts.attempted} | attempt |\n"
         f"| resolved to a stored value | {attempts.stored} | attempt |\n"
         f"| resolved to a failure record | {attempts.failed} | attempt |\n"
+        f"| resolved to a correct negative | {attempts.correct_negatives} | attempt |\n"
         f"| **unaccounted for** | {attempts.unaccounted} | attempt |\n"
     )
 
@@ -2802,6 +2851,12 @@ def attempt_ledger_section(
                 scope=attempt_labels,
             ),
             Figure(
+                label="Attempts resolved to a correct negative",
+                value=attempts.correct_negatives,
+                scope=attempt_labels,
+                note="no value offered for a field not printed on that chunk (FR-069, amended)",
+            ),
+            Figure(
                 label="Attempts unaccounted for",
                 value=attempts.unaccounted,
                 scope=attempt_labels,
@@ -2810,7 +2865,10 @@ def attempt_ledger_section(
         ),
         total_checks=(
             TotalCheck(
-                name="Every attempt resolves to exactly one stored value or one failure",
+                name=(
+                    "Every attempt resolves to exactly one stored value, one failure, or "
+                    "one correct negative"
+                ),
                 population="every field extraction this run attempted",
                 count=attempts.attempted,
                 scope=attempt_labels,
@@ -2838,10 +2896,25 @@ RETIRED_AT_RUN_TIME_REASON: str = (
 )
 
 
+#: The reason a printed field has no vocabulary term at all (FR-058). The
+#: strongest form of "outside the subset" available: the schema has no name to
+#: store it under, so it is not a term the declaration omitted but a field
+#: `field_vocabulary` never had.
+NO_VOCABULARY_TERM_REASON: str = (
+    "printed by the generator, and `field_vocabulary` has no term to store it under — so it "
+    "is outside the declared subset in the strongest sense available, not omitted from it. "
+    "Rightly absent from recall's denominator (FR-060), because a field nothing can be "
+    "stored for would denominate recall on a population extraction could not reach; "
+    "published here because FR-058 requires a printed field outside the subset published "
+    "as unattempted-but-printed rather than absorbed"
+)
+
+
 def unattempted_fields_section(
     *,
     run_id: str,
     printed_counts: Mapping[str, int],
+    printed_without_term: Mapping[str, int],
     attempted_fields: Sequence[str],
 ) -> Section:
     """Item 14: how many printed fields nobody attempted, and which (FR-058).
@@ -2854,6 +2927,14 @@ def unattempted_fields_section(
             printed, which is also FR-060's recall denominator. Counted per
             printed field and not per distinct term: a transmittal listing five
             items prints `manufacturer` five times.
+        printed_without_term: printed fields per generator key that has **no**
+            vocabulary term, from `reference.ReferenceSet.printed_without_term`.
+            A separate argument rather than merged into `printed_counts`, and
+            **required** rather than defaulted, because this is the population
+            item 14 exists for and the version of this function that could not
+            see it reported zero unattempted-but-printed fields on a corpus
+            printing 170 of them. A default of `{}` would restore
+            exactly that silence for any caller that forgot.
         attempted_fields: the subset this run attempted, in declared order
             (FR-024, FR-058). The run's own, not the committed declaration: a
             run whose vocabulary was narrowed by a retirement attempted fewer
@@ -2908,8 +2989,13 @@ def unattempted_fields_section(
             "empty population fails rather than passes."
         )
 
+    termless = {key: int(count) for key, count in sorted(printed_without_term.items())}
+    if any(count < 0 for count in termless.values()):
+        raise ReportError("FR-058: a printed-field count is negative")
+    termless_fields = sum(termless.values())
+
     unattempted = {term: count for term, count in sorted(printed.items()) if term not in attempted}
-    unattempted_fields = sum(unattempted.values())
+    unattempted_fields = sum(unattempted.values()) + termless_fields
     # Three reasons a printed term went unattempted, and only the third is a
     # defect. A term the *declaration* excluded carries the exclusion's own
     # stated reason; a term the declaration includes but this run did not
@@ -2925,9 +3011,9 @@ def unattempted_fields_section(
     }
     unexplained = sorted(term for term, reason in explained.items() if reason is None)
 
-    if not unattempted:
+    if not unattempted and not termless:
         detail = (
-            "**Every term the generator recorded as printed was attempted.** The declared "
+            "**Every field the generator recorded as printed was attempted.** The declared "
             "subset covers the printed vocabulary for this corpus, which is what FR-058's "
             "'no printed field goes unattempted by construction' claims — published as an "
             "enumerated zero rather than left as an absent table, because a zero nobody "
@@ -2935,20 +3021,24 @@ def unattempted_fields_section(
         )
     else:
         rows = [
-            "| Term | Printed fields | Recorded reason it was not attempted |",
+            "| Printed field | Printed fields | Recorded reason it was not attempted |",
             "|---|---|---|",
             *(
                 f"| `{term}` | {unattempted[term]} | "
                 f"{explained[term] or '**none recorded — see below**'} |"
                 for term in sorted(unattempted)
             ),
+            *(
+                f"| `{key}` (no vocabulary term) | {termless[key]} | {NO_VOCABULARY_TERM_REASON} |"
+                for key in sorted(termless)
+            ),
         ]
         detail = (
             f"**{unattempted_fields} printed field(s) across "
-            f"{len(unattempted)} vocabulary term(s) were printed and not attempted.** They "
-            f"are published here as a count rather than absorbed into the miss total, "
-            f"where they would read as the extractor failing to find something nobody "
-            f"looked for.\n\n" + "\n".join(rows)
+            f"{len(unattempted) + len(termless)} printed field name(s) were printed and not "
+            f"attempted.** They are published here as a count rather than absorbed into the "
+            f"miss total, where they would read as the extractor failing to find something "
+            f"nobody looked for.\n\n" + "\n".join(rows)
         )
         if unexplained:
             detail += (
@@ -2966,10 +3056,21 @@ def unattempted_fields_section(
         + ", ".join(f"`{term}`" for term in attempted)
         + ".\n\nThe attempted subset is declared before any extraction runs, so it is "
         "capable of being wrong; this item is where a mistake in it surfaces.\n\n"
+        "**Two populations are unattempted-but-printed and both are published here.** A "
+        "*vocabulary term* the run did not attempt — excluded by the declaration, or "
+        "retired at run time — and a *printed field with no vocabulary term at all*, which "
+        "is the stronger case: the generator prints the contract number, project "
+        "identifier, vendor name, descriptor code, approving authority, revision suffix and "
+        "date received on the transmittal, and `field_vocabulary` has no name for any of "
+        "them. Both are outside the subset, so FR-058 puts both here. Only the first can "
+        "ever appear in recall's denominator (FR-060), and the second is excluded from it "
+        "for the reason stated in its rows — excluding them from *this item* as well was "
+        "the defect, because it made an escape hatch report zero on a corpus that prints "
+        "seven such fields on nearly every document.\n\n"
         f"{detail}\n\n"
         "The counting unit is the **printed field** — one label-and-value the generator "
-        "recorded on a document — not the distinct term, because a transmittal listing "
-        "five items prints `manufacturer` five times and a count of terms would report "
+        "recorded on a document — not the distinct name, because a transmittal listing "
+        "five items prints `manufacturer` five times and a count of names would report "
         "that as one."
     )
 
@@ -3003,17 +3104,42 @@ def unattempted_fields_section(
                 note=f"{len(unexplained)} of them carry no recorded reason",
             ),
             Figure(
-                label="Printed fields the generator recorded",
-                value=printed_total,
+                label="Printed fields with no vocabulary term",
+                value=termless_fields,
                 scope=labels,
-                note="the denominator, from the verified reference set (FR-067)",
+                note=(
+                    f"{len(termless)} printed field name(s); outside recall's denominator "
+                    f"(FR-060) and inside this item (FR-058)"
+                ),
+            ),
+            Figure(
+                label="Printed field names with no vocabulary term",
+                value=len(termless),
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="run-scoped",
+                    kind="census",
+                    unit="printed field name",
+                    layer="SYNTHETIC",
+                ),
+                note="the generator prints these and the schema can store none of them",
+            ),
+            Figure(
+                label="Printed fields the generator recorded",
+                value=printed_total + termless_fields,
+                scope=labels,
+                note=(
+                    f"the population, from the verified reference set (FR-067); "
+                    f"{printed_total} of them have a vocabulary term, which is recall's "
+                    f"denominator"
+                ),
             ),
         ),
         total_checks=(
             TotalCheck(
                 name="Every printed field is either attempted or published as unattempted",
                 population="every field the generator recorded as printed on the synthetic layer",
-                count=printed_total,
+                count=printed_total + termless_fields,
                 scope=labels,
                 outcome="held" if not unexplained else "FAILED — see the declaration defect above",
             ),

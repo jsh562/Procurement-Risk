@@ -213,6 +213,47 @@ which is what `not_reached` means and why the two dispositions are separate.
 
 ---
 
+## Phase 8: The Publish Layer, Found During Quality Control
+
+**The same defect shape, a third time.** T093 found `extract_fields` with no
+production caller and T097 found the pipeline with none; QC found the whole
+**publish** layer with none. `report.py` is 3,977 lines behind twenty-one section
+builders, `build_report` had no caller outside tests, `REPORT_PATH` was declared
+and never written — the module says so itself, "this module writes no file" —
+`results_manifest` had zero call sites, and `cli.main` ended at four `print`
+statements. Twenty-two requirements' publish obligations were therefore unmet
+while every component that would have met them was complete and green.
+
+- [X] T098 {FR-071,FR-072,FR-074} Assemble all twenty-one report items from the run's own data, emit the report and the results manifest, and publish a named refusal naming every item with no data — in src/model/src/model/ingest/publish.py, called from run_ingestion after:T097 → exports: publish_report, PublicationOutcome, RunEvidence
+- [X] T099 {FR-050,FR-060,FR-067} Score the model path and the baseline against the verified reference set in production rather than only inside a test — in src/model/src/model/ingest/quality.py after:T098 → exports: score_against_reference, baseline_values
+- [X] T100 {FR-056,FR-014,FR-042} Carry FR-014's document, page and structural unit as attributes on ChunkerError and route every run-level abort through the constructor for its kind — in ingest/chunker.py, ingest/cli.py and llm/extraction.py after:T097
+- [X] T101 {FR-069} Add FR-069's third resolution — the correct negative — enumerate the three over attempt units in the extraction stage, and pair count_attempts with a real ExtractionStageResult in a test — in ingest/extract.py and ingest/report.py after:T098
+- [X] T102 {FR-058} Publish the printed fields with no vocabulary term as unattempted-but-printed, keeping them out of recall's denominator — in ingest/reference.py and ingest/report.py after:T098
+- [X] T103 {FR-029,FR-057} Narrow the page-split contributor rule to the adjacent chunk whose last line carries the label — in src/model/src/model/ingest/extract.py after:T093
+
+**Measured, from a clean database at `19dffc1` plus these six**: the full
+`ingest --mode replay` run reports `ingested=26 skipped_unchanged=0
+rolled_back=1 not_reached=24 enumerated=51`, 6,391 chunks committed,
+`fixture_missing` recorded through its own constructor naming
+`prj-001-t0001-r0` and the resolution key, exit code 3 — and, new, the report
+driver's named refusal: **16 of the 21 items built, 5 with no data** (items 6,
+7, 10, 12, 13), each named with what obliges it and the builder's own reason.
+No file is written, which is FR-071's rule, and the refusal is printed rather
+than left as silence, which is the defect QC found. A complete two-document run
+— one specification, one transmittal, a substituted invoker — emits all
+twenty-one items and the results manifest, asserted in
+`src/model/tests/schema/test_pipeline.py`.
+
+**Two spec amendments were required and are recorded in `spec.md` in place.**
+FR-069 and its two success criteria (SC-008, SC-054) stated a two-resolution
+identity that cannot balance on any run that extracts anything; FR-058's
+"twenty-two vocabulary terms, ten of which cannot appear on a transmittal"
+inverted the count — twelve cannot — and its escape hatch excluded the seven
+printed fields with no vocabulary term, which are the population it most needs
+to reach.
+
+---
+
 ## Blocked Work
 
 - **T081 — extraction fixtures.** The re-record trigger is documented in
@@ -255,7 +296,13 @@ which is what `not_reached` means and why the two dispositions are separate.
   list; those four are now `[X]` and all 21 items have builders —
   `src/model/tests/ingest/test_report_items.py` renders a complete
   twenty-one-item set from real builders with no placeholders — so **T081 is the
-  only remaining blocker**.
+  only remaining blocker**. **T098 removed the third blocker, which nobody had
+  named**: until it landed nothing called `build_report` in production at all, so
+  even a fixture-complete run would have emitted no report. The full-corpus
+  `replay` run now assembles 16 of the 21 items from real data and publishes a
+  named refusal for the 5 that need extracted values; a complete run over a
+  two-document corpus emits all 21 and the results manifest, which is the
+  assertion that the remaining blocker is the fixtures and nothing else.
 
 ---
 
@@ -311,7 +358,8 @@ Setup → Foundational → Delivery Work Items (US1 → US2 → US3 → US4 → 
 - **Mandatory red-green pairs** (`plan.md` §The test-first boundary): T044 before T045, T049 before T050, T056 before T057. Each test task is complete only when its suite has been run against the absent module and **observed to fail** — a collection error for the missing module, recorded on the task line. A test task marked complete beside a passing suite is the defect the condition exists to name. Neither member of a pair is ever `[P]`. T058 consumes T057's weights and sits directly after it in Phase 5, so sequential `T###` ordering within the phase carries that edge and leaves T058's single `after:` free for the cross-phase gate `after:T009` — the same construction T031 uses.
 - **Write order is a task, not a convention**: T075 implements `data-model.md` §Write Order steps 0a–7 exactly — mark, capture identifier sets, leaf-up removal, generation row, chunks, values, contributing chunks, failures, run associations, then the line-item and parse-signal rows. T066, T059, T070, and T072 attach to named steps in it and must not reorder them.
 - **The three operator procedures are deliverables**: T082 (whole-document correction, FR-041), T083 (index drop and rebuild, FR-064), T084 (promotion with removal, FR-055 / ADR-0020). None is reachable from the ingestion job, which is why each needs a runbook rather than code.
-- **Declared edges**: T009→T001, T023→T021, T030→T029, T031→T013, T032→T031, T034→T032, T046→T032, T047→T012, T051→T008, T055→T040, T058→T009, T059→T012, T060→T057, T069→T009, T070→T011, T075→T070, T079→T054, T085→T013, T090→T005, T091→T051, T092→T040. There is no `T031→T029` edge: it was dropped when T031 was redirected to `after:T013`, and within-phase ordering carries T029 before T031 as the bullet above explains.
+- **Declared edges**: T009→T001, T023→T021, T030→T029, T031→T013, T032→T031, T034→T032, T046→T032, T047→T012, T051→T008, T055→T040, T058→T009, T059→T012, T060→T057, T069→T009, T070→T011, T075→T070, T079→T054, T085→T013, T090→T005, T091→T051, T092→T040, T093→T087, T094→T087, T095→T093, T096→T087, T097→T093, T098→T097, T099→T098, T100→T097, T101→T098, T102→T098, T103→T093. There is no `T031→T029` edge: it was dropped when T031 was redirected to `after:T013`, and within-phase ordering carries T029 before T031 as the bullet above explains.
+- **The publish layer runs last within a run and its tasks sit last in the graph.** T098 is `after:T097` because a report of a run's own data cannot precede the run; T099, T101 and T102 are `after:T098` because each supplies a section that driver assembles. T100 and T103 are independent of the driver — they are the run-level failure classification and the page-split contributor rule — and carry edges to the tasks whose code they change.
 - **Symbol-import edges gate execution exactly as `after:` does.** T023←T021, T030←T029, T053←T050, T060←T057 carry a `← T###:Symbol` edge; a consumer reading only `after:` under-constrains them, and both forms must be honoured.
 - **P1 boundary**: Phases 1–5 (T001–T065, plus T092 at the tail of US2) are the viable deliverable — all 51 documents chunked, embedded, and citable, the 25 transmittals extracted with page citations and computed confidences, and untrustworthy values recorded as failures. Phases 6–9 are omittable without breaking any P1 criterion.
 - Tasks marked `[P]` can run in parallel within their phase — they touch distinct files and carry no `after:T###` or `← T###:` edge to another task in the same batch.

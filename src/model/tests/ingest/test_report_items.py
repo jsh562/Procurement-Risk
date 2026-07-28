@@ -26,6 +26,7 @@ missing item.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -74,6 +75,7 @@ from model.ingest.report import (
     recognition_error_section,
     reconciliation_section,
     reproduction_section,
+    results_manifest,
     scope_labels_section,
     tally_confidence,
     total_checks_section,
@@ -239,18 +241,77 @@ PRINTED_COUNTS = {
     "approval_date": 21,
 }
 
+#: The seven generator keys the transmittal prints that `field_vocabulary` has
+#: no term for, with the counts the committed corpus actually carries. Real, not
+#: invented: `test_baseline_and_reference.py` asserts these exact seven and this
+#: total against the verified reference set. The counts fall short of 25 where
+#: `MISSING_OR_BLANK_FIELD` blanked the field, since a blanked field is not a
+#: printed one.
+PRINTED_WITHOUT_TERM = {
+    "approving_authority": 25,
+    "contract_number": 23,
+    "date_received": 25,
+    "descriptor_code": 25,
+    "project_identifier": 23,
+    "revision_suffix": 25,
+    "vendor_name": 24,
+}
+PRINTED_WITHOUT_TERM_TOTAL = 170
+
 
 def test_a_corpus_whose_printed_fields_were_all_attempted_publishes_an_enumerated_zero() -> None:
     """FR-058's construction claim, published rather than left as an absent table."""
     section = unattempted_fields_section(
-        run_id=RUN_ID, printed_counts=PRINTED_COUNTS, attempted_fields=ATTEMPTED_FIELDS
+        run_id=RUN_ID,
+        printed_counts=PRINTED_COUNTS,
+        printed_without_term={},
+        attempted_fields=ATTEMPTED_FIELDS,
     )
     assert section.item == 14
     labels = {figure.label: figure.value for figure in section.figures}
     assert labels["Printed fields not attempted"] == 0
     assert labels["Vocabulary terms printed and not attempted"] == 0
+    assert labels["Printed fields with no vocabulary term"] == 0
     assert labels["Printed fields the generator recorded"] == sum(PRINTED_COUNTS.values())
-    assert "Every term the generator recorded as printed was attempted" in section.body
+    assert "Every field the generator recorded as printed was attempted" in section.body
+    assert section.total_checks[0].outcome == "held"
+
+
+def test_a_printed_field_with_no_vocabulary_term_is_published_rather_than_absorbed() -> None:
+    """FR-058's escape hatch reaching the population it exists for.
+
+    The generator prints seven fields on every transmittal — the contract
+    number, project identifier, vendor name, descriptor code, approving
+    authority, revision suffix and date received — that `field_vocabulary` has
+    no term for at all. They are "printed fields falling outside the subset" in
+    the strongest sense available, and the section could not see them: the
+    reference set filtered them out before `printed_counts` was built, so item
+    14 reported zero unattempted-but-printed fields on a corpus with 170 of
+    them.
+
+    Excluding them from **recall's denominator** is correct and is unchanged —
+    nothing can be stored for a field the schema cannot name. Excluding them
+    from **this item** was the defect.
+    """
+    section = unattempted_fields_section(
+        run_id=RUN_ID,
+        printed_counts=PRINTED_COUNTS,
+        printed_without_term=PRINTED_WITHOUT_TERM,
+        attempted_fields=ATTEMPTED_FIELDS,
+    )
+    labels = {figure.label: figure.value for figure in section.figures}
+    assert labels["Printed fields with no vocabulary term"] == PRINTED_WITHOUT_TERM_TOTAL
+    assert labels["Printed field names with no vocabulary term"] == 7
+    assert labels["Printed fields not attempted"] == PRINTED_WITHOUT_TERM_TOTAL
+    # Recall's denominator is untouched: the population grows, the terms with a
+    # vocabulary entry do not.
+    assert labels["Printed fields the generator recorded"] == (
+        sum(PRINTED_COUNTS.values()) + PRINTED_WITHOUT_TERM_TOTAL
+    )
+    for key in PRINTED_WITHOUT_TERM:
+        assert f"`{key}` (no vocabulary term)" in section.body
+    # Explained — the schema has no term — so this is not a declaration defect.
+    assert "Defect in the declaration" not in section.body
     assert section.total_checks[0].outcome == "held"
 
 
@@ -263,7 +324,10 @@ def test_a_printed_term_outside_the_subset_is_counted_with_its_recorded_reason()
     """
     printed = dict(PRINTED_COUNTS) | {"unit_price": 117}
     section = unattempted_fields_section(
-        run_id=RUN_ID, printed_counts=printed, attempted_fields=ATTEMPTED_FIELDS
+        run_id=RUN_ID,
+        printed_counts=printed,
+        printed_without_term={},
+        attempted_fields=ATTEMPTED_FIELDS,
     )
     labels = {figure.label: figure.value for figure in section.figures}
     assert labels["Printed fields not attempted"] == 117
@@ -285,7 +349,10 @@ def test_a_printed_term_with_no_recorded_reason_is_published_as_a_declaration_de
     """
     printed = dict(PRINTED_COUNTS) | {"delivery_ticket_number": 4}
     section = unattempted_fields_section(
-        run_id=RUN_ID, printed_counts=printed, attempted_fields=ATTEMPTED_FIELDS
+        run_id=RUN_ID,
+        printed_counts=printed,
+        printed_without_term={},
+        attempted_fields=ATTEMPTED_FIELDS,
     )
     assert "Defect in the declaration" in section.body
     assert "`delivery_ticket_number`" in section.body
@@ -305,7 +372,10 @@ def test_a_run_narrowed_by_a_retirement_reports_the_terms_it_did_not_attempt() -
     """
     narrowed = tuple(name for name in ATTEMPTED_FIELDS if name != "approval_date")
     section = unattempted_fields_section(
-        run_id=RUN_ID, printed_counts=PRINTED_COUNTS, attempted_fields=narrowed
+        run_id=RUN_ID,
+        printed_counts=PRINTED_COUNTS,
+        printed_without_term={},
+        attempted_fields=narrowed,
     )
     labels = {figure.label: figure.value for figure in section.figures}
     assert labels["Printed fields not attempted"] == PRINTED_COUNTS["approval_date"]
@@ -317,11 +387,17 @@ def test_a_run_narrowed_by_a_retirement_reports_the_terms_it_did_not_attempt() -
 def test_an_empty_attempted_subset_or_an_empty_printed_population_is_refused() -> None:
     with pytest.raises(ReportError, match="FR-058"):
         unattempted_fields_section(
-            run_id=RUN_ID, printed_counts=PRINTED_COUNTS, attempted_fields=()
+            run_id=RUN_ID,
+            printed_counts=PRINTED_COUNTS,
+            printed_without_term={},
+            attempted_fields=(),
         )
     with pytest.raises(ReportError, match="FR-058"):
         unattempted_fields_section(
-            run_id=RUN_ID, printed_counts={}, attempted_fields=ATTEMPTED_FIELDS
+            run_id=RUN_ID,
+            printed_counts={},
+            printed_without_term={},
+            attempted_fields=ATTEMPTED_FIELDS,
         )
 
 
@@ -569,7 +645,10 @@ def every_section(profile, measurement: ParityMeasurement):
             attempts=AttemptLedger(attempted=480, stored=430, failed=50),
         ),
         unattempted_fields_section(
-            run_id=RUN_ID, printed_counts=PRINTED_COUNTS, attempted_fields=ATTEMPTED_FIELDS
+            run_id=RUN_ID,
+            printed_counts=PRINTED_COUNTS,
+            printed_without_term=PRINTED_WITHOUT_TERM,
+            attempted_fields=ATTEMPTED_FIELDS,
         ),
         reconciliation_section(run_id=RUN_ID, trace_id=TRACE_ID, attempted=48, recorded=48),
         disposition_section(
@@ -607,6 +686,27 @@ def test_build_report_no_longer_refuses_on_a_missing_item() -> None:
     assert "## 8. Chunk counts, total and per layer" in rendered
     assert "## 14. Count of fields printed but not attempted" in rendered
     assert "## 21. Encoder parity bounds declared before the comparison" in rendered
+
+
+def test_the_complete_report_yields_a_results_manifest_with_no_duplicate_label() -> None:
+    """FR-074's artifact, from the same sections the report renders.
+
+    `results_manifest` is keyed on the figure label and refuses a duplicate, so
+    a report whose sections publish one label twice cannot produce a manifest at
+    all — the reproduction gate would have nothing to compare against, and a
+    comparison keyed on a label naming two numbers could not say which moved.
+    Item 9 published each of its figures three times under one label, once per
+    layer, so no complete report could ever be manifested; the labels now carry
+    their layer, as item 8's already did.
+    """
+    sections = every_section(profile_with(real=4_000, synthetic=2_466), measurement_from_artifact())
+    payload = json.loads(results_manifest(sections, run_id=RUN_ID))
+    labels = [figure["label"] for figure in payload["figures"]]
+    assert labels == sorted(labels)
+    assert len(labels) == len(set(labels))
+    assert payload["run_id"] == RUN_ID
+    for figure in payload["figures"]:
+        assert figure["tolerance"] and figure["unit"] and figure["layer"]
 
 
 def test_the_complete_report_carries_every_new_items_figures_with_their_labels() -> None:

@@ -171,6 +171,30 @@ class ExtractionStageResult:
     `ingest/cli.py` feeds `count_attempts`, where a field printed nowhere in the
     document collapses from one attempt per chunk to one attempt for the
     document.
+
+    **`attempts_stored`, `attempts_failed` and `correct_negatives` are the
+    attempt-level ledger, enumerated over attempt units rather than counted in
+    rows** (FR-069, amended 2026-07-28). An attempt unit is one field on one
+    chunk, except a field the document printed nowhere, which is one unit for
+    the document. `attempts_stored` is therefore **not** `len(values)`: a chunk
+    printing `manufacturer` for two line items stores two values against one
+    attempt, and a ledger denominated in attempts that counted rows would report
+    more resolutions than there were attempts. The unit is on the figure, so the
+    count has to be in it.
+
+    `correct_negatives` is the third resolution the amendment adds. The model is
+    invoked per chunk over the whole field subset, so for a field printed on
+    chunk 1 of 10 the other nine chunks correctly return nothing — those nine
+    attempts resolved, and resolved correctly, to no value offered for a field
+    not printed there. They are neither stored values nor failures, and before
+    the amendment they were the whole of the ledger's `unaccounted`.
+
+    **`rejected_signals` is the half of FR-033's distribution that has no rows.**
+    A value the floor rejected is recorded as a failure with outcome
+    `confidence_below_threshold` and its score is never stored, so a
+    distribution built by querying `extracted_value` would silently be the
+    stored half only and would report that the floor rejected nothing. The
+    signals are carried on the result because this is the only place they exist.
     """
 
     document_id: str
@@ -181,6 +205,10 @@ class ExtractionStageResult:
     invocations_repaired: int
     invocations_failed: int
     absent_fields: tuple[str, ...]
+    attempts_stored: int = 0
+    attempts_failed: int = 0
+    correct_negatives: int = 0
+    rejected_signals: tuple[ParseSignals, ...] = ()
 
     @property
     def invocations(self) -> int:
@@ -223,34 +251,50 @@ def _label_chunk(printed_label: str, anchor: Chunk, chunks: Sequence[Chunk]) -> 
         chunks: the document's chunks, in ordinal order.
 
     Returns:
-        The nearest preceding chunk on a **strictly earlier page** whose text
-        carries the label, or `None` — which is the ordinary case, since most
-        values are printed with their label in one chunk.
+        The chunk **immediately preceding** the anchor, when it lies on a
+        strictly earlier page and its **last line** carries the label — or
+        `None`, which is the ordinary case, since most values are printed with
+        their label in one chunk.
 
     **Derived from the chunk text and from nothing else.** The page-split shape
     is a label ending page *k* and its value opening page *k+1*, so the evidence
-    is that the anchor chunk does not carry the label and an earlier page's
-    chunk does. No template, no pre-render model and no answer key is consulted;
-    the model is not asked either, because it is never asked for a page.
+    is that the anchor chunk does not carry the label and the chunk that ran off
+    the previous page ends with it. No template, no pre-render model and no
+    answer key is consulted; the model is not asked either, because it is never
+    asked for a page.
 
-    **Strictly earlier page, nearest first.** `ValueCitation` refuses a
-    contributor on a page after the anchor's, so the earlier-page condition is
-    the constraint restated where the candidate is chosen rather than left to
-    fail at construction. Nearest-first bounds a common label word to the chunk
-    that actually preceded the value.
+    **Adjacent, and on the label's own last line — both conditions, because
+    neither alone is safe.** An earlier version accepted the nearest preceding
+    chunk on *any* strictly earlier page whose text contained the label
+    anywhere. On a multi-item transmittal that is wrong in a way nothing
+    downstream can see: `Manufacturer` printed for item 1 on page 1 would attach
+    to item 3's value on page 2, and the value would be published with
+    `multi_chunk` provenance, a contributing-chunk row pointing at another
+    item's label, and FR-057's 0.10 page-split deduction taken for a page split
+    that did not happen. The two conditions together are the printed shape
+    itself: a label whose value did not fit on its page is the *last* thing on
+    that page, and the value is the *first* thing on the next — so the two
+    chunks are adjacent in ordinal order, which is what makes them plausibly one
+    item's field rather than two items' coincidence.
+
+    **Strictly earlier page.** `ValueCitation` refuses a contributor on a page
+    after the anchor's, so the condition is the constraint restated where the
+    candidate is chosen rather than left to fail at construction. It also rules
+    out the same-page label, which is not a page split at all.
     """
     folded_label = fold_label(printed_label)
     if not folded_label or folded_label in fold_label(anchor.body_text):
         return None
-    preceding = [
-        chunk
-        for chunk in chunks
-        if chunk.ordinal < anchor.ordinal and chunk.page_number < anchor.page_number
-    ]
-    for chunk in sorted(preceding, key=lambda entry: entry.ordinal, reverse=True):
-        if folded_label in fold_label(chunk.body_text):
-            return CitedChunk(ordinal=chunk.ordinal, page_number=chunk.page_number)
-    return None
+    preceding = next(
+        (chunk for chunk in chunks if chunk.ordinal == anchor.ordinal - 1),
+        None,
+    )
+    if preceding is None or preceding.page_number >= anchor.page_number:
+        return None
+    lines = preceding.body_text.splitlines() or [preceding.body_text]
+    if folded_label not in fold_label(lines[-1]):
+        return None
+    return CitedChunk(ordinal=preceding.ordinal, page_number=preceding.page_number)
 
 
 @dataclass(frozen=True)
@@ -312,7 +356,7 @@ def _values_from_outcome(
     terms: Mapping[str, FieldTerm],
     fields: Sequence[FieldTerm],
     policy: ConfidencePolicy,
-) -> tuple[tuple[_Candidate, ...], tuple[ExtractionFailure, ...]]:
+) -> tuple[tuple[_Candidate, ...], tuple[ExtractionFailure, ...], tuple[ParseSignals, ...]]:
     """Coerce, cite and score everything one invocation returned.
 
     Every returned value leaves here as exactly one of two things: a candidate
@@ -320,10 +364,16 @@ def _values_from_outcome(
     dropped — a value that vanished between the model and the database would be
     an attempt with no resolution, and nothing downstream could tell it from a
     field the document never printed.
+
+    The third return is the signals of the scores the **floor rejected**. They
+    are FR-033's rejected half and they have no rows anywhere: the failure row a
+    rejection produces carries no confidence and no signals, by design, so a
+    distribution built from the database would report that nothing was rejected.
     """
     accepted, refused = bound_field_names((entry.field_name for entry in outcome.values), fields)
     candidates: list[_Candidate] = []
     failures: list[ExtractionFailure] = []
+    rejected: list[ParseSignals] = []
 
     for name in refused:
         # FR-024: a name outside the run's attempted subset is a per-field
@@ -343,7 +393,7 @@ def _values_from_outcome(
             )
         )
     if not accepted:
-        return (), tuple(failures)
+        return (), tuple(failures), ()
 
     admissible = set(accepted)
     for entry in outcome.values:
@@ -377,7 +427,9 @@ def _values_from_outcome(
         if not policy.admits(confidence):
             # FR-032: recorded absent rather than stored wrong. The failure row
             # carries no value and no confidence — `ExtractionFailure` has no
-            # field for either — so the score below is named in prose only.
+            # field for either — so the score below is named in prose only, and
+            # the signals are carried out separately for FR-033's distribution.
+            rejected.append(signals)
             failures.append(
                 _chunk_failure(
                     chunk,
@@ -408,7 +460,7 @@ def _values_from_outcome(
             )
         )
 
-    return tuple(candidates), tuple(failures)
+    return tuple(candidates), tuple(failures), tuple(rejected)
 
 
 def run_extraction_stage(
@@ -508,6 +560,7 @@ def run_extraction_stage(
     ordered = sorted(chunks, key=lambda chunk: chunk.ordinal)
     candidates: list[_Candidate] = []
     failures: list[ExtractionFailure] = []
+    rejected: list[ParseSignals] = []
     valid = repaired = failed = 0
 
     for chunk in ordered:
@@ -531,9 +584,12 @@ def run_extraction_stage(
 
         repaired += 1 if outcome.repaired else 0
         valid += 0 if outcome.repaired else 1
-        produced, refusals = _values_from_outcome(outcome, chunk, ordered, terms, fields, policy)
+        produced, refusals, below_floor = _values_from_outcome(
+            outcome, chunk, ordered, terms, fields, policy
+        )
         candidates.extend(produced)
         failures.extend(refusals)
+        rejected.extend(below_floor)
 
     document_scoped = {term.name for term in fields if term.scope == DOCUMENT_SCOPE}
     grouping = group_line_items(
@@ -604,6 +660,15 @@ def run_extraction_stage(
     absences = tuple(record for record in absences if record.field_name not in already_recorded)
     failures.extend(absences)
 
+    absent_names = frozenset(record.field_name for record in absences)
+    stored_units, failed_units, negatives = _resolve_attempts(
+        chunks=ordered,
+        fields=fields,
+        absent_fields=absent_names,
+        values=values,
+        failures=failures,
+    )
+
     return ExtractionStageResult(
         document_id=document_id,
         values=values,
@@ -613,4 +678,72 @@ def run_extraction_stage(
         invocations_repaired=repaired,
         invocations_failed=failed,
         absent_fields=tuple(record.field_name for record in absences),
+        attempts_stored=stored_units,
+        attempts_failed=failed_units,
+        correct_negatives=negatives,
+        rejected_signals=tuple(rejected),
     )
+
+
+#: One attempt unit: a chunk ordinal and a field name, the ordinal being `None`
+#: for the whole-document absence FR-058 collapses to one attempt per document.
+type _AttemptUnit = tuple[int | None, str]
+
+
+def _resolve_attempts(
+    *,
+    chunks: Sequence[Chunk],
+    fields: Sequence[FieldTerm],
+    absent_fields: frozenset[str],
+    values: Sequence[PreparedValue],
+    failures: Sequence[ExtractionFailure],
+) -> tuple[int, int, int]:
+    """Partition this document's attempt units three ways (FR-069, amended).
+
+    Args:
+        chunks: the document's chunks in ordinal order — the attempt unit's
+            first coordinate.
+        fields: the run's attempted subset — its second.
+        absent_fields: the fields this document printed nowhere. Their attempts
+            collapse from one per chunk to one for the document (FR-058), so
+            they contribute one unit each and none per chunk.
+        values: the values that will be stored.
+        failures: every failure row, the whole-document absences among them.
+
+    Returns:
+        `(attempts_stored, attempts_failed, correct_negatives)`, counted over
+        **units** and not over rows.
+
+    **Enumerated here, and totalled independently by `cli.count_attempts`.**
+    That duplication is the point. `count_attempts` derives the attempt total
+    from the corpus shape — fields, chunks, absences — while these three are
+    read off what the stage actually produced, so `AttemptLedger.unaccounted`
+    compares two derivations rather than a number against itself. Computing the
+    negatives by subtracting the other two from the total would make the ledger
+    balance by construction and publish a zero that measured nothing.
+
+    A unit resolving both ways — one chunk printing a field twice, one value
+    coercing and the other not — is counted in both classes, so the ledger's
+    `unaccounted` goes **negative**. That is deliberate: FR-069 fixes the unit
+    at one field on one chunk, and a unit with two outcomes is a disagreement
+    with the unit rather than with the counting, which is exactly the kind of
+    thing a published imbalance exists to surface.
+    """
+    units: set[_AttemptUnit] = {
+        (chunk.ordinal, term.name)
+        for chunk in chunks
+        for term in fields
+        if term.name not in absent_fields
+    }
+    units |= {(None, name) for name in absent_fields}
+
+    stored_units: set[_AttemptUnit] = {
+        (value.citation.anchor.ordinal, value.field_name) for value in values
+    }
+    failed_units: set[_AttemptUnit] = {
+        (None, failure.field_name)
+        if failure.field_name in absent_fields
+        else (failure.source_chunk.ordinal, failure.field_name)
+        for failure in failures
+    }
+    return len(stored_units), len(failed_units), len(units - stored_units - failed_units)

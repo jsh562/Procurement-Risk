@@ -43,6 +43,7 @@ from model.compute.confidence import (
     DeductionWeights,
 )
 from model.ingest.chunker import Chunk
+from model.ingest.cli import count_attempts
 from model.ingest.extract import (
     OUTCOME_CONFIDENCE_BELOW_THRESHOLD,
     OUTCOME_SCHEMA_VIOLATION,
@@ -51,6 +52,7 @@ from model.ingest.extract import (
     classify_label,
     run_extraction_stage,
 )
+from model.ingest.report import AttemptLedger
 from model.ingest.runs import (
     DECLARED_CONFIDENCE_FLOOR,
     DECLARED_DEDUCTION_ALTERNATE_LABEL,
@@ -553,3 +555,154 @@ def test_the_attempted_subset_this_suite_narrows_is_a_subset_of_the_declared_one
     """So a term retired from the declaration cannot leave these tests green."""
     declared = {entry.name for entry in TRANSMITTAL_FIELD_SUBSET}
     assert {entry.name for entry in FIELDS} <= declared
+
+
+# ---------------------------------------------------------------------------
+# FR-029 — the page-split rule is narrow, because a wide one invents provenance
+# ---------------------------------------------------------------------------
+
+
+def test_a_label_printed_for_an_earlier_item_does_not_contribute_to_a_later_value() -> None:
+    """The defect a nearest-preceding-page-anywhere rule produced.
+
+    A transmittal listing several items prints the same label once per item. The
+    earlier rule accepted the nearest preceding chunk on *any* strictly earlier
+    page whose text contained the folded label anywhere — so `Manufacturer`
+    printed for item 1 at the top of page 1 attached itself to item 3's value on
+    page 2, and nothing downstream could see it: the value was published with
+    `multi_chunk` provenance, a contributing-chunk row pointing at another
+    item's label, and FR-057's 0.10 page-split deduction taken for a page split
+    that never happened.
+
+    Here page 1 carries item 1's label **and its value**, so the label is not the
+    last thing on the page and the chunk is not adjacent to the anchor. Both
+    conditions fail; the value on page 2 is single-chunk and undeducted.
+    """
+    chunks = [
+        chunk(0, page=1, body="Manufacturer: Alpha Works\nQty.: 3"),
+        chunk(1, page=1, body="Item 2\nQty.: 4"),
+        chunk(2, page=2, body="Nordway Fabrication\nQty.: 12"),
+    ]
+    result, _ = stage(
+        values_json(),
+        values_json(),
+        values_json(value("manufacturer", "Manufacturer", "Nordway Fabrication", ordinal=3)),
+        chunks=chunks,
+    )
+    stored = next(entry for entry in result.values if entry.field_name == "manufacturer")
+    assert stored.citation.contributors == (), (
+        "item 1's label on page 1 is not item 3's label, and a citation that claimed it "
+        "would publish provenance the document does not have"
+    )
+    assert stored.citation.provenance_kind == "single_chunk"
+    assert stored.citation.source_chunk_count == 1
+    assert stored.confidence == 1.0, "no deduction is earned by a page split that did not happen"
+    assert not stored.signals.page_split
+
+
+def test_a_label_two_chunks_back_does_not_contribute_even_on_an_earlier_page() -> None:
+    """Adjacency, asserted on its own.
+
+    The printed shape of a page-split field is a label that ran out of page and a
+    value that opens the next one, so the two chunks are consecutive in ordinal
+    order. A label separated from the value by another chunk belongs to
+    something else on that page.
+    """
+    chunks = [
+        chunk(0, page=1, body="Manufacturer:"),
+        chunk(1, page=1, body="Spec Section: 23 52 00"),
+        chunk(2, page=2, body="Nordway Fabrication"),
+    ]
+    result, _ = stage(
+        values_json(),
+        values_json(),
+        values_json(value("manufacturer", "Manufacturer", "Nordway Fabrication")),
+        chunks=chunks,
+    )
+    stored = next(entry for entry in result.values if entry.field_name == "manufacturer")
+    assert stored.citation.contributors == ()
+
+
+# ---------------------------------------------------------------------------
+# FR-069 — the attempt ledger, against a real stage result rather than numbers
+# ---------------------------------------------------------------------------
+
+
+def test_the_attempt_ledger_balances_against_a_real_stage_result() -> None:
+    """FR-069 as amended, measured rather than asserted with hand-picked numbers.
+
+    Nothing paired `count_attempts` with an `ExtractionStageResult` before, which
+    is why the ledger's inability to balance was never seen: every test of it
+    supplied `attempted`, `stored` and `failed` by hand, and hand-picked numbers
+    balance.
+
+    Here the two sides are derived independently — `count_attempts` from the
+    corpus shape (four fields over three chunks, less the fields the document
+    printed nowhere), the three resolutions from what the stage produced — and
+    the identity is checked between them. Under the two-resolution binary this
+    ledger reported nine unaccounted attempts out of fourteen.
+    """
+    chunks = [chunk(0, page=1), chunk(1, page=1, body="Qty.: 12"), chunk(2, page=2, body="tail")]
+    result, _ = stage(
+        values_json(value("manufacturer", "Manufacturer", "Nordway")),
+        values_json(value("quantity", "Qty.", "12")),
+        values_json(),
+        chunks=chunks,
+    )
+
+    attempted = count_attempts(
+        chunks_by_document={DOCUMENT_ID: len(chunks)},
+        attempted_fields=[entry.name for entry in FIELDS],
+        absent_fields_by_document={DOCUMENT_ID: result.absent_fields},
+    )
+    ledger = AttemptLedger(
+        attempted=attempted,
+        stored=result.attempts_stored,
+        failed=result.attempts_failed,
+        correct_negatives=result.correct_negatives,
+    )
+
+    assert ledger.unaccounted == 0, (
+        f"FR-069: {ledger.attempted} attempts against {ledger.stored} stored, "
+        f"{ledger.failed} failed and {ledger.correct_negatives} correct negatives"
+    )
+    assert ledger.reconciles
+    assert ledger.correct_negatives > 0, (
+        "the third resolution is what the amendment adds, and a run where it never fires "
+        "would not have needed it"
+    )
+    # The two documents printed `manufacturer` on chunk 0 and `quantity` on
+    # chunk 1; the other two attempted terms are printed nowhere and collapse to
+    # one attempt each (FR-058).
+    assert set(result.absent_fields) == {"submittal_date", "submittal_number"}
+    assert attempted == (len(FIELDS) - 2) * len(chunks) + 2
+
+
+def test_the_ledger_publishes_a_genuine_imbalance_rather_than_absorbing_it() -> None:
+    """`unaccounted` still measures something after the amendment.
+
+    The whole risk of adding a third resolution is that the ledger balances by
+    construction and the published zero stops meaning anything. It does not: the
+    attempt total is derived from the corpus shape and the three resolutions are
+    enumerated from the stage's output, so a disagreement between the two shows
+    up — here as an attempt total computed over one chunk too many.
+    """
+    chunks = [chunk(0, page=1), chunk(1, page=1, body="Qty.: 12")]
+    result, _ = stage(
+        values_json(value("manufacturer", "Manufacturer", "Nordway")),
+        values_json(value("quantity", "Qty.", "12")),
+        chunks=chunks,
+    )
+    inflated = count_attempts(
+        chunks_by_document={DOCUMENT_ID: len(chunks) + 1},
+        attempted_fields=[entry.name for entry in FIELDS],
+        absent_fields_by_document={DOCUMENT_ID: result.absent_fields},
+    )
+    ledger = AttemptLedger(
+        attempted=inflated,
+        stored=result.attempts_stored,
+        failed=result.attempts_failed,
+        correct_negatives=result.correct_negatives,
+    )
+    assert ledger.unaccounted == len(FIELDS) - len(result.absent_fields)
+    assert not ledger.reconciles
