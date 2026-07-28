@@ -135,7 +135,7 @@ def test_no_created_table_grants_update_to_the_application_role(db_session: Sess
 def test_every_artifact_row_of_the_emitted_run_carries_one_insertion(
     db_session: Session, emitted_run: EmittedRun
 ) -> None:
-    """"Inserted once, never updated", measured from PostgreSQL's row versions.
+    """ "Inserted once, never updated", measured from PostgreSQL's row versions.
 
     Both artifact stores under this run report a single `xmin`, and it is the
     same one across the two, so transaction 1 wrote all of them and nothing

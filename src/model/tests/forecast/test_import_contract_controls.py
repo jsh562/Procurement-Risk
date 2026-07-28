@@ -227,9 +227,7 @@ def test_the_real_contract_still_names_gateway_as_forbidden() -> None:
     """
     manifest = tomllib.loads(MODEL_MANIFEST.read_text(encoding="utf-8"))
     contracts = manifest["tool"]["importlinter"]["contracts"]
-    declared = next(
-        (contract for contract in contracts if contract["name"] == CONTRACT_NAME), None
-    )
+    declared = next((contract for contract in contracts if contract["name"] == CONTRACT_NAME), None)
 
     assert declared is not None, (
         f"`src/model/pyproject.toml` declares {[c['name'] for c in contracts]} and not "
@@ -323,9 +321,7 @@ def test_a_tree_with_no_reach_passes_the_same_contract(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     configuration = write_fixture_tree(tmp_path / "unused", indirect=False)
-    (root / ".importlinter").write_text(
-        configuration.read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    (root / ".importlinter").write_text(configuration.read_text(encoding="utf-8"), encoding="utf-8")
 
     result = run_contract(root / ".importlinter")
 

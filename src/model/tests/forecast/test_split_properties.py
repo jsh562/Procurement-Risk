@@ -322,9 +322,7 @@ def test_a_single_line_cohort_is_still_assigned() -> None:
 def cell_size(result: SplitResult, *, censored: bool, side: str) -> int:
     """How many lines fall in one of the four (stratum, side) cells."""
     return sum(
-        1
-        for row in result.assignments
-        if row.is_censored is censored and row.split_side == side
+        1 for row in result.assignments if row.is_censored is censored and row.split_side == side
     )
 
 

@@ -125,9 +125,7 @@ def test_every_artifact_row_repeats_the_runs_own_shape(
     on the child row is the run's own and the arrays match it.
     """
     published = read_run_shape(db_session)
-    rows = db_session.execute(
-        POSTERIOR_SHAPE_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().all()
+    rows = db_session.execute(POSTERIOR_SHAPE_SQL, {"run_id": emitted_run.run_id}).mappings().all()
 
     assert rows, "the emitted run stored no artifact row to carry a shape"
     for row in rows:
@@ -151,9 +149,7 @@ def test_every_run_this_tier_emits_records_the_four_chain_minimum(
     committed shape happens to run at it, and a rule written as equality would
     fail a legitimate eight-chain run while catching nothing a `>=` misses.
     """
-    recorded = db_session.execute(
-        CHAIN_COUNT_SQL, {"run_id": emitted_run.run_id}
-    ).scalar_one()
+    recorded = db_session.execute(CHAIN_COUNT_SQL, {"run_id": emitted_run.run_id}).scalar_one()
 
     assert recorded == emitted_run.chain_count, (
         f"the run records {recorded} chains against the {emitted_run.chain_count} this "
@@ -167,9 +163,7 @@ def test_every_run_this_tier_emits_records_the_four_chain_minimum(
     )
 
 
-def test_the_comparison_reads_the_published_row_rather_than_a_literal(
-    db_session: Session
-) -> None:
+def test_the_comparison_reads_the_published_row_rather_than_a_literal(db_session: Session) -> None:
     """HINT-005, asserted over this file rather than promised in its docstring.
 
     The published pair appears nowhere in this module's source, so the predicate
@@ -194,9 +188,7 @@ def test_a_run_at_the_delivered_fixture_shape_fails_the_same_predicate(
     `posterior.py`, so the row is internally consistent and the only thing wrong
     with it is the pair DV-014 pins.
     """
-    rows = tuple(
-        _at_fixture_shape(row) for row in stored_run.line_posteriors
-    )
+    rows = tuple(_at_fixture_shape(row) for row in stored_run.line_posteriors)
     manifest = dataclasses.replace(
         stored_run.manifest,
         run_id=uuid.uuid4(),

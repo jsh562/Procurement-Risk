@@ -143,7 +143,7 @@ def test_a_perturbed_p80_makes_the_harness_disagree_and_exit_non_zero(
 def test_the_failure_names_the_line_and_its_realized_delta(
     perturbed: tuple[ReproductionOutcome, object],
 ) -> None:
-    """"Naming that line and its realized delta" — as data, not as prose.
+    """ "Naming that line and its realized delta" — as data, not as prose.
 
     The breach is asserted to be the perturbed line's P80 **and nothing else**,
     which is what makes the failure attributable: a harness that reported every

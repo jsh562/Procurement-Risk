@@ -77,8 +77,7 @@ def check_refusal_report(text: str) -> None:
     sections = report_sections(text)
 
     assert list(sections) == list(REFUSAL_SECTION_TITLES), (
-        f"the report declares sections {list(sections)} rather than "
-        f"{list(REFUSAL_SECTION_TITLES)}"
+        f"the report declares sections {list(sections)} rather than {list(REFUSAL_SECTION_TITLES)}"
     )
     for field in IDENTITY_FIELDS:
         assert f"**{field}**" in sections["Refused Attempt"], (

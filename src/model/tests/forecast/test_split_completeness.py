@@ -121,9 +121,7 @@ def test_the_canonical_ordinal_is_contiguous_from_one(
     bounds and the distinct count together are the statement: lowest 1, highest
     `n`, `n` distinct values over `n` rows admits nothing else.
     """
-    bounds = db_session.execute(
-        ORDINAL_BOUNDS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    bounds = db_session.execute(ORDINAL_BOUNDS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
 
     assert bounds["rows_written"] > 0
     assert bounds["lowest"] == 1, (
@@ -151,9 +149,7 @@ def test_the_ordinal_order_is_ascending_natural_key_order(
     value is what makes the hash recomputable from this table alone, without
     re-reading `purchase_order_line`.
     """
-    rows = db_session.execute(
-        ORDINAL_SEQUENCE_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().all()
+    rows = db_session.execute(ORDINAL_SEQUENCE_SQL, {"run_id": emitted_run.run_id}).mappings().all()
     keys = [(row["project_id"], row["po_number"], row["line_number"]) for row in rows]
 
     assert rows, "the run wrote no split assignment"

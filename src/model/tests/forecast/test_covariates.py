@@ -25,17 +25,13 @@ from forecast.conftest import EmittedRun, FitInput
 from model.forecast.model import COVARIATES, covariate_names
 
 #: Module-level SQL, never assembled from values (Ruff S608).
-RECORDED_COVARIATES_SQL = text(
-    "SELECT covariate_names FROM forecast_run WHERE run_id = :run_id"
-)
+RECORDED_COVARIATES_SQL = text("SELECT covariate_names FROM forecast_run WHERE run_id = :run_id")
 
 
 def _recorded(db_session: Session, emitted_run: EmittedRun) -> tuple[str, ...]:
     """The covariate list as the run row stores it, in column order."""
     return tuple(
-        db_session.execute(
-            RECORDED_COVARIATES_SQL, {"run_id": emitted_run.run_id}
-        ).scalar_one()
+        db_session.execute(RECORDED_COVARIATES_SQL, {"run_id": emitted_run.run_id}).scalar_one()
     )
 
 

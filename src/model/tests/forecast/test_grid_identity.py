@@ -66,9 +66,7 @@ FIRST_GRID_DAY = 1
 def stored_rows(db_session: Session, emitted_run: EmittedRun, store: str) -> list:
     """Every artifact row of the shared run in one store, in `po_line_id` order."""
     rows = (
-        db_session.execute(STORED_GRID_SQL[store], {"run_id": emitted_run.run_id})
-        .mappings()
-        .all()
+        db_session.execute(STORED_GRID_SQL[store], {"run_id": emitted_run.run_id}).mappings().all()
     )
     assert rows, f"the shared run stored no `{store}` row, so nothing here is measurable"
     return list(rows)

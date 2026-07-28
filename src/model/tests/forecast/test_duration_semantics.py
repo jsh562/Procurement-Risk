@@ -82,17 +82,13 @@ HELD_OUT_ORIGIN_PHRASE = "line_order_date"
 @pytest.fixture
 def run_row(db_session: Session, emitted_run: EmittedRun):
     """The shared run's recorded open-line semantic and its anchor."""
-    return db_session.execute(
-        RUN_SEMANTIC_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    return db_session.execute(RUN_SEMANTIC_SQL, {"run_id": emitted_run.run_id}).mappings().one()
 
 
 @pytest.fixture
 def held_out_rows(db_session: Session, emitted_run: EmittedRun) -> list:
     """Every held-out prediction of the shared run, joined to its own line."""
-    rows = (
-        db_session.execute(HELD_OUT_ROWS_SQL, {"run_id": emitted_run.run_id}).mappings().all()
-    )
+    rows = db_session.execute(HELD_OUT_ROWS_SQL, {"run_id": emitted_run.run_id}).mappings().all()
     assert rows, "the shared run stored no held-out prediction, so this file would pass vacuously"
     return list(rows)
 
@@ -183,9 +179,7 @@ def test_the_open_population_carries_no_anchor_of_its_own(db_session: Session) -
     assert {"draws", "survival", "residual_tail_mass"} <= columns
 
 
-def test_no_open_line_draw_is_exactly_zero(
-    db_session: Session, emitted_run: EmittedRun
-) -> None:
+def test_no_open_line_draw_is_exactly_zero(db_session: Session, emitted_run: EmittedRun) -> None:
     """The one signature of the re-based implementation FR-029 forbids.
 
     Re-basing a total duration by subtracting elapsed days and clipping puts a

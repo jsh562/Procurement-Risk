@@ -316,9 +316,7 @@ def _summary_frame(idata: xr.DataTree):
     return az.summary(idata, kind="diagnostics", round_to="none")
 
 
-def _parameter_rows(
-    idata: xr.DataTree, monitored_parameters: Sequence[str]
-) -> list[DiagnosticRow]:
+def _parameter_rows(idata: xr.DataTree, monitored_parameters: Sequence[str]) -> list[DiagnosticRow]:
     """Three rows for **every** monitored parameter, with no partial coverage.
 
     DV-011's completeness is a property of this loop: the three metrics are
@@ -386,9 +384,7 @@ def _run_rows(idata: xr.DataTree) -> list[DiagnosticRow]:
             "divergent_transitions", float(statistics[DIVERGING_STATISTIC].values.sum())
         ),
         diagnostic_row("ebfmi", float(min(per_chain)) if len(per_chain) else math.nan),
-        diagnostic_row(
-            "max_treedepth_hits", float(statistics[TREEDEPTH_STATISTIC].values.sum())
-        ),
+        diagnostic_row("max_treedepth_hits", float(statistics[TREEDEPTH_STATISTIC].values.sum())),
     ]
 
 

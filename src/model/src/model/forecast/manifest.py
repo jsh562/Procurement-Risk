@@ -751,9 +751,7 @@ def build_manifest(
             "membership question by asking about nobody"
         )
 
-    open_lines = sum(
-        1 for line in procurement_input.lines if censoring_indicator(line, as_of_date)
-    )
+    open_lines = sum(1 for line in procurement_input.lines if censoring_indicator(line, as_of_date))
     if _whole("open_line_count", open_line_count, 1) != open_lines:
         raise ManifestError(
             f"the caller reports {open_line_count} open lines and the censoring indicator "

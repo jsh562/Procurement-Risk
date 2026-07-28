@@ -125,9 +125,9 @@ def test_the_zero_open_line_refusal_leaves_every_store_as_found(
     enumeration is not a checkable one. This is the check.
     """
     for table in SNAPSHOT_TABLES:
-        assert (
-            refused_with_no_open_line.after[table] == refused_with_no_open_line.before[table]
-        ), f"`{table}` changed across a pre-sampling refusal"
+        assert refused_with_no_open_line.after[table] == refused_with_no_open_line.before[table], (
+            f"`{table}` changed across a pre-sampling refusal"
+        )
     assert (
         refused_with_no_open_line.after["active_run"]
         == refused_with_no_open_line.before["active_run"]
@@ -155,8 +155,7 @@ def test_below_the_chain_minimum_the_run_refuses_naming_the_precondition(
     assert refused_below_the_chain_minimum.completed.stdout == ""
     assert f"at least {CHAINS_MIN} chains" in stderr
     assert f"{BELOW_MINIMUM_CHAINS} chain(s) requested" in stderr, (
-        f"the refusal does not state the realized chain count. Standard error "
-        f"was:\n{stderr[:600]}"
+        f"the refusal does not state the realized chain count. Standard error was:\n{stderr[:600]}"
     )
 
 

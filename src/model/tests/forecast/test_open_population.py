@@ -59,9 +59,7 @@ def test_every_line_open_at_the_anchor_carries_a_stored_posterior(
     different lines, and the failure that produces — a closed line forecast in
     place of an open one — is invisible in every aggregate the run publishes.
     """
-    stored = set(
-        db_session.execute(POSTERIOR_LINES_SQL, {"run_id": emitted_run.run_id}).scalars()
-    )
+    stored = set(db_session.execute(POSTERIOR_LINES_SQL, {"run_id": emitted_run.run_id}).scalars())
     expected = _open_line_ids(db_session, emitted_run)
 
     assert expected, (
@@ -86,9 +84,7 @@ def test_no_line_closed_at_the_anchor_carries_a_stored_posterior(
     delivered constraint. This is the mechanism `data-model.md` names in its
     place.
     """
-    stored = set(
-        db_session.execute(POSTERIOR_LINES_SQL, {"run_id": emitted_run.run_id}).scalars()
-    )
+    stored = set(db_session.execute(POSTERIOR_LINES_SQL, {"run_id": emitted_run.run_id}).scalars())
     procurement_input = read_lines_and_events(db_session)
     closed = {
         line.po_line_id
@@ -103,16 +99,16 @@ def test_no_line_closed_at_the_anchor_carries_a_stored_posterior(
 def test_each_open_line_carries_exactly_one_row_under_the_run(
     db_session: Session, emitted_run: EmittedRun
 ) -> None:
-    """"Exactly one" is half of DV-001 and is not implied by the set equality above.
+    """ "Exactly one" is half of DV-001 and is not implied by the set equality above.
 
     `pk_line_posterior` is `(run_id, po_line_id)` so a duplicate is unstorable,
     and this asserts that the delivered key is doing that job rather than that
     the writer happened not to try — the two counts below are equal only if no
     line was written twice under this run.
     """
-    counts = db_session.execute(
-        POSTERIOR_COUNTS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    counts = (
+        db_session.execute(POSTERIOR_COUNTS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+    )
 
     assert counts["rows_written"] == counts["lines_covered"]
 
@@ -127,12 +123,8 @@ def test_the_run_row_publishes_the_open_line_count_it_actually_wrote(
     `ck_forecast_run__open_line_count_positive` bounds it below and nothing
     delivered compares it against the child rows.
     """
-    row = db_session.execute(
-        RUN_POPULATION_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
-    stored = set(
-        db_session.execute(POSTERIOR_LINES_SQL, {"run_id": emitted_run.run_id}).scalars()
-    )
+    row = db_session.execute(RUN_POPULATION_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+    stored = set(db_session.execute(POSTERIOR_LINES_SQL, {"run_id": emitted_run.run_id}).scalars())
 
     assert row["as_of_date"] == emitted_run.as_of_date
     assert row["open_line_count"] == len(stored)

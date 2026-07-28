@@ -172,9 +172,7 @@ def test_the_published_count_is_the_run_rows_and_the_stored_populations(
     parameters = {"run_id": emitted_run.run_id}
     recorded = db_session.execute(RUN_EVENT_COUNT_SQL, parameters).mappings().one()
     recounted = int(db_session.execute(STORED_UNCENSORED_HELD_OUT_SQL, parameters).scalar_one())
-    predictions = int(
-        db_session.execute(HELD_OUT_PREDICTION_COUNT_SQL, parameters).scalar_one()
-    )
+    predictions = int(db_session.execute(HELD_OUT_PREDICTION_COUNT_SQL, parameters).scalar_one())
 
     assert published_count == recorded["held_out_uncensored_event_count"] == recounted
     assert published_count == predictions, (
@@ -213,7 +211,7 @@ def test_the_count_is_published_with_a_statement_about_the_bands_precision(
 
 
 def test_the_band_is_restated_under_attribution_and_never_asserted_as_this_epics(
-    split_section: dict[str, str]
+    split_section: dict[str, str],
 ) -> None:
     """FR-026 and SC-025 held together, which is the whole difficulty of this field.
 
@@ -235,7 +233,7 @@ def test_the_band_is_restated_under_attribution_and_never_asserted_as_this_epics
 
 
 def test_the_realized_count_falls_short_of_the_registered_assumption_on_this_input(
-    published_count: int
+    published_count: int,
 ) -> None:
     """The honest miss, asserted rather than left to whichever branch renders.
 

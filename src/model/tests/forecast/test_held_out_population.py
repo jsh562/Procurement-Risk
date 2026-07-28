@@ -29,9 +29,7 @@ from forecast.conftest import EmittedRun
 from model.forecast.write import HELD_OUT_ANCHOR_CONVENTION, HELD_OUT_DURATION_SEMANTIC
 
 #: Module-level SQL, never assembled from values (Ruff S608).
-PREDICTION_LINES_SQL = text(
-    "SELECT po_line_id FROM held_out_prediction WHERE run_id = :run_id"
-)
+PREDICTION_LINES_SQL = text("SELECT po_line_id FROM held_out_prediction WHERE run_id = :run_id")
 HELD_OUT_DELIVERED_SQL = text(
     """
     SELECT a.po_line_id
@@ -40,9 +38,7 @@ HELD_OUT_DELIVERED_SQL = text(
     WHERE a.run_id = :run_id AND a.split_side = 'held_out' AND l.is_closed
     """
 )
-ASSIGNED_LINES_SQL = text(
-    "SELECT po_line_id FROM forecast_split_assignment WHERE run_id = :run_id"
-)
+ASSIGNED_LINES_SQL = text("SELECT po_line_id FROM forecast_split_assignment WHERE run_id = :run_id")
 PREDICTION_COUNTS_SQL = text(
     """
     SELECT count(*) AS rows_written, count(DISTINCT po_line_id) AS lines_covered
@@ -64,23 +60,17 @@ RECORDED_SEMANTICS_SQL = text(
     FROM held_out_prediction WHERE run_id = :run_id
     """
 )
-OPEN_SEMANTIC_SQL = text(
-    "SELECT open_line_draw_semantic FROM forecast_run WHERE run_id = :run_id"
-)
+OPEN_SEMANTIC_SQL = text("SELECT open_line_draw_semantic FROM forecast_run WHERE run_id = :run_id")
 
 
 def _stored_lines(db_session: Session, emitted_run: EmittedRun) -> set:
     """The lines the run wrote a held-out prediction for."""
-    return set(
-        db_session.execute(PREDICTION_LINES_SQL, {"run_id": emitted_run.run_id}).scalars()
-    )
+    return set(db_session.execute(PREDICTION_LINES_SQL, {"run_id": emitted_run.run_id}).scalars())
 
 
 def _expected_lines(db_session: Session, emitted_run: EmittedRun) -> set:
     """The membership rule, evaluated by the database over its own two tables."""
-    return set(
-        db_session.execute(HELD_OUT_DELIVERED_SQL, {"run_id": emitted_run.run_id}).scalars()
-    )
+    return set(db_session.execute(HELD_OUT_DELIVERED_SQL, {"run_id": emitted_run.run_id}).scalars())
 
 
 def test_every_held_out_delivered_line_carries_a_stored_prediction(
@@ -122,9 +112,7 @@ def test_no_other_line_carries_a_stored_prediction(
     fitted on.
     """
     stored = _stored_lines(db_session, emitted_run)
-    assigned = set(
-        db_session.execute(ASSIGNED_LINES_SQL, {"run_id": emitted_run.run_id}).scalars()
-    )
+    assigned = set(db_session.execute(ASSIGNED_LINES_SQL, {"run_id": emitted_run.run_id}).scalars())
     expected = _expected_lines(db_session, emitted_run)
     others = assigned - expected
 
@@ -139,16 +127,16 @@ def test_no_other_line_carries_a_stored_prediction(
 def test_each_held_out_line_carries_exactly_one_row_under_the_run(
     db_session: Session, emitted_run: EmittedRun
 ) -> None:
-    """"Exactly one" is half of DV-002 and is not implied by the set equality above.
+    """ "Exactly one" is half of DV-002 and is not implied by the set equality above.
 
     `pk_held_out_prediction` is `(run_id, po_line_id)`, so a duplicate is
     unstorable; this asserts the key is doing that job rather than that the
     writer happened not to try, because the two counts below are equal only if
     no line was written twice under this run.
     """
-    counts = db_session.execute(
-        PREDICTION_COUNTS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    counts = (
+        db_session.execute(PREDICTION_COUNTS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+    )
 
     assert counts["rows_written"] == counts["lines_covered"]
     assert counts["rows_written"] == len(_expected_lines(db_session, emitted_run))
@@ -164,9 +152,9 @@ def test_every_stored_prediction_is_joinable_to_exactly_one_run(
     that the join actually resolves for every row the run wrote — an inner join
     that loses a row would report a prediction attached to nothing.
     """
-    row = db_session.execute(
-        PREDICTION_RUN_JOIN_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    row = (
+        db_session.execute(PREDICTION_RUN_JOIN_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+    )
 
     assert row["predictions"] > 0
     assert row["runs_joined"] == row["predictions"]
@@ -188,9 +176,9 @@ def test_each_population_records_its_own_anchor_convention_and_duration_semantic
     identically. The anchor's measured counterpart is DV-023's rejection control
     and the duration's is DV-040.
     """
-    recorded = db_session.execute(
-        RECORDED_SEMANTICS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().all()
+    recorded = (
+        db_session.execute(RECORDED_SEMANTICS_SQL, {"run_id": emitted_run.run_id}).mappings().all()
+    )
     open_semantic = db_session.execute(
         OPEN_SEMANTIC_SQL, {"run_id": emitted_run.run_id}
     ).scalar_one()

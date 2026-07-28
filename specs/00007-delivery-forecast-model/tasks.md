@@ -219,11 +219,11 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T109 {FR-038} DV-039 / SC-034 — every measure with a criterion appears as measure, value, criterion **with direction** and verdict; wall-clock none — TST/test_reportable_unit.py after:T098
-- [ ] T110 {FR-038} **NC-20** — two planted entries fail: a value with no criterion, and a verdict against no criterion — TST/test_reportable_unit_controls.py
-- [ ] T111 [P] Verify `model.forecast` is counted in the root combined coverage report rather than landing in the denominator uncounted — **`.github/workflows/verify.yml:307` carries an inline `--source=src/model/roster,schema,corpus,procurement` that overrides the root `pyproject.toml` list T001 extended, so `forecast` is uncounted in CI while `tests/forecast` still runs**; add it there too, or the two halves of T001 buy nothing on the only run that gates — .github/workflows/verify.yml after:T001
-- [ ] T112 [P] Confirm the model entry declares **no new dependency** for `model.forecast` and keep CHK/test_dependency_isolation.py green after:T002
-- [ ] T113 Add the release gate — emitted-set equality, import contract, migration-range remediation, reportable-unit checker — to .github/workflows/verify.yml after:T110
+- [X] T109 {FR-038} DV-039 / SC-034 — every measure with a criterion appears as measure, value, criterion **with direction** and verdict; wall-clock none — TST/test_reportable_unit.py after:T098
+- [X] T110 {FR-038} **NC-20** — two planted entries fail: a value with no criterion, and a verdict against no criterion — TST/test_reportable_unit_controls.py
+- [X] T111 [P] Verify `model.forecast` is counted in the root combined coverage report rather than landing in the denominator uncounted — **`.github/workflows/verify.yml:307` carries an inline `--source=src/model/roster,schema,corpus,procurement` that overrides the root `pyproject.toml` list T001 extended, so `forecast` is uncounted in CI while `tests/forecast` still runs**; add it there too, or the two halves of T001 buy nothing on the only run that gates — .github/workflows/verify.yml after:T001
+- [X] T112 [P] Confirm the model entry declares **no new dependency** for `model.forecast` and keep CHK/test_dependency_isolation.py green after:T002
+- [X] T113 Add the release gate — emitted-set equality, import contract, migration-range remediation, reportable-unit checker — to .github/workflows/verify.yml after:T110
 
 ---
 
@@ -236,8 +236,8 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [X] T116 [COMPLETES FR-001] {FR-001} Rework T028 so the `logp` agreement oracle builds `likelihood.py`'s inputs from PKG/design.py rather than from the assembled graph — TST/test_model_logp.py after:T115
 - [X] T117 [US1] {FR-010,FR-029} **RED** Property test for the held-out **total-duration** path in PKG/posterior.py, absent from T025's set — TST/test_posterior_properties.py — A-015
 - [X] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015
-- [ ] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
-- [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
+- [X] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
+- [X] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
 - [X] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
 - [X] T122 {FR-039} **DV-042 / SC-038 / NC-24** — stdout carries exactly the `run_id` and nothing on refusal; every diagnostic on stderr; exit zero exactly on completion — TST/test_streams_and_exit.py after:T035
 - [X] T123 [COMPLETES FR-045] {FR-045} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068

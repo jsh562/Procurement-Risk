@@ -132,8 +132,7 @@ def within_tolerance(delta_days: ArrayLike, tolerance_days: float) -> bool:
     """
     if isinstance(tolerance_days, bool) or not isinstance(tolerance_days, float | int):
         raise CompareError(
-            f"the tolerance is a published number of days, found "
-            f"{type(tolerance_days).__name__}"
+            f"the tolerance is a published number of days, found {type(tolerance_days).__name__}"
         )
     if not math.isfinite(tolerance_days) or tolerance_days < 0.0:
         raise CompareError(

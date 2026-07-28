@@ -429,8 +429,9 @@ class _TotalDurationLaw:
         two populations count loops differently and that difference is theirs to
         state rather than this object's to guess.
         """
-        group = self.vendor_offsets[:, self.vendor_at[line.vendor_id]] + (
-            self.category_offsets[:, self.category_at[line.material_category]]
+        group = (
+            self.vendor_offsets[:, self.vendor_at[line.vendor_id]]
+            + (self.category_offsets[:, self.category_at[line.material_category]])
         )
         return _total_duration_lognormal(
             self.mu_sojourn, self.sigma_sojourn, group, _leg_positions(rework_loops)
@@ -597,9 +598,7 @@ def _training_line_counts(
     key would read as an oversight.
     """
     training = {
-        assignment.po_line_id
-        for assignment in split.assignments
-        if assignment.split_side == TRAIN
+        assignment.po_line_id for assignment in split.assignments if assignment.split_side == TRAIN
     }
     counts = dict.fromkeys(vendors, 0)
     for line in lines:
@@ -936,8 +935,9 @@ def _arm_median(
     reusing the generator would advance it between the arms and put sampler
     noise into the difference the ablation reports.
     """
-    sampled = sample_run(frame, seed_entropy=seed, chains=chains, draws=draws, tune=tune,
-                         cores=cores)
+    sampled = sample_run(
+        frame, seed_entropy=seed, chains=chains, draws=draws, tune=tune, cores=cores
+    )
     rows, _ = _line_posteriors(
         open_lines,
         _posterior_dataset(sampled.idata),
@@ -1001,9 +1001,7 @@ def _precondition_refusal(unmet: Sequence[UnmetPrecondition]) -> RefusedRun:
     enumeration does not fit a gate that ran before there was anything to
     measure.
     """
-    stated = "; ".join(
-        f"{item.precondition} — realized: {item.realized_value}" for item in unmet
-    )
+    stated = "; ".join(f"{item.precondition} — realized: {item.realized_value}" for item in unmet)
     return RefusedRun(
         f"{len(unmet)} pre-sampling precondition(s) unmet, so nothing was sampled and "
         f"nothing was written: {stated}",

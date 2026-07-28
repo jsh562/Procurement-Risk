@@ -192,10 +192,15 @@ SECTION_FIELDS: dict[str, tuple[str, ...]] = {
 #: because the run report states its own membership: a reader holding one of the
 #: three should not have to consult another document to learn what the set is.
 EMITTED_REPORT_KINDS: tuple[tuple[str, str], ...] = (
-    ("run report", f"`{RUN_REPORT_PREFIX}-<run_id>.md`, emitted by the fit job on a run "
-     "that ships"),
-    ("reproduction report", f"`{REPRODUCTION_REPORT_PREFIX}-<run_id>.md`, emitted by the "
-     "reproduction job and named after the run it re-derived"),
+    (
+        "run report",
+        f"`{RUN_REPORT_PREFIX}-<run_id>.md`, emitted by the fit job on a run that ships",
+    ),
+    (
+        "reproduction report",
+        f"`{REPRODUCTION_REPORT_PREFIX}-<run_id>.md`, emitted by the "
+        "reproduction job and named after the run it re-derived",
+    ),
     ("refusal report", f"`{REFUSAL_REPORT_PREFIX}-<attempt>.md`, emitted on any refusal"),
 )
 
@@ -528,8 +533,7 @@ def limitations(
             f"number is a property of that dataset's generative constants, not of this fit.",
             "More lines per vendor, or a vendor-level claim that survives at the realized "
             "shrinkage.",
-            "A real vendor population, where every vendor has enough observations to stand "
-            "on.",
+            "A real vendor population, where every vendor has enough observations to stand on.",
         ),
     )
 
@@ -609,15 +613,14 @@ def _shrinkage_section(
     )
     lines = [
         f"- **Credible level**: {VENDOR_SHRINKAGE_HDI_PROBABILITY:.2f} highest-density "
-        f"interval. Stated rather than assumed — \"wider\" is undefined between intervals of "
+        f'interval. Stated rather than assumed — "wider" is undefined between intervals of '
         f"different mass.",
         f"- **Vendor-claim observation floor**: {criterion} — the smallest training-line "
         f"count at which realized shrinkage reaches {SHRINKAGE_SUPPORT_THRESHOLD:.2f}, "
         f"derived by the published rule from this run's realized weights and not chosen "
         f"after seeing them.",
         "",
-        "| Vendor | Training lines | Realized shrinkage weight | Interval | "
-        "Vendor-level claim |",
+        "| Vendor | Training lines | Realized shrinkage weight | Interval | Vendor-level claim |",
         "|---|---|---|---|---|",
     ]
     for vendor in sorted(weights):
@@ -710,13 +713,21 @@ def _shape_section(manifest: RunManifest) -> list[str]:
 
 
 def _split_section(manifest: RunManifest) -> list[str]:
-    """The split's realized composition, and SC-025's event count with its verdict."""
+    """The split's realized composition, and SC-025's event count with its verdict.
+
+    The count is FR-038's unit rendered on one line, and **the direction is part
+    of it**: T109's checker found this field carrying a measure, a realized
+    value, a criterion and a verdict with nothing saying which side of the
+    criterion passes. The comparison is a floor — the band's precision assumes at
+    least that many gradeable events — and a reader who does not already know
+    that cannot turn 44 against ~120 into the disposition stated beside it.
+    Saying so restates `specs/prd.md`'s own basis and publishes no threshold of
+    this epic's (FR-026).
+    """
     events = manifest.held_out_uncensored_event_count
     low, high = REGISTERED_COVERAGE_BAND
     supports = events >= REGISTERED_UNCENSORED_EVENT_ASSUMPTION
-    disposition = (
-        "supports" if supports else "**does not support**"
-    )
+    disposition = "supports" if supports else "**does not support**"
     return [
         f"- **Declared held-out fraction**: {manifest.held_out_fraction_declared:.2f}, a "
         f"committed constant fixed before the split was drawn.",
@@ -727,7 +738,9 @@ def _split_section(manifest: RunManifest) -> list[str]:
         f"- **Open lines forecast**: {manifest.open_line_count}",
         f"- **Realized held-out uncensored event count**: {events}, against the "
         f"~{REGISTERED_UNCENSORED_EVENT_ASSUMPTION} events `specs/prd.md` derives its "
-        f"registered {low:.0%}–{high:.0%} coverage band from — so the realized count "
+        f"registered {low:.0%}–{high:.0%} coverage band from — a **floor**, so a realized "
+        f"count **at or above** it is the side that carries the band's stated precision — "
+        f"and the realized count therefore "
         f"{disposition} the precision that band claims. The band is that document's and is "
         f"restated here; this run asserts no coverage threshold and no calibration verdict "
         f"of its own (FR-026). See limitation L-3.",
@@ -766,8 +779,9 @@ def _emitted_set_section() -> list[str]:
         "as a category:",
         "",
     ]
-    lines += [f"- **Report kind** — {name}: {description}" for name, description in
-              EMITTED_REPORT_KINDS]
+    lines += [
+        f"- **Report kind** — {name}: {description}" for name, description in EMITTED_REPORT_KINDS
+    ]
     lines += ["", "- **This file**: run report."]
     return lines
 
@@ -1142,9 +1156,7 @@ def render_refusal_report(attempt: RefusedAttempt) -> str:
     return "\n".join(parts).rstrip("\n") + "\n"
 
 
-def write_refusal_report(
-    attempt: RefusedAttempt, report_root: Path | str | None = None
-) -> Path:
+def write_refusal_report(attempt: RefusedAttempt, report_root: Path | str | None = None) -> Path:
     """Emit one file per attempt, beside the run reports, never overwriting.
 
     `x` mode rather than `w`, so "never overwritten by a later refusal" is a

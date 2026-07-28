@@ -93,9 +93,7 @@ _INTEGER = re.compile(r"([0-9]+)")
 
 def emitted_report_text(emitted_run: EmittedRun) -> str:
     """The shipped run's report, read from the path the job resolved it under."""
-    return run_report_path(emitted_run.run_id, emitted_run.report_root).read_text(
-        encoding="utf-8"
-    )
+    return run_report_path(emitted_run.run_id, emitted_run.report_root).read_text(encoding="utf-8")
 
 
 def limitation_records(report: str) -> dict[str, dict[str, str]]:
@@ -345,9 +343,11 @@ def test_every_vendor_is_paired_with_its_own_count_weight_and_verdict(
     threshold — so a table rendering a verdict from anything other than that
     comparison fails here rather than reading as measured.
     """
-    stored = db_session.execute(
-        RUN_HORIZON_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()["vendor_shrinkage"]
+    stored = (
+        db_session.execute(RUN_HORIZON_SQL, {"run_id": emitted_run.run_id})
+        .mappings()
+        .one()["vendor_shrinkage"]
+    )
     rows = vendor_rows(report)
 
     assert set(rows) == set(stored)
@@ -356,9 +356,7 @@ def test_every_vendor_is_paired_with_its_own_count_weight_and_verdict(
         assert int(count) >= 0
         assert float(weight) == pytest.approx(float(stored[vendor]["median"]), abs=1e-3)
         assert interval.startswith("[") and interval.endswith("]")
-        assert ("**not supported**" in verdict) == (
-            float(weight) < SHRINKAGE_SUPPORT_THRESHOLD
-        )
+        assert ("**not supported**" in verdict) == (float(weight) < SHRINKAGE_SUPPORT_THRESHOLD)
         assert "at the floor above" in verdict
 
 

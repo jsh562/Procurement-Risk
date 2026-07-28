@@ -303,13 +303,17 @@ def test_a_line_closed_by_an_event_after_the_anchor_is_stored_censored(
     falls 45 days past the anchor, so at the anchor it had not delivered and the
     stored indicator must say censored — against the column, not with it.
     """
-    row = db_session.execute(
-        ONE_STORED_ASSIGNMENT_SQL,
-        {
-            "run_id": moved_terminal_event.variant_run_id,
-            "po_line_id": moved_terminal_event.po_line_id,
-        },
-    ).mappings().one()
+    row = (
+        db_session.execute(
+            ONE_STORED_ASSIGNMENT_SQL,
+            {
+                "run_id": moved_terminal_event.variant_run_id,
+                "po_line_id": moved_terminal_event.po_line_id,
+            },
+        )
+        .mappings()
+        .one()
+    )
 
     assert row["is_closed"] is True
     assert row["is_censored"] is True, (
@@ -338,7 +342,7 @@ def test_the_variant_run_still_agrees_with_the_events_over_every_other_line(
 def test_the_shipped_runs_stored_answer_does_not_move_when_the_events_move(
     db_session: Session, emitted_run: EmittedRun, moved_terminal_event: MovedTerminalEvent
 ) -> None:
-    """"Stored, and not re-inferred at read time" — made observable (FR-004).
+    """ "Stored, and not re-inferred at read time" — made observable (FR-004).
 
     The same line is read back under the run that was written *before* the event
     moved. Its answer is still the one that was true when the run was written,
@@ -346,9 +350,13 @@ def test_the_shipped_runs_stored_answer_does_not_move_when_the_events_move(
     way out; a read-time derivation would now report the new events against the
     old run's anchor and quietly rewrite a published run's split.
     """
-    row = db_session.execute(
-        ONE_STORED_ASSIGNMENT_SQL,
-        {"run_id": emitted_run.run_id, "po_line_id": moved_terminal_event.po_line_id},
-    ).mappings().one()
+    row = (
+        db_session.execute(
+            ONE_STORED_ASSIGNMENT_SQL,
+            {"run_id": emitted_run.run_id, "po_line_id": moved_terminal_event.po_line_id},
+        )
+        .mappings()
+        .one()
+    )
 
     assert row["is_censored"] is False

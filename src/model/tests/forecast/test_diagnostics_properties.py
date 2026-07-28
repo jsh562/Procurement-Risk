@@ -388,9 +388,7 @@ def test_a_treedepth_hit_fails_its_own_bar_and_still_refuses_nothing() -> None:
         min_value=-VALUE_SPAN, max_value=VALUE_SPAN, allow_nan=False, allow_infinity=False
     ),
 )
-def test_the_verdict_agrees_with_the_databases_own_expression(
-    metric: str, observed: float
-) -> None:
+def test_the_verdict_agrees_with_the_databases_own_expression(metric: str, observed: float) -> None:
     """An alternate implementation of `ck_forecast_diagnostic__passed_matches_threshold`.
 
     Written here as the `CASE` the migration declares, rather than by calling

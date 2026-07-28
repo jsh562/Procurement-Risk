@@ -85,9 +85,9 @@ ARTIFACTS_WITHOUT_AN_ASSIGNMENT_SQL = text(
 
 def _counts(db_session: Session, emitted_run: EmittedRun):
     """The four cells of the cross-store join, over the run's assigned lines."""
-    return db_session.execute(
-        POPULATION_COUNTS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    return (
+        db_session.execute(POPULATION_COUNTS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+    )
 
 
 def test_no_line_holds_an_artifact_row_in_both_stores_under_one_run(
@@ -189,9 +189,11 @@ def test_every_artifact_row_names_a_line_the_run_assigned(
     breaking one. It would also leave the artifact hash undefined, since the
     ordering is by `canonical_ordinal` and that line has none (DV-031).
     """
-    row = db_session.execute(
-        ARTIFACTS_WITHOUT_AN_ASSIGNMENT_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    row = (
+        db_session.execute(ARTIFACTS_WITHOUT_AN_ASSIGNMENT_SQL, {"run_id": emitted_run.run_id})
+        .mappings()
+        .one()
+    )
 
     assert row["unassigned_posteriors"] == 0
     assert row["unassigned_predictions"] == 0

@@ -143,9 +143,11 @@ def observations(db_session: Session, run_id: uuid.UUID, side: str) -> list[tupl
     Both land on the same axis, which is the whole of what lets a product-limit
     estimate use a censored row rather than discard it.
     """
-    rows = db_session.execute(
-        SPLIT_SIDE_OBSERVATIONS_SQL, {"run_id": run_id, "side": side}
-    ).mappings().all()
+    rows = (
+        db_session.execute(SPLIT_SIDE_OBSERVATIONS_SQL, {"run_id": run_id, "side": side})
+        .mappings()
+        .all()
+    )
     return [
         (
             (row["delivered_on"] - row["order_date"]).days
@@ -227,9 +229,7 @@ def test_the_job_ran_the_ablation_over_the_committed_seeds(
     each is additionally found in the job's own diagnostics — the report alone
     could not distinguish three fits from three labels.
     """
-    published = tuple(
-        int(seed) for seed in _SEEDS.match(section["Seeds"]).group(1).split(", ")
-    )
+    published = tuple(int(seed) for seed in _SEEDS.match(section["Seeds"]).group(1).split(", "))
 
     assert published == ABLATION_SEEDS
     assert len(set(published)) >= MINIMUM_ABLATION_SEEDS
@@ -309,7 +309,7 @@ def test_the_published_floor_is_the_training_splits_own_censoring_bias(
 def test_the_floor_counts_only_the_training_side_and_says_how_many_lines(
     section: dict[str, str], db_session: Session, emitted_run: EmittedRun
 ) -> None:
-    """"The training split alone" published as a number a reader can check.
+    """ "The training split alone" published as a number a reader can check.
 
     FR-007 is the whole content of the difference between the two counts, and a
     reader has no other way to tell which cohort the floor came off. Compared
@@ -335,9 +335,7 @@ def test_a_floor_taken_over_the_whole_cohort_would_not_be_this_number(
     from it.
     """
     floor = float(_FLOOR.search(section["Decision criterion"]).group(1))
-    whole_cohort, _, _ = derived_floor(
-        observations(db_session, emitted_run.run_id, EVERY_SIDE)
-    )
+    whole_cohort, _, _ = derived_floor(observations(db_session, emitted_run.run_id, EVERY_SIDE))
 
     assert abs(floor - whole_cohort) > FRACTION_TOLERANCE, (
         f"the floor derived over the whole cohort ({whole_cohort:.4f}) is indistinguishable "
@@ -357,9 +355,7 @@ def test_the_floor_carries_the_interval_its_own_estimate_supports(
     stated rather than left for a reader to assume.
     """
     floor = float(_FLOOR.search(section["Decision criterion"]).group(1))
-    low, high = (
-        float(value) for value in _INTERVAL.search(section["Decision criterion"]).groups()
-    )
+    low, high = (float(value) for value in _INTERVAL.search(section["Decision criterion"]).groups())
 
     assert low <= floor <= high
     assert f"{FLOOR_INTERVAL_PROBABILITY:.2f}" in section["Decision criterion"]
@@ -417,9 +413,13 @@ def test_the_anchor_the_ablation_was_measured_at_is_the_runs_own(
     `run_id`, so this file would agree with itself at a wrong anchor. The one
     comparison that pins it is against the date the invocation asked for.
     """
-    rows = db_session.execute(
-        SPLIT_SIDE_OBSERVATIONS_SQL, {"run_id": emitted_run.run_id, "side": TRAIN}
-    ).mappings().all()
+    rows = (
+        db_session.execute(
+            SPLIT_SIDE_OBSERVATIONS_SQL, {"run_id": emitted_run.run_id, "side": TRAIN}
+        )
+        .mappings()
+        .all()
+    )
 
     assert rows
     assert {row["as_of_date"] for row in rows} == {emitted_run.as_of_date}

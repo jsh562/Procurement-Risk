@@ -161,7 +161,7 @@ def test_moving_any_single_key_of_the_pin_degrades_the_same_mismatch_to_a_scope_
 def test_a_scope_limit_is_reported_rather_than_failed(
     reproduced_run: ReproducedRun,
 ) -> None:
-    """"Rather than a failure" — as an exit status, not as a word in a report.
+    """ "Rather than a failure" — as an exit status, not as a word in a report.
 
     The outcome the job returns is substituted with the degraded claim and its
     status is read back. FR-032 requires the claim to *degrade*, and a degradation

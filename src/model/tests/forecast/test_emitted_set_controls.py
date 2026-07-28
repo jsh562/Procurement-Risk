@@ -70,9 +70,7 @@ REFUSED_ROW_HASH = "sha256:" + "ab" * 32
 #: Three attempts a second apart. Three rather than two, so the directory holds
 #: four files in total and a file-count equality against FR-040's three fails
 #: rather than passing by coincidence.
-REFUSED_ATTEMPTS = tuple(
-    datetime(2026, 4, 1, 9, 0, second, tzinfo=UTC) for second in (1, 2, 3)
-)
+REFUSED_ATTEMPTS = tuple(datetime(2026, 4, 1, 9, 0, second, tzinfo=UTC) for second in (1, 2, 3))
 
 #: The undeclared kind. Named like something a well-meaning later epic would add
 #: — a summary beside the reports — rather than like an obvious stray file.
@@ -188,9 +186,7 @@ def test_three_refusal_reports_are_legal_and_a_file_count_equality_would_reject_
     wording.
     """
     for attempted_at in REFUSED_ATTEMPTS:
-        path = refusal_report_path(
-            REFUSED_AS_OF, REFUSED_ROW_HASH, attempted_at, report_directory
-        )
+        path = refusal_report_path(REFUSED_AS_OF, REFUSED_ROW_HASH, attempted_at, report_directory)
         path.write_text("# Forecast Refusal Report\n", encoding="utf-8")
 
     emitted = sorted(report_directory.iterdir())

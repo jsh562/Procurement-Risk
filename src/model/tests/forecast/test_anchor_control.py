@@ -112,9 +112,11 @@ def _a_stored_prediction(db_session: Session, emitted_run: EmittedRun):
     the digest are the ones the database already holds, and nothing else can be
     the reason a plant is refused.
     """
-    row = db_session.execute(
-        A_STORED_PREDICTION_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().first()
+    row = (
+        db_session.execute(A_STORED_PREDICTION_SQL, {"run_id": emitted_run.run_id})
+        .mappings()
+        .first()
+    )
 
     assert row is not None, (
         "the shared run stored no held-out prediction, so there is no accepted row to plant "
@@ -157,7 +159,7 @@ def _plant(db_session: Session, emitted_run: EmittedRun, **overrides) -> None:
 
 
 def test_the_anchor_foreign_key_is_present_with_the_shape_the_data_model_declares(
-    db_session: Session
+    db_session: Session,
 ) -> None:
     """DV-023's positive control: a dropped or renamed key fails here.
 
@@ -186,9 +188,7 @@ def test_the_anchor_foreign_key_is_present_with_the_shape_the_data_model_declare
         )
 
 
-def test_the_anchor_key_refuses_to_cascade_a_corrected_order_date(
-    db_session: Session
-) -> None:
+def test_the_anchor_key_refuses_to_cascade_a_corrected_order_date(db_session: Session) -> None:
     """`ON UPDATE RESTRICT`, the deliberate departure from E003's convention.
 
     E003 cascades on composite keys whose parent has a mutable column, so a
@@ -229,9 +229,7 @@ def test_every_stored_anchor_is_its_own_lines_order_date(
     of this file exist: the constraint proves it of every stored row, and this
     proves the constraint was in force when these particular rows were written.
     """
-    rows = db_session.execute(
-        STORED_ANCHORS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().all()
+    rows = db_session.execute(STORED_ANCHORS_SQL, {"run_id": emitted_run.run_id}).mappings().all()
 
     assert rows, "the shared run stored no held-out prediction to check an anchor of"
     for row in rows:
@@ -329,8 +327,10 @@ def test_the_unaltered_template_row_is_accepted(
     """
     with db_session.begin_nested():
         _plant(db_session, emitted_run)
-        stored = db_session.execute(
-            A_STORED_PREDICTION_SQL, {"run_id": emitted_run.run_id}
-        ).mappings().first()
+        stored = (
+            db_session.execute(A_STORED_PREDICTION_SQL, {"run_id": emitted_run.run_id})
+            .mappings()
+            .first()
+        )
 
         assert stored is not None

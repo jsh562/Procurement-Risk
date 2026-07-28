@@ -97,9 +97,7 @@ def test_every_line_the_frame_carries_is_on_the_training_side(fit_input: FitInpu
     )
 
 
-def test_the_frames_row_axis_is_aligned_with_every_array_it_carries(
-    fit_input: FitInput
-) -> None:
+def test_the_frames_row_axis_is_aligned_with_every_array_it_carries(fit_input: FitInput) -> None:
     """The alignment the isolation claim rests on, asserted rather than assumed.
 
     `po_line_ids` proves nothing about `duration_days` unless the two are one
@@ -117,9 +115,7 @@ def test_the_frames_row_axis_is_aligned_with_every_array_it_carries(
     assert frame.design.shape[0] == rows
 
 
-def test_the_excluded_lines_are_excluded_rather_than_silently_absent(
-    fit_input: FitInput
-) -> None:
+def test_the_excluded_lines_are_excluded_rather_than_silently_absent(fit_input: FitInput) -> None:
     """A line missing from the frame is either held out or declared excluded.
 
     `training_frame` records the lines it dropped as unstarted at the anchor
@@ -154,13 +150,10 @@ def test_isolation_is_asserted_over_the_frame_rather_than_over_the_database(
     """
     stored = {
         row["po_line_id"]: row["split_side"]
-        for row in db_session.execute(
-            STORED_SIDES_SQL, {"run_id": emitted_run.run_id}
-        ).mappings()
+        for row in db_session.execute(STORED_SIDES_SQL, {"run_id": emitted_run.run_id}).mappings()
     }
     in_memory = {
-        assignment.po_line_id: assignment.split_side
-        for assignment in fit_input.split.assignments
+        assignment.po_line_id: assignment.split_side for assignment in fit_input.split.assignments
     }
 
     assert stored == in_memory, (

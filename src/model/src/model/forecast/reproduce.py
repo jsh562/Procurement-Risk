@@ -270,9 +270,7 @@ class ProvenanceIdentity:
     def differing_fields(self, other: ProvenanceIdentity) -> tuple[str, ...]:
         """Every provenance field on which the two runs are not exactly equal."""
         return tuple(
-            name
-            for name in PROVENANCE_FIELDS
-            if getattr(self, name) != getattr(other, name)
+            name for name in PROVENANCE_FIELDS if getattr(self, name) != getattr(other, name)
         )
 
 
@@ -487,9 +485,7 @@ def _refusal(unmet: Sequence[UnmetPrecondition]) -> ReproductionRefusal:
     the sampler is reached, which is what makes "pre-sampling" a property of the
     control flow rather than a claim about it.
     """
-    stated = "; ".join(
-        f"{item.precondition} — realized: {item.realized_value}" for item in unmet
-    )
+    stated = "; ".join(f"{item.precondition} — realized: {item.realized_value}" for item in unmet)
     return ReproductionRefusal(
         f"{len(unmet)} recorded input digest(s) no longer match what is present, so the "
         f"reproduction refuses before sampling and nothing was written: {stated}",
@@ -679,9 +675,7 @@ def refit_recorded(
         note(warning)
 
     vendors, categories = roster_index(procurement_input.lines)
-    frame = training_frame(
-        procurement_input.lines, split, vendors, categories, recorded.as_of_date
-    )
+    frame = training_frame(procurement_input.lines, split, vendors, categories, recorded.as_of_date)
     draws_per_chain = recorded.draws_per_chain
     note(
         f"re-fitting run {recorded.run_id} at {recorded.chain_count} chains x "
@@ -983,9 +977,7 @@ def _paired(
                         po_line_id=po_line_id,
                         probability=probability,
                         recorded=nearest_rank_percentile(left[po_line_id].draws, probability),
-                        reproduced=nearest_rank_percentile(
-                            right[po_line_id].draws, probability
-                        ),
+                        reproduced=nearest_rank_percentile(right[po_line_id].draws, probability),
                         predictive_ess=refit.predictive_ess[po_line_id],
                         draw_count=recorded.draw_count,
                     )
@@ -1122,9 +1114,7 @@ def _input_provenance_section(outcome: ReproductionOutcome, recorded: RecordedRu
     """The two digests that refuse and the one that warns, with their dispositions."""
     fixture = outcome.fixture
     if fixture.agrees:
-        agreement = (
-            "agrees with the digest this run recorded and with the digest E005 publishes"
-        )
+        agreement = "agrees with the digest this run recorded and with the digest E005 publishes"
     else:
         agreement = "; ".join(fixture.warnings())
     differing = outcome.differing_provenance_fields
@@ -1423,9 +1413,7 @@ def run_reproduce(
         note(f"refusal report at {emitted}")
         raise
 
-    outcome = compare_reproduction(
-        recorded, refit, wall_clock_seconds=time.monotonic() - started
-    )
+    outcome = compare_reproduction(recorded, refit, wall_clock_seconds=time.monotonic() - started)
     emitted = write_reproduction_report(outcome, recorded, report_root)
     note(f"reproduction report at {emitted}")
     note(f"verdict: {outcome.verdict}; draw-digest claim: {outcome.claim.verdict}")

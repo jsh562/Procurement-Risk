@@ -79,9 +79,7 @@ def reproduce_refusal(
     compared, and the two must not be reportable as the same thing.
     """
     with pytest.raises(ReproductionRefusal) as caught:
-        run_reproduce(
-            db_session, emitted_run.run_id, report_root=report_root, log=io.StringIO()
-        )
+        run_reproduce(db_session, emitted_run.run_id, report_root=report_root, log=io.StringIO())
     return caught.value
 
 

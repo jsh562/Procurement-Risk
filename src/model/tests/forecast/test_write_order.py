@@ -77,9 +77,7 @@ def test_a_run_is_complete_and_unpublished_after_the_first_unit_of_work(
     somebody is.
     """
     manifest = dataclasses.replace(stored_run.manifest, run_id=uuid.uuid4())
-    insert_artifact_set(
-        db_session, manifest, stored_run.assignments, stored_run.line_posteriors
-    )
+    insert_artifact_set(db_session, manifest, stored_run.assignments, stored_run.line_posteriors)
     db_session.commit()
 
     counts = db_session.execute(CHILD_COUNTS_SQL, {"run_id": manifest.run_id}).mappings().one()
@@ -102,9 +100,7 @@ def test_the_pointer_is_set_explicitly_in_a_second_unit_of_work(
     statements necessary rather than tidy.
     """
     manifest = dataclasses.replace(stored_run.manifest, run_id=uuid.uuid4())
-    insert_artifact_set(
-        db_session, manifest, stored_run.assignments, stored_run.line_posteriors
-    )
+    insert_artifact_set(db_session, manifest, stored_run.assignments, stored_run.line_posteriors)
     db_session.commit()
     before = set(db_session.execute(ACTIVE_VIEW_SQL).scalars())
 
@@ -117,7 +113,7 @@ def test_the_pointer_is_set_explicitly_in_a_second_unit_of_work(
 
 
 def test_neither_pointer_statement_consults_the_creation_timestamp() -> None:
-    """"Explicit, never implied by recency" — asserted over the two statements.
+    """ "Explicit, never implied by recency" — asserted over the two statements.
 
     A recency fallback would make a superseded run indistinguishable from the
     live one, which is exactly the failure E003's TR-027 records. Neither
@@ -163,8 +159,7 @@ def test_no_stored_row_holds_two_arrays_of_disagreeing_length(
     inferred from the fact that the writer intended otherwise.
     """
     assert (
-        db_session.execute(DISAGREEING_ARRAYS_SQL, {"run_id": emitted_run.run_id}).scalar_one()
-        == 0
+        db_session.execute(DISAGREEING_ARRAYS_SQL, {"run_id": emitted_run.run_id}).scalar_one() == 0
     )
 
 

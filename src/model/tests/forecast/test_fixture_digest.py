@@ -145,9 +145,7 @@ def test_the_fixture_digest_and_the_row_hash_are_distinct_recorded_values(
     than an assertion that two strings happen to differ.
     """
     with engine.connect() as connection:
-        row = connection.execute(
-            RUN_DIGESTS_SQL, {"run_id": emitted_run.run_id}
-        ).mappings().one()
+        row = connection.execute(RUN_DIGESTS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
         from_rows = input_data_hash(read_lines_and_events(connection))
     from_file = dataset_content_hash(
         read_payload(procurement_paths.fixture_path(procurement_paths.REPO_ROOT))
@@ -175,12 +173,10 @@ def test_a_moved_fixture_digest_against_unchanged_rows_warns_and_completes(
     fail the next test.
     """
     with engine.connect() as connection:
-        row = connection.execute(
-            RUN_DIGESTS_SQL, {"run_id": warned_run.run_id}
-        ).mappings().one()
-        shipped = connection.execute(
-            RUN_DIGESTS_SQL, {"run_id": emitted_run.run_id}
-        ).mappings().one()
+        row = connection.execute(RUN_DIGESTS_SQL, {"run_id": warned_run.run_id}).mappings().one()
+        shipped = (
+            connection.execute(RUN_DIGESTS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+        )
 
     assert warned_run.observed_digest != warned_run.published_digest
     assert row["input_fixture_digest"] == warned_run.observed_digest
@@ -246,9 +242,7 @@ def test_a_moved_row_moves_the_row_hash_and_leaves_the_fixture_digest_alone(
     unchanged `input_data_hash`" — would be unreachable rather than merely
     untested. The edit is discarded with the test's transaction.
     """
-    recorded = db_session.execute(
-        RUN_DIGESTS_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    recorded = db_session.execute(RUN_DIGESTS_SQL, {"run_id": emitted_run.run_id}).mappings().one()
     before = input_data_hash(read_lines_and_events(db_session))
     db_session.execute(MOVE_ONE_ROW_SQL, {"suffix": ROW_MUTATION_SUFFIX})
     after = input_data_hash(read_lines_and_events(db_session))
@@ -279,9 +273,9 @@ def test_the_row_hash_has_no_published_counterpart_to_warn_against(
     and DV-015 refuses on it.
     """
     columns = set(db_session.execute(ROW_HASH_COLUMNS_SQL).scalars())
-    beside_the_row_hash = {
-        name for name in columns if name.startswith("input_data_hash")
-    } - {"input_data_hash"}
+    beside_the_row_hash = {name for name in columns if name.startswith("input_data_hash")} - {
+        "input_data_hash"
+    }
     sidecar = procurement_paths.hash_path(procurement_paths.REPO_ROOT)
 
     assert "input_data_hash" in columns

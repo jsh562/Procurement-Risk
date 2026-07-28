@@ -65,9 +65,7 @@ MOVE_NEED_BY_DATE_SQL = text(
 
 def _recorded(db_session: Session, emitted_run: EmittedRun):
     """The four provenance values the run committed alongside its split."""
-    return db_session.execute(
-        RECORDED_HASHES_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    return db_session.execute(RECORDED_HASHES_SQL, {"run_id": emitted_run.run_id}).mappings().one()
 
 
 def _split_now(db_session: Session, emitted_run: EmittedRun):
@@ -80,9 +78,7 @@ def _split_now(db_session: Session, emitted_run: EmittedRun):
     """
     procurement_input = read_lines_and_events(db_session)
     row_hash = input_data_hash(procurement_input)
-    return row_hash, assign_split(
-        procurement_input.lines, emitted_run.as_of_date, row_hash
-    )
+    return row_hash, assign_split(procurement_input.lines, emitted_run.as_of_date, row_hash)
 
 
 def test_the_recorded_split_hash_is_reproduced_from_the_rows_in_the_database(

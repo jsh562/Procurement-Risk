@@ -217,8 +217,7 @@ def test_progressbar_defaults_to_off() -> None:
     default = _keyword_defaults()["progressbar"]
 
     assert isinstance(default, ast.Constant) and default.value is False, (
-        f"`progressbar` defaults to {ast.dump(default) if default else '(nothing)'}, not "
-        f"`False`."
+        f"`progressbar` defaults to {ast.dump(default) if default else '(nothing)'}, not `False`."
     )
     assert inspect.signature(sample_posterior).parameters["progressbar"].default is False
 

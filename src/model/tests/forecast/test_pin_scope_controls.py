@@ -87,7 +87,8 @@ def outside_the_pin(reproduced_run: ReproducedRun) -> ReproductionOutcome:
 
 
 def test_the_injection_is_a_real_difference_from_the_recorded_pin(
-    outside_the_pin: ReproductionOutcome, reproduced_run: ReproducedRun,
+    outside_the_pin: ReproductionOutcome,
+    reproduced_run: ReproducedRun,
 ) -> None:
     """The planting is what it claims to be, before anything is concluded from it.
 
@@ -167,7 +168,8 @@ def test_the_moved_version_also_breaks_the_provenance_equality_and_says_so(
 
 
 def test_the_report_publishes_the_scope_limit_in_those_words(
-    outside_the_pin: ReproductionOutcome, reproduced_run: ReproducedRun,
+    outside_the_pin: ReproductionOutcome,
+    reproduced_run: ReproducedRun,
 ) -> None:
     """A scope limit a reader cannot find is not a reported scope limit.
 

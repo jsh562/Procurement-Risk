@@ -354,9 +354,7 @@ def moved_fixture_root(tmp_path_factory) -> Path:
         shutil.copy2(source / name, target / name)
 
     payload = read_payload(source / procurement_paths.FIXTURE_FILENAME)
-    payload[MUTATED_FIXTURE_FIELD] = (
-        f"{payload[MUTATED_FIXTURE_FIELD]}{FIXTURE_MUTATION_MARKER}"
-    )
+    payload[MUTATED_FIXTURE_FIELD] = f"{payload[MUTATED_FIXTURE_FIELD]}{FIXTURE_MUTATION_MARKER}"
     write_payload(target / procurement_paths.FIXTURE_FILENAME, payload)
     return root
 
@@ -594,9 +592,7 @@ def committed_dataset(engine: Engine, schema_at_head: str) -> int:
 
 
 @pytest.fixture(scope="package")
-def emitted_run(
-    engine: Engine, committed_dataset: int, tmp_path_factory
-) -> Iterator[EmittedRun]:
+def emitted_run(engine: Engine, committed_dataset: int, tmp_path_factory) -> Iterator[EmittedRun]:
     """The tier's shared run: one `forecast-fit` at the committed shape.
 
     Shared because sampling is the expensive part and every assertion over stored
@@ -685,9 +681,7 @@ class ReproducedRun:
 
 
 @pytest.fixture(scope="package")
-def reproduced_run(
-    engine: Engine, emitted_run: EmittedRun, tmp_path_factory
-) -> ReproducedRun:
+def reproduced_run(engine: Engine, emitted_run: EmittedRun, tmp_path_factory) -> ReproducedRun:
     """The tier's shared reproduction: one re-fit of `emitted_run`, at its shape.
 
     **Package-scoped because it is a second fit at the committed shape**, which
@@ -707,12 +701,8 @@ def reproduced_run(
     """
     log = io.StringIO()
     root = tmp_path_factory.mktemp("reproduction-reports")
-    reproduction = run_reproduce(
-        engine, emitted_run.run_id, report_root=root, log=log
-    )
-    return ReproducedRun(
-        reproduction=reproduction, diagnostics=log.getvalue(), report_root=root
-    )
+    reproduction = run_reproduce(engine, emitted_run.run_id, report_root=root, log=log)
+    return ReproducedRun(reproduction=reproduction, diagnostics=log.getvalue(), report_root=root)
 
 
 # --------------------------------------------------------------------------
@@ -1075,9 +1065,7 @@ def fit_input(db_session: Session, emitted_run: EmittedRun) -> FitInput:
         sorted({line.material_category for line in procurement_input.lines})
     )
     training = {
-        assignment.po_line_id
-        for assignment in split.assignments
-        if assignment.split_side == TRAIN
+        assignment.po_line_id for assignment in split.assignments if assignment.split_side == TRAIN
     }
     counts = dict.fromkeys(vendor_ids, 0)
     for line in procurement_input.lines:

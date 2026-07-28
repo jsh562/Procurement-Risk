@@ -103,8 +103,8 @@ def test_the_active_run_pointer_is_unmoved(
         "the shipped run is not the active one before the refusal, so this test has no "
         "pointer value to hold constant"
     )
-    assert refused_after_sampling.after["active_run"] == (
-        refused_after_sampling.before["active_run"]
+    assert (
+        refused_after_sampling.after["active_run"] == (refused_after_sampling.before["active_run"])
     )
 
 

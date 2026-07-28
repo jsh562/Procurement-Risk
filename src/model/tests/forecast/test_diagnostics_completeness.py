@@ -56,9 +56,7 @@ def stored_diagnostics(db_session: Session, run_id) -> list[dict]:
     """
     return [
         dict(row)
-        for row in db_session.execute(STORED_DIAGNOSTICS_SQL, {"run_id": run_id})
-        .mappings()
-        .all()
+        for row in db_session.execute(STORED_DIAGNOSTICS_SQL, {"run_id": run_id}).mappings().all()
     ]
 
 
@@ -88,9 +86,7 @@ def test_every_monitored_parameter_carries_all_three_parameter_metrics(
     not a code change, and it is not a change to this test either.
     """
     rows = stored_diagnostics(db_session, emitted_run.run_id)
-    expected = set(
-        monitored_parameter_names(fit_input.vendor_ids, fit_input.material_categories)
-    )
+    expected = set(monitored_parameter_names(fit_input.vendor_ids, fit_input.material_categories))
     coverage = parameter_coverage(rows)
 
     assert expected, "the monitored set is empty, so this test would pass vacuously"
@@ -114,9 +110,7 @@ def test_every_monitored_parameter_carries_all_three_parameter_metrics(
     )
 
 
-def test_exactly_three_run_scope_rows_exist(
-    db_session: Session, emitted_run: EmittedRun
-) -> None:
+def test_exactly_three_run_scope_rows_exist(db_session: Session, emitted_run: EmittedRun) -> None:
     """DV-011's second half: the three run-level metrics, each exactly once.
 
     Exactly three and exactly *these* three. `uq_forecast_diagnostic__run_metric_
@@ -144,9 +138,7 @@ def test_the_stored_row_count_is_the_set_the_run_claims_to_have_monitored(
     store hold a measurement twice. The unique key forbids it; this is what
     shows the key is doing that job.
     """
-    monitored = monitored_parameter_names(
-        fit_input.vendor_ids, fit_input.material_categories
-    )
+    monitored = monitored_parameter_names(fit_input.vendor_ids, fit_input.material_categories)
     rows = stored_diagnostics(db_session, emitted_run.run_id)
 
     assert len(rows) == len(monitored) * len(PARAMETER_METRICS) + len(RUN_METRICS)
@@ -190,9 +182,7 @@ def test_every_row_is_joinable_to_exactly_one_run(
     being declared on a table nothing writes to.
     """
     rows = stored_diagnostics(db_session, emitted_run.run_id)
-    orphaned = db_session.execute(
-        ORPHANED_ROWS_SQL, {"run_id": emitted_run.run_id}
-    ).scalar_one()
+    orphaned = db_session.execute(ORPHANED_ROWS_SQL, {"run_id": emitted_run.run_id}).scalar_one()
     natural_keys = [(row["metric"], row["parameter_name"]) for row in rows]
 
     assert orphaned == 0

@@ -264,31 +264,82 @@ VERDICT_CRITERION_FIELDS: dict[str, str] = {
 #: forecast quality.
 REVIEWED_COLUMNS: dict[str, tuple[str, ...]] = {
     "forecast_run": (
-        "run_id", "code_commit", "code_worktree_dirty", "input_data_hash", "seed_entropy",
-        "chain_count", "draw_count", "tuning_count", "library_versions", "artifact_hash",
-        "draw_serialization", "artifact_schema_version", "model_version", "as_of_date",
-        "horizon_days", "wall_clock_seconds", "roster_hash", "is_active", "created_at",
-        "covariate_names", "open_line_draw_semantic", "input_fixture_digest", "input_layer",
-        "input_datasheet_ref", "canonical_serialization", "split_seed_entropy",
-        "split_assignment_hash", "held_out_fraction_declared", "held_out_fraction_realized",
-        "held_out_uncensored_event_count", "vendor_shrinkage", "open_line_count",
+        "run_id",
+        "code_commit",
+        "code_worktree_dirty",
+        "input_data_hash",
+        "seed_entropy",
+        "chain_count",
+        "draw_count",
+        "tuning_count",
+        "library_versions",
+        "artifact_hash",
+        "draw_serialization",
+        "artifact_schema_version",
+        "model_version",
+        "as_of_date",
+        "horizon_days",
+        "wall_clock_seconds",
+        "roster_hash",
+        "is_active",
+        "created_at",
+        "covariate_names",
+        "open_line_draw_semantic",
+        "input_fixture_digest",
+        "input_layer",
+        "input_datasheet_ref",
+        "canonical_serialization",
+        "split_seed_entropy",
+        "split_assignment_hash",
+        "held_out_fraction_declared",
+        "held_out_fraction_realized",
+        "held_out_uncensored_event_count",
+        "vendor_shrinkage",
+        "open_line_count",
         "training_line_count",
     ),
     "forecast_split_assignment": (
-        "run_id", "po_line_id", "split_side", "is_censored", "canonical_ordinal",
+        "run_id",
+        "po_line_id",
+        "split_side",
+        "is_censored",
+        "canonical_ordinal",
     ),
     "line_posterior": (
-        "run_id", "po_line_id", "draw_count", "horizon_days", "draws", "survival",
-        "residual_tail_mass", "draw_digest",
+        "run_id",
+        "po_line_id",
+        "draw_count",
+        "horizon_days",
+        "draws",
+        "survival",
+        "residual_tail_mass",
+        "draw_digest",
     ),
     "held_out_prediction": (
-        "run_id", "po_line_id", "draw_count", "horizon_days", "anchor_date", "line_is_closed",
-        "anchor_convention", "duration_semantic", "draws", "survival", "residual_tail_mass",
+        "run_id",
+        "po_line_id",
+        "draw_count",
+        "horizon_days",
+        "anchor_date",
+        "line_is_closed",
+        "anchor_convention",
+        "duration_semantic",
+        "draws",
+        "survival",
+        "residual_tail_mass",
         "draw_digest",
     ),
     "forecast_diagnostic": (
-        "diagnostic_id", "run_id", "diagnostic_scope", "parameter_name", "metric",
-        "observed_value", "threshold_value", "threshold_direction", "is_blocking", "passed",
+        "diagnostic_id",
+        "run_id",
+        "diagnostic_scope",
+        "parameter_name",
+        "metric",
+        "observed_value",
+        "threshold_value",
+        "threshold_direction",
+        "is_blocking",
+        "passed",
     ),
 }
 
@@ -341,9 +392,9 @@ def stored_columns(db_session: Session) -> dict[str, dict[str, str]]:
     is the reviewed set and this is what the database actually has, and DV-021
     is the comparison between them.
     """
-    rows = db_session.execute(
-        STORE_COLUMNS_SQL, {"tables": list(REVIEWED_COLUMNS)}
-    ).mappings().all()
+    rows = (
+        db_session.execute(STORE_COLUMNS_SQL, {"tables": list(REVIEWED_COLUMNS)}).mappings().all()
+    )
     observed: dict[str, dict[str, str]] = {table: {} for table in REVIEWED_COLUMNS}
     for row in rows:
         observed[row["table_name"]][row["column_name"]] = row["data_type"]

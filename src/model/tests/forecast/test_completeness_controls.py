@@ -65,9 +65,7 @@ DROP_ONE_DIAGNOSTIC_SQL = text(
 OMITTED_METRIC = "ess_tail"
 
 
-def test_a_split_row_removed_fails_dv_006(
-    db_session: Session, emitted_run: EmittedRun
-) -> None:
+def test_a_split_row_removed_fails_dv_006(db_session: Session, emitted_run: EmittedRun) -> None:
     """NC-16's first case: one line loses its assignment and the count notices.
 
     `pk_forecast_split_assignment` gives *at most once per run* and
@@ -105,9 +103,7 @@ def test_an_ess_tail_row_omitted_fails_dv_011(
     metric nobody recorded a verdict for, on a parameter the gate claims to have
     judged (G-7).
     """
-    monitored = monitored_parameter_names(
-        fit_input.vendor_ids, fit_input.material_categories
-    )
+    monitored = monitored_parameter_names(fit_input.vendor_ids, fit_input.material_categories)
     victim = monitored[0]
     with db_session.begin_nested() as plant:
         removed = db_session.execute(
@@ -152,9 +148,7 @@ def test_a_vendor_absent_from_the_shrinkage_object_fails_dv_009(
         insert_artifact_set(
             db_session, manifest, stored_run.assignments, stored_run.line_posteriors
         )
-        stored = db_session.execute(
-            STORED_WEIGHTS_SQL, {"run_id": manifest.run_id}
-        ).scalar_one()
+        stored = db_session.execute(STORED_WEIGHTS_SQL, {"run_id": manifest.run_id}).scalar_one()
         roster = set(db_session.execute(ROSTER_VENDORS_SQL).scalars())
 
         assert dropped in roster, "the dropped vendor is not in the roster, so nothing is missing"
@@ -182,9 +176,7 @@ def test_the_three_predicates_pass_on_the_undoctored_run(
     parameters = {"run_id": emitted_run.run_id}
     counts = db_session.execute(COVERAGE_SQL, parameters).mappings().one()
     coverage = parameter_coverage(stored_diagnostics(db_session, emitted_run.run_id))
-    monitored = monitored_parameter_names(
-        fit_input.vendor_ids, fit_input.material_categories
-    )
+    monitored = monitored_parameter_names(fit_input.vendor_ids, fit_input.material_categories)
 
     assert counts["assigned"] == counts["lines_present"]
     assert set(coverage) == set(monitored)

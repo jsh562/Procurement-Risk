@@ -62,9 +62,7 @@ HELD_OUT_EVENTS_SQL = text(
     WHERE a.run_id = :run_id AND a.split_side = 'held_out' AND l.is_closed
     """
 )
-PREDICTION_ROWS_SQL = text(
-    "SELECT count(*) FROM held_out_prediction WHERE run_id = :run_id"
-)
+PREDICTION_ROWS_SQL = text("SELECT count(*) FROM held_out_prediction WHERE run_id = :run_id")
 POSTERIOR_ROWS_SQL = text("SELECT count(*) FROM line_posterior WHERE run_id = :run_id")
 
 #: `held_out_fraction_realized` is a ratio of two integers stored as a `double

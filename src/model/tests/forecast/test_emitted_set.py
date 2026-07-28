@@ -224,9 +224,7 @@ def test_the_reproduction_report_renders_its_sections_in_the_declared_order(
     assertion for the kind that arrived with T098, and it is what turns the set
     comparison above into a claim about the document a reader receives.
     """
-    report = next(
-        path for path in every_emitted_file if kind_of(path) == "reproduction report"
-    )
+    report = next(path for path in every_emitted_file if kind_of(path) == "reproduction report")
 
     assert tuple(report_fields(report)) == REPRODUCTION_SECTION_TITLES
 

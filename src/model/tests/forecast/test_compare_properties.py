@@ -88,9 +88,7 @@ days = st.floats(min_value=0.001, max_value=5000.0, allow_nan=False, allow_infin
 #: The open interval `(0, 1]`. Zero is excluded because `ceil(0·n)` is a rank of
 #: zero, which 1-indexing has no element for; one is included because `p = 1` is
 #: the maximum and is a legal nearest-rank request.
-probabilities = st.floats(
-    min_value=0.001, max_value=1.0, allow_nan=False, allow_infinity=False
-)
+probabilities = st.floats(min_value=0.001, max_value=1.0, allow_nan=False, allow_infinity=False)
 
 deltas = st.floats(min_value=-500.0, max_value=500.0, allow_nan=False, allow_infinity=False)
 

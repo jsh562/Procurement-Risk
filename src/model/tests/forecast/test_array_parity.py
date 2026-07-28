@@ -131,7 +131,7 @@ def test_each_paired_definition_is_identical_on_both_stores(
 
 
 def test_no_paired_definition_mentions_the_table_it_sits_on(db_session: Session) -> None:
-    """"Identical modulo the table name" needs no substitution, and that is checked.
+    """ "Identical modulo the table name" needs no substitution, and that is checked.
 
     A check constraint references bare column names, so neither table's name
     appears in either definition — which is what lets the comparison above be
@@ -148,9 +148,7 @@ def test_no_paired_definition_mentions_the_table_it_sits_on(db_session: Session)
             )
 
 
-def test_both_stores_call_the_delivered_helpers_rather_than_a_copy(
-    db_session: Session
-) -> None:
+def test_both_stores_call_the_delivered_helpers_rather_than_a_copy(db_session: Session) -> None:
     """DV-026's consequence, seen from the parity side.
 
     Three of the shared invariants are enforced by `IMMUTABLE` helper functions,

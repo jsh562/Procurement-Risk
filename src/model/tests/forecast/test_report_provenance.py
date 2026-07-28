@@ -94,9 +94,7 @@ def section(emitted_run: EmittedRun) -> dict[str, str]:
 @pytest.fixture
 def recorded(db_session: Session, emitted_run: EmittedRun):
     """The same run's manifest half, read back out of `forecast_run`."""
-    return db_session.execute(
-        RUN_PROVENANCE_SQL, {"run_id": emitted_run.run_id}
-    ).mappings().one()
+    return db_session.execute(RUN_PROVENANCE_SQL, {"run_id": emitted_run.run_id}).mappings().one()
 
 
 def test_the_provenance_section_renders_every_field_its_schema_declares(

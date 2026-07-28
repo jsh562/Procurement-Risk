@@ -165,9 +165,9 @@ def fitted_laws(engine: Engine, emitted_run: EmittedRun) -> dict[uuid.UUID, Line
     which is what makes the identity below a tolerance on the uniforms alone.
     """
     with engine.connect() as connection:
-        provenance = connection.execute(
-            RUN_PROVENANCE_SQL, {"run_id": emitted_run.run_id}
-        ).mappings().one()
+        provenance = (
+            connection.execute(RUN_PROVENANCE_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+        )
         procurement_input = read_lines_and_events(connection)
 
     as_of_date = provenance["as_of_date"]
@@ -202,8 +202,9 @@ def fitted_laws(engine: Engine, emitted_run: EmittedRun) -> dict[uuid.UUID, Line
     for line in procurement_input.lines:
         if not censoring_indicator(line, as_of_date):
             continue
-        group = vendor_offsets[:, vendor_at[line.vendor_id]] + (
-            category_offsets[:, category_at[line.material_category]]
+        group = (
+            vendor_offsets[:, vendor_at[line.vendor_id]]
+            + (category_offsets[:, category_at[line.material_category]])
         )
         mu, sigma = _total_duration_lognormal(
             mu_sojourn,
@@ -211,9 +212,7 @@ def fitted_laws(engine: Engine, emitted_run: EmittedRun) -> dict[uuid.UUID, Line
             group,
             _leg_positions(_rework_loops(line, as_of_date)),
         )
-        laws[line.po_line_id] = LineLaw(
-            elapsed=elapsed_days(line, as_of_date), mu=mu, sigma=sigma
-        )
+        laws[line.po_line_id] = LineLaw(elapsed=elapsed_days(line, as_of_date), mu=mu, sigma=sigma)
     return laws
 
 
@@ -249,9 +248,7 @@ def anchored_medians(
             near, far = (
                 {
                     row["po_line_id"]: float(np.median(np.asarray(row["draws"], dtype=float)))
-                    for row in connection.execute(
-                        STORED_DRAWS_SQL, {"run_id": run_id}
-                    ).mappings()
+                    for row in connection.execute(STORED_DRAWS_SQL, {"run_id": run_id}).mappings()
                 }
                 for run_id in written
             )
@@ -267,9 +264,7 @@ def _stored(engine: Engine, run_id: uuid.UUID) -> list:
         return list(connection.execute(STORED_DRAWS_SQL, {"run_id": run_id}).mappings().all())
 
 
-def test_every_stored_draw_is_strictly_positive(
-    engine: Engine, emitted_run: EmittedRun
-) -> None:
+def test_every_stored_draw_is_strictly_positive(engine: Engine, emitted_run: EmittedRun) -> None:
     """Relation 1, and the exact discriminator against the re-based alternative.
 
     Re-basing a total draw — subtracting elapsed days and clipping at zero — puts

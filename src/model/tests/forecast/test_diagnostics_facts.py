@@ -88,9 +88,7 @@ def _plant(db_session: Session, run_id: uuid.UUID, **overrides) -> None:
     db_session.execute(PLANT_SQL, parameters)
 
 
-def test_every_stored_blocking_row_passed(
-    db_session: Session, emitted_run: EmittedRun
-) -> None:
+def test_every_stored_blocking_row_passed(db_session: Session, emitted_run: EmittedRun) -> None:
     """DV-012's first half, over the run this tier emitted.
 
     A published run's stored evidence says its sampler converged, and every
@@ -151,8 +149,7 @@ def test_a_failing_blocking_row_cannot_be_stored(
         )
 
     assert "ck_forecast_diagnostic__blocking_rows_passed" in str(refused.value), (
-        f"the plant was refused by something other than the blocking-rows rule: "
-        f"{refused.value}"
+        f"the plant was refused by something other than the blocking-rows rule: {refused.value}"
     )
 
 

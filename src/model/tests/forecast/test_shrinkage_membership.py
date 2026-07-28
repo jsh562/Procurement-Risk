@@ -129,9 +129,7 @@ def test_a_vendor_with_no_training_line_is_stored_rather_than_dropped(
     manifest = dataclasses.replace(
         stored_run.manifest, run_id=uuid.uuid4(), vendor_shrinkage=weights
     )
-    insert_artifact_set(
-        db_session, manifest, stored_run.assignments, stored_run.line_posteriors
-    )
+    insert_artifact_set(db_session, manifest, stored_run.assignments, stored_run.line_posteriors)
 
     stored = _stored_weights(db_session, manifest.run_id)
 
