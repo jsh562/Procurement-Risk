@@ -50,7 +50,7 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 - [ ] T005 [P] Append ingest,llm,compute to the coverage --source enumeration and add a per-package 80% floor for each in .github/workflows/verify.yml
 - [ ] T006 {FR-048} Extend the enumerated computation-boundary contract to this epic's model-facing modules in src/model/pyproject.toml (AD-001)
 - [ ] T007 {FR-023} Add the placement check — only model.llm may import gateway — with a seeded violation in tests/checks/test_model_facing_placement.py after:T006
-- [ ] T008 {FR-050} Add the baseline-independence contract — model.ingest.baseline may not import model.corpus.templates, .render or .model — in src/model/tests/ingest/test_baseline_independence.py
+- [ ] T008 {FR-050} Add the baseline-independence contract — baseline.py may not import model.corpus templates, render or model — in src/model/tests/ingest/test_baseline_independence.py
 
 ---
 
