@@ -16,6 +16,7 @@ import pytest
 from model.procurement import paths
 from model.procurement.load import LoadError, load
 from model.procurement.serialize import read_payload, write_payload
+from model.roster.reader import ROSTER_FILENAME
 
 pytestmark = pytest.mark.usefixtures("empty_procurement_tables")
 
@@ -139,7 +140,7 @@ class TestInputDriftRefusal:
 
     @pytest.mark.parametrize(
         "path_fragment",
-        ["project-vendor-roster.json", "equipment-category-map.json", "manufacturer-catalog.json"],
+        [ROSTER_FILENAME, "equipment-category-map.json", "manufacturer-catalog.json"],
     )
     def test_each_drifted_input_refuses_and_names_itself(
         self, database_url, tmp_path, path_fragment, row_counts, pg_connection

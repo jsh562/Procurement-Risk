@@ -72,7 +72,7 @@ from model.procurement.model import (
 from model.procurement.seeds import line_generator
 from model.procurement.serialize import dataset_content_hash, write_payload
 from model.procurement.truth import build_truth_record, write_truth_record
-from model.roster.reader import read_roster
+from model.roster.reader import ROSTER_REPO_RELATIVE_PATH, read_roster
 
 __all__ = [
     "DATASET_SCHEMA_VERSION",
@@ -119,7 +119,7 @@ SEED_DERIVATION = (
     'sha256("<project_id>|<po_number>|<line_number>".encode("utf-8")).digest()[:8], "big"),))'
 )
 
-_ROSTER_INPUT_PATH = "data/roster/project-vendor-roster.json"
+_ROSTER_INPUT_PATH = ROSTER_REPO_RELATIVE_PATH
 
 #: The share of lines drawn as corpus-overlapping. Above FR-032's 60% floor with
 #: margin, because the realized share is *measured* — a target set exactly at the

@@ -40,7 +40,11 @@ from model.corpus.manufacturers import MANUFACTURER_CATALOG_INPUT_PATH
 from model.procurement import paths
 from model.procurement.model import NS_E005
 from model.procurement.serialize import read_payload
-from model.roster.reader import read_roster
+from model.roster.reader import (
+    ROSTER_FILENAME,
+    ROSTER_REPO_RELATIVE_PATH,
+    read_roster,
+)
 from model.schema.url import get_database_url
 
 __all__ = [
@@ -207,9 +211,7 @@ def _derive(envelope: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[dic
     inside a hashed artifact is a value that can disagree with itself.
     """
     roster_entry = next(
-        entry
-        for entry in envelope["generation_inputs"]
-        if entry["path"].endswith("project-vendor-roster.json")
+        entry for entry in envelope["generation_inputs"] if entry["path"].endswith(ROSTER_FILENAME)
     )
     roster_hash = roster_entry["digest"]
 
@@ -284,7 +286,7 @@ def _check_input_drift(envelope: Mapping[str, Any]) -> None:
         MANUFACTURER_CATALOG_INPUT_PATH: lambda: sha256_of_file(
             paths.REPO_ROOT / MANUFACTURER_CATALOG_INPUT_PATH
         ),
-        "data/roster/project-vendor-roster.json": lambda: read_roster().content_hash,
+        ROSTER_REPO_RELATIVE_PATH: lambda: read_roster().content_hash,
     }
     for entry in envelope["generation_inputs"]:
         recompute = recomputed.get(entry["path"])

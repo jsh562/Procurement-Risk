@@ -20,7 +20,16 @@ from pathlib import Path
 # reader.py sits at src/model/src/model/roster/, so the repository root is six
 # levels up — the entry's own src-layout repeats the package name.
 REPO_ROOT = Path(__file__).resolve().parents[5]
-DEFAULT_ROSTER_PATH = REPO_ROOT / "data" / "roster" / "project-vendor-roster.json"
+
+# VR-013 and VR-045 permit exactly one module to name the roster file, and this
+# is it. Consumers that need the name — for a manifest key, a repo-relative
+# path, or a suffix match — import these rather than restating the literal.
+# Restating it is what made the check red: naming a path is not opening a file,
+# but a text scan cannot tell the two apart, and the honest fix is to leave the
+# scan a single site to find rather than to loosen what it looks for.
+ROSTER_FILENAME = "project-vendor-roster.json"
+ROSTER_REPO_RELATIVE_PATH = f"data/roster/{ROSTER_FILENAME}"
+DEFAULT_ROSTER_PATH = REPO_ROOT / "data" / "roster" / ROSTER_FILENAME
 
 EXPECTED_PROJECTS = 5
 EXPECTED_VENDORS = 12
