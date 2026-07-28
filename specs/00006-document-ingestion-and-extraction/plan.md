@@ -37,12 +37,12 @@
 | VI. Evaluate Before You Tune | Confidence floor declared before the first run and not refitted; the extraction reference is E002's committed generation record, already hash-pinned | PASS — FR-032; SC-013 |
 | VII. Publish the Miss | Limitations carry scope decision, evidence, reversal trigger, and production-scale alternative — including G-6, the one shortfall this epic actually expects to publish | PASS — spec Disclosed Limitations, eleven rows, and data-model §Disclosed Gaps now carries the reversal trigger and the production-scale alternative as separate columns rather than one merged sentence; SC-024 left absolute and the shortfall published beside it rather than the target softened |
 | VIII. Honest Opponents | Deterministic template extractor over the same transmittals, labelled strong or weak | PASS — `ingest/baseline.py`; FR-050 |
-| Technology Stack | ONNX Runtime already declared for INT8 CPU inference; PostgreSQL 16 + pgvector; no second datastore of record | PASS — see ADR-0018 |
+| Technology Stack | ONNX Runtime is the stack's declared inference runtime and is what this encoder uses; the precision term is **FP32**, fixed by ADR-0012's ~80 MB full-precision weight budget and by AD-014 — the stack's INT8 clause is ADR-0006's reranker term and is not evidence for this encoder; PostgreSQL 16 + pgvector; no second datastore of record | PASS — see ADR-0018 and AD-014 |
 | Testing & Quality Policy | Deterministic computation modules take **both** mandates: strict test-first (red-green-refactor) **and** property-based tests; architecture contracts gate the build; new packages enter the coverage denominator | PASS — see Testing Strategy; the coverage `--source` list is an enumeration that overrides rather than merges, so it is a real change, not "configured" |
 | Source Code Layout | All code under `/src/model`; cross-entry checks under `/tests`; no fifth entry | PASS |
 | Development Workflow | Branch matches `#####-feature-name`; Conventional Commits; the migration-block partition stays green | PASS — but claiming block `0300`–`0399` is **not** a one-line append; see AD-013 and Complexity Tracking |
 | Data Provenance | Layer, license basis, and layer-appropriate provenance carried unchanged; no fabricated retrieval provenance | PASS — FR-004 |
-| Governance | Migration block `0300`–`0399` and ADR-0018/0019 claimed at epic start; TR-081 amendment recorded, not performed | PASS — FR-040, FR-051, FR-047 |
+| Governance | Migration block `0300`–`0399` and ADR-0018/0019 claimed at epic start; **ADR-0020 claimed during the Checklist phase**, not at epic start — allocated by scanning for the highest number in use, disclosed rather than back-dated; TR-081 amendment recorded, not performed | **DEVIATION (disclosed)** — PASS on FR-040 and FR-047; ADR-0020's timing deviates from the claim-at-epic-start clause and is not reversible (FR-051). Confirm before merge that no concurrent wave epic allocated 0020 |
 
 **Re-check after design**: PASS. Two boundary crossings are recorded in Complexity Tracking rather than waved through.
 
@@ -204,7 +204,7 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-025 | Extraction | `model/llm/extraction.py` | `output_schema` supplied to the gateway |
 | FR-026 | Extraction | `model/llm/extraction.py` | Repair budget fixed at 1 by the gateway |
 | FR-027 | Extraction, writer | `model/llm/extraction.py`, `ingest/writer.py` | Stored exactly as printed; no normalized twin |
-| FR-028 | — | — | Prohibition; asserted by `tests/ingest/test_no_identity_claims.py` |
+| FR-028 | — | — | Prohibition; asserted by `src/model/tests/ingest/test_no_identity_claims.py` (T043) |
 | FR-029 | Writer | `model/ingest/writer.py` | Citation inherited from the chunk; composite FK makes disagreement unstorable. A page-split value anchors on the chunk carrying the **printed value**, so its cited page is the later page and any reassembly orders chunks by page, not by contributor ordinal (SC-027) |
 | FR-030 | Confidence | `model/compute/confidence.py` | Confidence on every value |
 | FR-031 | Confidence | `model/compute/confidence.py` | Deterministic from parse signals; property-tested |
@@ -226,8 +226,8 @@ N/A — no API surface. Ingestion is an offline console entry point; the read pa
 | FR-047 | — | spec Compliance Check | Amendment recorded; blocks implementation |
 | FR-048 | Placement check | `tests/checks/test_model_facing_placement.py` | Only `model.llm` may import `gateway` (AD-001) |
 | FR-049 | Coercion | `model/compute/coerce.py` | Deterministic; property-tested |
-| FR-050 | Baseline, metrics | `model/ingest/baseline.py`, `compute/metrics.py` | **Two** baseline labels — the declared one recorded before any figure is computed, the observed one read from the published table, with a disagreement published as a finding rather than reconciled; interval on every figure. **Authored from rendered text only**: an import contract (`src/model/tests/ingest/test_baseline_independence.py`) forbids `baseline.py` from reaching `model.corpus.templates`, `model.corpus.render`, and `model.corpus.model`, so the answer key cannot be read into the opponent. The committed field-label vocabulary is the one shared input and is permitted (AD-012) |
-| FR-051 | — | `specs/adrs/0018-*`, `0019-*` | Numbers claimed at epic start |
+| FR-050 | Baseline, metrics | `model/ingest/baseline.py`, `compute/metrics.py` | **Two** baseline labels — the declared one recorded before any figure is computed, the observed one read from the published table, with a disagreement published as a finding rather than reconciled; interval on every figure. **Authored from rendered text only**: a `[[tool.importlinter.contracts]]` `forbidden` contract in `src/model/pyproject.toml` (`allow_indirect_imports = false`) forbids `model.ingest.baseline` from reaching `model.corpus.templates`, `model.corpus.render`, and `model.corpus.model`, so `lint-imports` carries it in the Architecture tier and the answer key cannot be read into the opponent. The committed field-label vocabulary is the one shared input and is permitted (AD-012) |
+| FR-051 | — | `specs/adrs/0018-*`, `0019-*`, `0020-*` | 0018 and 0019 claimed at epic start; **0020 claimed during the Checklist phase** when ADR-0019's retention clause was superseded, allocated by scanning for the highest number in use. The timing is disclosed rather than back-dated; confirm before merge that no concurrent wave epic allocated 0020 |
 | FR-052 | Document minting | `model/ingest/documents.py` | Identifier collision aborts naming both files |
 | FR-053 | Chunker, report | `model/ingest/chunker.py`, `report.py` | Leaf-length distribution measured and published |
 | FR-054 | Writer | `model/ingest/writer.py` | Single transaction, stated write order |
@@ -283,19 +283,29 @@ src/model/src/model/
 + compute/coerce.py                # numeric/date coercion
 + compute/metrics.py               # precision/recall + Wilson; no F1 (FR-060)
 + schema/versions/0300_*.py … 03NN_*.py   # 6 tables + 1 view; 0300 gated on FR-047
-~ pyproject.toml                   # deps + `ingest` console script
+
+src/model/
+~ pyproject.toml                   # deps + `ingest` console script (T004); baseline-independence forbidden contract (T008, FR-050)
++ README.md                        # the three operator runbooks: T082 (FR-041), T083 (FR-064), T084 (FR-055) + fixture re-record trigger (T081)
++ fixtures/                        # committed extraction fixtures for `replay` mode (T081, FR-045)
 
 src/model/tests/
-+ ingest/                          # chunker, tokens, segment, documents, failures
++ ingest/                          # chunker, tokens, segment, documents, failures, page split
 + ingest/test_page_attribution.py  # FR-010 total containment, fresh post-run extraction
 + ingest/test_single_page_reader.py    # no second tolerance map, normalization, or assembly (SC-037)
-+ ingest/test_baseline_independence.py # baseline.py may not import corpus templates/render/model
-+ llm/test_extraction.py
++ llm/test_extraction.py           # gateway invocation path, schemas and prompts (T092, FR-023)
 + compute/                         # property-based: confidence, coerce, metrics
-+ schema/test_ingestion_run.py
++ schema/test_table_ownership.py       # six E003 tables identical at 0103 and at head (T014, FR-065)
++ schema/test_ingestion_migrations.py  # apply-from-empty, re-apply, single head, 03xx (T015, FR-040)
++ schema/test_parse_signals.py         # every stored confidence recomputes from its row (T060, FR-063)
++ schema/test_run_attribution.py       # anti-join chunks, values, failures against associations (T071, FR-039)
++ schema/test_generations.py           # one active generation per document, none left at promotion (T073, FR-055)
++ schema/test_failure_domains.py       # five run-level kinds disjoint from seven per-field (T078, FR-056)
++ schema/test_privileges.py            # thirteen privilege refusals under the app role (T085, FR-066)
 
 tests/checks/
 + test_model_facing_placement.py   # only model.llm imports gateway
++ test_ingest_offline_only.py      # no ingestion module reachable from a request-serving entry (T080, FR-044)
 ~ test_migration_ranges.py         # AD-013: declare E005 + E006 blocks, amend 2 assertions
 
 data/encoder/                      # committed ONNX export + tokenizer, digests recorded (FR-019)
