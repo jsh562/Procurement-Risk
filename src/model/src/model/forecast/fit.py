@@ -3,10 +3,18 @@
 The offline console entry point of {SAD:ADR-0011}. **Standard output carries
 exactly one line — the `run_id` — and nothing on a refusal**; every diagnostic
 goes to standard error, and the exit status is zero exactly on completion
-(FR-039). The pre-sampling preconditions and the post-sampling diagnostics gate
-are *not* here yet: US4 inserts them at the two marked seams, ahead of the first
-statement, because the refusal guarantee is achieved by ordering rather than by
-rollback (AD-010).
+(FR-039).
+
+Two gates, at two points, leaving two different kinds of evidence. The
+**pre-sampling preconditions** (T081) refuse before the sampler runs, so nothing
+is sampled — FR-035's four-chain minimum and FR-021's zero-open-line case. The
+**post-sampling diagnostics gate** (T082) refuses after sampling and before the
+first statement, so a sample was taken and nothing was written (FR-017). A run
+can breach one while satisfying the other, which is why they are two obligations
+and not one clause. Both are ordering rather than rollback (AD-010): no
+statement is issued on either refusing path, so there is nothing to roll back.
+Every refusal also emits a report file (FR-037), which is not a write to any
+store SC-015 quantifies over.
 """
 
 from __future__ import annotations
@@ -18,7 +26,7 @@ import sys
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
@@ -36,13 +44,23 @@ from model.forecast.ablation import (
 from model.forecast.censoring import CensoringError, censoring_indicator, elapsed_days
 from model.forecast.config import (
     CHAINS,
+    CHAINS_MIN,
     DRAWS_PER_CHAIN,
     LIFECYCLE_TRANSITIONS,
     TUNING_DRAWS_PER_CHAIN,
     ConfigError,
+    RunShape,
+    monitored_parameter_names,
     read_run_shape,
 )
 from model.forecast.design import DesignError, category_index, vendor_index
+from model.forecast.diagnostics import (
+    DiagnosticRow,
+    DiagnosticsError,
+    blocking_breaches,
+    evaluate_diagnostics,
+    refusal_lines,
+)
 from model.forecast.manifest import (
     POPULATION_RANK_HELD_OUT_PREDICTION,
     POPULATION_RANK_LINE_POSTERIOR,
@@ -72,8 +90,16 @@ from model.forecast.posterior import (
     survival_grid,
     total_duration_draws,
 )
-from model.forecast.read import LineRow, ReadError, read_lines_and_events
-from model.forecast.report import AblationOutcome, ReportError, write_run_report
+from model.forecast.read import LineRow, ProcurementInput, ReadError, read_lines_and_events
+from model.forecast.report import (
+    AblationOutcome,
+    RefusedAttempt,
+    ReportError,
+    SampledShape,
+    UnmetPrecondition,
+    write_refusal_report,
+    write_run_report,
+)
 from model.forecast.sample import SampleError, sample_posterior
 from model.forecast.serialize import SerializeError, input_data_hash
 from model.forecast.shrinkage import ShrinkageError, VendorShrinkage, vendor_shrinkage
@@ -96,6 +122,7 @@ __all__ = [
     "ABLATION_SEEDS",
     "ABLATION_TUNING_DRAWS",
     "FitError",
+    "RefusedRun",
     "aggregate_median_forecast",
     "censoring_ablation",
     "censoring_ignoring_frame",
@@ -114,6 +141,30 @@ class FitError(RuntimeError):
     """
 
 
+class RefusedRun(FitError):
+    """A gate refusing a run, carrying the evidence its report has to record.
+
+    A subclass rather than a flag, so the two structured refusals travel with
+    the field sets FR-017 fixes — the two-field set for an unmet precondition,
+    the five-field set for a breached blocking diagnostic — and the emitter does
+    not have to reconstruct from a message what the gate already knew. Every
+    other failure this job reports is an ordinary refusal whose report carries
+    the reason and no field set, which is correct: it breached no published
+    threshold.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        preconditions: Sequence[UnmetPrecondition] = (),
+        diagnostics: Sequence[DiagnosticRow] = (),
+    ) -> None:
+        super().__init__(message)
+        self.preconditions = tuple(preconditions)
+        self.diagnostics = tuple(diagnostics)
+
+
 #: Every refusal this job reports as a message rather than as a traceback. Each
 #: is a named type from a module in this package, plus the two the environment
 #: raises. An unlisted exception is a defect and keeps its traceback, because a
@@ -124,6 +175,7 @@ _REPORTED_FAILURES: tuple[type[Exception], ...] = (
     ConfigError,
     DatabaseUrlNotConfiguredError,
     DesignError,
+    DiagnosticsError,
     FitError,
     ForecastPathError,
     ManifestError,
@@ -759,6 +811,134 @@ def _arm_median(
     return aggregate_median_forecast(rows)
 
 
+# ---------------------------------------------------------------------------
+# The two gates (T081, T082 — FR-021, FR-035, FR-017, FR-037)
+# ---------------------------------------------------------------------------
+
+
+def _unmet_preconditions(
+    chains: int, open_line_count: int, as_of_date: date
+) -> tuple[UnmetPrecondition, ...]:
+    """Every blocking precondition that is unmet, evaluated before sampling.
+
+    Both are evaluated rather than the first refusing, for the reason FR-017
+    gives about diagnostics: an operator handed one unmet precondition returns
+    to discover the next. Each carries the two-field set FR-017 fixes for a
+    pre-sampling refusal — the precondition and its realized value — and no
+    threshold direction, because a precondition is not a measured metric.
+    """
+    unmet: list[UnmetPrecondition] = []
+    if chains < CHAINS_MIN:
+        unmet.append(
+            UnmetPrecondition(
+                precondition=(
+                    f"at least {CHAINS_MIN} chains — the published minimum "
+                    f"(`spec.md` § Published Constants, a **blocking precondition**), and "
+                    f"the basis the R-hat and ESS thresholds are stated at (FR-035)"
+                ),
+                realized_value=f"{chains} chain(s) requested",
+            )
+        )
+    if open_line_count <= 0:
+        unmet.append(
+            UnmetPrecondition(
+                precondition=(
+                    "at least one line open at the as-of date — an empty forecast set "
+                    "reads as an absence of risk, and "
+                    "`ck_forecast_run__open_line_count_positive` makes it "
+                    "unrepresentable (FR-021)"
+                ),
+                realized_value=f"0 line(s) open at {as_of_date.isoformat()}",
+            )
+        )
+    return tuple(unmet)
+
+
+def _precondition_refusal(unmet: Sequence[UnmetPrecondition]) -> RefusedRun:
+    """FR-035's message: every unmet precondition and its realized value.
+
+    Nothing is sampled and nothing is written on this path — the exit names a
+    *precondition* rather than a breached diagnostic, because FR-017's
+    enumeration does not fit a gate that ran before there was anything to
+    measure.
+    """
+    stated = "; ".join(
+        f"{item.precondition} — realized: {item.realized_value}" for item in unmet
+    )
+    return RefusedRun(
+        f"{len(unmet)} pre-sampling precondition(s) unmet, so nothing was sampled and "
+        f"nothing was written: {stated}",
+        preconditions=unmet,
+    )
+
+
+def _diagnostics_refusal(breaches: Sequence[DiagnosticRow]) -> RefusedRun:
+    """FR-017's message: **every** breached blocking diagnostic, not the first.
+
+    One complete five-field set per breach — metric, the parameter where the
+    metric is parameter-scoped, the realized value, the threshold and the
+    threshold's direction — assembled by `diagnostics.py` so the stream and the
+    emitted report cannot describe the same breach differently (DV-038).
+    """
+    return RefusedRun(
+        f"{len(breaches)} blocking diagnostic(s) breached after sampling, so no run "
+        f"record, no posterior, no held-out prediction, no split assignment and no "
+        f"diagnostic row was written and the active-run pointer is unmoved: "
+        + "; ".join(refusal_lines(breaches)),
+        diagnostics=breaches,
+    )
+
+
+def _emit_refusal_report(
+    exc: BaseException,
+    *,
+    as_of_date: date,
+    input_data_hash: str,
+    attempted_at: datetime,
+    wall_clock_seconds: float,
+    sampled_shape: SampledShape | None,
+    report_root: Path | str | None,
+) -> Path:
+    """Write the durable half of the pair G-8 names, for **any** refusal.
+
+    Quantified over every refusal this job reports rather than over the two
+    structured gates, because FR-037 says every refusal emits one — and the
+    field sets ride on `RefusedRun` where a gate produced them, so an ordinary
+    failure records its reason and no threshold it never breached.
+    """
+    return write_refusal_report(
+        RefusedAttempt(
+            as_of_date=as_of_date,
+            input_data_hash=input_data_hash,
+            attempted_at=attempted_at,
+            reason=f"{type(exc).__name__}: {exc}",
+            wall_clock_seconds=wall_clock_seconds,
+            sampled_shape=sampled_shape,
+            preconditions=getattr(exc, "preconditions", ()),
+            diagnostics=getattr(exc, "diagnostics", ()),
+        ),
+        report_root,
+    )
+
+
+# A mutable record, unlike everything else in this module: it exists so the
+# refusal emitter can say how far the attempt got, and "how far" is by
+# definition not known when the attempt starts.
+@dataclasses.dataclass(slots=True)
+class _Progress:
+    """What the refusal report needs to know about the attempt's own history.
+
+    `sampled_shape` stays `None` until the sampler returns, which is exactly
+    FR-035's evidence — *nothing was sampled* — and becomes the realized shape
+    afterwards, which is FR-017's — a sample was taken and nothing was written.
+    `published` is what keeps a failure *after* transaction 2 from being filed
+    as a refusal of a run that shipped.
+    """
+
+    sampled_shape: SampledShape | None = None
+    published: bool = False
+
+
 def run_fit(
     engine: Engine,
     *,
@@ -772,31 +952,110 @@ def run_fit(
     repo_root: Path | str | None = None,
     log: TextIO = sys.stderr,
 ) -> uuid.UUID:
-    """Fit one run and publish it, returning the `run_id` written.
+    """Read and hash the input, then fit under the refusal report's cover.
 
-    Every step's output feeds exactly one successor, in the order the epic's
-    guarantees require: read the schema (never a copy), hash the rows read, split
-    from that hash and two committed constants, build the training frame from the
-    `train` side only, sample, derive both derived artifacts, then write. The two
-    seams below are where US4 inserts the refusals; nothing between them issues a
-    statement, which is what makes the guarantee ordering rather than rollback.
+    **The read precedes both preconditions, and that is FR-037's doing rather
+    than a relaxation of FR-035.** A refused attempt has no `run_id` — FR-017
+    forbids writing the run row — so its evidence is filed under an identifier
+    built from the as-of date, the **input row hash** and the attempt's instant,
+    and an attempt that has not read has no name to file that evidence under.
+    Reading is neither sampling nor writing: no statement is issued on any
+    refusing path below, so "nothing is sampled and nothing is written" holds
+    exactly as stated.
     """
     started = time.monotonic()
+    attempted_at = datetime.now(UTC)
     note = _notes(log)
-
-    # ---- SEAM (T081): the pre-sampling preconditions belong here, before the
-    # first read. Schema head is not 0303; fewer than `CHAINS_MIN` chains; no
-    # open line at the anchor. Each refuses naming the precondition and its
-    # realized value, and nothing is sampled and nothing written.
+    progress = _Progress()
 
     with engine.connect() as connection:
         procurement_input = read_lines_and_events(connection)
         shape = read_run_shape(connection)
-    lines = procurement_input.lines
-    note(f"read {len(lines)} lines and {len(procurement_input.events)} lifecycle events")
-
+    note(
+        f"read {len(procurement_input.lines)} lines and "
+        f"{len(procurement_input.events)} lifecycle events"
+    )
     row_hash = input_data_hash(procurement_input)
     note(f"input row hash {row_hash}")
+
+    try:
+        return _fit_and_publish(
+            engine,
+            procurement_input=procurement_input,
+            shape=shape,
+            row_hash=row_hash,
+            as_of_date=as_of_date,
+            seed_entropy=seed_entropy,
+            chains=chains,
+            draws=draws,
+            tune=tune,
+            cores=cores,
+            report_root=report_root,
+            repo_root=repo_root,
+            log=log,
+            note=note,
+            started=started,
+            progress=progress,
+        )
+    except _REPORTED_FAILURES as exc:
+        if progress.published:
+            # The run committed and something after it failed. That is a defect
+            # in a later step, not a refusal, and filing it as one would put a
+            # published run's identifier in a file that says nothing was written.
+            raise
+        emitted = _emit_refusal_report(
+            exc,
+            as_of_date=as_of_date,
+            input_data_hash=row_hash,
+            attempted_at=attempted_at,
+            wall_clock_seconds=time.monotonic() - started,
+            sampled_shape=progress.sampled_shape,
+            report_root=report_root,
+        )
+        note(f"refusal report at {emitted}")
+        raise
+
+
+def _fit_and_publish(
+    engine: Engine,
+    *,
+    procurement_input: ProcurementInput,
+    shape: RunShape,
+    row_hash: str,
+    as_of_date: date,
+    seed_entropy: int,
+    chains: int,
+    draws: int,
+    tune: int,
+    cores: int,
+    report_root: Path | str | None,
+    repo_root: Path | str | None,
+    log: TextIO,
+    note: Callable[[str], None],
+    started: float,
+    progress: _Progress,
+) -> uuid.UUID:
+    """Fit one run and publish it, returning the `run_id` written.
+
+    Every step's output feeds exactly one successor, in the order the epic's
+    guarantees require: split from the input hash and two committed constants,
+    build the training frame from the `train` side only, sample, derive both
+    derived artifacts, then write. The two gates sit at the two seams, and
+    nothing between them issues a statement — which is what makes the refusal
+    guarantee ordering rather than rollback (AD-010).
+    """
+    lines = procurement_input.lines
+
+    # ---- SEAM (T081): the pre-sampling preconditions. Fewer than `CHAINS_MIN`
+    # chains (FR-035); no open line at the anchor (FR-021). Both are evaluated,
+    # both are named with their realized values, and the refusal happens before
+    # the sampler is reached — so nothing is sampled and nothing is written.
+    open_lines = _open_lines(lines, as_of_date)
+    note(f"{len(open_lines)} line(s) open at {as_of_date}")
+    unmet = _unmet_preconditions(chains, len(open_lines), as_of_date)
+    if unmet:
+        raise _precondition_refusal(unmet)
+
     fixture = read_fixture_provenance(repo_root)
     if not fixture.digest_matches_published:
         note(
@@ -834,11 +1093,22 @@ def run_fit(
         tune=tune,
         cores=cores,
     )
+    progress.sampled_shape = SampledShape(chains, draws, tune)
 
-    # ---- SEAM (T082): the post-sampling diagnostics gate belongs here, after
-    # sampling and **before the first statement**. Every breached blocking
-    # diagnostic is reported with its parameter, realized value, threshold and
-    # threshold direction; the run refuses and no store is touched.
+    # ---- SEAM (T082): the post-sampling diagnostics gate, after sampling and
+    # **before the first statement**. Every breached blocking diagnostic carries
+    # its own complete field set — metric, parameter where parameter-scoped,
+    # realized value, threshold and threshold direction — and the run refuses
+    # with no store touched and the pointer unmoved (FR-017).
+    monitored = monitored_parameter_names(vendors, categories)
+    diagnostics = evaluate_diagnostics(idata, monitored)
+    breaches = blocking_breaches(diagnostics)
+    note(
+        f"{len(diagnostics)} monitored diagnostic(s) over {len(monitored)} parameter(s): "
+        f"{len(breaches)} blocking breach(es)"
+    )
+    if breaches:
+        raise _diagnostics_refusal(breaches)
 
     posterior = _posterior_dataset(idata)
     if shape.draw_count != chains * draws:
@@ -846,18 +1116,6 @@ def run_fit(
             f"realized shape {chains * draws} draws against a declared "
             f"{shape.draw_count}; the run records what it produced, and DV-014 is what "
             f"asserts the declared pair on a run at the committed shape"
-        )
-    open_lines = _open_lines(lines, as_of_date)
-    note(f"{len(open_lines)} line(s) open at {as_of_date}")
-    if not open_lines:
-        # FR-021's refusal is a **pre-sampling** precondition and belongs at the
-        # T081 seam above, where it costs nothing and leaves no sampler output.
-        # This is the same condition caught late, so an empty forecast set is
-        # named rather than surfacing as an index error two functions from here.
-        raise FitError(
-            f"no line is open at {as_of_date}, so this run has nothing to forecast. "
-            f"`ck_forecast_run__open_line_count_positive` makes an empty forecast set "
-            f"unrepresentable (FR-021), and the condition is knowable before sampling"
         )
     line_posteriors = _line_posteriors(
         open_lines,
@@ -927,11 +1185,13 @@ def run_fit(
             fixture=fixture,
         )
     run_id = write_artifact_set(
-        engine, manifest, split.assignments, line_posteriors, held_out_predictions
+        engine, manifest, split.assignments, line_posteriors, held_out_predictions, diagnostics
     )
+    progress.published = True
     note(
-        f"wrote {len(line_posteriors)} line_posterior row(s) and "
-        f"{len(held_out_predictions)} held_out_prediction row(s), and published run {run_id}"
+        f"wrote {len(line_posteriors)} line_posterior row(s), "
+        f"{len(held_out_predictions)} held_out_prediction row(s) and "
+        f"{len(diagnostics)} forecast_diagnostic row(s), and published run {run_id}"
     )
 
     # The floor is derived here, from the training split and the input rows alone

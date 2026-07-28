@@ -37,6 +37,7 @@ __all__ = [
     "DiagnosticsError",
     "blocking_breaches",
     "diagnostic_row",
+    "direction_prose",
     "evaluate_diagnostics",
     "monitored_parameter_coverage",
     "passes",
@@ -152,7 +153,7 @@ class DiagnosticRow:
         return (
             f"{self.metric}{scope}: realized {realized} against a threshold of "
             f"{self.threshold_value:g}, direction {self.threshold_direction} "
-            f"({_DIRECTION_PROSE[self.threshold_direction]}) — breached"
+            f"({direction_prose(self.threshold_direction)}) — breached"
         )
 
     def row_parameters(self, run_id: uuid.UUID) -> dict[str, object]:
@@ -183,6 +184,24 @@ _DIRECTION_PROSE: dict[str, str] = {
     "max": "the realized value must be at or below it",
     "min": "the realized value must be at or above it",
 }
+
+
+def direction_prose(threshold_direction: str) -> str:
+    """What a direction means, spelled out once for both refusal surfaces.
+
+    FR-017 requires the direction in the refusal message and DV-038 requires the
+    same field set in the emitted report. Rendering the sentence in two places
+    is how they drift: the stream kept the threshold and dropped its direction
+    once already, which is why FR-038 states the unit rather than the verb.
+    """
+    try:
+        return _DIRECTION_PROSE[threshold_direction]
+    except KeyError as exc:
+        raise DiagnosticsError(
+            f"{threshold_direction!r} is not a direction "
+            f"`ck_forecast_diagnostic__direction` admits; a value and a bar do not "
+            f"resolve to a verdict without one of `max` or `min`"
+        ) from exc
 
 
 def threshold_for(metric: str) -> DiagnosticThreshold:

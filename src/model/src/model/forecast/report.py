@@ -1,4 +1,4 @@
-"""The run report: Markdown with a declared section-and-field schema.
+"""The two reports this job emits: the run report, and the refusal report.
 
 Markdown and not JSON, because FR-020, FR-027 and FR-045 each name a
 *reader-facing* artifact and E005's datasheet is the precedent. The schema is
@@ -7,13 +7,22 @@ absence check stays a structural predicate over declared fields rather than the
 term search FR-040 rejects. Every measure carrying a decision criterion is
 rendered as FR-038's four-part unit; the wall clock and the realized shape are
 rendered with no verdict, because neither has a criterion to be judged against.
+
+The **refusal report** (FR-037) is the second kind and has a closed schema of
+its own. One file per *attempt*, named by an identifier built from the as-of
+date, the input row hash and the attempt's instant, because a refused attempt
+has no `run_id` — FR-017 forbids writing the run row — and two refusals of one
+input would otherwise have nothing distinguishing their evidence. It is never
+overwritten, and it carries the same field set as the stderr reason, since the
+stream is transient while the file is the durable half of the pair G-8 names.
+Writing it is not a write to any store SC-015 or DV-013 ranges over.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from datetime import UTC, date
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from model.forecast.ablation import (
@@ -23,10 +32,13 @@ from model.forecast.ablation import (
 )
 from model.forecast.censoring import terminal_event
 from model.forecast.config import CHAINS_MIN
+from model.forecast.diagnostics import DiagnosticRow, direction_prose
 from model.forecast.manifest import VENDOR_SHRINKAGE_HDI_PROBABILITY, RunManifest
 from model.forecast.paths import (
     REFUSAL_REPORT_PREFIX,
     RUN_REPORT_PREFIX,
+    refusal_report_path,
+    refused_attempt_id,
     run_report_path,
 )
 from model.forecast.read import ProcurementInput
@@ -37,6 +49,10 @@ __all__ = [
     "EMITTED_REPORT_KINDS",
     "LIMITATION_IDENTIFIERS",
     "LIMITATION_PARTS",
+    "NOTHING_SAMPLED",
+    "REFUSAL_DIAGNOSTIC_FIELDS",
+    "REFUSAL_PRECONDITION_FIELDS",
+    "REFUSAL_SECTION_TITLES",
     "REGISTERED_COVERAGE_BAND",
     "REGISTERED_UNCENSORED_EVENT_ASSUMPTION",
     "SECTION_FIELDS",
@@ -44,12 +60,17 @@ __all__ = [
     "SHRINKAGE_SUPPORT_THRESHOLD",
     "AblationOutcome",
     "LimitationRecord",
+    "RefusedAttempt",
     "ReportError",
+    "SampledShape",
+    "UnmetPrecondition",
     "check_limitations",
     "limitations",
     "maximum_observed_duration_days",
+    "render_refusal_report",
     "render_run_report",
     "vendor_claim_observation_floor",
+    "write_refusal_report",
     "write_run_report",
 ]
 
@@ -862,4 +883,286 @@ def write_run_report(
     target = run_report_path(manifest.run_id, report_root)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(text.encode("utf-8"))
+    return target
+
+
+# ---------------------------------------------------------------------------
+# The refusal report (T083 — FR-017, FR-037, FR-038, FR-040)
+# ---------------------------------------------------------------------------
+
+#: The refusal report's closed schema. All four sections are rendered on every
+#: refusal, including the one that does not apply: a report whose "Unmet
+#: Preconditions" section is absent and a report whose preconditions were all
+#: met are indistinguishable to a reader, and the difference between a
+#: pre-sampling and a post-sampling refusal is the whole of what this file is
+#: read for.
+REFUSAL_SECTION_TITLES: tuple[str, ...] = (
+    "Refused Attempt",
+    "Sampling",
+    "Unmet Preconditions",
+    "Breached Blocking Diagnostics",
+)
+
+#: FR-017's field set for a breached blocking diagnostic, as the labels this
+#: report renders them under. Five fields plus the verdict, which is FR-038's
+#: unit with the refusal itself as the verdict. `Parameter` appears only where
+#: the metric is parameter-scoped — `divergent_transitions` is measured over the
+#: run and has none, and rendering an empty one would be a field with no value.
+REFUSAL_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
+    "Metric",
+    "Parameter",
+    "Realized value",
+    "Threshold",
+    "Threshold direction",
+    "Verdict",
+)
+
+#: The **two**-field set a pre-sampling refusal carries, and no threshold
+#: direction: a precondition is not a measured metric, so there is no floor or
+#: ceiling for a direction to disambiguate (FR-017's trailing clause, FR-035).
+REFUSAL_PRECONDITION_FIELDS: tuple[str, ...] = ("Precondition", "Realized value", "Verdict")
+
+#: What the Sampling section says when the refusal came before the sampler ran.
+#: FR-037 requires the report to record this rather than leave the section
+#: empty: FR-035's observable evidence is that *nothing was sampled*, which is a
+#: different fact from FR-017's *nothing was written*, and a reader cannot tell
+#: them apart from an absent section.
+NOTHING_SAMPLED = "nothing was sampled"
+
+#: The five stores a refusal leaves as it found them, enumerated in the report
+#: rather than described (SC-015). Named here so the file states its own
+#: guarantee to a reader who is holding it precisely because no row exists.
+UNTOUCHED_STORES: tuple[str, ...] = (
+    "forecast_run",
+    "line_posterior",
+    "held_out_prediction",
+    "forecast_split_assignment",
+    "forecast_diagnostic",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SampledShape:
+    """The shape a refused attempt actually reached before it was refused.
+
+    Recorded rather than quoted from the published constants: FR-037 asks for
+    the attempt's *realized* shape, and an attempt refused at two chains is
+    precisely the case where the realized and the published shapes differ.
+    """
+
+    chain_count: int
+    draws_per_chain: int
+    tuning_draws_per_chain: int
+
+    @property
+    def draw_count(self) -> int:
+        """Post-warmup draws in total — the product, never a fourth constant."""
+        return self.chain_count * self.draws_per_chain
+
+
+@dataclass(frozen=True, slots=True)
+class UnmetPrecondition:
+    """One pre-sampling precondition and the value that failed it.
+
+    Two fields, deliberately. FR-017 fixes a five-field set for a *measured*
+    diagnostic and a two-field set for a precondition, and the difference is not
+    an omission: a precondition is knowable before sampling and has no realized
+    threshold direction to report.
+    """
+
+    precondition: str
+    realized_value: str
+
+
+@dataclass(frozen=True, slots=True)
+class RefusedAttempt:
+    """Everything one refused attempt leaves behind, in one record.
+
+    A record rather than eight arguments, because FR-037 makes the identifier a
+    function of three of these fields and the report's content a function of the
+    rest — and a caller able to supply the reason without the evidence would
+    eventually emit a file that records that a run refused and not why.
+    """
+
+    as_of_date: date
+    input_data_hash: str
+    attempted_at: datetime
+    reason: str
+    wall_clock_seconds: float
+    sampled_shape: SampledShape | None = None
+    preconditions: tuple[UnmetPrecondition, ...] = ()
+    diagnostics: tuple[DiagnosticRow, ...] = field(default=())
+
+    @property
+    def attempt_id(self) -> str:
+        """This attempt's identity, from `paths.py` and never re-derived here."""
+        return refused_attempt_id(self.as_of_date, self.input_data_hash, self.attempted_at)
+
+
+def _refused_attempt_section(attempt: RefusedAttempt) -> list[str]:
+    """Which input, at which anchor, at which instant, and why."""
+    return [
+        f"- **Attempt identifier**: `{attempt.attempt_id}`",
+        f"- **As-of date**: {attempt.as_of_date.isoformat()}",
+        f"- **Input row hash**: `{attempt.input_data_hash}` — the full digest, of which the "
+        f"identifier above carries a prefix.",
+        f"- **Attempted at**: {attempt.attempted_at.astimezone(UTC).isoformat()}",
+        f"- **Reason**: {attempt.reason}",
+        f"- **Stores left as found**: "
+        f"{', '.join(f'`{store}`' for store in UNTOUCHED_STORES)}, and the active-run "
+        f"pointer (SC-015). This file is not a write to any of them.",
+    ]
+
+
+def _refusal_sampling_section(attempt: RefusedAttempt) -> list[str]:
+    """The realized shape, or the record that nothing was sampled at all.
+
+    The wall clock carries no verdict, for the same reason the run report's does
+    not: it is a measure with no decision criterion, and attaching a verdict to
+    one would manufacture a gate FR-026 forbids.
+    """
+    clock = (
+        f"- **Wall clock**: {attempt.wall_clock_seconds:.1f} seconds — recorded, with no "
+        f"criterion and therefore no verdict."
+    )
+    shape = attempt.sampled_shape
+    if shape is None:
+        return [
+            f"- **Realized sampling shape**: {NOTHING_SAMPLED}. The refusal is a "
+            f"pre-sampling precondition, so there is no sampler output to inspect — which "
+            f"is the evidence FR-035 leaves, and it differs from FR-017's, where a sample "
+            f"was taken and nothing was written.",
+            clock,
+        ]
+    return [
+        f"- **Realized sampling shape**: {shape.chain_count} chains x "
+        f"{shape.draws_per_chain} draws = {shape.draw_count} post-warmup draws, with "
+        f"{shape.tuning_draws_per_chain} tuning draws per chain. A sample was taken and "
+        f"nothing was written (FR-017).",
+        clock,
+    ]
+
+
+def _refusal_precondition_section(attempt: RefusedAttempt) -> list[str]:
+    """Each unmet precondition as its two-field set, plus the verdict."""
+    if not attempt.preconditions:
+        return [
+            "None — every pre-sampling precondition was met, so this refusal followed "
+            "sampling rather than preceding it."
+        ]
+    lines: list[str] = []
+    for unmet in attempt.preconditions:
+        lines += [
+            f"- **Precondition**: {unmet.precondition}",
+            f"- **Realized value**: {unmet.realized_value}",
+            "- **Verdict**: **unmet** — refused before sampling, so nothing was sampled "
+            "and nothing was written.",
+            "",
+        ]
+    return lines
+
+
+def _refusal_diagnostic_section(attempt: RefusedAttempt) -> list[str]:
+    """**Every** breached blocking diagnostic, each as FR-017's five-field set.
+
+    Every one and not the first: several rows can breach in a single run, and an
+    operator handed one of them returns for a second run to discover the next.
+    The `Parameter` field is rendered exactly where the metric is
+    parameter-scoped, which is what FR-017 asks for — `r_hat`, `ess_bulk` and
+    `ess_tail` are keyed by parameter and a bare metric name does not say which.
+    """
+    if not attempt.diagnostics:
+        return [
+            "None — no blocking diagnostic was breached, so this refusal preceded "
+            "sampling rather than following it."
+        ]
+    lines = [
+        f"{len(attempt.diagnostics)} breached blocking diagnostic(s), each with its "
+        f"realized value, the threshold it was judged against and that threshold's "
+        f"direction — a value and a bar do not resolve to a verdict without it.",
+        "",
+    ]
+    for row in attempt.diagnostics:
+        scope = f" on `{row.parameter_name}`" if row.parameter_name is not None else ""
+        realized = (
+            f"{row.observed_value:g}"
+            if row.is_computable
+            else f"`{row.observed_value}` — **uncomputable**, not out of range"
+        )
+        lines += [f"### {row.metric}{scope}", ""]
+        lines.append(f"- **Metric**: `{row.metric}`")
+        if row.parameter_name is not None:
+            lines.append(f"- **Parameter**: `{row.parameter_name}`")
+        lines += [
+            f"- **Realized value**: {realized}",
+            f"- **Threshold**: {row.threshold_value:g}",
+            f"- **Threshold direction**: `{row.threshold_direction}` — "
+            f"{direction_prose(row.threshold_direction)}.",
+            "- **Verdict**: **breached** — the run is refused and no artifact is written.",
+            "",
+        ]
+    return lines
+
+
+def render_refusal_report(attempt: RefusedAttempt) -> str:
+    """The whole refusal report, as Markdown under its declared schema.
+
+    Deterministic: no clock read and no environment read. The instant is the
+    attempt's own, passed in, so the file and the filename it is written under
+    cannot describe two different moments.
+    """
+    bodies: dict[str, list[str]] = {
+        "Refused Attempt": _refused_attempt_section(attempt),
+        "Sampling": _refusal_sampling_section(attempt),
+        "Unmet Preconditions": _refusal_precondition_section(attempt),
+        "Breached Blocking Diagnostics": _refusal_diagnostic_section(attempt),
+    }
+    missing = [title for title in REFUSAL_SECTION_TITLES if title not in bodies]
+    if missing:
+        raise ReportError(
+            f"the refusal report's declared schema names section(s) {missing} that this "
+            f"renderer does not emit; a refusal is recorded by this file and the job's "
+            f"standard error alone (G-8), so a missing section is evidence nobody has"
+        )
+    parts: list[str] = [
+        "# Forecast Refusal Report",
+        "",
+        f"Attempt `{attempt.attempt_id}` was refused. No row was written in any of "
+        f"{', '.join(f'`{store}`' for store in UNTOUCHED_STORES)} and the active-run "
+        f"pointer is unmoved. A refused attempt has no `run_id`, because FR-017 forbids "
+        f"writing the run row — this file and the job's standard error are the only "
+        f"surviving record of why the run refused (G-8), and this file is the durable "
+        f"half of that pair.",
+        "",
+    ]
+    for ordinal, title in enumerate(REFUSAL_SECTION_TITLES, start=1):
+        parts += [f"## {ordinal}. {title}", "", *bodies[title], ""]
+    return "\n".join(parts).rstrip("\n") + "\n"
+
+
+def write_refusal_report(
+    attempt: RefusedAttempt, report_root: Path | str | None = None
+) -> Path:
+    """Emit one file per attempt, beside the run reports, never overwriting.
+
+    `x` mode rather than `w`, so "never overwritten by a later refusal" is a
+    mechanism rather than an argument from the timestamp's resolution: two
+    attempts that somehow shared an identifier would refuse the second write
+    rather than silently discard the first, and a retry loop is exactly when
+    that history matters.
+    """
+    text = render_refusal_report(attempt)
+    target = refusal_report_path(
+        attempt.as_of_date, attempt.input_data_hash, attempt.attempted_at, report_root
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with target.open("xb") as handle:
+            handle.write(text.encode("utf-8"))
+    except FileExistsError as exc:
+        raise ReportError(
+            f"a refusal report already exists at {target}; FR-037 retains one file per "
+            f"attempt and never overwrites, so the earlier attempt's evidence is kept and "
+            f"this one is reported instead"
+        ) from exc
     return target

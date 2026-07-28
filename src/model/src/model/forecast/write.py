@@ -15,6 +15,11 @@ as-of date, `held_out_prediction` holds held-out lines that already delivered,
 anchored per row at each line's own order date. Everything they share — the
 array shapes, the digest agreement — is checked by one function here, so the
 duplication ADR-0018 accepts in the schema is not repeated in the writer.
+
+`forecast_diagnostic` is step 5 of that same transaction, so a run's evidence
+that it converged is durable exactly when its artifacts are: there is no state
+in which the posteriors exist and the diagnostics do not, and none in which a
+constraint rejects a diagnostic row after the artifacts have committed.
 """
 
 from __future__ import annotations
@@ -30,12 +35,20 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.orm import Session
 
+from model.forecast.diagnostics import (
+    PARAMETER_METRICS,
+    RUN_METRICS,
+    DiagnosticRow,
+    blocking_breaches,
+    monitored_parameter_coverage,
+)
 from model.forecast.manifest import RunManifest, draw_digest
 from model.forecast.split import SplitAssignment
 
 __all__ = [
     "ACTIVATE_RUN_SQL",
     "CLEAR_ACTIVE_RUN_SQL",
+    "DIAGNOSTIC_INSERT",
     "HELD_OUT_ANCHOR_CONVENTION",
     "HELD_OUT_DURATION_SEMANTIC",
     "HELD_OUT_PREDICTION_INSERT",
@@ -174,6 +187,31 @@ HELD_OUT_PREDICTION_INSERT = text(
         :run_id, :po_line_id, :draw_count, :horizon_days,
         :anchor_date, true, :anchor_convention, :duration_semantic,
         :draws, :survival, :residual_tail_mass, :draw_digest
+    )
+    """
+)
+
+#: Step 5 of `data-model.md` § Write order — every monitored parameter and every
+#: run-level metric, in the same transaction as the artifacts they justify.
+#:
+#: `diagnostic_id` is bound rather than defaulted: `0303` declares the column
+#: NOT NULL with no default, because the natural key is
+#: `(run_id, metric, parameter_name)` and the surrogate exists only so a primary
+#: key has something non-nullable to key on.
+#:
+#: Nothing here computes `passed`, `is_blocking`, the scope or the direction.
+#: Each is pinned to the metric by one of `0303`'s agreement checks, so the
+#: writer copies the row `diagnostics.py` assembled and the database re-derives
+#: the verdict from the two numbers beside it.
+DIAGNOSTIC_INSERT = text(
+    """
+    INSERT INTO forecast_diagnostic (
+        diagnostic_id, run_id, diagnostic_scope, parameter_name, metric,
+        observed_value, threshold_value, threshold_direction, is_blocking, passed
+    )
+    VALUES (
+        :diagnostic_id, :run_id, :diagnostic_scope, :parameter_name, :metric,
+        :observed_value, :threshold_value, :threshold_direction, :is_blocking, :passed
     )
     """
 )
@@ -329,6 +367,53 @@ def _checked_prediction(row: HeldOutPredictionRow, manifest: RunManifest) -> dic
     }
 
 
+def _checked_diagnostics(diagnostics: Sequence[DiagnosticRow]) -> None:
+    """Every diagnostic row proved storable before the first one is issued.
+
+    Three claims, each of which the database would otherwise report as a
+    constraint name inside a transaction that has already written a run. A
+    blocking breach is mechanism 3 of § The Refusal Guarantee firing — "a writer
+    that skips the gate" — and is a **defect in the writer**, not a refusal of
+    the run, because the gate has already passed by the time this module runs. A
+    repeated natural key is what `uq_forecast_diagnostic__run_metric_parameter`
+    refuses. A partially covered parameter is DV-011, which no `CHECK` can see.
+    """
+    breaches = blocking_breaches(diagnostics)
+    if breaches:
+        raise WriteError(
+            f"{len(breaches)} blocking diagnostic row(s) did not pass and reached the "
+            f"writer — first {breaches[0].described()}. "
+            f"`ck_forecast_diagnostic__blocking_rows_passed` refuses the row outright, so "
+            f"this is the gate having been skipped rather than a run legitimately refusing"
+        )
+    keys = [(row.metric, row.parameter_name) for row in diagnostics]
+    if len(set(keys)) != len(keys):
+        raise WriteError(
+            "two diagnostic rows share a metric and parameter under one run; "
+            "`uq_forecast_diagnostic__run_metric_parameter` is `NULLS NOT DISTINCT`, so "
+            "the second insert is refused after the first has already been issued"
+        )
+    partial = sorted(
+        name
+        for name, metrics in monitored_parameter_coverage(diagnostics).items()
+        if metrics != frozenset(PARAMETER_METRICS)
+    )
+    if partial:
+        raise WriteError(
+            f"{len(partial)} monitored parameter(s) carry fewer than the three "
+            f"parameter-scope metrics — first {partial[0]}. DV-011 requires no parameter "
+            f"be partially covered, and a `CHECK` admits no sibling row (G-7), so a run "
+            f"recording an R-hat and omitting its ESS would store cleanly"
+        )
+    run_scoped = sorted(row.metric for row in diagnostics if row.parameter_name is None)
+    if diagnostics and run_scoped != sorted(RUN_METRICS):
+        raise WriteError(
+            f"the run-scope rows are {run_scoped} rather than {sorted(RUN_METRICS)}; "
+            f"DV-011 requires exactly three, and a missing E-BFMI row is a blocking "
+            f"metric nobody recorded a verdict for"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Transaction 1 — the artifact set
 # ---------------------------------------------------------------------------
@@ -340,6 +425,7 @@ def insert_artifact_set(
     split_assignments: Sequence[SplitAssignment],
     line_posteriors: Sequence[LinePosteriorRow],
     held_out_predictions: Sequence[HeldOutPredictionRow] = (),
+    diagnostics: Sequence[DiagnosticRow] = (),
 ) -> uuid.UUID:
     """Every statement of transaction 1, issued in the order the keys force.
 
@@ -363,6 +449,15 @@ def insert_artifact_set(
     actually has was written is DV-002's question and DV-028's, both asserted
     over the stored rows against the run row's own counts — not something this
     function can answer, since it is handed the rows rather than the lines.
+
+    `diagnostics` defaults to empty for a different and narrower reason: a run
+    the job emits always carries the complete set, and the default exists so a
+    test re-emitting a variant of a stored run drives the artifact statements
+    without re-deriving a posterior summary it is making no claim about. The
+    completeness of what a *run* stores is DV-011's question, asserted over the
+    stored rows; what this function refuses is a set that is internally
+    incoherent — a blocking breach, a repeated natural key, a parameter covered
+    by fewer than three metrics.
     """
     if not split_assignments:
         raise WriteError(
@@ -404,6 +499,7 @@ def insert_artifact_set(
             f"schema refuses an order-date-anchored row written into `line_posterior`. "
             f"DV-030 asserts it over the stored rows; this refuses it before the write"
         )
+    _checked_diagnostics(diagnostics)
 
     connection.execute(RUN_INSERT, manifest.row_parameters())
     connection.execute(
@@ -430,6 +526,15 @@ def insert_artifact_set(
         connection.execute(
             HELD_OUT_PREDICTION_INSERT,
             [_checked_prediction(row, manifest) for row in held_out_predictions],
+        )
+    # Step 5, and the last statement of transaction 1. Last because every
+    # diagnostic row is the run's child and because ordering inside one
+    # transaction carries no external guarantee anyway — what it does carry is
+    # that a rejected diagnostic rolls the artifacts back with it.
+    if diagnostics:
+        connection.execute(
+            DIAGNOSTIC_INSERT,
+            [row.row_parameters(manifest.run_id) for row in diagnostics],
         )
     return manifest.run_id
 
@@ -497,6 +602,7 @@ def write_artifact_set(
     split_assignments: Sequence[SplitAssignment],
     line_posteriors: Sequence[LinePosteriorRow],
     held_out_predictions: Sequence[HeldOutPredictionRow] = (),
+    diagnostics: Sequence[DiagnosticRow] = (),
 ) -> uuid.UUID:
     """Write one run's artifact set, then publish it. Two transactions (AD-010).
 
@@ -513,7 +619,12 @@ def write_artifact_set(
     """
     with _unit_of_work(target) as connection:
         run_id = insert_artifact_set(
-            connection, manifest, split_assignments, line_posteriors, held_out_predictions
+            connection,
+            manifest,
+            split_assignments,
+            line_posteriors,
+            held_out_predictions,
+            diagnostics,
         )
     with _unit_of_work(target) as connection:
         set_active_run(connection, run_id)
