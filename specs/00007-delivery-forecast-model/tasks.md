@@ -102,12 +102,12 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 **Independent test**: fit against the committed dataset at the recorded as-of date and confirm every open line carries a stored posterior whose draws and survival array agree, joinable to exactly one run.
 
-- [ ] T025 [US1] {FR-010,FR-011,FR-029} **RED** Failing posterior property tests in TST/test_posterior_properties.py — DV-004's grid identity, DV-003 by a second path, monotone conditioning
+- [X] T025 [US1] {FR-010,FR-011,FR-029} **RED** Failing posterior property tests in TST/test_posterior_properties.py — DV-004's grid identity, DV-003 by a second path, monotone conditioning
 - [ ] T026 [US1] {FR-010,FR-011,FR-029} **GREEN** Inverse-CDF conditioning, sort, grid and residual in PKG/posterior.py → exports: conditional_remaining_draws(), survival_grid() after:T025
 - [ ] T027 [US1] {FR-001,FR-002} Build the PyMC graph — one lognormal per transition, the vendor and category hierarchy, the rework sub-model — in PKG/model.py ← T024:log_contribution after:T115
 - [ ] T028 [US1] {FR-003} [COMPLETES FR-003] The graph's `logp` agrees with `likelihood.py` to floating tolerance over extreme σ, τ and a one-row vendor — TST/test_model_logp.py
 - [ ] T029 [US1] {FR-016} Seeded sampling at 4 chains × 1,000 draws with 1,000 tuning draws in PKG/sample.py, fitting the `train` side only
-- [ ] T030 [P] [US1] {FR-019} **RED** Failing shrinkage property tests in TST/test_shrinkage_properties.py — ρ monotone in nⱼ, triple ordered inside `[0,1]`, interval widens as nⱼ falls
+- [X] T030 [P] [US1] {FR-019} **RED** Failing shrinkage property tests in TST/test_shrinkage_properties.py — ρ monotone in nⱼ, triple ordered inside `[0,1]`, interval widens as nⱼ falls
 - [ ] T031 [US1] {FR-019} **GREEN** ρⱼ = τ²/(τ² + σ²/nⱼ) as a median with an HPDI per vendor in PKG/shrinkage.py → exports: vendor_shrinkage() after:T030
 - [ ] T032 [US1] {FR-002,FR-006,FR-009,FR-043,FR-044} [COMPLETES FR-009] Assemble the manifest in PKG/manifest.py — every SC-020 field, both digests, both SC-022 labels → exports: build_manifest()
 - [ ] T033 [US1] {FR-008,FR-013,FR-034} Transaction 1 in PKG/write.py — run row, split assignments, `line_posterior`; both arrays one row ← T032:build_manifest → exports: write_artifact_set()
