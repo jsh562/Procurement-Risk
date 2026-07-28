@@ -300,6 +300,125 @@ def test_a_single_line_cohort_is_still_assigned() -> None:
 
 
 # ---------------------------------------------------------------------------
+# T064 — DV-007 / SC-010: both strata present on **both** sides
+# ---------------------------------------------------------------------------
+#
+# The proportion tests above quantify over each stratum's held-out share and are
+# satisfied by a stratum that lands entirely on one side whenever the rounded
+# quota says it should — a stratum of one, or of two, legitimately does. What
+# they cannot say is that at the shape this epic actually runs at, all four cells
+# are populated: censored-train, censored-held-out, delivered-train and
+# delivered-held-out. That is DV-007's first clause and SC-010's, and it is a
+# claim about the realized cohort rather than about the function's whole domain.
+#
+# It is worth stating separately because the two failures look identical in the
+# aggregate. A split that put all 24 censored lines on the training side hits the
+# declared fraction over the cohort exactly, satisfies the ordinal and
+# side-membership rules, and leaves FR-006's realized held-out **uncensored event
+# count** — the quantity L-3's precision shortfall is measured in — as whatever
+# the shuffle happened to produce.
+
+
+def cell_size(result: SplitResult, *, censored: bool, side: str) -> int:
+    """How many lines fall in one of the four (stratum, side) cells."""
+    return sum(
+        1
+        for row in result.assignments
+        if row.is_censored is censored and row.split_side == side
+    )
+
+
+def test_both_strata_appear_on_both_sides_at_the_realized_shape() -> None:
+    """DV-007's first clause, at the 24-censored / 175-delivered shape E005 ships.
+
+    All four cells non-empty. Asserted at the realized shape rather than swept,
+    because at small stratum sizes an empty cell is the *correct* answer — the
+    rounded quota takes a stratum of one entirely to the training side on
+    purpose, so that a single observation is not held out and trained on nothing.
+    """
+    result = assign_split(
+        cohort(REALIZED_CENSORED, REALIZED_DELIVERED),
+        as_of_date=AS_OF_DATE,
+        input_data_hash=input_hash("both-strata-both-sides"),
+    )
+
+    for censored in (True, False):
+        for side in (TRAIN, HELD_OUT):
+            assert cell_size(result, censored=censored, side=side) > 0, (
+                f"the {'censored' if censored else 'delivered'} stratum has no line on the "
+                f"{side!r} side. The stratification is then decorative: the aggregate "
+                f"fraction is still met and FR-006's realized held-out uncensored event "
+                f"count is whatever the shuffle produced"
+            )
+
+
+def test_the_four_cells_partition_the_cohort() -> None:
+    """The cells are a partition, so "both sides" is a statement about all the lines.
+
+    Without this, four non-empty cells could still leave lines counted twice or
+    not at all — and the two proportion tests above range over each stratum
+    separately, so neither would notice.
+    """
+    result = assign_split(
+        cohort(REALIZED_CENSORED, REALIZED_DELIVERED),
+        as_of_date=AS_OF_DATE,
+        input_data_hash=input_hash("partition"),
+    )
+    cells = {
+        (censored, side): cell_size(result, censored=censored, side=side)
+        for censored in (True, False)
+        for side in (TRAIN, HELD_OUT)
+    }
+
+    assert sum(cells.values()) == REALIZED_CENSORED + REALIZED_DELIVERED
+    assert cells[(True, TRAIN)] + cells[(True, HELD_OUT)] == REALIZED_CENSORED
+    assert cells[(False, TRAIN)] + cells[(False, HELD_OUT)] == REALIZED_DELIVERED
+
+
+@given(shape=cohort_shapes, digest=input_hashes)
+def test_a_stratum_large_enough_to_split_lands_on_both_sides(
+    shape: tuple[int, int], digest: str
+) -> None:
+    """The general form, with the condition under which it is true stated.
+
+    A stratum splits across both sides exactly when its rounded quota is neither
+    zero nor the whole stratum — below `1/(2·fraction)` lines the nearest whole
+    number of held-out lines is none, and that is deliberate. Quantifying over
+    the sizes where the split *is* possible is what makes this a property rather
+    than a fact about one cohort, and it is the direction a shape-dependent bug
+    would show up in first.
+    """
+    result = assign_split(cohort(*shape), as_of_date=AS_OF_DATE, input_data_hash=digest)
+
+    for censored in (True, False):
+        size = stratum_size(result, censored=censored)
+        quota = held_out_count(result, censored=censored)
+        if 0 < quota < size:
+            assert cell_size(result, censored=censored, side=TRAIN) > 0
+            assert cell_size(result, censored=censored, side=HELD_OUT) > 0
+
+
+def test_the_realized_uncensored_held_out_count_is_the_delivered_held_out_cell() -> None:
+    """FR-006's event count is one of the four cells, and L-3 is what it costs.
+
+    `held_out_uncensored_event_count` is the delivered-and-held-out cell, which
+    is why the cell being non-empty is not enough on its own: the registered
+    coverage band's precision depends on how large it is. E007 publishes the
+    realized figure and states the shortfall rather than adjusting the band
+    (Principle VII), and this is where the figure comes from.
+    """
+    result = assign_split(
+        cohort(REALIZED_CENSORED, REALIZED_DELIVERED),
+        as_of_date=AS_OF_DATE,
+        input_data_hash=input_hash("event-count"),
+    )
+    delivered_held_out = cell_size(result, censored=False, side=HELD_OUT)
+
+    assert delivered_held_out == held_out_count(result, censored=False)
+    assert abs(delivered_held_out - HELD_OUT_FRACTION * REALIZED_DELIVERED) <= 1.0
+
+
+# ---------------------------------------------------------------------------
 # Metamorphic: reordering the input rows changes no line's side
 # ---------------------------------------------------------------------------
 
