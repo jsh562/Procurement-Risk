@@ -6,17 +6,12 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Throwaway working area. Scratch scripts, probes, and any environment that has
-# to be built for a one-off task live here and nowhere else.
-#
-# This exists because they previously lived in %LOCALAPPDATA%\Temp, where a
-# one-off task installed a ~1 GB PyTorch environment to generate the encoder
-# parity reference. A gigabyte of unsigned native DLLs appearing at once under
-# a user-profile temp path is the shape antivirus heuristics look for, and
-# Avast blocked it — correctly, on the evidence available to it. Nothing was
-# corrupted, but the location was the problem: work that belongs to this
-# project should be visible inside this project, not buried in a temp folder
-# the developer never looks at.
+# Throwaway working area, one per checkout. Scratch scripts, probes, and any
+# environment built for a one-off task live here and nowhere else — see the
+# Temporary Files rule in project-instructions.md. Several checkouts of this
+# repository share one disk, and the system temp directory is shared with the
+# whole machine; a ~1 GB unsigned install there was blocked as a dropper by the
+# host's antivirus, correctly.
 .tmp/
 
 # Node
