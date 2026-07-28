@@ -63,8 +63,15 @@ _SQRT_TWO = math.sqrt(2.0)
 #: The largest quantile `F⁻¹` has a finite answer for. `F*` is strictly below 1
 #: in exact arithmetic, but `1 − S(e)(1 − u)` rounds to exactly 1 once `S(e)` is
 #: small enough, and `inv_cdf(1.0)` raises from inside the stdlib rather than
-#: naming the line that reached the far tail. Capping keeps the draw finite and
-#: enormous, which is the honest answer for a line open that long.
+#: naming the line that reached the far tail.
+#:
+#: The cap is a **precision guard only, and it is not a domain extension**. An
+#: earlier revision of this comment claimed it "keeps the draw finite and
+#: enormous, which is the honest answer for a line open that long". It does not:
+#: once `S(e)` underflows, every `u` maps to this one quantile, `T` becomes a
+#: ceiling independent of `e`, and `T − e` goes negative without bound —
+#: −15,610 days at 20,000 elapsed, measured at the fit's own scale. The refusal
+#: at the end of `conditional_remaining_draws` is what covers that regime.
 _LARGEST_QUANTILE = math.nextafter(1.0, 0.0)
 
 

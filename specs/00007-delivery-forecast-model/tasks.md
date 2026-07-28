@@ -146,21 +146,21 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 **Independent test**: confirm the stored split covers every line exactly once, is hashable, that no held-out line entered the design matrix, and that held-out delivered lines carry order-date-anchored predictions. **No integration task in this phase is `[P]`** — each drives the one live PostgreSQL on `${PRC_DB_PORT:-5434}`.
 
-- [ ] T055 [US3] {FR-008,FR-029} Draw **total** durations from each held-out line's own order date in PKG/posterior.py — no conditioning, same grid and residual path after:T026,T117
-- [ ] T056 [US3] {FR-012,FR-034} Insert `held_out_prediction` inside transaction 1 in PKG/write.py — anchor, delivered flag, both label columns, insert-only
-- [ ] T057 [US3] {FR-012} DV-002 / SC-013 — one prediction row per held-out delivered line and none for any other, each joinable to one run — TST/test_held_out_population.py
-- [ ] T058 [US3] {FR-012} DV-023 — a positive control that `fk_held_out_prediction__line_anchor` is present, so a dropped FK fails — TST/test_anchor_control.py
-- [ ] T059 [US3] {FR-012} [COMPLETES FR-012] **NC-5** / SC-002 — a planted row whose `anchor_date` differs from its line's `order_date` is rejected by the FK — TST/test_anchor_control.py
-- [ ] T060 [US3] {FR-010} DV-003 and DV-004 over stored `held_out_prediction` rows — the store no delivered constraint reaches — TST/test_stored_arrays.py
-- [ ] T061 [US3] {FR-011} [COMPLETES FR-011] DV-027 — pair `pg_constraint` definitions and assert all seven array invariants on both stores — TST/test_array_parity.py
-- [ ] T062 [US3] {FR-029} DV-040 — the stored held-out median lands inside a pre-published band around the training KM median — TST/test_held_out_semantic.py after:T050
-- [ ] T063 [US3] {FR-005} DV-006 / SC-009 — one row per line per run against `purchase_order_line`, ordinal contiguous from 1 in the canonical order — TST/test_split_completeness.py
-- [ ] T064 [US3] {FR-005} DV-007 / SC-010 — both strata on both sides, each realized proportion within one line of the declared fraction — TST/test_split_properties.py after:T022
-- [ ] T065 [US3] {FR-007} [COMPLETES FR-007] DV-008 / SC-011 — no held-out `po_line_id` in the fit's design matrix, recorded as a proxy — TST/test_training_isolation.py after:T029
-- [ ] T066 [US3] {FR-006} DV-028 / SC-012 — all four run-row scalars agree with their child rows, each a single SQL comparison — TST/test_run_scalars.py
-- [ ] T067 [US3] {FR-008} [COMPLETES FR-008] DV-030 — the three populations exhaustive and disjoint; no line holds rows in both stores (G-5) — TST/test_population_disjointness.py
-- [ ] T068 [US3] {FR-044} DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
-- [ ] T069 [US3] {FR-005} [COMPLETES FR-005] **NC-13** / AD-011 — a re-run gives the **same** `split_assignment_hash`, one mutated row a **different** one — TST/test_split_determinism.py
+- [X] T055 [US3] {FR-008,FR-029} Draw **total** durations from each held-out line's own order date in PKG/posterior.py — no conditioning, same grid and residual path after:T026,T117
+- [X] T056 [US3] {FR-012,FR-034} Insert `held_out_prediction` inside transaction 1 in PKG/write.py — anchor, delivered flag, both label columns, insert-only
+- [X] T057 [US3] {FR-012} DV-002 / SC-013 — one prediction row per held-out delivered line and none for any other, each joinable to one run — TST/test_held_out_population.py
+- [X] T058 [US3] {FR-012} DV-023 — a positive control that `fk_held_out_prediction__line_anchor` is present, so a dropped FK fails — TST/test_anchor_control.py
+- [X] T059 [US3] {FR-012} [COMPLETES FR-012] **NC-5** / SC-002 — a planted row whose `anchor_date` differs from its line's `order_date` is rejected by the FK — TST/test_anchor_control.py
+- [X] T060 [US3] {FR-010} DV-003 and DV-004 over stored `held_out_prediction` rows — the store no delivered constraint reaches — TST/test_stored_arrays.py
+- [X] T061 [US3] {FR-011} [COMPLETES FR-011] DV-027 — pair `pg_constraint` definitions and assert all seven array invariants on both stores — TST/test_array_parity.py
+- [X] T062 [US3] {FR-029} DV-040 — the stored held-out median lands inside a pre-published band around the training KM median — TST/test_held_out_semantic.py after:T050
+- [X] T063 [US3] {FR-005} DV-006 / SC-009 — one row per line per run against `purchase_order_line`, ordinal contiguous from 1 in the canonical order — TST/test_split_completeness.py
+- [X] T064 [US3] {FR-005} DV-007 / SC-010 — both strata on both sides, each realized proportion within one line of the declared fraction — TST/test_split_properties.py after:T022
+- [X] T065 [US3] {FR-007} [COMPLETES FR-007] DV-008 / SC-011 — no held-out `po_line_id` in the fit's design matrix, recorded as a proxy — TST/test_training_isolation.py after:T029
+- [X] T066 [US3] {FR-006} DV-028 / SC-012 — all four run-row scalars agree with their child rows, each a single SQL comparison — TST/test_run_scalars.py
+- [X] T067 [US3] {FR-008} [COMPLETES FR-008] DV-030 — the three populations exhaustive and disjoint; no line holds rows in both stores (G-5) — TST/test_population_disjointness.py
+- [X] T068 [US3] {FR-044} DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
+- [X] T069 [US3] {FR-005} [COMPLETES FR-005] **NC-13** / AD-011 — a re-run gives the **same** `split_assignment_hash`, one mutated row a **different** one — TST/test_split_determinism.py
 - [ ] T070 [US3] {FR-028} DV-025 / SC-025 — the realized event count published **with** a statement of whether it supports the band's precision (L-3) — TST/test_report_event_count.py after:T036
 - [ ] T071 [US3] {FR-020,FR-027,FR-031} DV-024, DV-037 / SC-024, SC-029 — four parts on each limitation, the observation count stated, `L-1`–`L-4` present by identity — TST/test_limitations.py
 - [ ] T072 [US3] {FR-027} [COMPLETES FR-027] **NC-8** — a deliberately three-part limitation record **fails** the checker — TST/test_limitation_controls.py after:T071
@@ -234,7 +234,7 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [X] T114 {FR-001,FR-002} **RED** Property tests for the vendor and material-category index mapping and the pooling structure in TST/test_design_properties.py — a swapped vendor index must be detected, and the mapping must be a pure function of the roster order — A-002
 - [X] T115 [COMPLETES FR-002] {FR-001,FR-002} **GREEN** Extract the index mapping and design-matrix construction from PKG/model.py into PKG/design.py after:T114 → exports: vendor_index(), category_index(), design_matrix()
 - [X] T116 [COMPLETES FR-001] {FR-001} Rework T028 so the `logp` agreement oracle builds `likelihood.py`'s inputs from PKG/design.py rather than from the assembled graph — TST/test_model_logp.py after:T115
-- [ ] T117 [US1] {FR-010,FR-029} **RED** Property test for the held-out **total-duration** path in PKG/posterior.py, absent from T025's set — TST/test_posterior_properties.py — A-015
+- [X] T117 [US1] {FR-010,FR-029} **RED** Property test for the held-out **total-duration** path in PKG/posterior.py, absent from T025's set — TST/test_posterior_properties.py — A-015
 - [X] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015
 - [ ] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
 - [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
