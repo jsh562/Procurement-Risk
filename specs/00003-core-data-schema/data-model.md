@@ -415,7 +415,7 @@ One row per line per run, holding **both** arrays (TR-031, SC-014). Names `Poste
 | `draws[i]`, `i = 1..draw_count` | Posterior predictive **delivery duration in days measured from `forecast_run.as_of_date`**, ascending. Non-negative. |
 | `survival[k]`, `k = 1..horizon_days` | `P(delivery has not occurred by end of day as_of_date + k)`. Non-increasing, in `[0,1]`. |
 | `residual_tail_mass` | `P(T > horizon_days)`, i.e. mass beyond the grid, stored explicitly rather than truncated (TR-030, OBJ5 VC5). Definitionally equal to `survival[horizon_days]`; the producer computes it independently from the draws, so the check is a genuine agreement test between two computations, not a tautology. |
-| Probability of lateness for a line with `need_by_date d` | `1 - survival[d - as_of_date]`, clamped: if `d <= as_of_date` the line is already late; if `d - as_of_date > horizon_days` the answer is `1 - residual_tail_mass`. Computed by E010 in SQL. |
+| Probability of lateness for a line with `need_by_date d` | `survival[d - as_of_date]`, clamped: if `d <= as_of_date` the line is already late; if `d - as_of_date > horizon_days` the answer is bounded above by `residual_tail_mass`. Computed by E010 in SQL. **No complement.** `survival[k]` is defined one row above as the probability that delivery has *not* occurred by day `k`, which is the probability of lateness itself; `1 - survival[k]` is the probability of arriving on time. An earlier revision of this row carried that inversion and was corrected during E010's planning, before any code consumed it — the migration's own comment always stated the correct semantics. |
 | Percentile `p` (0 < p ≤ 1) | `draws[ceil(p * draw_count)]` — nearest rank, one-based, no interpolation (TR-033, OBJ5 VC10). |
 
 **Length enforcement chain (SC-025)**: the composite FK proves `draw_count` and `horizon_days` on the artifact row are the run's own values; the two single-row `array_length` checks then prove each array matches. Neither check reads another row, so nothing here depends on a trigger and nothing breaks under dump-and-restore.
@@ -718,7 +718,7 @@ Each gap above is a scope decision, not an oversight. The covering test makes it
 | TR-050 | Migration `0004` gate |
 | TR-051 | **Invariant → Mechanism Map** — one deferrable FK, zero deferred checks, zero triggers |
 | TR-052 | Plan-level action on `specs/project-plan.md`; not a schema object |
-| TR-053 | **Array semantics** — the beyond-horizon row: `1 - residual_tail_mass` |
+| TR-053 | **Array semantics** — the beyond-horizon row: `residual_tail_mass` as an upper bound |
 | TR-054, TR-081 | `extracted_value.confidence double precision` + `ck_extracted_value__confidence_range` (inclusive) |
 | TR-055 | `ck_line_posterior__residual_matches_grid_tail` at `1e-9`, both operands `double precision` |
 | TR-056 | **Declared Constants** + **Scope-decision record for the three values fixed during planning** |

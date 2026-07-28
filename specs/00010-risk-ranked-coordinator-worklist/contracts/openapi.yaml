@@ -1,0 +1,1742 @@
+openapi: 3.1.0
+
+info:
+  title: Risk-Ranked Coordinator Worklist API
+  version: 1.0.0
+  summary: Read-only worklist of open purchase-order lines ranked by expected schedule harm.
+  description: |
+    Request-serving boundary for E010. One operation, `GET /worklist`, is the only path by which the
+    interface tier obtains worklist data (FR-024); the interface opens no datastore connection.
+
+    **No write path.** FR-031 makes an adjusted need-by date a session-local what-if that is never
+    persisted, so this contract defines no POST, PUT, PATCH or DELETE. The what-if is expressed as a
+    repeatable `need_by_override` query parameter on the same GET, which makes non-persistence a
+    property of the contract rather than a discipline of the implementation. See
+    `components/parameters/NeedByOverride` for why the override is a server round-trip rather than a
+    client-side recomputation.
+
+    **No model call.** Every figure is read at request time from the active forecast run's stored
+    artifacts (FR-002). The provider being unreachable cannot affect this operation (FR-023, SC-003).
+
+    **No predicted delivery date, anywhere.** FR-007 names the response among the surfaces its
+    prohibition binds — a row, a label, a sort control, a tooltip, an export, or the payload the
+    interface renders from — so the omissions below discharge a requirement rather than a courtesy.
+    Three deliberate omissions enforce it:
+      - no estimated / expected / predicted delivery date field exists in any schema;
+      - the raw `draws` and `survival` arrays are not exposed (FR-053), because a client holding them
+        could compute a mean or modal delivery date and render exactly the figure FR-007 removes. The
+        prohibition is scoped to *this* surface, not to the arrays: the project plan records E012 as a
+        second consumer of the same arrays for a single-line detail view, whose presentation
+        obligations are that feature's to state;
+      - `calendar_margin_days` is computed from the as-of date and the need-by date only, and takes no
+        forecast input (FR-009), so it cannot be combined with a displayed figure to reconstruct one.
+
+    FR-041 states the rule for the *set* rather than the field, and FR-053 additionally keeps the raw
+    probability off the wire: figures arrive rounded once, server-side, as an integer plus a finished
+    display string, because two independent roundings produce an FR-006 pair summing to 101.
+
+    **Degraded states are content, not failures.** All eight states of FR-018 are carried inside a
+    `200` response. None of them maps to an HTTP error status: "no active forecast run" is a fully
+    successful description of the system's knowledge, and returning `503` for it would make an honest
+    answer indistinguishable from an outage.
+
+    **Degraded states (FR-018, canonical enumeration of eight).** Machine-readable at the root
+    `x-degraded-states` extension.
+
+    | State | Requirement | Scope | Row precedence | Ranked | Figures |
+    |---|---|---|---|---|---|
+    | `no_active_run` | FR-015 | page (echoed on rows) | — | no | none, for any line |
+    | `stale_run` | FR-029 | page | — | unchanged | unchanged, with age reported |
+    | `empty_filter` | FR-042 | page | — | — | — |
+    | `roster_mismatch` | FR-021 | row | 1 | no | withheld |
+    | `not_covered` | FR-016 | row | 2 | no | none exist |
+    | `beyond_horizon` | FR-017 | row | 3 | yes | quantile pair, miss probability as an upper bound |
+    | `already_late` | FR-030 | row | 4 | yes | quantile pair; miss probability suppressed |
+    | `calendar_passed` | FR-030 | row | 5 | yes | all figures, annotated |
+
+    Row precedence is total (FR-018a). Exactly one row state wins and governs the row in full — its
+    label, whether the line is ranked, and which figures are suppressed. Losing states contribute no
+    behaviour, which is why the payload carries one `state` field per row and no list of also-applicable
+    states: two independent booleans would let a client annotate a beyond-horizon row as
+    calendar-passed, a combination FR-018a resolves in favour of beyond-horizon alone.
+
+    The three page-scope states compose with a row label rather than competing with it, so they travel
+    in `page_states` — in one of the six sets FR-033 admits, never any subset of three — and never in a
+    row's `state`. The single exception is
+    `no_active_run`, which is echoed onto every row so that no row in that mode can carry a figure by
+    construction rather than by the client remembering to check the banner.
+
+    **Terminal lines never appear.** FR-022 excludes them at the query, not as a state.
+
+    **Authentication.** None, and this is inherited rather than decided here. `specs/sad.md` § Security
+    records the absence of authentication as a deliberate project-level scope decision, carried in the
+    product document with its reversal condition and production-scale alternative. FR-056 states what
+    that inheritance obliges of this surface: no scheme, no coordinator identity, no per-reader
+    visibility rule — every reader who can reach the deployment reads the same worklist, and a response
+    is scoped by `project_id` and by the adjustment set it carries and by nothing about who is asking.
+    `Cache-Control: private` therefore rests on FR-031's session, which is the adjustment set the
+    request carries, and not on an identity this contract does not have.
+
+    **Versioning.** Three counters exist and they are not the same counter:
+      - the `/api/v1` path segment is the **interface version a consumer binds to**. It moves only when
+        an external consumer exists that cannot be updated in the same change — see the compatibility
+        rule below;
+      - `info.version` is this document's own revision, bumped on every change to the contract whether
+        breaking or not. It is what the ETag means by "this contract's version", because it is the
+        counter that moves when the response shape moves. It starts moving when the endpoint first
+        ships: revisions made while the contract is still a planning artifact, including the three
+        checklist passes that produced this text, are revisions of an unshipped document and do not
+        earn a version history no consumer could have observed;
+      - `ForecastRunMeta.artifact_schema_version` is E003's schema version for the *stored forecast
+        artifacts*. It is a property of the data read, never of this interface, and a value this reader
+        does not recognise is a fault under FR-043 rather than an interface version mismatch.
+
+    **Compatibility and change.** Every consumer the project plan records for this surface — E012, E017,
+    E019 — lives in this repository and ships from the same commit as the endpoint, and there is no
+    external client. The rule follows from that fact rather than from a general policy: a change to this
+    contract lands together with the update to every recorded consumer, and bumps `info.version`. The
+    path version moves only if a consumer outside this repository is ever introduced, which would be a
+    scope change with its own decision.
+
+    A change is **breaking** if it removes or renames a member, changes a member's type or its admitted
+    values, changes the meaning of an existing member, adds a member to an object declared
+    `additionalProperties: false`, adds a value to a closed `enum`, adds a required parameter, or moves
+    an existing condition to a different status. Because the response object and every object inside it
+    are closed, almost any payload change is breaking for a strict consumer — that is the deliberate
+    cost of FR-027's cap being structural. A change is **compatible** only if it adds an optional query
+    parameter with a server-side default, or adds a new problem `type` identifier.
+
+    **No deprecation or sunset mechanism** is defined, and its absence is recorded rather than implied:
+    with every consumer in-repo and released together, there is no window during which an old and a new
+    consumer both call this endpoint, so a `Deprecation` or `Sunset` header would announce a change to
+    nobody. The announcement mechanism is the same-commit rule plus the `info.version` bump; a member is
+    withdrawn by removing it from this contract and from its consumers in one change. The reversal
+    trigger is the first consumer outside this repository. See the plan's recorded limitation for the
+    four-part form.
+  contact:
+    name: E010 Risk-Ranked Coordinator Worklist
+  x-epic: E010
+  x-spec: specs/00010-risk-ranked-coordinator-worklist/spec.md
+
+servers:
+  - url: /api/v1
+    description: Request-serving boundary (FastAPI, Python 3.12), mounted under a version prefix.
+
+tags:
+  - name: worklist
+    description: The coordinator's primary surface. Read-only.
+
+x-degraded-states:
+  - name: no_active_run
+    requirement: FR-015
+    scope: page
+    row_precedence: null
+    ranked: false
+    figures: none
+  - name: stale_run
+    requirement: FR-029
+    scope: page
+    row_precedence: null
+    ranked: null
+    figures: unchanged
+  - name: empty_filter
+    requirement: FR-042
+    scope: page
+    row_precedence: null
+    ranked: null
+    figures: null
+  - name: roster_mismatch
+    requirement: FR-021
+    scope: row
+    row_precedence: 1
+    ranked: false
+    figures: withheld
+  - name: not_covered
+    requirement: FR-016
+    scope: row
+    row_precedence: 2
+    ranked: false
+    figures: none
+  - name: beyond_horizon
+    requirement: FR-017
+    scope: row
+    row_precedence: 3
+    ranked: true
+    figures: bounded
+  - name: already_late
+    requirement: FR-030
+    scope: row
+    row_precedence: 4
+    ranked: true
+    figures: quantiles_only
+  - name: calendar_passed
+    requirement: FR-030
+    scope: row
+    row_precedence: 5
+    ranked: true
+    figures: full
+
+paths:
+  /worklist:
+    get:
+      tags: [worklist]
+      operationId: getWorklist
+      summary: Open purchase-order lines ranked by expected schedule harm.
+      description: |
+        Returns the complete worklist in one response. Every figure a row renders — state, miss
+        probability, quantile pair, as-of date, criticality, calendar margin, expected harm — is inline,
+        so the interface makes no follow-up call per row. This is a performance constraint, not a
+        convenience: the registered target is a worklist p95 of 1.5 s on one shared vCPU, and 200
+        follow-up requests cannot meet it.
+
+        **No pagination.** The working scale is roughly two hundred open lines and the specification
+        records that no pagination strategy is needed. Offering `limit`/`offset` would also let a client
+        render a partial ordering while FR-001 and SC-001 require a single ordering in which the
+        highest-harm line is identifiable without opening anything else. `counts` is returned so that
+        growth past this assumption is observable rather than silent.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/NeedByOverride'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: |
+            The worklist. Returned for every degraded state, including no active forecast run.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorklistResponse'
+              examples:
+                nominal:
+                  $ref: '#/components/examples/NominalWorklist'
+                noActiveRun:
+                  $ref: '#/components/examples/NoActiveRunWorklist'
+                emptyFilter:
+                  $ref: '#/components/examples/EmptyFilterWorklist'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatastoreUnavailable'
+
+components:
+
+  parameters:
+
+    ProjectId:
+      name: project_id
+      in: query
+      required: false
+      description: |
+        FR-025. Scopes the worklist to one project; the ranking is recomputed within that scope, so
+        `rank` runs 1..N over the filtered set rather than carrying positions from the unfiltered list.
+
+        A well-formed identifier matching no open line returns `200` with an empty list and the
+        `empty_filter` page state — never `404`. There is no project registry in the schema
+        (`project_id` is a format-checked column on `purchase_order_line`), so the system cannot
+        distinguish "no such project" from "a project with no open lines". Reporting a distinction the
+        data cannot support is the same defect the specification refuses when it folds a failed forecast
+        run into the stale state.
+      schema:
+        type: string
+        pattern: '^PRJ-[0-9]{3}$'
+      example: PRJ-002
+
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: |
+        FR-026. Exactly four keys are accepted; any other value is a `422`. The probability of missing
+        the need-by date is deliberately absent — it passes FR-007's stated exclusions but ordering the
+        whole list by one probability discards criticality, which is the collapse to a single figure the
+        specification exists to prevent. No quantile key and no delivery-date key exists, which is what
+        makes FR-004's "not independently sortable" and SC-012 enforceable at the contract rather than
+        in the interface.
+
+        Direction is not a parameter. Each key has one meaningful direction, fixed by the server and
+        echoed in `sort.direction` and `sort.options` so the interface can state the active key and
+        direction (FR-026) without hard-coding them. Admitting a `direction` parameter would permit
+        `expected_harm` ascending — a "least harmful first" ordering of the product's primary surface
+        that no requirement provides for and that inverts SC-001.
+      schema:
+        $ref: '#/components/schemas/SortKey'
+
+    NeedByOverride:
+      name: need_by_override
+      in: query
+      required: false
+      description: |
+        FR-031. Zero or more session-local what-if need-by dates, each `<po_line_id>:<YYYY-MM-DD>`.
+        Nothing is written; the parameter is the whole mechanism, so reloading without it restores the
+        recorded dates and no reset endpoint is required.
+
+        **Why a server round-trip rather than a client-side recomputation.** Re-ranking under a changed
+        need-by date requires the mean over the line's stored draws of the overrun past the new date
+        (FR-001) and a fresh survival-array lookup at the new offset (FR-020). Doing that in the browser
+        would require shipping ~4000 draws and 365 survival values per line — several megabytes for two
+        hundred lines — and would move probability arithmetic, ranking and FR-008's rounding into the
+        interface tier, against Principle V and against FR-024's rule that worklist data crosses the
+        request-serving boundary. It would also hand the client the arrays from which a point delivery
+        date is one aggregation away, defeating FR-007.
+
+        **Why this stays inside the latency budget.** The recomputation is the same query the unmodified
+        worklist already runs, with the need-by date substituted for the named lines: no model call
+        (FR-002), no refit, the same ~200 rows and the same array offsets. Overrides are capped at 25 to
+        bound both the URL length and the substitution set; a coordinator interrogating an ordering
+        adjusts one line at a time.
+
+        The operation writes nothing — not to `purchase_order_line`, and not to the model-invocation
+        record, which gains no row during the interaction because no invocation occurs (FR-011, SC-005).
+
+        **Admissibility (FR-055).** A date that is not a valid calendar date, a duplicate `po_line_id`,
+        a date more than ten years from `today`, or more than 25 entries is a `422` naming the parameter
+        and the reason. The cap and the ten-year window are the values FR-055 defers to this contract;
+        the requirement is that a set exceeding the bound is refused with the cap stated rather than
+        silently truncated, since a truncated set re-ranks the list against dates the coordinator did not
+        ask for. An override naming a line that is absent, terminal or out of the current scope is
+        **not** an error: it is reported in `overrides.unapplied` with which of the three it was, because
+        silently dropping it would leave the coordinator believing an adjustment took effect while
+        reading an ordering computed without it. The recorded constraint `need_by_date >= order_date` is
+        deliberately not applied — it guards the stored record, this value is never stored, and enforcing
+        it would refuse a question the ranking answers correctly.
+
+        More than one override at a time is admitted by FR-031, which is why this parameter is
+        repeatable: a coordinator comparing two lines needs both dates moved at once.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 25
+        uniqueItems: true
+        items:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}:[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      example:
+        - '9f2a1c44-7b31-4d0e-9a11-2c8e5f0b71d3:2026-07-18'
+
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |
+        Conditional request. A `304` means **nothing this response depends on has changed** — not merely
+        that no figure moved; see `components/headers/ETag` for the input set, which includes the
+        reported line set. FR-020a states that a row's figures change only under a new active run, a
+        coordinator action, or the advance of the day boundary, and requires the validator that makes the
+        claim observable; SC-027 is what fails if a line opened, made terminal or re-prioritised does not
+        move it. A `304` arriving after any admitted input changed is a defect with a specific cause
+        rather than a cache anomaly.
+      schema:
+        type: string
+      example: 'W/"sha256:1f0c9d2b8a4e6015c7b3d9012fa4e86b5c37d0912ae4f6b83c105d7e29ab4f60"'
+
+  headers:
+
+    ETag:
+      description: |
+        Weak validator over exactly the inputs FR-020a admits, and nothing else:
+
+          - the active run identifier, or its absence;
+          - `today` in the configured time zone;
+          - the project scope and the sort key;
+          - the applied override set;
+          - **the state of the open-line set the response reports** — which lines are in it, and every
+            stored field the response derives from them: identity, recorded need-by date, criticality,
+            lifecycle state, roster hash;
+          - `info.version`, this document's revision (see `info` § Versioning — not the path segment and
+            not `artifact_schema_version`).
+
+        The line set participates because FR-020a's subject is a row's figures while this response's
+        subject is a *set* of rows. Without it, a line opened since the last request, one FR-022 has
+        since made terminal, or one whose criticality moved under E017 changes the worklist while every
+        surviving row's figure stands still — and a `304` would withhold a response that differs. An
+        unchanged ETag is a positive statement that the whole response is unchanged, not merely that no
+        figure moved (SC-027).
+
+        `meta.generated_at` deliberately takes no part: it records when the response was produced rather
+        than what it contains, and a validator moving with the clock would report a change on every
+        request and assert nothing. It is the single member two otherwise-identical responses may differ
+        in (FR-020a).
+      schema:
+        type: string
+      example: 'W/"sha256:1f0c9d2b8a4e6015c7b3d9012fa4e86b5c37d0912ae4f6b83c105d7e29ab4f60"'
+
+    CacheControl:
+      description: |
+        `private, no-cache` — revalidate on every request, never serve from a shared cache. FR-031 states
+        the obligation this implements and defines the session it rests on: the session is the adjustment
+        set the request carries, not an identity, because FR-056 inherits the registered decision that
+        this system has none. A response computed under one adjustment set must not be served to a
+        request carrying a different one. The payload is also time-dependent through `today`, so a stored
+        copy could show a run as current after the day boundary made it stale — the precise failure
+        FR-029 exists to prevent.
+      schema:
+        type: string
+        const: 'private, no-cache'
+
+  responses:
+
+    NotModified:
+      description: No figure has changed since the supplied validator. No body.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+
+    ValidationFailed:
+      description: |
+        A query parameter is malformed or semantically inadmissible: an unknown sort key, a
+        `project_id` failing its pattern, a malformed or duplicated override, an override date outside
+        the admissible range, or more than 25 overrides. FR-055 owns the admissibility rules and
+        requires each refusal to name the parameter and the reason.
+
+        `422` rather than `400` for all of them, and the choice is a stated convention rather than the
+        framework's default: it covers the malformed and the semantically inadmissible alike, so a
+        consumer needs one branch and not two, and later endpoints on this boundary adopt it (the plan's
+        Error Handling Strategy). FastAPI's default `RequestValidationError` body does not match this
+        schema; the implementation must register a handler that renders validation failures as
+        `application/problem+json` so the contract is honoured rather than approximated.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/invalid-parameter'
+            title: Invalid query parameter
+            status: 422
+            detail: '`sort` must be one of expected_harm, need_by_date, criticality, calendar_margin.'
+            instance: '/api/v1/worklist'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+            errors:
+              - parameter: sort
+                value: p_miss
+                reason: not_an_offered_sort_key
+
+    InternalError:
+      description: |
+        Two conditions, distinguished by `type` and both carrying FR-043's interface treatment — no row,
+        no figure, wording distinct from `no_active_run`, and a correlation identifier.
+
+          - `internal-error` — an unhandled fault in the request-serving boundary.
+          - `unsupported-artifact-schema` — the active run's `artifact_schema_version` is one this build
+            does not recognise. A deliberate refusal rather than a breakdown: the registered
+            architecture requires a reader meeting an unfamiliar artifact schema to fail loudly rather
+            than misread array offsets (`specs/sad.md` § Data Management), and it carries its own `type`
+            so the response names what would change it. It is **not** a ninth degraded state (FR-018
+            stays canonical at eight) and not a `503`, because the datastore is reachable and retrying
+            changes nothing — a run written under a schema this build knows is what does.
+
+        No partial worklist is returned under either: a row rendered from a half-computed response is
+        the silent wrong figure the whole specification is written against (Principle III), and FR-043
+        requires no row and no figure rather than as many as could be assembled.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/unsupported-artifact-schema'
+            title: Forecast artifact schema not recognised
+            status: 500
+            detail: 'Active run 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201 carries artifact_schema_version 2; this build reads 1.'
+            instance: '/api/v1/worklist'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+
+    DatastoreUnavailable:
+      description: |
+        PostgreSQL is unreachable, so no stored artifact can be read. Distinct from `no_active_run`,
+        which is a `200`: one means the system cannot look, the other means it looked and there is
+        nothing there — FR-018's eight states are each carried inside a successful response, and FR-043
+        is the only condition this feature reports as a fault. The model provider being unreachable
+        never produces this status — this operation does not call it (FR-023).
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          example: 5
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/datastore-unavailable'
+            title: Cannot read forecast data
+            status: 503
+            detail: 'The datastore is unreachable, so no worklist could be assembled.'
+            instance: '/api/v1/worklist'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+
+  schemas:
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 problem details. The single error shape for this boundary, and the convention later
+        endpoints on it adopt rather than re-choose (see the plan's Error Handling Strategy).
+      additionalProperties: true
+      required: [type, title, status, correlation_id]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            Stable identifier for the problem kind. The set a consumer of *this* operation may encounter
+            is closed at four, and each is stable: an identifier is never reused for a different
+            condition and never renamed in place — adding one is the only compatible change to this
+            vocabulary (`info` § Compatibility).
+
+            | `type` | Status | Condition |
+            |---|---|---|
+            | `…/problems/invalid-parameter` | 422 | a query parameter is malformed or semantically inadmissible (FR-055) |
+            | `…/problems/unsupported-artifact-schema` | 500 | the active run's `artifact_schema_version` is one this reader does not recognise (FR-043) |
+            | `…/problems/internal-error` | 500 | an unhandled fault in the request-serving boundary |
+            | `…/problems/datastore-unavailable` | 503 | PostgreSQL is unreachable (FR-043) |
+
+            Base: `https://procurement-risk.local/problems/`.
+          enum:
+            - 'https://procurement-risk.local/problems/invalid-parameter'
+            - 'https://procurement-risk.local/problems/unsupported-artifact-schema'
+            - 'https://procurement-risk.local/problems/internal-error'
+            - 'https://procurement-risk.local/problems/datastore-unavailable'
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+        correlation_id:
+          type: string
+          minLength: 1
+          description: |
+            FR-043 requires a failure to carry an identifier correlating it to its record, and the
+            architecture propagates a trace identifier from web through API (`specs/sad.md` §
+            Observability). This is that identifier, and it is **required** on every problem response —
+            including `422`, where the correlation is what turns "it rejected my adjustment" into a
+            record someone can find. The plan's fault treatment promises it; declaring it here is what
+            makes the promise a property of the contract.
+          example: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+        errors:
+          type: array
+          description: |
+            Per-parameter detail. Present on `422`. The vocabulary is closed and each value states one of
+            FR-055's admissibility rules: `malformed` and `date_out_of_range` for a date that is not a
+            calendar date or falls outside the window, `duplicate_override` for a second adjustment on
+            one line, `too_many_overrides` for a set past the cap, `not_an_offered_sort_key` for a key
+            outside FR-026's four.
+          items:
+            type: object
+            additionalProperties: false
+            required: [parameter, reason]
+            properties:
+              parameter:
+                type: string
+              value:
+                type: [string, 'null']
+              reason:
+                type: string
+                enum:
+                  - malformed
+                  - not_an_offered_sort_key
+                  - duplicate_override
+                  - too_many_overrides
+                  - date_out_of_range
+
+    SortKey:
+      type: string
+      description: |
+        FR-026's four keys, and no others. Each carries one fixed direction:
+        `expected_harm` descending (the default — worst first, FR-001), `need_by_date` ascending
+        (soonest first), `criticality` descending (5 first), `calendar_margin` ascending (least margin
+        first). `criticality` and `calendar_margin` are FR-009 explanatory context admitted here by
+        FR-027's explicit carve-out, because both are inputs a coordinator may reasonably triage by.
+      enum:
+        - expected_harm
+        - need_by_date
+        - criticality
+        - calendar_margin
+      default: expected_harm
+
+    SortDirection:
+      type: string
+      enum: [asc, desc]
+
+    SortOption:
+      type: object
+      additionalProperties: false
+      required: [key, direction, is_default, is_active]
+      properties:
+        key:
+          $ref: '#/components/schemas/SortKey'
+        direction:
+          $ref: '#/components/schemas/SortDirection'
+        is_default:
+          type: boolean
+        is_active:
+          type: boolean
+
+    SortState:
+      type: object
+      description: |
+        The active key and direction (FR-026) plus the full offered set. The server enumerates the
+        options rather than the interface hard-coding them, so FR-032's assertion that the offered keys
+        are exactly FR-026's four is testable against the response instead of against a component's
+        source.
+      additionalProperties: false
+      required: [key, direction, tiebreak, options]
+      properties:
+        key:
+          $ref: '#/components/schemas/SortKey'
+        direction:
+          $ref: '#/components/schemas/SortDirection'
+        tiebreak:
+          type: array
+          description: |
+            FR-010, applied after the active key so every ordering is total and reproducible across
+            reloads. Under the default key this rule is not an edge case: expected harm is exactly zero
+            for every line whose draws all land on or before its need-by date, so it is the sole ordering
+            within that block. Returned because FR-047 requires the rule to be stated on screen beside
+            the active key and direction, and stating the rule the server applied is only possible if the
+            server sends it — a stable order the coordinator cannot account for reads as arbitrary.
+          items:
+            type: string
+          minItems: 3
+          maxItems: 3
+          example: ['need_by_date asc', 'criticality desc', 'po_line_id asc']
+        options:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/SortOption'
+
+    PageState:
+      type: string
+      description: |
+        FR-018's three page-scope states. They render as banners and compose with a row label rather
+        than competing with it (FR-018a), so they never appear in a row's `state` — except
+        `no_active_run`, which is additionally echoed onto every row.
+
+        `empty_filter` is emitted only when a scope filter is present and matched nothing (FR-042). An
+        unfiltered worklist with no open lines returns an empty list and no page state, because "the
+        filter matched nothing" would be false and FR-018's enumeration is canonical, so no ninth state
+        may be invented for it. A failure to read the stored artifacts is not a page state either: it is
+        a `500` or `503` carrying FR-043's treatment, because these three describe what the system knows
+        and that describes its inability to look.
+      enum:
+        - no_active_run
+        - stale_run
+        - empty_filter
+
+    RankedRowState:
+      type: string
+      description: |
+        The row states that keep a line in the ranking (FR-017, FR-030), plus `nominal` for a populated
+        row to which no degraded state applies. `not_covered` and `roster_mismatch` are absent from this
+        enum by design: a line under either of them is excluded from the ranking (FR-016, FR-021), and
+        making that a type-level fact means no ranked row can carry them.
+      enum:
+        - nominal
+        - beyond_horizon
+        - already_late
+        - calendar_passed
+
+    UnrankedRowState:
+      type: string
+      description: |
+        The row states that exclude a line from the ranking. `roster_mismatch` outranks `not_covered`
+        (FR-018a). `no_active_run` is the page-scope state echoed onto every row when no run is active,
+        so that a client cannot render a figure from a row it forgot to cross-check against the banner.
+      enum:
+        - roster_mismatch
+        - not_covered
+        - no_active_run
+
+    LineIdentity:
+      type: object
+      description: |
+        One of FR-027's four comparison quantities, carried as a single unit. Vendor, manufacturer,
+        part number and material category are deliberately not returned: no E010 requirement needs them,
+        and a field present in the payload is a column waiting to be added against FR-027's cap.
+      additionalProperties: false
+      required: [project_id, po_number, line_number, description]
+      properties:
+        project_id:
+          type: string
+          pattern: '^PRJ-[0-9]{3}$'
+        po_number:
+          type: string
+          minLength: 1
+        line_number:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+          minLength: 1
+
+    NeedBy:
+      type: object
+      description: |
+        The effective need-by date and, when a session what-if is in force, the recorded value it
+        replaces. Both are returned so the adjustment is auditable in the payload rather than only on
+        screen, and `unsaved` gives FR-031's "visibly marked as unsaved" a field to bind to.
+      additionalProperties: false
+      required: [date, date_of_record, source, unsaved]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The date every figure in this row was computed against.
+        date_of_record:
+          type: string
+          format: date
+          description: The stored value. Equal to `date` unless an override is applied.
+        source:
+          type: string
+          enum: [record, session_override]
+        unsaved:
+          type: boolean
+          description: True exactly when `source` is `session_override`. Never persisted (FR-031, FR-028).
+
+    PercentFigure:
+      type: object
+      description: |
+        One direction of a probability, already rounded for display. FR-053 requires exactly this
+        encoding — the rounded integer plus the finished display string, and never the stored value —
+        so the interface has no second rounding to perform, and requires both numeric fields to be
+        absent of a value in the bounded form so no numeral survives beside the bound.
+      additionalProperties: false
+      required: [percent, display]
+      properties:
+        percent:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 99
+          description: |
+            The displayed integer, half-up rounded server-side. **Null exactly when the pair renders in
+            FR-008's bounded form**, so a client physically cannot render `0%` or `100%` from a numeric
+            field. Where both directions carry an integer, they sum to 100 by construction.
+
+            The range is 1..99, not 0..100: FR-008 sends every value that would round to 0 or 100 to the
+            bounded form, so an integer 0 or 100 is not a rare case but an unrepresentable one, and the
+            bound here is what makes a regression fail schema validation instead of rendering a certainty.
+        display:
+          type: string
+          description: |
+            The numeral as it must appear: `"12%"`, or `"<1%"` / `">99%"` in the bounded form. The
+            interface supplies the surrounding words — "late", "on time", and, when `measure` is
+            `upper_bound`, "at most" / "at least" — but never re-derives the numeral. It also supplies
+            the spoken equivalents FR-051 requires for the two bounded forms, "less than one percent"
+            and "greater than ninety-nine percent", because a screen reader that drops the `<` turns
+            `<1%` into a flat `1%`.
+
+            The pattern admits exactly `1%`..`99%` and the two bounded forms. `"0%"` and `"100%"` are
+            excluded by construction (FR-008, SC-010).
+          pattern: '^(<1%|>99%|([1-9]|[1-9][0-9])%)$'
+
+    MissProbability:
+      type: object
+      description: |
+        The probability of missing the need-by date, stated in both directions (FR-006) and evaluated
+        against the active run's as-of date (FR-020).
+
+        **Why display strings and integers, and never a float.** FR-008 fixes the displayed precision at
+        whole percent with half-up rounding, requires `<1%` / `>99%` where a value would round to 0 or
+        100, and requires the complementary direction to be computed as 100 minus the *displayed*
+        integer rather than rounded independently. A raw float in the payload invites the client to round
+        it, and two independent roundings of 0.4951 and 0.5049 produce a mandated FR-006 pair summing to
+        101. Returning the rounded integer and the finished numeral removes the opportunity: the
+        arithmetic happens once, on the deterministic side of the boundary, where it is unit-testable.
+        The integer is retained alongside the string for assistive technology and for tests; it is null
+        in the bounded form so it can never reintroduce the certainty the bound removes.
+
+        Monotonicity (FR-013): within the interval from the as-of date to the end of the horizon, moving
+        a need-by date earlier never decreases `miss.percent`. This is a property of the survival array,
+        which is non-increasing, and holds under `need_by_override`.
+      additionalProperties: false
+      required: [measure, bounded, miss, on_time]
+      properties:
+        measure:
+          type: string
+          description: |
+            Required by FR-017: which of the two measures this figure is travels with the figure rather
+            than being inferred by the interface from the row's `state`, because the two are rendered in
+            different words and an unmarked figure is one refactor from being rendered as a point.
+
+            `point` — read directly from the survival array at the need-by offset.
+            `upper_bound` — FR-017: the need-by date lies beyond the run's horizon, so only the residual
+            tail mass is available. The interface renders it as "at most N% late, at least (100−N)% on
+            time" rather than as a point value, and never extrapolates past where the model was fitted.
+          enum: [point, upper_bound]
+        bounded:
+          type: boolean
+          description: |
+            True when FR-008's bounded form is in use. Then both `percent` fields are null and the two
+            `display` values are the complementary bounds `<1%` and `>99%` — never a bound paired with a
+            flat certainty. A bound that would round to 0 or 100 under `measure: upper_bound` degrades to
+            this same form (FR-017), so "at most 0% late" is unrepresentable.
+        miss:
+          $ref: '#/components/schemas/PercentFigure'
+        on_time:
+          $ref: '#/components/schemas/PercentFigure'
+
+    QuantileFigure:
+      type: object
+      description: |
+        One quantile of the delivery-duration posterior, in whole days counted from the run's as-of date,
+        with the complementary frequency FR-005 requires so it reads as a proportion of comparable orders
+        rather than as a commitment.
+      additionalProperties: false
+      required: [quantile_percent, days, later_percent]
+      properties:
+        quantile_percent:
+          type: integer
+          enum: [50, 80]
+        days:
+          type: integer
+          minimum: 0
+          description: Whole days from the as-of date. Never converted to a date (FR-007).
+        later_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: '100 − quantile_percent. The complementary frequency: 50 for the median, 20 for the eightieth.'
+
+    ReferenceClass:
+      type: object
+      description: |
+        FR-005's reference class. Names what population the quantiles are a proportion of, and the
+        convention by which they were read, so a published figure resolves to the artifact it came from.
+
+        `draw_count` and `percentile_convention` appear here and again in `meta.conventions`. FR-003
+        fixes which governs: **the copy carried with the figure is authoritative**, because it is the one
+        attached to the figure it describes, and the two MUST agree within a response. A disagreement is
+        a provenance defect under Principle I, not a display choice — both cannot be the rule the figure
+        was computed under, and nothing tells the reader which is.
+      additionalProperties: false
+      required: [basis, draw_count, percentile_convention]
+      properties:
+        basis:
+          type: string
+          const: posterior_predictive_draws
+        draw_count:
+          type: integer
+          minimum: 1
+        percentile_convention:
+          type: string
+          const: nearest_rank_one_based_no_interpolation
+
+    DurationPair:
+      type: object
+      description: |
+        FR-003 and FR-004. The median and eightieth-percentile delivery durations as **one labelled
+        pair**, nested under a single object rather than carried as two sibling scalars — which is what
+        makes "not independently sortable" structural rather than a rule the interface must remember.
+        Both members are always present, including on a near-degenerate posterior where they are equal;
+        the contract offers no way to collapse them to one figure.
+
+        `counted_from` and `as_of_date` are required on every pair because an unanchored median of thirty
+        days on a ten-day-old run reads ten days more optimistic than it is.
+      additionalProperties: false
+      required: [unit, counted_from, as_of_date, median, eightieth, reference_class]
+      properties:
+        unit:
+          type: string
+          const: days
+        counted_from:
+          type: string
+          const: run_as_of_date
+        as_of_date:
+          type: string
+          format: date
+        median:
+          $ref: '#/components/schemas/QuantileFigure'
+        eightieth:
+          $ref: '#/components/schemas/QuantileFigure'
+        reference_class:
+          $ref: '#/components/schemas/ReferenceClass'
+
+    ExpectedHarm:
+      description: |
+        REMOVED during E010 planning, deliberately and not by oversight.
+
+        An earlier revision published `value` and `mean_overrun_days` on every
+        ranked row. Three problems, any one of which is disqualifying:
+
+        1. Principle II requires every reported metric to be published with its
+           interval. Both were bare point estimates over the same posterior the
+           quantile pair summarises honestly.
+        2. `need_by.date + mean_overrun_days` reconstructs a mean delivery date,
+           defeating FR-007 through arithmetic rather than through a field. The
+           contract withholds `draws` for exactly this reason, then re-admitted
+           the derivable answer. FR-041 now states that rule as a requirement
+           rather than leaving it to this note: no set of displayed figures may
+           combine into a delivery date or a single central summary, and the
+           permitted case — the as-of date plus a labelled quantile pair, which
+           yields two labelled quantiles rather than one bare date — is stated
+           there alongside it. Publishing `value` with `criticality` on the same
+           row would also surrender `mean_overrun_days` to a division.
+        3. It left rounding to the interface, which is the defect AD-001 rejects
+           for probabilities, permitted for a figure from the same draws.
+
+        FR-009 requires the criticality and the calendar margin, not the score.
+        Expected harm remains the server-side ordering key and the default sort;
+        a row's rank position is how it reaches the coordinator.
+      type: 'null'
+    SecondaryContext:
+      type: object
+      description: |
+        FR-009 and FR-019 explanatory context. Named `secondary` to bind directly to FR-032's presentation
+        contract, which requires named primary and secondary regions and a type scale here that is smaller
+        than the primary region's and never heavier. FR-027 classifies everything here as context rather
+        than a comparison quantity, so nothing in this object may be rendered with the weight of a figure
+        in `primary`. `additionalProperties: false` over exactly these three is what closes the region:
+        FR-027's cap is decidable only if a fifth scannable figure cannot be parked here instead.
+      additionalProperties: false
+      required: [as_of_date, criticality, calendar_margin_days]
+      properties:
+        as_of_date:
+          type: string
+          format: date
+          description: |
+            FR-019. Repeated on every populated row rather than left in `meta` alone, because the
+            requirement is that the date the run was fitted as of is visible in the row without hovering
+            or opening anything, and a value the row renderer must reach out of page scope to find is one
+            refactor away from a tooltip.
+        criticality:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Consequence weight, 5 most critical. Read only — E017 owns overrides (FR-028).
+        calendar_margin_days:
+          type: integer
+          description: |
+            Whole days from the run's as-of date to the effective need-by date. Negative when the need-by
+            date precedes the as-of date. Takes no forecast input (FR-009), so it cannot be subtracted
+            from the need-by date to reconstruct a predicted delivery date.
+
+    PrimaryFigures:
+      type: object
+      description: |
+        FR-027's four comparison quantities, and no fifth. The declared property order — identity,
+        need-by, miss probability, quantile pair — is the reading order FR-032's presentation contract
+        asserts. `additionalProperties: false` is what caps the four: an opt-in quantity cannot arrive
+        by accident, and one added deliberately must satisfy FR-005 through FR-008 first.
+      additionalProperties: false
+      required: [identity, need_by, miss_probability, duration_pair]
+      properties:
+        identity:
+          $ref: '#/components/schemas/LineIdentity'
+        need_by:
+          $ref: '#/components/schemas/NeedBy'
+        miss_probability:
+          oneOf:
+            - $ref: '#/components/schemas/MissProbability'
+            - type: 'null'
+          description: |
+            Null **exactly when** `state` is `already_late` (FR-030): a need-by date at or before the
+            as-of date has a miss probability of 1 by construction, which is uninformative, so the state
+            replaces the figure rather than asserting a certainty. The null is unambiguous because the
+            state is carried explicitly on the row; a client never infers absence from the null alone.
+
+            This is FR-054's second encoding — an **explicit null**, used where a figure exists in the
+            general case and this row's state removed it, as against the structural absence of
+            `UnrankedPrimary`. A zero, a dash, an empty string or a sentinel date is forbidden here, and
+            the null is never the sole carrier of the state (FR-050).
+
+            The boundary `need_by == as_of_date` falls under `already_late`, following E003's normative
+            clamp (`data-model.md` array semantics: "if `d <= as_of_date` the line is already late").
+            FR-030's prose says "earlier than"; the survival array is one-based over `k = 1..horizon_days`
+            and stores no `k = 0` element, so there is no figure to read at that offset and the clamp is
+            the only consistent reading.
+        duration_pair:
+          $ref: '#/components/schemas/DurationPair'
+
+    UnrankedPrimary:
+      type: object
+      description: |
+        What an excluded line shows: its identity and its need-by date, so it cannot be forgotten
+        (FR-016, US3-2). `additionalProperties: false` is what makes "carrying no risk figures"
+        structural — there is no property on this object that could hold a zero, a dash, or a suppressed
+        figure that a renderer might treat as one. Criticality and calendar margin are absent for the same
+        reason: with figures withheld they would be the only numbers on the row and would read as risk.
+
+        This is the first of FR-054's two encodings of a withheld figure — **structural absence**, used
+        where nothing may ever be shown. The second is an explicit null, used where a figure exists in
+        the general case and this row's state removed it: see `PrimaryFigures.miss_probability`. A zero,
+        a dash, an empty string or a sentinel is forbidden in both.
+      additionalProperties: false
+      required: [identity, need_by]
+      properties:
+        identity:
+          $ref: '#/components/schemas/LineIdentity'
+        need_by:
+          $ref: '#/components/schemas/NeedBy'
+
+    RankedRow:
+      type: object
+      description: A line inside the ranking (FR-017, FR-030, and the nominal case).
+      additionalProperties: false
+      required: [po_line_id, rank, state, primary, secondary]
+      properties:
+        po_line_id:
+          type: string
+          format: uuid
+          description: |
+            Stable identifier. FR-010's terminator, and the key a `need_by_override` names. Not a
+            comparison quantity — the interface shows the natural identity in `primary.identity`.
+        rank:
+          type: integer
+          minimum: 1
+          description: |
+            1-based position in this ordering, recomputed within the active scope (FR-025). Under the
+            default sort it is the expected-harm rank; under another key it is the position under that
+            key, because presenting a harm rank next to a differently ordered list would be two orderings
+            on one screen. FR-048 makes this field load-bearing rather than decorative: the ranking
+            quantity is deliberately absent from the row, so this is how position reaches a coordinator
+            who is not reading the list's geometry, and it must be rendered as text within the row.
+        state:
+          $ref: '#/components/schemas/RankedRowState'
+        primary:
+          $ref: '#/components/schemas/PrimaryFigures'
+        secondary:
+          $ref: '#/components/schemas/SecondaryContext'
+
+    UnrankedRow:
+      type: object
+      description: |
+        A line excluded from the ranking (FR-016, FR-021) or every line when no run is active (FR-015).
+        Carried in a separate array rather than flagged inside one list, so a client cannot sort an
+        excluded line into the ranking and the exclusion survives every ordering (SC-008). FR-016 makes
+        the partition an obligation on the response and not only on the rendered screen: a group that
+        exists only in the rendering is one the next consumer of this surface re-decides, and the project
+        plan records three.
+      additionalProperties: false
+      required: [po_line_id, state, primary]
+      properties:
+        po_line_id:
+          type: string
+          format: uuid
+        state:
+          $ref: '#/components/schemas/UnrankedRowState'
+        primary:
+          $ref: '#/components/schemas/UnrankedPrimary'
+
+    ForecastRunMeta:
+      type: object
+      description: |
+        The active forecast run. Selected by the explicit active-run pointer, never by most-recent
+        timestamp.
+
+        `run_id`, `model_version` and `artifact_schema_version` are required by FR-052, which is
+        Principle I applied to this surface: the as-of date FR-019 puts on every row is the
+        coordinator-facing half of the identification and does not resolve the artifact on its own — two
+        runs can share an as-of date, and neither version is derivable from a date. Together with the
+        schema version they are what makes a published figure recomputable from the same arrays.
+      additionalProperties: false
+      required:
+        - run_id
+        - as_of_date
+        - horizon_days
+        - roster_hash
+        - model_version
+        - artifact_schema_version
+        - age_days
+        - stale
+        - staleness_threshold_days
+        - staleness_basis
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        as_of_date:
+          type: string
+          format: date
+        horizon_days:
+          type: integer
+          minimum: 1
+        roster_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        model_version:
+          type: string
+        artifact_schema_version:
+          type: integer
+          minimum: 1
+        age_days:
+          type: integer
+          minimum: 0
+          description: |
+            FR-029. `today − as_of_date` in whole days — the as-of date, not the run's creation time,
+            because FR-019 already puts the as-of date on every row so a coordinator can verify the
+            staleness claim from a figure the screen already shows, and because a backfilled run's
+            creation time diverges from what it was fitted against.
+        stale:
+          type: boolean
+          description: |
+            True when `age_days > staleness_threshold_days`. Accompanied by the `stale_run` page state.
+            Staleness annotates and suppresses nothing: rows keep every figure, their ranking membership
+            and their own labels (FR-029). This flag plus each row's `secondary.as_of_date` is what the
+            interface composes FR-029's per-row stale mark from, so no additional field is needed — a
+            banner alone stops carrying once rows are sorted, filtered, or read one at a time.
+        staleness_threshold_days:
+          type: integer
+          minimum: 1
+          description: Configuration, not a literal. Returned so the interface states the threshold it is being judged against.
+        staleness_basis:
+          type: string
+          minLength: 1
+          description: |
+            FR-029 requires the threshold's recorded basis to travel with it. An API field for a
+            justification string is unusual; it is here because a threshold whose basis lives only in a
+            configuration file is indistinguishable on screen from one someone guessed, and FR-029 fails
+            if the value arrives without it.
+          example: One refit cadence — a run whose anchor predates the current week has missed at least a week of lifecycle events.
+
+    Conventions:
+      type: object
+      description: |
+        The read conventions the figures were produced under, published from `schema_constants` rather
+        than compiled into either tier. Present so a displayed figure resolves to the artifact and the
+        rule it was computed by. This is the page-scope copy; where it overlaps a figure's own
+        `reference_class`, the figure's copy governs and the two must agree (FR-003).
+      additionalProperties: false
+      required: [draw_count, percentile_convention, anchor_date_convention]
+      properties:
+        draw_count:
+          type: integer
+          minimum: 1
+        percentile_convention:
+          type: string
+          const: nearest_rank_one_based_no_interpolation
+        anchor_date_convention:
+          type: string
+          const: run_as_of_date
+
+    Meta:
+      type: object
+      additionalProperties: false
+      required: [generated_at, today, timezone, forecast_run, conventions]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          description: |
+            When this response was produced. FR-020a makes it the **single member** two responses with
+            identical admitted inputs may differ in, and it takes no part in the ETag: it describes the
+            act of answering rather than what was answered, and a validator moving with the clock would
+            report a change on every request and assert nothing.
+        today:
+          type: string
+          format: date
+          description: |
+            The request-time date in the configured time zone (Glossary). Supplied by the server and
+            never taken from the viewer's device: FR-018, FR-029 and FR-030 all depend on it, and a
+            per-viewer clock would let the same run be stale for one coordinator and current for another,
+            making the state labels irreproducible. FR-038 states both halves as obligations: the server
+            supplies this value and reports the one it computed with, and no consumer derives a
+            date-dependent state — staleness, calendar-passed, already late, a run's age — from a clock
+            of its own.
+        timezone:
+          type: string
+          description: |
+            IANA zone that fixes `today`. Required to travel with the date by FR-038, so the claim is
+            auditable rather than asserted: a bare date states which day the server believes it is and
+            nothing about the rule that produced it, and the rule is the whole of the Glossary's
+            definition of Today.
+          example: America/New_York
+        forecast_run:
+          oneOf:
+            - $ref: '#/components/schemas/ForecastRunMeta'
+            - type: 'null'
+          description: Null exactly when the `no_active_run` page state is present (FR-015).
+        conventions:
+          $ref: '#/components/schemas/Conventions'
+
+    ProjectSummary:
+      type: object
+      additionalProperties: false
+      required: [project_id, open_line_count]
+      properties:
+        project_id:
+          type: string
+          pattern: '^PRJ-[0-9]{3}$'
+        open_line_count:
+          type: integer
+          minimum: 0
+
+    Scope:
+      type: object
+      description: |
+        The active scope and the domain of the scoping control, required in every state by FR-025 rather
+        than only in the empty-filter state FR-042 names. `available_projects` is always the full set,
+        including while a filter is active, so the coordinator can leave a scope without a second
+        request — the alternative being a `/projects` call the 1.5 s budget has no room for. Each entry
+        carries `open_line_count` because a project holding no open line and a project the coordinator
+        has simply not scoped to are otherwise identical from inside a filtered list, and because the
+        counts summed across the set are the unscoped total SC-023 reconciles against.
+      additionalProperties: false
+      required: [project_id, available_projects]
+      properties:
+        project_id:
+          type: [string, 'null']
+          pattern: '^PRJ-[0-9]{3}$'
+        available_projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectSummary'
+
+    Counts:
+      type: object
+      description: |
+        `ranked + unranked == total` on every response, and that is an invariant rather than an accident of
+        assembly. It is what separates a line correctly excluded for having no posterior — which appears in
+        `unranked` carrying `not_covered`, evidence that the active run was consulted for it — from a line a
+        defective query dropped, which would appear in neither array and shows up here as a shortfall
+        (SC-023). Without the reconciliation the two render identically to a coordinator.
+      additionalProperties: false
+      required: [ranked, unranked, total]
+      properties:
+        ranked:
+          type: integer
+          minimum: 0
+        unranked:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+          description: Open lines in scope. Terminal lines are excluded before counting (FR-022).
+
+    AppliedOverride:
+      type: object
+      additionalProperties: false
+      required: [po_line_id, need_by_date]
+      properties:
+        po_line_id:
+          type: string
+          format: uuid
+        need_by_date:
+          type: string
+          format: date
+
+    UnappliedOverride:
+      type: object
+      description: |
+        An override that named a line this response does not contain. Reported with its cause and never
+        silently dropped, and the three reasons are the three FR-055 names: absent, terminal under
+        FR-022, or outside the active scope under FR-025.
+      additionalProperties: false
+      required: [po_line_id, need_by_date, reason]
+      properties:
+        po_line_id:
+          type: string
+          format: uuid
+        need_by_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          enum:
+            - line_not_found
+            - line_terminal
+            - line_out_of_scope
+
+    OverrideReport:
+      type: object
+      description: |
+        What the session what-if actually did. `applied` is the evidence FR-012 needs on the interface
+        side: an adjustment that changes no ordering is still visibly an adjustment that took effect.
+      additionalProperties: false
+      required: [applied, unapplied]
+      properties:
+        applied:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedOverride'
+        unapplied:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnappliedOverride'
+
+    WorklistResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - meta
+        - scope
+        - sort
+        - page_states
+        - ranked
+        - unranked
+        - counts
+        - overrides
+        - ordering_digest
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        scope:
+          $ref: '#/components/schemas/Scope'
+        sort:
+          $ref: '#/components/schemas/SortState'
+        page_states:
+          type: array
+          description: |
+            The page-scope states in force, rendered as banners that compose with each row's label
+            (FR-018a). Order is not significant.
+
+            **Admissible sets are exactly six** (FR-033), and this array is not a free subset of three:
+
+            | Set | Admissible | Why |
+            |---|---|---|
+            | `[]` | yes | nominal |
+            | `[no_active_run]` | yes | `meta.forecast_run` is null |
+            | `[stale_run]` | yes | `meta.forecast_run` is non-null and `stale` is true |
+            | `[empty_filter]` | yes | a scope filter matched no open line |
+            | `[no_active_run, empty_filter]` | yes | whether a filter matched is decided over the line set, independently of whether a run exists |
+            | `[stale_run, empty_filter]` | yes | the `EmptyFilterWorklist` example |
+            | `[no_active_run, stale_run]` | **no** | staleness is the age of a run; `no_active_run` requires `meta.forecast_run` null and `stale_run` requires it non-null, so the pair asserts a run and no run at once |
+            | any set of three | **no** | every triple contains the excluded pair |
+
+            `maxItems: 2` follows from the last two rows and is what makes the exclusion partly
+            structural; the remaining pair is excluded by the `forecast_run` nullability rule above.
+          uniqueItems: true
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/PageState'
+        ranked:
+          type: array
+          description: |
+            The ordering, worst first under the default key. Position in the array is authoritative;
+            `rank` restates it. Empty when no run is active.
+          items:
+            $ref: '#/components/schemas/RankedRow'
+        unranked:
+          type: array
+          description: |
+            The excluded group, ordered by need-by date ascending then `po_line_id` ascending (FR-045).
+            This order is fixed and does not follow the active sort key: keys are undefined for a line
+            with no figures — expected harm needs draws it has none of, and with no active run calendar
+            margin has no as-of date to count from — and a group outside the ranking that reorders with
+            the ranking would read as part of it. The group is scoped by `project_id` exactly as `ranked`
+            is (FR-025, FR-045), which is what makes `counts` reconcile under SC-023.
+          items:
+            $ref: '#/components/schemas/UnrankedRow'
+        counts:
+          $ref: '#/components/schemas/Counts'
+        overrides:
+          $ref: '#/components/schemas/OverrideReport'
+        ordering_digest:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: |
+            Digest over the ordered `po_line_id` sequence of `ranked`. FR-012 requires an adjustment that
+            changes no ordering to be acknowledged as applied with the order unchanged, and FR-046 the
+            converse; comparing this value against the previous response answers both in constant time
+            and without the interface re-deriving an equality the server already knows. It also gives
+            SC-015 and FR-010's stability claim ("stable across reloads") a single assertable value.
+
+            **Domain** (FR-012). Defined on every response, including one whose `ranked` is empty, where
+            it is the digest of the empty sequence — `sha256:e3b0c442…b855`. Two responses that rank
+            nothing therefore carry the same digest however much else differs between them: the
+            `NoActiveRunWorklist` and `EmptyFilterWorklist` examples are digest-identical and describe
+            different states. Equality of this value alone MUST NOT be read as sameness of state, which
+            travels in `page_states`. The comparison is meaningful only between two responses computed
+            under the same `project_id` and `sort` — which is the case FR-012 governs, since an
+            adjustment changes the override set and nothing else. It is not a response validator and is
+            not a substitute for the ETag, whose input set is wider.
+
+  examples:
+
+    NominalWorklist:
+      summary: Active run, one session override, all four ranked row states plus both exclusions
+      value:
+        meta:
+          generated_at: '2026-07-28T13:04:11Z'
+          today: '2026-07-28'
+          timezone: America/New_York
+          forecast_run:
+            run_id: 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201
+            as_of_date: '2026-07-24'
+            horizon_days: 365
+            roster_hash: 'sha256:4c1e9a77b2d3f0518c6a4bb90e2f17d3a58c60419e7b2d8f3a1c5e0d94b7f682'
+            model_version: 'lognormal-hierarchical-v3'
+            artifact_schema_version: 1
+            age_days: 4
+            stale: false
+            staleness_threshold_days: 7
+            staleness_basis: One refit cadence — a run whose anchor predates the current week has missed at least a week of lifecycle events.
+          conventions:
+            draw_count: 4000
+            percentile_convention: nearest_rank_one_based_no_interpolation
+            anchor_date_convention: run_as_of_date
+        scope:
+          project_id: null
+          available_projects:
+            - project_id: PRJ-001
+              open_line_count: 74
+            - project_id: PRJ-002
+              open_line_count: 61
+            - project_id: PRJ-003
+              open_line_count: 68
+        sort:
+          key: expected_harm
+          direction: desc
+          tiebreak: ['need_by_date asc', 'criticality desc', 'po_line_id asc']
+          options:
+            - key: expected_harm
+              direction: desc
+              is_default: true
+              is_active: true
+            - key: need_by_date
+              direction: asc
+              is_default: false
+              is_active: false
+            - key: criticality
+              direction: desc
+              is_default: false
+              is_active: false
+            - key: calendar_margin
+              direction: asc
+              is_default: false
+              is_active: false
+        page_states: []
+        ranked:
+          - po_line_id: 1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55
+            rank: 1
+            state: nominal
+            primary:
+              identity:
+                project_id: PRJ-001
+                po_number: PO-4471
+                line_number: 3
+                description: Air handling unit AHU-3, 12000 CFM
+              need_by:
+                date: '2026-08-10'
+                date_of_record: '2026-08-10'
+                source: record
+                unsaved: false
+              miss_probability:
+                measure: point
+                bounded: false
+                miss:
+                  percent: 87
+                  display: '87%'
+                on_time:
+                  percent: 13
+                  display: '13%'
+              duration_pair:
+                unit: days
+                counted_from: run_as_of_date
+                as_of_date: '2026-07-24'
+                median:
+                  quantile_percent: 50
+                  days: 34
+                  later_percent: 50
+                eightieth:
+                  quantile_percent: 80
+                  days: 51
+                  later_percent: 20
+                reference_class:
+                  basis: posterior_predictive_draws
+                  draw_count: 4000
+                  percentile_convention: nearest_rank_one_based_no_interpolation
+            secondary:
+              as_of_date: '2026-07-24'
+              criticality: 5
+              calendar_margin_days: 17
+          - po_line_id: 9f2a1c44-7b31-4d0e-9a11-2c8e5f0b71d3
+            rank: 2
+            state: already_late
+            primary:
+              identity:
+                project_id: PRJ-002
+                po_number: PO-4502
+                line_number: 1
+                description: Switchgear lineup SWG-2, 480V
+              need_by:
+                date: '2026-07-18'
+                date_of_record: '2026-08-02'
+                source: session_override
+                unsaved: true
+              miss_probability: null
+              duration_pair:
+                unit: days
+                counted_from: run_as_of_date
+                as_of_date: '2026-07-24'
+                median:
+                  quantile_percent: 50
+                  days: 9
+                  later_percent: 50
+                eightieth:
+                  quantile_percent: 80
+                  days: 22
+                  later_percent: 20
+                reference_class:
+                  basis: posterior_predictive_draws
+                  draw_count: 4000
+                  percentile_convention: nearest_rank_one_based_no_interpolation
+            secondary:
+              as_of_date: '2026-07-24'
+              criticality: 3
+              calendar_margin_days: -6
+          - po_line_id: c8b41f22-9e05-4a37-b6d8-71f3a90c4e6b
+            rank: 3
+            state: calendar_passed
+            primary:
+              identity:
+                project_id: PRJ-001
+                po_number: PO-4463
+                line_number: 7
+                description: Chilled water pump P-14, 25 HP
+              need_by:
+                date: '2026-07-26'
+                date_of_record: '2026-07-26'
+                source: record
+                unsaved: false
+              miss_probability:
+                measure: point
+                bounded: true
+                miss:
+                  percent: null
+                  display: '>99%'
+                on_time:
+                  percent: null
+                  display: '<1%'
+              duration_pair:
+                unit: days
+                counted_from: run_as_of_date
+                as_of_date: '2026-07-24'
+                median:
+                  quantile_percent: 50
+                  days: 6
+                  later_percent: 50
+                eightieth:
+                  quantile_percent: 80
+                  days: 14
+                  later_percent: 20
+                reference_class:
+                  basis: posterior_predictive_draws
+                  draw_count: 4000
+                  percentile_convention: nearest_rank_one_based_no_interpolation
+            secondary:
+              as_of_date: '2026-07-24'
+              criticality: 4
+              calendar_margin_days: 2
+          - po_line_id: 5e30d9aa-4c17-4b82-8f45-a1c6b70e2d94
+            rank: 4
+            state: beyond_horizon
+            primary:
+              identity:
+                project_id: PRJ-003
+                po_number: PO-4610
+                line_number: 2
+                description: Cooling tower CT-1, structural steel package
+              need_by:
+                date: '2027-08-01'
+                date_of_record: '2027-08-01'
+                source: record
+                unsaved: false
+              miss_probability:
+                measure: upper_bound
+                bounded: false
+                miss:
+                  percent: 4
+                  display: '4%'
+                on_time:
+                  percent: 96
+                  display: '96%'
+              duration_pair:
+                unit: days
+                counted_from: run_as_of_date
+                as_of_date: '2026-07-24'
+                median:
+                  quantile_percent: 50
+                  days: 96
+                  later_percent: 50
+                eightieth:
+                  quantile_percent: 80
+                  days: 148
+                  later_percent: 20
+                reference_class:
+                  basis: posterior_predictive_draws
+                  draw_count: 4000
+                  percentile_convention: nearest_rank_one_based_no_interpolation
+            secondary:
+              as_of_date: '2026-07-24'
+              criticality: 2
+              calendar_margin_days: 373
+        unranked:
+          - po_line_id: 7d19c503-2f8b-41a6-95e0-b3c74d10a8f2
+            state: roster_mismatch
+            primary:
+              identity:
+                project_id: PRJ-002
+                po_number: PO-4488
+                line_number: 4
+                description: VAV terminal units, floors 3-5
+              need_by:
+                date: '2026-09-14'
+                date_of_record: '2026-09-14'
+                source: record
+                unsaved: false
+          - po_line_id: b40f8e61-6a92-4c5d-83b7-2e0d915cf47a
+            state: not_covered
+            primary:
+              identity:
+                project_id: PRJ-003
+                po_number: PO-4633
+                line_number: 1
+                description: Fire pump controller FPC-1
+              need_by:
+                date: '2026-10-02'
+                date_of_record: '2026-10-02'
+                source: record
+                unsaved: false
+        counts:
+          ranked: 4
+          unranked: 2
+          total: 6
+        overrides:
+          applied:
+            - po_line_id: 9f2a1c44-7b31-4d0e-9a11-2c8e5f0b71d3
+              need_by_date: '2026-07-18'
+          unapplied: []
+        ordering_digest: 'sha256:0b7d4e19c25a3f8016d47ba9e3c015f2d8a6714b90ce2f5813a7d6be04c92f31'
+
+    NoActiveRunWorklist:
+      summary: No active forecast run — every line unranked, no figure anywhere
+      value:
+        meta:
+          generated_at: '2026-07-28T13:04:11Z'
+          today: '2026-07-28'
+          timezone: America/New_York
+          forecast_run: null
+          conventions:
+            draw_count: 4000
+            percentile_convention: nearest_rank_one_based_no_interpolation
+            anchor_date_convention: run_as_of_date
+        scope:
+          project_id: null
+          available_projects:
+            - project_id: PRJ-001
+              open_line_count: 74
+        sort:
+          key: expected_harm
+          direction: desc
+          tiebreak: ['need_by_date asc', 'criticality desc', 'po_line_id asc']
+          options:
+            - key: expected_harm
+              direction: desc
+              is_default: true
+              is_active: true
+            - key: need_by_date
+              direction: asc
+              is_default: false
+              is_active: false
+            - key: criticality
+              direction: desc
+              is_default: false
+              is_active: false
+            - key: calendar_margin
+              direction: asc
+              is_default: false
+              is_active: false
+        page_states: [no_active_run]
+        ranked: []
+        unranked:
+          - po_line_id: 1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55
+            state: no_active_run
+            primary:
+              identity:
+                project_id: PRJ-001
+                po_number: PO-4471
+                line_number: 3
+                description: Air handling unit AHU-3, 12000 CFM
+              need_by:
+                date: '2026-08-10'
+                date_of_record: '2026-08-10'
+                source: record
+                unsaved: false
+        counts:
+          ranked: 0
+          unranked: 1
+          total: 1
+        overrides:
+          applied: []
+          unapplied: []
+        ordering_digest: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+
+    EmptyFilterWorklist:
+      summary: A scope filter matched nothing — distinct wording from the no-forecast state
+      value:
+        meta:
+          generated_at: '2026-07-28T13:04:11Z'
+          today: '2026-07-28'
+          timezone: America/New_York
+          forecast_run:
+            run_id: 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201
+            as_of_date: '2026-07-12'
+            horizon_days: 365
+            roster_hash: 'sha256:4c1e9a77b2d3f0518c6a4bb90e2f17d3a58c60419e7b2d8f3a1c5e0d94b7f682'
+            model_version: 'lognormal-hierarchical-v3'
+            artifact_schema_version: 1
+            age_days: 16
+            stale: true
+            staleness_threshold_days: 7
+            staleness_basis: One refit cadence — a run whose anchor predates the current week has missed at least a week of lifecycle events.
+          conventions:
+            draw_count: 4000
+            percentile_convention: nearest_rank_one_based_no_interpolation
+            anchor_date_convention: run_as_of_date
+        scope:
+          project_id: PRJ-009
+          available_projects:
+            - project_id: PRJ-001
+              open_line_count: 74
+        sort:
+          key: need_by_date
+          direction: asc
+          tiebreak: ['need_by_date asc', 'criticality desc', 'po_line_id asc']
+          options:
+            - key: expected_harm
+              direction: desc
+              is_default: true
+              is_active: false
+            - key: need_by_date
+              direction: asc
+              is_default: false
+              is_active: true
+            - key: criticality
+              direction: desc
+              is_default: false
+              is_active: false
+            - key: calendar_margin
+              direction: asc
+              is_default: false
+              is_active: false
+        page_states: [stale_run, empty_filter]
+        ranked: []
+        unranked: []
+        counts:
+          ranked: 0
+          unranked: 0
+          total: 0
+        overrides:
+          applied: []
+          unapplied: []
+        ordering_digest: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
