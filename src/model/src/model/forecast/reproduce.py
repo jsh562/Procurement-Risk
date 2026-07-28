@@ -781,7 +781,9 @@ class LineComparison:
     @property
     def quantity(self) -> str:
         """`median` or `P80`, as a reader names them rather than as a number."""
-        return "median" if self.probability == MEDIAN_PROBABILITY else f"P{self.probability:.0%}"
+        if self.probability == MEDIAN_PROBABILITY:
+            return "median"
+        return f"P{self.probability * 100:.0f}"
 
     @property
     def delta_days(self) -> float:

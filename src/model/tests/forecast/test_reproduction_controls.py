@@ -22,8 +22,8 @@ and fails here.
 
 from __future__ import annotations
 
-import inspect
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -31,6 +31,7 @@ from sqlalchemy import URL, text
 from sqlalchemy.orm import Session
 
 from forecast.conftest import EmittedRun, ReproducedRun
+from model.forecast import reproduce
 from model.forecast.compare import MEDIAN_PROBABILITY, P80_PROBABILITY
 from model.forecast.config import REPRODUCTION_TOLERANCE_DAYS
 from model.forecast.reproduce import (
@@ -38,6 +39,7 @@ from model.forecast.reproduce import (
     OUTCOME_AGREES,
     OUTCOME_DISAGREES,
     RecordedRun,
+    Reproduction,
     ReproductionOutcome,
     compare_reproduction,
     main,
@@ -54,6 +56,7 @@ PERTURB_DRAWS_SQL = text(
 #: realized delta the harness reports is recognisably this number rather than
 #: sampling noise that happened to exceed the bar.
 PERTURBATION_DAYS = 50.0
+
 
 def perturbed_line(recorded: RecordedRun) -> tuple[object, np.ndarray]:
     """The line to move, and the draw vector that moves its P80 and not its median.
@@ -179,23 +182,43 @@ def test_the_same_lines_median_is_untouched_so_a_median_only_harness_would_pass(
 
 def test_the_console_entry_point_returns_the_outcomes_own_status(
     perturbed: tuple[ReproductionOutcome, object],
+    reproduced_run: ReproducedRun,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     """The last link: the outcome above is what `forecast-reproduce` returns.
 
     `main` computes nothing of its own — it parses arguments, runs the job and
-    returns `outcome.exit_status` — so the mapping asserted here is what carries
-    "makes `forecast-reproduce` exit non-zero" without sampling a third time.
-    Read out of the entry point's own source rather than asserted about it, so a
-    `main` that started deciding a status itself fails this rather than passing
-    on a comment.
+    returns the outcome's status — so the job is substituted for one returning
+    the planted outcome and the entry point's own answer is read back. That is
+    what carries "makes `forecast-reproduce` exit non-zero" without sampling a
+    third time, and it is a behavioural assertion rather than a scan of the
+    function's text: a `main` that started deciding a status of its own fails
+    here, and one whose source merely moved does not.
+
+    FR-039 is asserted in the same breath, because this is the only path in the
+    tier that observes the entry point completing: standard output carries
+    **exactly one** line, the reproduced `run_id`, and nothing else.
     """
     outcome, _ = perturbed
-    source = inspect.getsource(main)
+    substituted = Reproduction(
+        recorded=reproduced_run.reproduction.recorded,
+        refit=reproduced_run.reproduction.refit,
+        outcome=outcome,
+        report=tmp_path / "unused.md",
+    )
+    monkeypatch.setattr(reproduce, "run_reproduce", lambda *_, **__: substituted)
+
+    status = main([])
+    captured = capsys.readouterr()
 
     assert outcome.exit_status != 0
-    assert "return reproduction.outcome.exit_status" in source, (
-        f"`main` no longer returns the outcome's own status:\n{source}"
+    assert status == outcome.exit_status, (
+        f"`forecast-reproduce` exited {status} on an outcome whose own status is "
+        f"{outcome.exit_status}; the entry point decides nothing and must return it"
     )
+    assert captured.out.splitlines() == [str(outcome.run_id)]
 
 
 def test_the_entry_point_refuses_an_unknown_run_without_sampling(
