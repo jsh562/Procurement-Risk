@@ -70,21 +70,21 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 ## Phase 3: US1 - Corpus Becomes Citable Chunks (Priority: P1) 🎯 MVP
 
-- [ ] T016 [P] [US1] {FR-001,FR-005} Read the committed manifests and hash-verify each file in src/model/src/model/ingest/manifest_reader.py → exports: iter_entries, verify_hash
-- [ ] T017 [US1] {FR-002,FR-006,FR-052} Mint ids, classify the closed type set, abort on a corpus-wide collision in src/model/src/model/ingest/documents.py → exports: mint_document_id
-- [ ] T018 [US1] {FR-003,FR-004} Attach real specifications to PRJ-000 and carry layer, licence basis, and layer-appropriate provenance unchanged in ingest/documents.py after:T017
-- [ ] T019 [US1] {FR-007,FR-008} Derive pages and page text only through corpus.derive's committed reader in src/model/src/model/ingest/parse.py → exports: read_pages
-- [ ] T020 [P] [US1] {FR-008} Assert the ingest package declares no second tolerance map, normalization, or page-text assembly in src/model/tests/ingest/test_single_page_reader.py
-- [ ] T021 [P] [US1] {FR-014} Count content word pieces against the 254 budget and add the pinned pySBD split in ingest/tokens.py and segment.py → exports: content_pieces, sentences
-- [ ] T022 [US1] {FR-012,FR-013} Detect UFGS structure and transmittal field blocks, splitting on the page break before the ladder, in ingest/structure.py (HINT-004) after:T019
-- [ ] T023 [US1] {FR-012,FR-014} Cut the three boundary classes and descend article→paragraph→subparagraph→sentence in ingest/chunker.py after:T022 ← T021:content_pieces
-- [ ] T024 [US1] {FR-015,FR-016} Assign contiguous zero-based ordinals in reading order and keep bracketed markup verbatim in src/model/src/model/ingest/chunker.py after:T023
-- [ ] T025 [US1] {FR-014,FR-017} [COMPLETES FR-014] Record the chunker version and fail the run only on an over-long single sentence in ingest/chunker.py after:T024
-- [ ] T026 [US1] {FR-017} Assert identical boundaries across two chunkings differing in process, hash seed, cwd, and enumeration order in src/model/tests/ingest/test_determinism.py
-- [ ] T027 [P] [US1] {FR-019} Export the encoder to ONNX FP32, vendor it with its tokenizer and recorded digests under data/encoder/, and commit the two-layer parity probe set (AD-014)
-- [ ] T028 [US1] {FR-019} Verify the committed encoder and tokenizer digests before the session is created, failing rather than fetching, in ingest/artifacts.py after:T027
-- [ ] T029 [US1] {FR-019} Implement the ONNX Runtime session with attention-masked mean pooling and L2 normalization in ingest/embed.py after:T028 → exports: embed_chunks
-- [ ] T030 [US1] {FR-019} [COMPLETES FR-019] Assert pre-declared cosine ≥ 0.999999 and max per-dim ≤ 1e-5 over the probe set in src/model/tests/ingest/test_encoder_parity.py ← T029:embed_chunks
+- [X] T016 [P] [US1] {FR-001,FR-005} Read the committed manifests and hash-verify each file in src/model/src/model/ingest/manifest_reader.py → exports: iter_entries, verify_hash
+- [X] T017 [US1] {FR-002,FR-006,FR-052} Mint ids, classify the closed type set, abort on a corpus-wide collision in src/model/src/model/ingest/documents.py → exports: mint_document_id
+- [X] T018 [US1] {FR-003,FR-004} Attach real specifications to PRJ-000 and carry layer, licence basis, and layer-appropriate provenance unchanged in ingest/documents.py after:T017
+- [X] T019 [US1] {FR-007,FR-008} Derive pages and page text only through corpus.derive's committed reader in src/model/src/model/ingest/parse.py → exports: read_pages
+- [X] T020 [P] [US1] {FR-008} Assert the ingest package declares no second tolerance map, normalization, or page-text assembly in src/model/tests/ingest/test_single_page_reader.py
+- [X] T021 [P] [US1] {FR-014} Count content word pieces against the 254 budget and add the pinned pySBD split in ingest/tokens.py and segment.py → exports: content_pieces, sentences
+- [X] T022 [US1] {FR-012,FR-013} Detect UFGS structure and transmittal field blocks, splitting on the page break before the ladder, in ingest/structure.py (HINT-004) after:T019
+- [X] T023 [US1] {FR-012,FR-014} Cut the three boundary classes and descend article→paragraph→subparagraph→sentence in ingest/chunker.py after:T022 ← T021:content_pieces
+- [X] T024 [US1] {FR-015,FR-016} Assign contiguous zero-based ordinals in reading order and keep bracketed markup verbatim in src/model/src/model/ingest/chunker.py after:T023
+- [X] T025 [US1] {FR-014,FR-017} [COMPLETES FR-014] Record the chunker version and fail the run only on an over-long single sentence in ingest/chunker.py after:T024
+- [X] T026 [US1] {FR-017} Assert identical boundaries across two chunkings differing in process, hash seed, cwd, and enumeration order in src/model/tests/ingest/test_determinism.py
+- [X] T027 [P] [US1] {FR-019} Export the encoder to ONNX FP32, vendor it with its tokenizer and recorded digests under data/encoder/, and commit the two-layer parity probe set (AD-014)
+- [X] T028 [US1] {FR-019} Verify the committed encoder and tokenizer digests before the session is created, failing rather than fetching, in ingest/artifacts.py after:T027
+- [X] T029 [US1] {FR-019} Implement the ONNX Runtime session with attention-masked mean pooling and L2 normalization in ingest/embed.py after:T028 → exports: embed_chunks
+- [X] T030 [US1] {FR-019} [COMPLETES FR-019] Assert pre-declared cosine ≥ 0.999999 and max per-dim ≤ 1e-5 over the probe set in src/model/tests/ingest/test_encoder_parity.py ← T029:embed_chunks
 - [ ] T031 [US1] {FR-020,FR-021} Record the embedding identity and revision on every chunk and read the vector dimension from schema_constants in ingest/writer.py after:T013
 - [ ] T032 [US1] {FR-010} Re-check chunk-text containment inside each document's transaction before it commits in src/model/src/model/ingest/writer.py after:T031
 - [ ] T033 [US1] {FR-010} Assert containment for every chunk against a fresh post-run read, publishing its population, in src/model/tests/ingest/test_page_attribution.py after:T032
