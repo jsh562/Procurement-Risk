@@ -347,3 +347,16 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | Migration tasks emitted | **4** — `0300`–`0303` inside the claimed block, each `downgrade()` raising |
 | Tasks for `G-1`–`G-19` other than G-1 | **0**, by design — a disclosed gap is a record, not work |
 | Tasks for `P-1`–`P-8` | **0**, by design — each belongs to another epic or to a registered document |
+
+## QC Bug Tasks — iteration 1
+
+Appended by `/sddp-qc` 2026-07-28. Numbering continues from T127; no existing ID is reused or renumbered.
+
+- [ ] T128 [BUG:ERROR] {FR-030} [test-failure] E007 moved the chain head to 0303 and gateway's ledger test still asserts 0103 — src/gateway/tests/test_migrations.py:242
+- [ ] T129 [BUG:ERROR] {FR-019} [requirement-gap] SC-005's vendor-effect interval is computed only in the test; implement sd(theta_j|data) in shrinkage.py and drive the comparison from the run's own fitted tau/sigma — src/model/src/model/forecast/shrinkage.py:24
+- [ ] T130 [BUG:ERROR] {FR-019} [requirement-gap] SC-005's operands must be counted from the run's forecast_split_assignment train rows, not hard-coded at 5 and 35 — src/model/tests/forecast/test_shrinkage_properties.py:90 after:T129
+- [ ] T131 [BUG:WARNING] {FR-027} [requirement-gap] L-5 is declared under AD-013 but never emitted; add it to LIMITATION_IDENTIFIERS and widen DV-037's scope — src/model/src/model/forecast/report.py:220
+- [ ] T132 [BUG:WARNING] {FR-022} [coverage-gap] SC-018's outside-basis outcome has no covering test in either direction; construct a below-half predictive-ESS comparison — src/model/tests/forecast/test_reproduction.py:89
+- [ ] T133 [BUG:WARNING] {FR-041} [requirement-gap] Traceability stops at SC-035; SC-039, SC-041 and SC-042 carry no task tag and SC-041/SC-042 are named by no test — specs/00007-delivery-forecast-model/tasks.md:333
+
+**B-3 is not a separate task**: DV-010's declared tier disagrees with its delivered tier only because the quantity is unimplemented. T129 closes it.
