@@ -133,7 +133,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 **Independent test**: fit the same input twice, once with the censoring contribution and once without, and compare the aggregate median forecast over open lines against the independently derived floor.
 
 - [ ] T048 [US2] {FR-004} [COMPLETES FR-004] DV-029 / SC-007 — stored `is_censored` agrees with `lifecycle_event` by an independent path — TST/test_censoring_stored.py after:T035
-- [ ] T049 [P] [US2] {FR-033} **RED** Failing ablation property tests in TST/test_ablation_properties.py — the KM floor uses the training split alone and no held-out row moves it
+- [X] T049 [P] [US2] {FR-033} **RED** Failing ablation property tests in TST/test_ablation_properties.py — the KM floor uses the training split alone and no held-out row moves it
 - [ ] T050 [US2] {FR-033} **GREEN** Kaplan–Meier floor against the naive completed-duration mean, and the realized delta, in PKG/ablation.py (AD-008) → exports: kaplan_meier_floor() after:T049
 - [ ] T051 [US2] {FR-033} Run the censoring-ignoring comparator over repeated seeds for the delta's interval in PKG/ablation.py — an **ablation comparator, never a baseline** after:T118
 - [ ] T052 [US2] {FR-033,FR-038} DV-020's report half — the ablation entry carries the delta, its interval, the derived floor **and a met-or-missed verdict**, in PKG/report.py
@@ -235,7 +235,7 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [X] T115 [COMPLETES FR-002] {FR-001,FR-002} **GREEN** Extract the index mapping and design-matrix construction from PKG/model.py into PKG/design.py after:T114 → exports: vendor_index(), category_index(), design_matrix()
 - [X] T116 [COMPLETES FR-001] {FR-001} Rework T028 so the `logp` agreement oracle builds `likelihood.py`'s inputs from PKG/design.py rather than from the assembled graph — TST/test_model_logp.py after:T115
 - [ ] T117 [US1] {FR-010,FR-029} **RED** Property test for the held-out **total-duration** path in PKG/posterior.py, absent from T025's set — TST/test_posterior_properties.py — A-015
-- [ ] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015
+- [X] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015
 - [ ] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
 - [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
 - [ ] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
