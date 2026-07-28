@@ -15,9 +15,12 @@ reasons and one implementation setting would silence one of them:
 
 The plantings target `gateway` specifically. The committed `forecast_offline`
 fixture at the repository root stands in for this contract in the cross-entry
-harness and plants `anthropic` as its external target; `gateway` is the other
-forbidden module the real contract names, and reaching the provider through the
-shared client is the same violation by another route.
+harness and plants the provider distribution as its external target; `gateway`
+is the other forbidden module the real contract names, and reaching the provider
+through the shared client is the same violation by another route. The
+distribution is deliberately **not named here**: TR-010's source scan requires it
+to appear in exactly one file in the repository, and that file is the gateway's
+provider wrapper.
 
 **What this does not close** is recorded rather than implied: G-17 bounds a
 static contract to what an import edge predicts. A provider reached without one —
