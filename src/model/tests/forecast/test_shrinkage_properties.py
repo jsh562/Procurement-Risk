@@ -1,18 +1,25 @@
-"""T030 (RED) — the per-vendor shrinkage weight, at the mandatory property tier.
+"""T030 / T043 — the per-vendor shrinkage weight and the vendor-effect interval.
 
 `plan.md` § Mandated properties gives `shrinkage.py` two **Invariant**
 relations. First: `ρ = τ²/(τ² + σ²/n)` is monotone increasing in `n` and lies
 in `[0,1]`, and a vendor with no training line yields a weight rather than an
 omission. Second: the published value is a **triple** ordered
 `hpdi_low ≤ median ≤ hpdi_high`, all inside `[0,1]`. Domain: `n = 0`, `n = 1`,
-the 35-line vendor, `τ → 0` and `τ → ∞`. The module under test does not exist
-yet — this file is the RED half of T030/T031 and must fail at collection.
+the 35-line vendor, `τ → 0` and `τ → ∞`. That is T030/T031, and it is the whole
+of the file down to the refusals.
+
+**T043 is the section after them**, and it is about a different quantity:
+`sd(θⱼ | data) = τσ/√(nτ² + σ²)`, the posterior spread of the vendor *effect*.
+DV-010, SC-005 and NC-11 are claims about that interval and not about the ρ
+triple — the reason is set out in the note below and was measured rather than
+reasoned about.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from statistics import NormalDist
 from typing import Any
 
 import numpy as np
@@ -534,3 +541,184 @@ def test_a_non_positive_residual_scale_is_refused(scale: float) -> None:
             training_line_counts={SPARSE_VENDOR: SPARSE_COUNT},
             hdi_probability=HDI_PROBABILITY,
         )
+
+
+# ---------------------------------------------------------------------------
+# T043 — NC-11 / DV-010 / SC-005: the vendor-effect interval
+# ---------------------------------------------------------------------------
+#
+# DV-010 reads "the vendor with the fewest training lines has a wider
+# vendor-effect interval than the vendor with the most", and the quantity it is
+# about is `θⱼ`, the vendor's own offset — **not** the ρ triple above. The
+# distinction is the whole reason this section exists separately, and it was
+# corrected mid-implementation after being measured rather than argued:
+#
+#   ρ = n·r/(n·r + 1) with r = τ²/σ² is a logistic in `log n`, so the interval it
+#   induces peaks where the median weight is nearest 0.5 — near `n = σ²/τ²`,
+#   which is about 3 at the medians used below and about 18 at E005's published
+#   0.22-at-`n = 5` — and collapses at both ends. A
+#   strict comparison between the 5-line and 35-line vendors' *ρ* intervals is
+#   therefore false for some rosters and true for others, and no implementation
+#   of the published formula can make it otherwise.
+#
+#   `sd(θⱼ | data) = τσ/√(nτ² + σ²)` has no turning point at all: it is strictly
+#   decreasing in `n` for every draw of `(τ, σ)`, so the vendor-effect interval
+#   is strictly wider at every smaller count, at every credible level, without a
+#   threshold and without a regime condition. That is the relation NC-11 asks for
+#   a **strict** comparison of.
+#
+# The two are one algebraic step apart — `sd² = ρ·σ²/n` — so the assertions below
+# are tied back to the module's own weight rather than being a second formula
+# written beside it.
+
+#: The credible level the vendor-effect interval is reported at. Stated because
+#: "wider" is undefined between intervals of different mass (SC-005), and equal
+#: to the level the ρ triple above is compared at so the two are commensurable.
+VENDOR_EFFECT_LEVEL = HDI_PROBABILITY
+
+#: Counts spanning the committed roster, ascending. Wide enough to contain the ρ
+#: interval's turning point, which is what lets the contrast below be measured
+#: rather than asserted.
+VENDOR_EFFECT_SWEEP = (0, 1, 2, 3, 5, 8, 13, 21, 34, 55)
+
+
+def vendor_effect_sd(
+    tau: NDArray[np.float64], sigma: NDArray[np.float64], count: int
+) -> NDArray[np.float64]:
+    """`sd(θⱼ | data) = τσ/√(nτ² + σ²)`, draw by draw.
+
+    Written with `nτ²` in the radicand so `n = 0` is a value rather than a
+    division: a vendor with no training line has learned nothing of its own, and
+    its effect is then the population's spread τ exactly.
+    """
+    return tau * sigma / np.sqrt(count * tau**2 + sigma**2)
+
+
+def vendor_effect_width(
+    tau: NDArray[np.float64], sigma: NDArray[np.float64], count: int, level: float
+) -> NDArray[np.float64]:
+    """The width of the θⱼ interval at the stated mass, per posterior draw.
+
+    A normal posterior conditional on `(τ, σ)`, so the width is `2·z·sd` with `z`
+    the standard normal quantile at that mass. The level is an argument for the
+    reason SC-005 gives: a comparison between intervals of different mass is not
+    a comparison at all.
+    """
+    z = NormalDist().inv_cdf(0.5 + 0.5 * level)
+    return 2.0 * z * vendor_effect_sd(tau, sigma, count)
+
+
+def test_the_vendor_effect_interval_is_strictly_wider_at_the_sparsest_vendor() -> None:
+    """NC-11: a strict comparison between the two extremes, not a threshold.
+
+    Asserted draw by draw rather than between two summaries. Every posterior draw
+    of `(τ, σ)` gives the 5-line vendor a strictly wider interval than the 35-line
+    vendor, so the claim survives whatever summary is published — which is what
+    distinguishes it from a width threshold any pair of intervals could satisfy.
+    """
+    tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
+    sparse = vendor_effect_width(tau, sigma, SPARSE_COUNT, VENDOR_EFFECT_LEVEL)
+    dense = vendor_effect_width(tau, sigma, DENSE_COUNT, VENDOR_EFFECT_LEVEL)
+
+    assert np.all(sparse > dense), (
+        f"{int(np.count_nonzero(sparse <= dense))} draw(s) give the {DENSE_COUNT}-line vendor "
+        f"an interval at least as wide as the {SPARSE_COUNT}-line vendor's"
+    )
+    assert float(np.median(sparse)) > float(np.median(dense))
+
+
+@pytest.mark.parametrize(("tau_median", "sigma_median"), [(0.30, 0.50), (0.11, 0.50), (0.45, 0.40)])
+def test_the_vendor_effect_interval_narrows_with_every_extra_training_line(
+    tau_median: float, sigma_median: float
+) -> None:
+    """DV-010 as a monotone chain: decreasing in nⱼ, with **no turning point**.
+
+    The differences are all strictly negative rather than merely ending lower, so
+    a quantity that dipped and recovered inside the sweep would fail here even if
+    its endpoints ordered correctly. Swept across three parameterisations because
+    the claim is unconditional — unlike the ρ interval's, it holds whatever the
+    ratio σ/τ happens to be.
+    """
+    tau, sigma = posterior(tau_median, 0.25, sigma_median, 0.10)
+    widths = [
+        float(np.median(vendor_effect_width(tau, sigma, count, VENDOR_EFFECT_LEVEL)))
+        for count in VENDOR_EFFECT_SWEEP
+    ]
+    steps = np.diff(widths)
+
+    assert np.all(steps < 0.0), (
+        f"the vendor-effect interval did not narrow at every step: "
+        f"{list(zip(VENDOR_EFFECT_SWEEP, widths, strict=True))}"
+    )
+
+
+def test_the_shrinkage_weights_own_interval_does_have_a_turning_point() -> None:
+    """The measurement that moved this claim off the ρ triple, kept as a test.
+
+    ρ's interval width rises and then falls across the same sweep, peaking near
+    `n = σ²/τ²`, so "wider at the sparser vendor" is not a property of it. This is
+    asserted over the **module's** published triple rather than over a formula
+    here, which is what makes it evidence about the delivered value and not about
+    an argument in a comment.
+    """
+    tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
+    widths = [width(triple) for triple in sweep(VENDOR_EFFECT_SWEEP, tau, sigma)]
+    steps = np.diff(widths)
+
+    assert np.any(steps > 0.0) and np.any(steps < 0.0), (
+        f"ρ's interval width is monotone across the sweep, so the correction this section "
+        f"records would not have been necessary: "
+        f"{list(zip(VENDOR_EFFECT_SWEEP, widths, strict=True))}"
+    )
+    assert 0 < int(np.argmax(widths)) < len(widths) - 1
+
+
+@pytest.mark.parametrize("count", [1, SPARSE_COUNT, DENSE_COUNT, 60])
+def test_the_vendor_effect_spread_is_one_algebraic_step_from_the_published_weight(
+    count: int,
+) -> None:
+    """`sd² = ρ·σ²/n`, draw by draw — the tie back to what the module publishes.
+
+    Without it this section would be a second formula asserted beside the module
+    rather than a statement about it: the identity says the vendor-effect spread
+    and the published weight are two readings of the same two fitted scales, so a
+    module that computed ρ from something else would break this as well.
+    """
+    tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
+    spread = vendor_effect_sd(tau, sigma, count)
+    from_weight = np.sqrt(plug_in(tau, sigma, count) * sigma**2 / count)
+
+    assert np.allclose(spread, from_weight, rtol=1e-12, atol=0.0)
+
+
+def test_a_vendor_with_no_training_line_carries_the_populations_whole_spread() -> None:
+    """`n = 0`: the effect interval is widest exactly where the weight is degenerate.
+
+    This is the boundary at which the two quantities part company most visibly.
+    The *weight* at `n = 0` is known exactly — none of the estimate is the
+    vendor's own data, so its triple is `(0, 0, 0)` — while the *effect* is known
+    least well of all, its spread falling back to τ. Publishing `[0, 1]` for the
+    weight would confuse the second fact for the first.
+    """
+    tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
+    starved = vendor_effect_sd(tau, sigma, 0)
+
+    assert np.allclose(starved, tau, rtol=1e-12, atol=0.0)
+    assert np.all(starved > vendor_effect_sd(tau, sigma, 1))
+    assert weights(tau, sigma, {ABSENT_VENDOR: 0})[ABSENT_VENDOR] == (0.0, 0.0, 0.0)
+
+
+@pytest.mark.parametrize("level", [0.5, 0.8, 0.94])
+def test_a_wider_credible_level_gives_a_wider_vendor_effect_interval(level: float) -> None:
+    """SC-005 applied to this interval too: the level is stated, never assumed.
+
+    The comparison DV-010 asks for is between two vendors at one mass. An
+    implementation reporting them at different masses could order them either way
+    without either interval being wrong, which is why the level is an argument
+    here rather than a default.
+    """
+    tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
+    narrow = vendor_effect_width(tau, sigma, SPARSE_COUNT, level)
+    wide = vendor_effect_width(tau, sigma, SPARSE_COUNT, 0.99)
+
+    assert np.all(wide > narrow)

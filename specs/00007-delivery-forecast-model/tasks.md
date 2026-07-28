@@ -115,16 +115,16 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T035 [US1] {FR-039} Wire `forecast-fit` in PKG/fit.py — read, censor, split, sample, condition, write, publish — and print **one** stdout line, the `run_id` ← T033:write_artifact_set
 - [X] T036 [US1] {FR-027,FR-031,FR-040} Render the run report as a **closed schema** in PKG/report.py — layer label, datasheet reference, `L-1`–`L-4` four-part with the computed maximum (G-10)
 - [X] T037 [US1] {FR-019,FR-020} Report each vendor's shrinkage weight beside its training observation count and a per-vendor supported/not-supported verdict, in PKG/report.py
-- [ ] T038 [US1] {FR-008} DV-001 / SC-001 — one `line_posterior` row per open line and `open_line_count` equal to that count — TST/test_open_population.py after:T035
-- [ ] T039 [US1] {FR-010,FR-011} DV-003 and DV-004 over stored `line_posterior` rows — SC-002 and SC-003 for the open population — TST/test_stored_arrays.py after:T035
-- [ ] T040 [US1] {FR-029} DV-005 / SC-027 — the longest-elapsed decile's median draw is no smaller than the shortest's, and no `survival[1]` below the floor — TST/test_conditioning.py
-- [ ] T041 [US1] {FR-002} DV-036 / SC-006 — `covariate_names` equals the design matrix's covariate set, over the input frame — TST/test_covariates.py
-- [ ] T042 [US1] {FR-019} DV-009 / SC-004 — exactly the twelve roster `vendor_id`s including a vendor with no training line, each triple ordered — TST/test_shrinkage_membership.py
-- [ ] T043 [US1] {FR-019} [COMPLETES FR-019] **NC-11** / DV-010 / SC-005 — a **strict** comparison between the two extremes, not a threshold — TST/test_shrinkage_properties.py after:T031
-- [ ] T044 [US1] {FR-030} DV-014 / SC-028 — every run this test emits carries the shape in `schema_constants` **read over the connection** (HINT-005) — TST/test_run_shape.py
-- [ ] T045 [US1] {FR-030} **NC-10** — a run emitted at 5 draws over a 3-day horizon **fails** the assertion, the shape E003's suite legally passes — TST/test_run_shape.py
-- [ ] T046 [US1] {FR-034} DV-032 / SC-031 — the grant read from `information_schema`, and **no `UPDATE`** anywhere in `model.forecast` — TST/test_artifact_immutability.py
-- [ ] T047 [US1] {FR-013,FR-015} SC-020 and SC-023 — every manifest field present, the pointer set explicitly, and the write order asserted — TST/test_write_order.py after:T035
+- [X] T038 [US1] {FR-008} DV-001 / SC-001 — one `line_posterior` row per open line and `open_line_count` equal to that count — TST/test_open_population.py after:T035
+- [X] T039 [US1] {FR-010,FR-011} DV-003 and DV-004 over stored `line_posterior` rows — SC-002 and SC-003 for the open population — TST/test_stored_arrays.py after:T035
+- [X] T040 [US1] {FR-029} DV-005 / SC-027 — the longest-elapsed decile's median draw is no smaller than the shortest's, and no `survival[1]` below the floor — TST/test_conditioning.py
+- [X] T041 [US1] {FR-002} DV-036 / SC-006 — `covariate_names` equals the design matrix's covariate set, over the input frame — TST/test_covariates.py
+- [X] T042 [US1] {FR-019} DV-009 / SC-004 — exactly the twelve roster `vendor_id`s including a vendor with no training line, each triple ordered — TST/test_shrinkage_membership.py
+- [X] T043 [US1] {FR-019} [COMPLETES FR-019] **NC-11** / DV-010 / SC-005 — a **strict** comparison between the two extremes, not a threshold — TST/test_shrinkage_properties.py after:T031
+- [X] T044 [US1] {FR-030} DV-014 / SC-028 — every run this test emits carries the shape in `schema_constants` **read over the connection** (HINT-005) — TST/test_run_shape.py
+- [X] T045 [US1] {FR-030} **NC-10** — a run emitted at 5 draws over a 3-day horizon **fails** the assertion, the shape E003's suite legally passes — TST/test_run_shape.py
+- [X] T046 [US1] {FR-034} DV-032 / SC-031 — the grant read from `information_schema`, and **no `UPDATE`** anywhere in `model.forecast` — TST/test_artifact_immutability.py
+- [X] T047 [US1] {FR-013,FR-015} SC-020 and SC-023 — every manifest field present, the pointer set explicitly, and the write order asserted — TST/test_write_order.py after:T035
 
 ---
 
@@ -239,12 +239,12 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [ ] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
 - [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
 - [ ] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
-- [ ] T122 {FR-039} **DV-042 / SC-038 / NC-24** — stdout carries exactly the `run_id` and nothing on refusal; every diagnostic on stderr; exit zero exactly on completion — TST/test_streams_and_exit.py after:T035
+- [X] T122 {FR-039} **DV-042 / SC-038 / NC-24** — stdout carries exactly the `run_id` and nothing on refusal; every diagnostic on stderr; exit zero exactly on completion — TST/test_streams_and_exit.py after:T035
 - [ ] T123 [COMPLETES FR-045] {FR-045} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068
 - [ ] T124 {FR-041} SC-036 and SC-037 assertions, plus the pre-registration duty for any estimated band, asserted as a committed-constant check (G-11 bounds it) — TST/test_band_preregistration.py after:T077
 - [ ] T125 {FR-010} [COMPLETES FR-010] Assert the day-grid identity `survival[k] = count(draws > k)/draw_count` over emitted rows in **both** stores — TST/test_grid_identity.py after:T117
 - [ ] T126 {FR-029} [COMPLETES FR-029] Assert both recorded duration semantics over emitted rows: conditional-remaining for open lines, total-from-order-date for held-out — TST/test_duration_semantics.py after:T117
-- [ ] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
+- [X] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
 
 **A-015 — and the pair rule reaches them by this sentence, not by a label.** T055 and T051 add behaviour to property-tier modules outside any of the ten pairs. T117 and T118 are their RED halves and T055 and T051 are the corresponding GREEN halves, **so the `test:`-before-`feat:` commit ordering binds those two couples exactly as it binds the ten** — they are recorded here rather than in the table because the table is keyed by module and both modules already appear in it. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
 
