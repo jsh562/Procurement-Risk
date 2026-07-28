@@ -299,12 +299,18 @@ jobs:
         working-directory: src/model
         # --source overrides the root pyproject.toml `source` list rather than
         # merging with it, so every package in that list must appear here too or
-        # it lands in the denominator with no hits. Four packages now: roster
+        # it lands in the denominator with no hits. Seven packages now: roster
         # from the scaffold, corpus from E002, schema from E003, procurement
-        # from E005. Each epic widened this line independently and the union is
-        # what is correct — dropping any package would put it in the denominator
-        # uncovered and drag the gate down while measuring nothing.
-        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement -m pytest tests -q
+        # from E005, and ingest, llm and compute from E006. Each epic widened
+        # this line independently and the union is what is correct — dropping
+        # any package would put it in the denominator uncovered and drag the
+        # gate down while measuring nothing.
+        #
+        # E006's three are the direction that hurts more: an *absent* package is
+        # not measured at all rather than measured badly, so leaving this line
+        # at four would make every line of the ingestion epic invisible to the
+        # gate below — a green 80% that says nothing about the code just added.
+        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement,src/model/ingest,src/model/llm,src/model/compute -m pytest tests -q
 
       # E005's release gate. Each command below is a checkable claim about the
       # committed dataset, and each fails the build rather than warning:
@@ -436,8 +442,19 @@ jobs:
       # the model step's `--source=…,src/model/corpus` records every importable
       # file under the package whether a test reached it or not, so a new module
       # nothing covers subtracts here instead of being averaged away.
+      #
+      # E006 adds three more per-package floors for the same reason SC-026 gave
+      # for `model.corpus`, and the reason is arithmetic rather than style: a
+      # single combined figure lets `roster`, `schema`, `corpus` and
+      # `procurement` — already covered — carry a newly added package across the
+      # threshold with none of its own lines exercised. That is precisely the
+      # arithmetic that makes a coverage gate agree with adding untested code.
+      # Each of `ingest`, `llm` and `compute` is therefore asserted alone.
       - name: Coverage gate
         run: |
           uv run coverage combine
           uv run coverage report --fail-under=80
           uv run coverage report --include='*/model/corpus/*' --fail-under=80
+          uv run coverage report --include='*/model/ingest/*' --fail-under=80
+          uv run coverage report --include='*/model/llm/*' --fail-under=80
+          uv run coverage report --include='*/model/compute/*' --fail-under=80

@@ -13,13 +13,17 @@ dependencies = [
     "gateway",
     "jsonschema[format-nongpl]>=4.26.0",
     "numpy>=2.4.6",
+    "onnxruntime>=1.24.1",
     "pandas>=3.0.5",
     "pdfplumber>=0.11.10",
+    "pgvector>=0.4.2",
     "pillow>=12.3.0",
     "psycopg[binary]>=3.3.4",
     "pymc>=6.2.0",
+    "pysbd>=0.3.4",
     "reportlab>=5.0.0",
     "sqlalchemy>=2.0.51",
+    "tokenizers>=0.23.1",
 ]
 
 # ADR-0011: every job this entry owns is a console entry point invoked through
@@ -39,6 +43,31 @@ dependencies = [
 # E005 adds no dependency: the generator draws with the NumPy already declared
 # above, the loader uses the declared psycopg, and everything else it needs is
 # stdlib or a package this entry already ships (`model.roster`, `model.corpus`).
+#
+# E006 adds four, and each is a runtime dependency of the ingestion job rather
+# than tooling:
+#
+#   onnxruntime  {SAD:ADR-0018} pins the inference runtime for corpus and query
+#                embedding. FP32 export, per AD-014 -- ADR-0012 budgets roughly
+#                80 MB for full-precision weights, and INT8 would change the
+#                vectors every published retrieval figure is measured on.
+#   tokenizers   The encoder's own tokenizer, standalone. Chunk sizes are
+#                measured in the encoder's word pieces against the 254-piece
+#                content budget (HINT-001), so counting with anything else
+#                measures a different thing than the model consumes. Declared
+#                without `transformers`: the tokenizer is all that is needed and
+#                the full library would pull a second inference stack in beside
+#                ONNX Runtime.
+#   pysbd        The pinned terminal sentence split below a paragraph, with
+#                character spans kept so every sentence maps back to an offset
+#                in its parent unit and page containment still holds.
+#   pgvector     The psycopg 3 adapter, needed to bulk-load embeddings through
+#                `cursor.copy()`. Not a second client -- it registers vector
+#                types on the psycopg connection already declared above.
+#
+# `ingest` joins the console entries under the same one-verb-per-job rule the
+# corpus and procurement commands follow. It is the only entry point of the
+# ingestion job, and it is offline in both its modes (FR-044, FR-045).
 [project.scripts]
 migrate = "model.schema.cli:main"
 corpus-retrieve = "model.corpus.retrieve:main"
@@ -48,6 +77,7 @@ corpus-reverify = "model.corpus.reverify:main"
 procurement-generate = "model.procurement.generate:main"
 procurement-load = "model.procurement.load:main"
 procurement-validate = "model.procurement.validate:main"
+ingest = "model.ingest.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
@@ -115,4 +145,40 @@ name = "Corpus code does not reach the model provider"
 type = "forbidden"
 source_modules = ["model.corpus"]
 forbidden_modules = ["model.llm", "gateway"]
+allow_indirect_imports = false
+
+# FR-050 / Principle VIII: the baseline extractor is an honest opponent, and it
+# is only honest if it was authored from the *rendered* documents alone. The
+# corpus generator holds the per-vendor templates, the renderer, and the
+# pre-render document model -- the three things that say what each document was
+# built to contain. A baseline reading any of them is not extracting from a
+# document, it is reading the answer key, and every quality figure published
+# beside it would flatter the model against an opponent that cannot lose.
+#
+# Stated as a build-gating contract rather than a code-review convention for the
+# same reason the two above are: the claim "the baseline is independent" is what
+# FR-050's *declared* label rests on, and that label is fixed before any figure
+# exists. A claim fixed in advance and checked by nobody is the one that quietly
+# stops being true.
+#
+# Scoped to `model.ingest.baseline` rather than `model.ingest`: the rest of the
+# ingestion package legitimately reads the corpus -- the manifests, the derived
+# page text, `corpus.paths.resolve_within` -- and forbidding the package wholesale
+# would forbid the job from reading the documents it ingests.
+#
+# The three forbidden modules are named individually rather than as `model.corpus`
+# for the same reason. `templates` is the per-vendor generation source, `render`
+# turns a document model into the PDF, and `model` is the pre-render document
+# model itself; those are the answer key. Indirect detection stays ON -- reaching
+# the templates through `corpus.generate` is the same violation by one more hop,
+# and it is the shape the evasion would actually take.
+[[tool.importlinter.contracts]]
+name = "The baseline extractor does not reach the corpus generator"
+type = "forbidden"
+source_modules = ["model.ingest.baseline"]
+forbidden_modules = [
+    "model.corpus.templates",
+    "model.corpus.render",
+    "model.corpus.model",
+]
 allow_indirect_imports = false

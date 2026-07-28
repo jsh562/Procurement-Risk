@@ -1,0 +1,25 @@
+[importlinter]
+root_package = baseline_fixture
+
+# Shaped to match the real contract in `src/model/pyproject.toml` term for term.
+# The source is a single module rather than a package: the rest of `model.ingest`
+# legitimately reads the corpus -- manifests, derived page text, path resolution
+# -- and only the baseline extractor is held to independence. The three forbidden
+# modules are named individually for the same reason; forbidding `model.corpus`
+# wholesale would forbid the job from reading the documents it ingests.
+#
+# `allow_indirect_imports = False` is the term this fixture exists to evidence.
+# The direct reach below would be caught either way; the laundered one -- the
+# baseline importing an ordinary corpus module that itself reads the templates --
+# is invisible with indirect detection off, and it is the shape the evasion
+# actually takes.
+[importlinter:contract:baseline-independence]
+name = The baseline extractor does not reach the corpus generator
+type = forbidden
+source_modules =
+    baseline_fixture.ingest.baseline
+forbidden_modules =
+    baseline_fixture.corpus.templates
+    baseline_fixture.corpus.render
+    baseline_fixture.corpus.model
+allow_indirect_imports = False

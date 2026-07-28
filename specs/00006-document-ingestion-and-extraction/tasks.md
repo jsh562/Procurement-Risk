@@ -43,14 +43,14 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 **Lands the gate (T001), the block claim (T003), the contracts, and the coverage wiring before any module or migration they constrain. T003 in particular precedes T009, the first `03xx` revision — see §Dependencies.**
 
-- [ ] T001 {FR-047} Confirm E003's TR-081 amendment has landed on main and record the verifying revision in specs/00006-document-ingestion-and-extraction/plan.md
-- [ ] T002 {FR-051} Verify specs/adrs/0018, 0019, and 0020 are committed and record the ADR and migration-block claim before implementation (SC-034)
-- [ ] T003 {FR-040} Amend tests/checks/test_migration_ranges.py 3 ways (AD-013): BLOCKS += E005 200-299, E006 300-399; populated assert splits reserved-empty vs claimed; "0200" control -> "0400"
-- [ ] T004 [P] Add onnxruntime, tokenizers, pysbd, and the pgvector psycopg adapter plus the ingest console script to src/model/pyproject.toml
-- [ ] T005 [P] Append ingest,llm,compute to the coverage --source enumeration and add a per-package 80% floor for each in .github/workflows/verify.yml
-- [ ] T006 {FR-048} Verify src/model/pyproject.toml's model.llm forbidden contract needs no edit — plant a model.llm.<new> import of model.compute and observe lint-imports reject it (AD-001)
-- [ ] T007 {FR-023} Add the placement check — only model.llm may import gateway — with a seeded violation in tests/checks/test_model_facing_placement.py after:T006
-- [ ] T008 {FR-050} Forbid model.ingest.baseline from model.corpus templates/render/model via [[tool.importlinter.contracts]] type=forbidden, allow_indirect_imports=false in src/model/pyproject.toml
+- [X] T001 {FR-047} Confirm E003's TR-081 amendment has landed on main and record the verifying revision in specs/00006-document-ingestion-and-extraction/plan.md
+- [X] T002 {FR-051} Verify specs/adrs/0018, 0019, and 0020 are committed and record the ADR and migration-block claim before implementation (SC-034)
+- [X] T003 {FR-040} Amend tests/checks/test_migration_ranges.py 3 ways (AD-013): BLOCKS += E005 200-299, E006 300-399; populated assert splits reserved-empty vs claimed; "0200" control -> "0400"
+- [X] T004 [P] Add onnxruntime, tokenizers, pysbd, and the pgvector psycopg adapter plus the ingest console script to src/model/pyproject.toml
+- [X] T005 [P] Append ingest,llm,compute to the coverage --source enumeration and add a per-package 80% floor for each in .github/workflows/verify.yml
+- [X] T006 {FR-048} Verify src/model/pyproject.toml's model.llm forbidden contract needs no edit — plant a model.llm.<new> import of model.compute and observe lint-imports reject it (AD-001)
+- [X] T007 {FR-023} Add the placement check — only model.llm may import gateway — with a seeded violation in tests/checks/test_model_facing_placement.py after:T006
+- [X] T008 {FR-050} Forbid model.ingest.baseline from model.corpus templates/render/model via [[tool.importlinter.contracts]] type=forbidden, allow_indirect_imports=false in src/model/pyproject.toml
 
 ---
 
