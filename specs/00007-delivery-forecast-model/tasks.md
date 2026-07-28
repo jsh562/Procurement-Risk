@@ -176,22 +176,22 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 **Independent test**: force a non-converging configuration and confirm nothing was written in any of the five stores, the pointer is unmoved, and the refusal left a durable record. **No task in this phase is `[P]`.**
 
-- [ ] T078 [US4] {FR-016} **RED** Failing diagnostics property tests in TST/test_diagnostics_properties.py — a breach never yields `passed`, in **both** directions; at threshold; `NaN`
-- [ ] T079 [US4] {FR-016,FR-018} **GREEN** Threshold comparisons, direction per metric and the pass verdict in PKG/diagnostics.py → exports: evaluate_diagnostics() after:T078
-- [ ] T080 [US4] {FR-016,FR-018} Insert `forecast_diagnostic` rows inside transaction 1 in PKG/write.py — three parameter-scope rows per monitored parameter, three run-scope rows
-- [ ] T081 [US4] {FR-021,FR-035} Evaluate the pre-sampling preconditions first in PKG/fit.py — schema head, chain count, no open line — each naming the precondition and its value
-- [ ] T082 [US4] {FR-017,FR-038} Gate after sampling, **before the first statement**, in PKG/fit.py — **every** breach with parameter, value, threshold and direction, on stderr
-- [ ] T083 [US4] {FR-017,FR-037,FR-040} Emit one refusal report **per attempt** in PKG/report.py — a refused-attempt identifier, never overwritten, wall-clock and shape or nothing-sampled
-- [ ] T084 [US4] {FR-016} DV-011 / SC-016 — three rows per monitored parameter with no partial coverage, and exactly three run-scope rows — TST/test_diagnostics_completeness.py
-- [ ] T085 [US4] {FR-018} [COMPLETES FR-018] DV-012 — every stored blocking row passed, and treedepth is the only non-blocking row — TST/test_diagnostics_facts.py
-- [ ] T086 [US4] {FR-016,FR-035} [COMPLETES FR-016] DV-035 — every run this test emits records `chain_count` at the four-chain minimum — TST/test_run_shape.py after:T084
-- [ ] T087 [US4] {FR-017} [COMPLETES FR-017] **NC-1** / DV-013 / SC-014 / SC-015 — a forced non-converging run leaves five tables and the pointer as found — TST/test_refusal_guarantee.py
-- [ ] T088 [US4] {FR-021} **NC-2** / SC-017 — an as-of date past every terminal event refuses rather than writing `open_line_count = 0` — TST/test_refusal_controls.py
-- [ ] T089 [US4] {FR-035} [COMPLETES FR-035] **NC-14** — below four chains, a non-zero exit naming the precondition **with nothing sampled** — TST/test_refusal_controls.py
-- [ ] T090 [US4] {FR-006} [COMPLETES FR-006] **NC-16** — three planted cases: a split row removed, an `ess_tail` row omitted, a vendor absent — TST/test_completeness_controls.py
-- [ ] T091 [US4] {FR-036} [COMPLETES FR-036] **NC-18** — `0300` against a **populated** `forecast_run` raises the migration's named error — TST/test_migration_guard.py after:T012
-- [ ] T092 [US4] {FR-037} DV-038 / SC-033 — the refusal file exists **and** carries the stream's whole field set, post- and pre-sampling — TST/test_refusal_report.py after:T087
-- [ ] T093 [US4] {FR-037} [COMPLETES FR-037] **NC-19** — two directions: no report file at all fails, and a report omitting a threshold or direction fails — TST/test_refusal_report_controls.py
+- [X] T078 [US4] {FR-016} **RED** Failing diagnostics property tests in TST/test_diagnostics_properties.py — a breach never yields `passed`, in **both** directions; at threshold; `NaN`
+- [X] T079 [US4] {FR-016,FR-018} **GREEN** Threshold comparisons, direction per metric and the pass verdict in PKG/diagnostics.py → exports: evaluate_diagnostics() after:T078
+- [X] T080 [US4] {FR-016,FR-018} Insert `forecast_diagnostic` rows inside transaction 1 in PKG/write.py — three parameter-scope rows per monitored parameter, three run-scope rows
+- [X] T081 [US4] {FR-021,FR-035} Evaluate the pre-sampling preconditions first in PKG/fit.py — **chain count and no open line**, each naming the precondition and its value. **Schema head is excluded**: this line originally named three, but only two carry a requirement tag, and the third is recorded as deliberately unimplemented in plan.md § Error Handling Strategy
+- [X] T082 [US4] {FR-017,FR-038} Gate after sampling, **before the first statement**, in PKG/fit.py — **every** breach with parameter, value, threshold and direction, on stderr
+- [X] T083 [US4] {FR-017,FR-037,FR-040} Emit one refusal report **per attempt** in PKG/report.py — a refused-attempt identifier, never overwritten, wall-clock and shape or nothing-sampled
+- [X] T084 [US4] {FR-016} DV-011 / SC-016 — three rows per monitored parameter with no partial coverage, and exactly three run-scope rows — TST/test_diagnostics_completeness.py
+- [X] T085 [US4] {FR-018} [COMPLETES FR-018] DV-012 — every stored blocking row passed, and treedepth is the only non-blocking row — TST/test_diagnostics_facts.py
+- [X] T086 [US4] {FR-016,FR-035} [COMPLETES FR-016] DV-035 — every run this test emits records `chain_count` at the four-chain minimum — TST/test_run_shape.py after:T084
+- [X] T087 [US4] {FR-017} [COMPLETES FR-017] **NC-1** / DV-013 / SC-014 / SC-015 — a forced non-converging run leaves five tables and the pointer as found — TST/test_refusal_guarantee.py
+- [X] T088 [US4] {FR-021} **NC-2** / SC-017 — an as-of date past every terminal event refuses rather than writing `open_line_count = 0` — TST/test_refusal_controls.py
+- [X] T089 [US4] {FR-035} [COMPLETES FR-035] **NC-14** — below four chains, a non-zero exit naming the precondition **with nothing sampled** — TST/test_refusal_controls.py
+- [X] T090 [US4] {FR-006} [COMPLETES FR-006] **NC-16** — three planted cases: a split row removed, an `ess_tail` row omitted, a vendor absent — TST/test_completeness_controls.py
+- [X] T091 [US4] {FR-036} [COMPLETES FR-036] **NC-18** — `0300` against a **populated** `forecast_run` raises the migration's named error — TST/test_migration_guard.py after:T012
+- [X] T092 [US4] {FR-037} DV-038 / SC-033 — the refusal file exists **and** carries the stream's whole field set, post- and pre-sampling — TST/test_refusal_report.py after:T087
+- [X] T093 [US4] {FR-037} [COMPLETES FR-037] **NC-19** — two directions: no report file at all fails, and a report omitting a threshold or direction fails — TST/test_refusal_report_controls.py
 
 ---
 
