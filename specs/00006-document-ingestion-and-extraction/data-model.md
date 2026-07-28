@@ -449,7 +449,9 @@ Every `CHECK` constraining a single column's value domain sits on a `NOT NULL` c
 
 ### Nullable-column checks
 
-The complete list. A `CHECK` rejects only on *false*, and any comparison against NULL is NULL, which a `CHECK` **accepts** — so a check on a nullable column is vacuous unless it says what it means on a null.
+**Nullable-column checks** — the complete list. A `CHECK` rejects only on *false*, and any comparison against NULL is NULL, which a `CHECK` **accepts** — so a check on a nullable column is vacuous unless it says what it means on a null.
+
+The heading is repeated in bold on the line above the table because E003's whole-schema audit (`src/model/tests/schema/test_constraint_audit.py`, TR-039) enumerates every check touching a nullable column out of `pg_constraint` and requires each to be named in a table it locates by exactly that marker, in *any* epic's data model. Written as a heading alone, this epic's table is invisible to it and E006's four nullable-column checks read as unreviewed exceptions. Same wording as E004's document, for the same reason.
 
 | Check | Nullable column(s) | Why the null case is closed |
 |---|---|---|
@@ -592,6 +594,7 @@ Recorded in the four-part form Principle VII fixes — scope decision, supportin
 | SC-043 | `ix_ingestion_run_document__single_active`, the view, and the promotion removal that satisfies the criterion's "zero superseded generations' rows remain" clause; VR-002, VR-018, VR-024, VR-025; G-4 |
 | SC-044 | `ck_ingestion_run__failed_run_unfinished`; VR-006 |
 | SC-046 | `pk_extracted_value_line_item`; VR-009 |
+| TR-063 | Inherited from E003, and the one column default this epic declares: `committed_at` on `ingestion_run_document`, defaulting to now(). A creation timestamp of exactly the family TR-063 admits — the instant the document's single transaction committed, which the database knows better than the writer does. Declared here rather than added to E003's own TR-063 row because that document owns none of this epic's tables; E003's whole-schema audit (`test_constraint_audit.py`) reads every epic's TR-063 row and rejects a default on any column no data model names |
 
 <details><summary>ER Diagram (visual reference)</summary>
 

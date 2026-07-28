@@ -112,9 +112,22 @@ RESERVED_BLOCK_LAST = 99
 #: — deliberately does not live here. TR-051 places it at the repository root,
 #: in `tests/checks/test_migration_ranges.py`, on the ground that it asserts the
 #: boundary *between* two epics' claims and so belongs to neither entry.
+#:
+#: **E005's and E006's blocks added 2026-07-27**, when E006 authored `0300`-`0304`
+#: and this per-revision check reported all five as belonging to no epic. The
+#: root partition check has declared both blocks since E006's T003; the two
+#: tables are separate on purpose — that one asserts the blocks tile the range,
+#: this one asserts each revision on disk sits inside some declared block — so
+#: they have to be extended together, and this half was the one a *populated*
+#: block made observable. E005's `0200`-`0299` is carried here as well, even
+#: though it holds no revision: a block is a claim on a number range, and
+#: omitting a claimed-but-empty block would make the two tables disagree about
+#: what is claimed the moment E005 authors its first revision.
 DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
     (RESERVED_BLOCK_FIRST, RESERVED_BLOCK_LAST, "E003"),
     (100, 199, "E004"),
+    (200, 299, "E005"),
+    (300, 399, "E006"),
 )
 
 #: Revision ids are the four-digit prefix itself (see alembic.ini). Exactly four

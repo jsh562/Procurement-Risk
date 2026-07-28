@@ -624,22 +624,41 @@ def test_the_schema_carries_no_triggers(db_session: Session) -> None:
 
 
 def _documented_default_carriers() -> set[str]:
-    """The column names data-model.md permits to carry a default (TR-063)."""
-    artifact = _data_model_text()
-    row = TR063_TRACEABILITY_ROW.search(artifact)
+    """The column names data-model.md permits to carry a default (TR-063).
 
-    assert row is not None, (
-        "data-model.md's Requirement Traceability table no longer carries a TR-063 row. "
+    **`finditer`, not `search`, from 2026-07-27** -- the same correction the
+    nullable-check table needed one paragraph of history ago, and for the same
+    reason. `_data_model_text` concatenates every epic's document, so taking the
+    first match reads E003's TR-063 row and silently ignores every later epic's,
+    reporting *their* declared defaults as undeclared while the declaration sits
+    further down the same string. E004 declared no default, so the flaw was
+    invisible until E006's `ingestion_run_document.committed_at`.
+
+    Unioned across documents, so each epic enumerates the defaults on the tables
+    it owns. The requirement is unweakened: a default still has to be written
+    down by column name, in a reviewed artifact, before the catalog may carry it
+    -- and requiring E003's document to enumerate E006's columns would invert the
+    ownership {SAD:ADR-0013} exists to fix.
+    """
+    artifact = _data_model_text()
+    rows = list(TR063_TRACEABILITY_ROW.finditer(artifact))
+
+    assert rows, (
+        "no data model's Requirement Traceability table carries a TR-063 row. "
         "That row is the enumeration of legitimate defaults; this audit has no expected "
         "set without it (TR-083)."
     )
 
-    carriers = set(BACKTICKED_IDENTIFIER.findall(row.group("carriers")))
+    carriers = {
+        identifier
+        for row in rows
+        for identifier in BACKTICKED_IDENTIFIER.findall(row.group("carriers"))
+    }
 
     assert carriers, (
-        f"the TR-063 traceability row names no backticked column: {row.group('carriers')!r}. "
-        f"With an empty enumeration every default would fail, which is a broken test rather "
-        f"than a finding."
+        f"the {len(rows)} TR-063 traceability row(s) name no backticked column: "
+        f"{[row.group('carriers') for row in rows]!r}. With an empty enumeration every "
+        f"default would fail, which is a broken test rather than a finding."
     )
     return carriers
 

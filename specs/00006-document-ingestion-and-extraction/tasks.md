@@ -58,13 +58,13 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 **The seven owned objects and the view. Every delivery phase writes through them, so they are lifted here rather than into US5, which would otherwise make P1 unbuildable.**
 
-- [ ] T009 {FR-038,FR-040} Author revision 0300_ingestion_run in src/model/src/model/schema/versions/ — agent-id grammar, floor/weight CHECKs, five failure kinds after:T001
-- [ ] T010 {FR-055,FR-043} Author revision 0301_ingestion_run_document with its single-active partial index, document index, and v_active_ingestion_generation after:T009
-- [ ] T011 {FR-039} Author revision 0302 — three run-output associations, their generation indexes, and the redundant value UK — in src/model/src/model/schema/versions/ after:T010
-- [ ] T012 {FR-059,FR-063} Author revision 0303 — extracted_value_line_item and extracted_value_parse_signal with their indexes and composite FKs — after:T011
-- [ ] T013 {FR-066} Author revision 0304 — grants, revoke UPDATE/DELETE on the six append-only tables, revoke DELETE on ingestion_run — after:T012
-- [ ] T014 {FR-065} Assert the six E003-owned tables' catalog entries are identical at 0103 and at head in src/model/tests/schema/test_table_ownership.py after:T013
-- [ ] T015 {FR-040} [COMPLETES FR-040] Verify apply-from-empty, re-apply no-op, single head, 03xx prefixes, and the object inventory in src/model/tests/schema/test_ingestion_migrations.py after:T013
+- [X] T009 {FR-038,FR-040} Author revision 0300_ingestion_run in src/model/src/model/schema/versions/ — agent-id grammar, floor/weight CHECKs, five failure kinds after:T001
+- [X] T010 {FR-055,FR-043} Author revision 0301_ingestion_run_document with its single-active partial index, document index, and v_active_ingestion_generation after:T009
+- [X] T011 {FR-039} Author revision 0302 — three run-output associations, their generation indexes, and the redundant value UK — in src/model/src/model/schema/versions/ after:T010
+- [X] T012 {FR-059,FR-063} Author revision 0303 — extracted_value_line_item and extracted_value_parse_signal with their indexes and composite FKs — after:T011
+- [X] T013 {FR-066} Author revision 0304 — grants, revoke UPDATE/DELETE on the six append-only tables, revoke DELETE on ingestion_run — after:T012
+- [X] T014 {FR-065} Assert the six E003-owned tables' catalog entries are identical at 0103 and at head in src/model/tests/schema/test_table_ownership.py after:T013
+- [X] T015 {FR-040} [COMPLETES FR-040] Verify apply-from-empty, re-apply no-op, single head, 03xx prefixes, and the object inventory in src/model/tests/schema/test_ingestion_migrations.py after:T013
 
 ---
 
