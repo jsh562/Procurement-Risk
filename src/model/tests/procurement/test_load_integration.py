@@ -13,6 +13,7 @@ import pytest
 from model.procurement import paths
 from model.procurement.load import LINE_PROJECTION, load
 from model.procurement.serialize import read_payload
+from model.roster.reader import ROSTER_FILENAME
 
 pytestmark = pytest.mark.usefixtures("empty_procurement_tables")
 
@@ -133,7 +134,7 @@ class TestDerivedValues:
         recorded = next(
             e["digest"]
             for e in envelope["generation_inputs"]
-            if e["path"].endswith("project-vendor-roster.json")
+            if e["path"].endswith(ROSTER_FILENAME)
         )
         assert values[0] == recorded
 

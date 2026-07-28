@@ -34,7 +34,7 @@ from model.corpus.manufacturers import MANUFACTURER_CATALOG_INPUT_PATH
 from model.procurement import paths
 from model.procurement.model import DIGEST_KIND_CANONICAL_CONTENT, DIGEST_KIND_RAW_BYTES
 from model.procurement.serialize import dataset_content_hash, read_payload
-from model.roster.reader import read_roster
+from model.roster.reader import ROSTER_REPO_RELATIVE_PATH, read_roster
 
 __all__ = [
     "ROSTER_INPUT_PATH",
@@ -51,7 +51,7 @@ __all__ = [
     "validate",
 ]
 
-ROSTER_INPUT_PATH = "data/roster/project-vendor-roster.json"
+ROSTER_INPUT_PATH = ROSTER_REPO_RELATIVE_PATH
 
 #: How each recorded input is recomputed. Keyed by the path the envelope records,
 #: so the check iterates `generation_inputs` rather than naming inputs — an input
