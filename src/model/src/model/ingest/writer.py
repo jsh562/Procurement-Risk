@@ -48,14 +48,18 @@ savepoint, so a handler *inside* the block rolls back to the savepoint and lets
 the outer block commit the partial document. `write_generations` is written the
 way it is for that one reason.
 
-**One generation's rows per document, and this module writes only the first.**
+**One generation's rows per document, and which role writes the second.**
 `uq_chunk__document_ordinal UNIQUE (document_id, ordinal)` is scoped to the
 document, so a second resident generation's ordinal 0 collides ({SAD:ADR-0020});
-the predecessor is removed by the promotion, which runs under the schema-owning
-role and is `data-model.md` §Operator Procedures 3. This module therefore
-**refuses** a document that already has an active generation instead of
-attempting a removal it holds no privilege for. `runs.promote_generation` is the
-removal, and it runs inside the same transaction as the write that replaces it.
+the predecessor is removed first, by `runs.promote_generation`, inside the same
+transaction as the write that replaces it — steps 0a–0g of the order below.
+That removal needs `DELETE` on tables the application role holds none on, so it
+is `data-model.md` §Operator Procedures 3 and runs under the schema-owning role.
+The two paths are therefore one parameter apart and not one code path with a
+guess in it: `promote=False`, the default and the unattended run, **refuses** a
+resident predecessor rather than attempting a removal it has no privilege for;
+`promote=True` performs it, and the whole run must be connected as the
+schema-owning role. First ingestion and re-ingestion are not the same operation.
 
 **Every row this document writes resolves to exactly one run** (FR-039, SC-021).
 `chunk`, `extracted_value` and `extraction_failure` are E003's and gain no
@@ -75,7 +79,7 @@ only arithmetic is the containment comparison, which is a substring test.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Final
@@ -94,7 +98,12 @@ from model.ingest.embed import embed_chunks, embedding_identity
 from model.ingest.failures import FAILURE_COLUMNS, ExtractionFailure
 from model.ingest.lineitems import LineItemMembership
 from model.ingest.parse import ParsedPage, page_by_number, read_pages
-from model.ingest.runs import ConfidencePolicy, read_confidence_policy
+from model.ingest.runs import (
+    ConfidencePolicy,
+    PromotionOutcome,
+    promote_generation,
+    read_confidence_policy,
+)
 from model.schema.url import get_database_url
 
 __all__ = [
@@ -424,7 +433,14 @@ def prepare_document(
 
 @dataclass(frozen=True)
 class DocumentOutcome:
-    """What one document's transaction did, or why it did nothing."""
+    """What one document's transaction did, or why it did nothing.
+
+    `promotion` is the removal steps 0a–0g performed, or `None` on a first
+    ingest. Carried rather than inferred from a zero count, for {SAD:ADR-0020}'s
+    reason: a promotion that removed nothing is indistinguishable from a first
+    ingest unless the difference is reported, and the two run under different
+    roles.
+    """
 
     document_id: str
     chunks_written: int
@@ -433,6 +449,7 @@ class DocumentOutcome:
     contributing_rows_written: int = 0
     failures_written: int = 0
     error: str | None = None
+    promotion: PromotionOutcome | None = None
 
     @property
     def committed(self) -> bool:
@@ -1349,8 +1366,9 @@ def write_document_generation(
     line_items: Sequence[LineItemMembership] = (),
     fresh_pages: Sequence[ParsedPage] | None = None,
     dimension: int | None = None,
+    promote: bool = False,
 ) -> DocumentOutcome:
-    """Write one document's first generation, in one transaction (FR-042, FR-054).
+    """Write one document's generation, in one transaction (FR-042, FR-054).
 
     Args:
         connection: an **autocommit** connection, as `connect` returns. A
@@ -1374,10 +1392,21 @@ def write_document_generation(
         dimension: the schema's published vector width. Read from
             `schema_constants` when not supplied; a caller writing 51 documents
             passes the value it read once.
+        promote: whether this write may **replace** a resident generation
+            ({SAD:ADR-0020}, FR-055, FR-043). Default `False`, which is the
+            unattended run: a resident predecessor is refused rather than
+            removed, because the application role holds `DELETE` on none of the
+            tables steps 0c–0g touch and would abort mid-removal with the mark
+            already applied. `True` runs steps 0a–0g inside this document's
+            transaction, and the whole run must then be connected as the
+            schema-owning role — `data-model.md` §Write Order fixes that as a
+            property of the *run*, not of the document, because the removal has
+            to share a transaction with the write that replaces it.
 
     Returns:
         The outcome, with the containment population and count the guard
-        enumerated and the row counts each step wrote.
+        enumerated, the row counts each step wrote, and the promotion's own
+        counts where one ran.
 
     Raises:
         WriterError: on a non-autocommit connection, a malformed digest, a
@@ -1387,12 +1416,15 @@ def write_document_generation(
             or a document row that disagrees with the record. Every one of them
             leaves the document with zero rows.
 
-    The statement order is `data-model.md` §Write Order, first-ingest path:
-    steps 0a–0g are the promotion's removal and are skipped entirely when no
-    predecessor is resident (and refused when one is — see the module
-    docstring), then 0h and steps 1 through 6 in order. The containment guard
-    runs after step 1 and before the block closes, which is what makes "never
-    committed" true rather than "detected afterwards".
+    The statement order is `data-model.md` §Write Order, **steps 0a through 7
+    exactly and in that order**: mark the predecessor and capture its identifier
+    sets, remove it leaf-up, insert the generation row, then the chunks, the
+    values, the contributing chunks, the failures, the three run associations,
+    and last the line-item and parse-signal rows. Steps 0a–0g are skipped
+    entirely when no predecessor is resident, and refused rather than attempted
+    when one is and `promote` is `False`. The containment guard runs after step
+    1 and before the block closes, which is what makes "never committed" true
+    rather than "detected afterwards".
 
     **Every step's position is a constraint's rather than a preference.** Step 2
     follows step 1 because a value's cited page has to resolve to a chunk this
@@ -1442,20 +1474,34 @@ def write_document_generation(
     # statement: the cursor closes first on the way out and the transaction
     # commits after it, which is the order both need.
     with connection.transaction(), connection.cursor() as cursor:
-        # 0a–0g: the predecessor's removal. Not attempted — the ingestion job
-        # holds `DELETE` on none of the tables involved, and the promotion is an
-        # operator procedure under the schema-owning role ({SAD:ADR-0020},
-        # `data-model.md` §Operator Procedures 3).
-        cursor.execute(_ACTIVE_GENERATION, (record.document_id,))
-        resident = cursor.fetchone()
-        if resident is not None:
-            raise WriterError(
-                f"{record.document_id} already has an active generation under run "
-                f"{resident[0]}. Exactly one generation's rows are resident per document "
-                f"({{SAD:ADR-0020}}); replacing it is the promotion procedure, which "
-                f"removes the predecessor under the schema-owning role and is not "
-                f"reachable from the ingestion job."
-            )
+        # 0a–0g: the predecessor's mark, identifier capture, and leaf-up
+        # removal, inside **this** document's transaction and before anything is
+        # written — the order {SAD:ADR-0020} exists to fix, since deleting after
+        # writing would put both generations' ordinal 0 in `chunk` for the
+        # length of a statement. `runs.promote_generation` is the whole block
+        # and this module does not restate it; a no-op when nothing is resident.
+        promotion: PromotionOutcome | None = None
+        if promote:
+            outcome = promote_generation(connection, record.document_id)
+            promotion = outcome if outcome.replaced else None
+        else:
+            # The unattended path. Refused rather than attempted: the ingestion
+            # job connects as the application role, which holds `DELETE` on none
+            # of the tables steps 0c–0g touch and no `UPDATE` on
+            # `ingestion_run_document` — so an attempt would apply step 0a's
+            # mark and then abort on the first delete, which is a pointless
+            # privilege in front of a failed transaction (§Privileges).
+            cursor.execute(_ACTIVE_GENERATION, (record.document_id,))
+            resident = cursor.fetchone()
+            if resident is not None:
+                raise WriterError(
+                    f"{record.document_id} already has an active generation under run "
+                    f"{resident[0]}. Exactly one generation's rows are resident per document "
+                    f"({{SAD:ADR-0020}}); replacing it is the promotion procedure, which "
+                    f"removes the predecessor under the schema-owning role and is reached "
+                    f"by `promote=True` on a run connected as that role — never by the "
+                    f"unattended job."
+                )
 
         # E003's `document` row is the composite-FK target of both the
         # generation row and every chunk, so it precedes step 0h. Never an
@@ -1518,6 +1564,7 @@ def write_document_generation(
         values_written=len(written_values),
         contributing_rows_written=contributing,
         failures_written=len(written_failures),
+        promotion=promotion,
     )
 
 
@@ -1526,34 +1573,76 @@ def write_generations(
     *,
     run_id: UUID | str,
     documents: Iterable[tuple[PreparedDocument, str]],
+    promote: bool = False,
+    fresh_pages_by_document: Mapping[str, Sequence[ParsedPage]] | None = None,
 ) -> Iterator[DocumentOutcome]:
-    """Write each document in its own transaction, continuing past a failure.
+    """Write each document in its own transaction, and stop when one fails.
 
-    Yields one `DocumentOutcome` per document, in the order given, so a caller
-    can build FR-073's disposition ledger without re-deriving what happened.
+    Args:
+        connection: the run's one **autocommit** connection.
+        run_id: the run every generation belongs to.
+        documents: each prepared document paired with its FR-043 input-tuple
+            digest, in the order they are to be written. Documents whose tuple
+            is unchanged are **not** in this sequence — `runs.plan_documents`
+            has already dropped them, and they create no rows at all.
+        fresh_pages_by_document: the containment guard's independent read, per
+            document. Read from each document's own bytes when absent, which is
+            the ordinary path; supplying it is the test harness's, which needs
+            to hand over a *known* extraction — the same seam
+            `write_document_generation`'s `fresh_pages` is, lifted to the loop.
+        promote: whether this run may replace resident generations. A run of
+            first ingests and skips alone leaves it `False` and runs unattended
+            under the application role; a run replacing anything sets it and
+            must be connected as the schema-owning role for its whole length
+            (`data-model.md` §Write Order).
+
+    Yields:
+        One `DocumentOutcome` per document **begun**, in the order given, the
+        last of them carrying `error` if the run aborted. A caller builds
+        FR-073's four-way ledger from what was yielded against what was
+        enumerated: everything yielded without an error is `ingested`, an
+        errored one is `rolled_back`, and everything enumerated and never
+        yielded is `not_reached`.
+
+    **The run stops at the first failure, and that is FR-042 rather than a
+    policy choice.** The requirement states the standing of a run that aborts
+    part-way — the documents already committed remain durable, their generations
+    remain active, and the corpus is consumable in that state — and FR-073's
+    `rolled_back` disposition is singular: *the* document in flight when the run
+    aborted. A loop that carried on would leave nothing for `not_reached` to
+    mean and would keep issuing work against a configuration already known to be
+    broken.
 
     **The handler catches outside `write_document_generation`, and therefore
     outside its `with conn.transaction()` block** (HINT-002). Catching inside
     would roll back to a savepoint and let the outer block commit a document
     that failed halfway through. The consequence is the one `data-model.md`
     §Write Order states: an abort at document *k* leaves 1..*k*−1 committed and
-    durable and document *k* entirely absent.
+    durable and document *k* entirely absent — or, if *k* was a re-ingest,
+    restored to its prior generation intact, since the removal rolls back with
+    everything else.
 
-    Writing the **run-level** failure that explains an aborted document is
-    `ingest/runs.py`'s, in a fresh transaction after the rollback: a row written
+    **The run-level failure that explains the abort is written afterwards, by
+    the caller, in a fresh transaction** (`runs.record_run_failure`, T077). Not
+    here: this generator is inside no transaction of its own by the time it
+    yields, but it is also not the thing that knows *which* of FR-056's five
+    kinds aborted the run — `ingest/cli.py` classifies that. A row written
     inside *d*'s transaction to explain why *d* failed rolls back with it, and
-    an `extraction_failure` row cannot carry it either — its `source_chunk_id`
+    an `extraction_failure` row cannot carry it either: its `source_chunk_id`
     is NOT NULL against a chunk the rollback has just removed.
     """
     dimension = vector_dimension(connection)
+    supplied = dict(fresh_pages_by_document or {})
     for prepared, digest in documents:
         try:
-            yield write_document_generation(
+            outcome = write_document_generation(
                 connection,
                 run_id=run_id,
                 prepared=prepared,
                 input_tuple_digest=digest,
                 dimension=dimension,
+                promote=promote,
+                fresh_pages=supplied.get(prepared.record.document_id),
             )
         except (WriterError, psycopg.Error) as exc:
             yield DocumentOutcome(
@@ -1562,3 +1651,5 @@ def write_generations(
                 containment=None,
                 error=f"{type(exc).__name__}: {exc}",
             )
+            return
+        yield outcome

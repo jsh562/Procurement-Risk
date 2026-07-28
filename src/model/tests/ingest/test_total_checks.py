@@ -51,13 +51,16 @@ from model.ingest.report import (
     chunking_section,
     collect_figures,
     collect_total_checks,
+    disposition_section,
     human_inspection_section,
+    index_procedure_section,
     measure_near_duplicates,
     near_duplicate_section,
     page_split_section,
     prj_000_section,
     profile_chunkings,
     recognition_error_section,
+    reproduction_section,
     scope_labels_section,
     total_checks_section,
 )
@@ -68,13 +71,25 @@ RUN_ID = "00000000-0000-4000-8000-00000000e006"
 #: The items US2-US6 own. Named rather than computed as "everything the US1
 #: builders do not produce", so a US1 section quietly disappearing shows up as a
 #: missing-item failure instead of being absorbed into this set.
-PLACEHOLDER_ITEMS = (5, 6, 7, 8, 12, 13, 14, 15, 16, 18, 19, 21)
+PLACEHOLDER_ITEMS = (5, 6, 7, 8, 12, 13, 14, 15, 21)
 
 #: Item 10's counts (FR-029). Four values assembled across a page break and five
 #: contributing rows between them, so the row count exceeds the value count and
 #: the "three or more pages" case is present rather than assumed away. The real
 #: counts come from the run's citations; these exercise the builder.
 MULTI_CHUNK_COUNTS = MultiChunkCounts(values=120, multi_chunk_values=4, contributing_rows=5)
+
+#: Item 16's four counts (FR-073), summing to the 51-document corpus: a run that
+#: reloaded 25, skipped 25, aborted on one, and never reached none. The zero is
+#: present on purpose — a disposition holding no document is published as a zero
+#: rather than omitted, and a fixture with four non-zero counts would never
+#: exercise that.
+DISPOSITION_COUNTS = {
+    "ingested": 25,
+    "skipped_unchanged": 25,
+    "rolled_back": 1,
+    "not_reached": 0,
+}
 
 
 def _scope(**overrides: str) -> FigureScope:
@@ -587,8 +602,14 @@ def _all_sections(profile) -> list[Section]:
         ),
     ]
     # Item 10 is US4's and is real (T067), so it joins the census of total
-    # checks below rather than being stubbed past it.
+    # checks below rather than being stubbed past it. Items 16 and 18 are US6's
+    # and are real too (T086, T083); item 19 is built from the others, as item
+    # 20 is, so it is appended after them.
     sections.append(page_split_section(run_id=RUN_ID, counts=MULTI_CHUNK_COUNTS))
+    sections.append(
+        disposition_section(run_id=RUN_ID, counts=dict(DISPOSITION_COUNTS), enumerated=51)
+    )
+    sections.append(index_procedure_section(run_id=RUN_ID, chunks_resident=6466))
     sections.append(total_checks_section(run_id=RUN_ID, checks=collect_total_checks(sections)))
     sections.extend(
         Section(
@@ -600,8 +621,9 @@ def _all_sections(profile) -> list[Section]:
         )
         for item in PLACEHOLDER_ITEMS
     )
-    # Item 20 is built last and from everything else: it is a census *of* the
-    # report's figures, so it cannot be assembled before they exist.
+    # Items 19 and 20 are built last and from everything else: each is a census
+    # *of* the report's figures, so neither can be assembled before they exist.
+    sections.append(reproduction_section(run_id=RUN_ID, sections=sections))
     sections.append(scope_labels_section(run_id=RUN_ID, sections=sections))
     return sections
 

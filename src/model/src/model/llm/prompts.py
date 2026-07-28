@@ -35,14 +35,16 @@ Nothing here imports `gateway`, and nothing here imports `model.compute`.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from typing import Final
 
-from model.llm.schemas import DOCUMENT_SCOPE, FieldTerm
+from model.llm.schemas import DOCUMENT_SCOPE, TRANSMITTAL_FIELD_SUBSET, FieldTerm
 
 __all__ = [
     "PROMPT_TEMPLATE_ID",
     "field_catalogue",
+    "prompt_template_digest",
     "render_extraction_prompt",
 ]
 
@@ -180,3 +182,31 @@ def render_extraction_prompt(
         f"chunk ordinal {chunk_ordinal}:\n\n"
         f"---\n{chunk_text}\n---\n"
     )
+
+
+def prompt_template_digest(fields: Sequence[FieldTerm] = TRANSMITTAL_FIELD_SUBSET) -> str:
+    """`ingestion_run.extraction_prompt_digest` — the template, not one prompt.
+
+    Args:
+        fields: the declared subset the run attempts. Part of the digest because
+            a narrowed subset changes every resolved prompt, and FR-043's input
+            tuple has to move when it does; defaulted to the declared subset so
+            the ordinary caller states nothing and gets the run's real value.
+
+    Returns:
+        `sha256:<64 hex>` over the instruction block and the field catalogue, in
+        the form `ck_ingestion_run__extraction_prompt_digest_format` admits.
+
+    **Over the template and its catalogue, never over a resolved prompt.** A
+    resolved prompt carries one chunk's own text, so digesting one would give a
+    per-chunk value where the run record needs a per-run one — and FR-043's
+    input tuple would then move for every document, reloading all 51 whenever
+    any one of them changed.
+
+    **This is not the fixture key** and does not try to be. The key digests the
+    *resolved* request (TR-038), which is what makes a changed prompt resolve to
+    a miss; this is the run record's account of which template produced the
+    run's invocations, and it moves for exactly the same edits.
+    """
+    payload = f"{PROMPT_TEMPLATE_ID}\n{_INSTRUCTIONS}\n{field_catalogue(fields)}"
+    return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"

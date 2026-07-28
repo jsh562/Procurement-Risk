@@ -46,6 +46,8 @@ every module under `model.llm`.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -64,6 +66,7 @@ __all__ = [
     "FieldTerm",
     "SchemaError",
     "attempted_terms",
+    "output_schema_digest",
     "bound_field_names",
     "printed_but_unattempted",
     "term",
@@ -501,3 +504,25 @@ class ChunkExtraction(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     values: tuple[ExtractedField, ...] = ()
+
+
+def output_schema_digest() -> str:
+    """`ingestion_run.extraction_schema_digest` — the submitted output schema.
+
+    Returns:
+        `sha256:<64 hex>` over `ChunkExtraction`'s JSON Schema, in the form
+        `ck_ingestion_run__extraction_schema_digest_format` admits.
+
+    **Over the generated JSON Schema rather than over the source text**, because
+    the schema is what the gateway submits and what validation refuses against.
+    A digest of the module's source would move when a docstring changed and
+    would sit still when a constraint moved through an imported default — the
+    two failure directions this value exists to exclude, since FR-045 makes a
+    changed schema constraint resolve to a fixture miss.
+
+    Serialized with sorted keys and a fixed separator so the digest is a
+    function of the schema and not of pydantic's key ordering.
+    """
+    schema = ChunkExtraction.model_json_schema()
+    payload = json.dumps(schema, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"

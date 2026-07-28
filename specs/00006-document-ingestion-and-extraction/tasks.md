@@ -155,19 +155,61 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 ## Phase 8: US6 - Re-Ingesting Is Safe And Repeatable (Priority: P3)
 
-- [ ] T075 [US6] {FR-054,FR-042} Commit one document per transaction on an autocommit connection in the stated 0a–7 order in ingest/writer.py (HINT-002) after:T070
-- [ ] T076 [US6] {FR-043} Compute the per-document input tuple digest, skip unchanged documents, and reload only those that differ in ingest/runs.py after:T075
-- [ ] T077 [US6] {FR-056} Record a run-level failure from the closed five after the rollback, in a fresh transaction, in ingest/cli.py and runs.py after:T075
-- [ ] T078 [US6] {FR-056} Assert the five run-level kinds and the seven per-field outcomes are disjoint by reading both CHECK bodies in src/model/tests/schema/test_failure_domains.py after:T077
-- [ ] T079 [US6] {FR-044,FR-045} Add the offline ingest console entry in record and replay modes, reaching no network, in src/model/src/model/ingest/cli.py after:T054
-- [ ] T080 [US6] {FR-044} Assert no ingestion module is reachable from a request-serving entry point in tests/checks/test_ingest_offline_only.py after:T079
-- [ ] T081 [US6] {FR-045} Commit the extraction fixtures and document the prompt- and schema-digest re-record trigger in src/model/fixtures/ and src/model/README.md after:T079
-- [ ] T082 [US6] {FR-041} Document the whole-document remove-and-reload correction under the schema-owning role in src/model/README.md after:T075
-- [ ] T083 [US6] {FR-064} Document the HNSW index drop and rebuild, the sequential-scan window, and abort recovery in src/model/README.md and ingest/report.py after:T079
-- [ ] T084 [US6] {FR-055} [COMPLETES FR-055] Document promotion-with-removal under the schema-owning role, and that a first-ingest run stays unattended, in src/model/README.md after:T072
-- [ ] T085 [US6] {FR-066} Assert the thirteen privilege refusals under SET LOCAL ROLE procurement_app in src/model/tests/schema/test_privileges.py after:T013
-- [ ] T086 [US6] {FR-073} Publish the four-way per-document disposition ledger summing to the enumerated corpus in ingest/cli.py and report.py after:T076
-- [ ] T087 [US6] {FR-074} Print the reproduction tolerance beside every figure and emit the committed results manifest in ingest/report.py after:T074
+- [X] T075 [US6] {FR-054,FR-042} Commit one document per transaction on an autocommit connection in the stated 0a–7 order in ingest/writer.py (HINT-002) after:T070
+- [X] T076 [US6] {FR-043} Compute the per-document input tuple digest, skip unchanged documents, and reload only those that differ in ingest/runs.py after:T075
+- [X] T077 [US6] {FR-056} Record a run-level failure from the closed five after the rollback, in a fresh transaction, in ingest/cli.py and runs.py after:T075
+- [X] T078 [US6] {FR-056} Assert the five run-level kinds and the seven per-field outcomes are disjoint by reading both CHECK bodies in src/model/tests/schema/test_failure_domains.py after:T077
+- [X] T079 [US6] {FR-044,FR-045} Add the offline ingest console entry in record and replay modes, reaching no network, in src/model/src/model/ingest/cli.py after:T054
+- [X] T080 [US6] {FR-044} Assert no ingestion module is reachable from a request-serving entry point in tests/checks/test_ingest_offline_only.py after:T079
+- [ ] T081 [US6] {FR-045} Commit the extraction fixtures and document the prompt- and schema-digest re-record trigger in src/model/fixtures/ and src/model/README.md after:T079 — BLOCKED, see §Blocked Work; the re-record trigger is documented, zero fixtures are committed
+- [X] T082 [US6] {FR-041} Document the whole-document remove-and-reload correction under the schema-owning role in src/model/README.md after:T075
+- [X] T083 [US6] {FR-064} Document the HNSW index drop and rebuild, the sequential-scan window, and abort recovery in src/model/README.md and ingest/report.py after:T079
+- [X] T084 [US6] {FR-055} [COMPLETES FR-055] Document promotion-with-removal under the schema-owning role, and that a first-ingest run stays unattended, in src/model/README.md after:T072
+- [X] T085 [US6] {FR-066} Assert the thirteen privilege refusals under SET LOCAL ROLE procurement_app in src/model/tests/schema/test_privileges.py after:T013
+- [X] T086 [US6] {FR-073} Publish the four-way per-document disposition ledger summing to the enumerated corpus in ingest/cli.py and report.py after:T076
+- [X] T087 [US6] {FR-074} Print the reproduction tolerance beside every figure and emit the committed results manifest in ingest/report.py after:T074
+
+---
+
+## Phase 8: Assembly Gaps Found During Implementation
+
+**These four were missing from the decomposition, not deferred by it.** Every task
+below is obliged by a requirement or success criterion that already had tasks
+against it — the gap is that no task connected the pieces those tasks built, or
+built a report item the closed content list already required. Analyze did not
+catch them because each individual task's exports were present and its tests
+green; what was absent was a caller. T093 in particular is why `extract_fields`
+had no production caller after T092 marked its coverage complete: T040 built the
+module, T042 restricted its scope, T046 placed its citation, and nothing invoked
+it. Recorded here rather than folded silently into Polish, because a task list
+that acquires work without saying so stops being a record.
+
+- [ ] T093 [US2] {FR-025,FR-026,FR-030} Drive the extraction stage — chunks → extract_fields → coerce, confidence, citation, line items → writer — in src/model/src/model/ingest/extract.py after:T087 → exports: run_extraction_stage
+- [ ] T094 {FR-054} Build report item 8 — chunk counts, total and per layer, against the 5,000–15,000 estimate with the cause of any deviation — in ingest/report.py after:T087
+- [ ] T095 {FR-058} Build report item 14 — the count of fields printed but not attempted — in src/model/src/model/ingest/report.py after:T093
+- [ ] T096 {FR-019} Build report item 21 — encoder parity bounds declared before the comparison, with observed maxima — in ingest/report.py after:T087
+
+---
+
+## Blocked Work
+
+- **T081 — extraction fixtures.** The re-record trigger is documented in
+  `src/model/README.md`; **zero fixtures are committed**. A fixture is a recorded
+  provider response, and none can be produced without network access and a
+  provider credential, neither of which is available to this work. A `replay` run
+  reaching extraction therefore aborts with `fixture_missing`, which is the
+  designed behaviour rather than a failure of it. Two further facts belong on the
+  record: `plan.md` §Project Structure places E006's fixtures at
+  `src/model/fixtures/`, but `gateway.orchestrator.DEFAULT_FIXTURE_ROOT` resolves
+  to `src/gateway/fixtures` and `Resolution.from_environment` constructs the store
+  from it with no environment override, so the committed plan and the committed
+  code disagree about where fixtures live. Closing T081 requires either E004
+  gaining a configurable fixture root or `plan.md` being corrected — a decision
+  outside this epic's scope. Marked `[ ]` rather than `[X]` deliberately: the task
+  names committing fixtures, and none were committed.
+- **T089 — regenerated ingestion report.** Blocked transitively on T081, because a
+  full replay pipeline cannot reach extraction without fixtures, and on T093–T096,
+  because `build_report` refuses any incomplete content list.
 
 ---
 

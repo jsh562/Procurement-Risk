@@ -37,6 +37,7 @@ module states the method whether or not that module has landed yet.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -72,6 +73,12 @@ __all__ = [
     "DECLARED_BASELINE_CRITERION",
     "DECLARED_BASELINE_LABEL",
     "DECLARED_SIMILARITY_GRID",
+    "DISPOSITIONS",
+    "DISPOSITION_INGESTED",
+    "DISPOSITION_MEANINGS",
+    "DISPOSITION_NOT_REACHED",
+    "DISPOSITION_ROLLED_BACK",
+    "DISPOSITION_SKIPPED_UNCHANGED",
     "DOCUMENT_UNIT",
     "FIGURE_KINDS",
     "GENERATION_SETS",
@@ -82,6 +89,10 @@ __all__ = [
     "PERCENTILE_POINTS",
     "REPORT_CONTENTS",
     "REPORT_PATH",
+    "REPRODUCTION_ENCODER_PARITY",
+    "REPRODUCTION_EXACT",
+    "REPRODUCTION_TOLERANCES",
+    "RESULTS_MANIFEST_PATH",
     "RULE_OF_THREE_MINIMUM",
     "AttemptLedger",
     "CarriedClaim",
@@ -110,13 +121,17 @@ __all__ = [
     "confidence_domain",
     "confidence_section",
     "declared_baseline_label",
+    "disposition_section",
     "extraction_quality_section",
     "failure_breakdown_section",
     "human_inspection_section",
+    "index_procedure_section",
     "measure_near_duplicates",
     "near_duplicate_section",
     "observed_baseline_label",
     "page_split_section",
+    "reproduction_section",
+    "results_manifest",
     "profile_chunkings",
     "prj_000_section",
     "read_resident_chunks",
@@ -280,31 +295,71 @@ class FigureScope:
             raise ReportError(f"FR-072: layer {self.layer!r} is outside {LAYERS}")
 
 
+#: FR-074's two reproduction classes, declared as the text printed beside every
+#: figure rather than as a symbol a reader has to resolve elsewhere.
+#:
+#: **Exact is the default and covers almost everything**: every count, every rate
+#: derived from counts, every interval computed from them, and every stored
+#: confidence reproduces as **bit equality** on a replay-mode run from a clean
+#: checkout. Nothing in that list is floating-point-sensitive — the confidences
+#: are deductions applied left to right in a declared order from weights read off
+#: the run row, and the intervals are computed from integer counts.
+REPRODUCTION_EXACT: str = "exact (bit equality)"
+
+#: The one class **not** claimed exact (FR-061, FR-074). The near-duplicate
+#: cluster counts are computed from floating-point vectors produced by the
+#: exported encoder, so they reproduce within the encoder parity band ADR-0018
+#: declares and FR-019 measures — and the band is printed with the counts rather
+#: than cited, because a tolerance a reader has to look up is one nobody checks.
+REPRODUCTION_ENCODER_PARITY: str = (
+    "encoder parity: cosine >= 0.999999, max per-dimension |diff| <= 1e-5"
+)
+
+#: Both, in the order item 19 tabulates them.
+REPRODUCTION_TOLERANCES: tuple[str, ...] = (REPRODUCTION_EXACT, REPRODUCTION_ENCODER_PARITY)
+
+
 @dataclass(frozen=True)
 class Figure:
-    """One published number with its labels attached, never a bare value."""
+    """One published number with its labels attached, never a bare value.
+
+    **The reproduction tolerance is a field on the figure, not a paragraph
+    elsewhere** (FR-074). It defaults to `REPRODUCTION_EXACT` because that is
+    what almost every figure this report publishes must reproduce to, and it is
+    rendered as a column of the same table the value is in — so a figure without
+    its tolerance is unconstructible rather than merely undocumented, and a
+    reader checking a reproduction never has to resolve a reference to find the
+    band they are checking against.
+    """
 
     label: str
     value: object
     scope: FigureScope
     note: str | None = None
+    tolerance: str = REPRODUCTION_EXACT
 
     def __post_init__(self) -> None:
         if not self.label.strip():
             raise ReportError("a figure carries a label naming what it counts")
+        if not self.tolerance.strip():
+            raise ReportError(
+                f"FR-074: the figure {self.label!r} publishes no reproduction tolerance. A "
+                f"figure without the band it must reproduce within is not reproducible, and "
+                f"the results manifest is a committed artifact checked against it."
+            )
 
     def row(self) -> str:
         note = self.note or ""
         return (
             f"| {self.label} | {self.value} | {self.scope.run_id} | "
             f"{self.scope.generation_set} | {self.scope.kind} | {self.scope.unit} | "
-            f"{self.scope.layer} | {note} |"
+            f"{self.scope.layer} | {self.tolerance} | {note} |"
         )
 
 
 _FIGURE_HEADER = (
-    "| Figure | Value | Run | Generation set | Kind | Unit | Layer | Note |\n"
-    "|---|---|---|---|---|---|---|---|"
+    "| Figure | Value | Run | Generation set | Kind | Unit | Layer | Reproduction tolerance | "
+    "Note |\n|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -1584,6 +1639,9 @@ def near_duplicate_section(
                 value=entry.exact_clusters,
                 scope=scope,
                 note=f"{entry.candidates} candidate chunks under the declared rule",
+                # Exact: this count compares normalized *text*, not vectors, so
+                # nothing floating-point enters it. Only the thresholded counts
+                # below inherit the encoder's tolerance (FR-074).
             )
         )
         for threshold in thresholds:
@@ -1593,6 +1651,7 @@ def near_duplicate_section(
                     value=entry.clusters_by_threshold[threshold],
                     scope=scope,
                     note="declared grid; not a fitted threshold",
+                    tolerance=REPRODUCTION_ENCODER_PARITY,
                 )
             )
 
@@ -2835,3 +2894,451 @@ def scope_labels_section(*, run_id: str, sections: Sequence[Section]) -> Section
             ),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Item 16 — FR-073, the per-document disposition ledger (T086)
+# ---------------------------------------------------------------------------
+
+#: FR-073's closed four. Declared here rather than in `ingest/cli.py` because
+#: this module is the one every other module in the package may import: `cli`
+#: imports `report`, so the reverse edge would be a cycle. `cli` re-exports
+#: them, as it already does for the three counting units.
+DISPOSITION_INGESTED: str = "ingested"
+DISPOSITION_SKIPPED_UNCHANGED: str = "skipped_unchanged"
+DISPOSITION_ROLLED_BACK: str = "rolled_back"
+DISPOSITION_NOT_REACHED: str = "not_reached"
+DISPOSITIONS: tuple[str, ...] = (
+    DISPOSITION_INGESTED,
+    DISPOSITION_SKIPPED_UNCHANGED,
+    DISPOSITION_ROLLED_BACK,
+    DISPOSITION_NOT_REACHED,
+)
+
+#: What each disposition means, in FR-073's own words. Published beside the
+#: counts because three of the four leave a document with no new rows, and a
+#: reader looking at the corpus cannot tell them apart: a skipped document, a
+#: rolled-back one and one never begun are identical in the database and differ
+#: only in what the run did.
+DISPOSITION_MEANINGS: Mapping[str, str] = {
+    DISPOSITION_INGESTED: "a generation was written for it",
+    DISPOSITION_SKIPPED_UNCHANGED: (
+        "its input tuple was unchanged, so FR-043 created no rows for it"
+    ),
+    DISPOSITION_ROLLED_BACK: "it was the document in flight when the run aborted",
+    DISPOSITION_NOT_REACHED: "it was enumerated but never begun",
+}
+
+
+def disposition_section(*, run_id: str, counts: Mapping[str, int], enumerated: int) -> Section:
+    """Item 16: every enumerated document under exactly one of four (FR-073).
+
+    Args:
+        run_id: the run this report describes.
+        counts: the four counts, keyed by `DISPOSITIONS`. All four are required
+            **including zeros** — a disposition holding no documents is
+            published as a zero, because an omitted row and a zero row read the
+            same to a reader and only one of them is a measurement.
+        enumerated: the document count FR-068 publishes for this run. The four
+            counts must sum to it.
+
+    Returns:
+        Item 16, with a figure per disposition and the total check over the sum.
+
+    Raises:
+        ReportError: a disposition is missing, one appears that is not among the
+            four, a count is negative, or the four do not sum to `enumerated`.
+
+    **The sum is an assertion, not a printed total.** A ledger that does not sum
+    is precisely the defect FR-073 exists to prevent — a document a run silently
+    dropped is invisible because nothing claims it — so the four counts are
+    checked against the enumerated corpus here and refused rather than published
+    beside a total a reader is left to verify. `cli.DispositionLedger` asserts
+    the same property one level earlier, over the identifiers rather than the
+    counts, so a document claimed by two dispositions is caught where four
+    counts summing correctly would hide it.
+
+    **The skipped count is published rather than inferred** (SC-055). A skipped
+    document creates no rows, which is exactly what a document the run never
+    reached also leaves behind; the two are distinguishable only because the run
+    wrote down which it was.
+    """
+    if not str(run_id).strip():
+        raise ReportError("FR-072: the report names the run record it describes, by identifier")
+    missing = [name for name in DISPOSITIONS if name not in counts]
+    if missing:
+        raise ReportError(
+            f"FR-073: the disposition ledger omits {missing}. All four are published, "
+            f"including the ones holding no documents — an omitted row and a zero row read "
+            f"the same and only one of them is a measurement."
+        )
+    outside = sorted(set(counts) - set(DISPOSITIONS))
+    if outside:
+        raise ReportError(
+            f"FR-073: {outside} is outside the closed four {list(DISPOSITIONS)}. A fifth "
+            f"disposition would make the partition sum by admitting a category nothing "
+            f"defined."
+        )
+    negative = sorted(name for name in DISPOSITIONS if counts[name] < 0)
+    if negative:
+        raise ReportError(f"FR-073: {negative} carry a negative count")
+    total = sum(counts[name] for name in DISPOSITIONS)
+    if enumerated <= 0:
+        raise ReportError(
+            "FR-073 / FR-068: the disposition ledger ranges over zero enumerated documents. "
+            "An empty population fails rather than passes — four zeros summing to zero is a "
+            "ledger that balances because nothing happened."
+        )
+    if total != enumerated:
+        raise ReportError(
+            f"FR-073: the four dispositions hold {total} documents and the run enumerated "
+            f"{enumerated}. They partition the enumerated corpus; a shortfall is a document "
+            f"the run lost track of and a surplus is one counted twice."
+        )
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit=DOCUMENT_UNIT,
+        layer="pooled",
+    )
+    rows = "\n".join(
+        f"| `{name}` | {counts[name]} | {DISPOSITION_MEANINGS[name]} |" for name in DISPOSITIONS
+    )
+    body = (
+        f"**Every one of the {enumerated} documents this run enumerated carries exactly one "
+        f"of four dispositions**, and the four sum to the enumerated count (FR-073, SC-055). "
+        f"The sum is asserted where the ledger is built rather than printed for a reader to "
+        f"check: a ledger that does not add up is the defect this requirement exists to "
+        f"prevent, because a document a run silently dropped is invisible precisely because "
+        f"nothing claims it.\n\n"
+        f"| Disposition | Documents | Meaning |\n|---|---|---|\n{rows}\n\n"
+        f"**Three of these four leave the same trace in the database — none.** A document "
+        f"skipped as unchanged, one rolled back when the run aborted, and one the run never "
+        f"began are indistinguishable by query: all three have no new rows. They are "
+        f"distinguishable only because the run wrote down which it was, which is why the "
+        f"skipped count is **published rather than inferred from the absence of new rows** "
+        f"and why a run that aborted publishes what it never reached separately from what it "
+        f"rolled back.\n\n"
+        f"**A disposition holding no document is published as a zero**, never omitted. An "
+        f"omitted row and a zero row read the same to a reader and only one of them is a "
+        f"measurement — the same rule FR-034 applies to the seven failure outcomes.\n\n"
+        f"`rolled_back` holds at most one document: the per-document transaction means the "
+        f"run aborts with one document in flight, and everything committed before it stays "
+        f"durable with its generation active (FR-042)."
+    )
+    return Section(
+        item=16,
+        body=body,
+        figures=tuple(
+            Figure(
+                label=f"Documents {name}",
+                value=counts[name],
+                scope=labels,
+                note=DISPOSITION_MEANINGS[name],
+            )
+            for name in DISPOSITIONS
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every enumerated document carries exactly one disposition",
+                population="every document this run enumerated, both layers",
+                count=enumerated,
+                scope=labels,
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 18 — FR-064, the index window and what an abort leaves (T083)
+# ---------------------------------------------------------------------------
+
+#: E003's object, named exactly as migration `0004` declares it. Written down
+#: because the runbook's `CREATE INDEX` must reproduce the name verbatim: a
+#: rebuild under any other name leaves the live schema disagreeing with
+#: `specs/00003-core-data-schema/data-model.md`, which is normative over it.
+VECTOR_INDEX_NAME: str = "ix_chunk__embedding_hnsw"
+
+
+def index_procedure_section(*, run_id: str, chunks_resident: int) -> Section:
+    """Item 18: the sequential-scan window, and the index absent after an abort.
+
+    Args:
+        run_id: the run this report describes.
+        chunks_resident: the chunks a sequential scan would range over while the
+            index is absent — the number that decides whether the window is
+            tolerable, so it is published rather than described.
+
+    Returns:
+        Item 18, with the scanned population as its figure.
+
+    Raises:
+        ReportError: `chunks_resident` is not positive. A window measured over
+            no rows is not a measured window (FR-068).
+
+    **Both disclosed states, neither presented as closed** (FR-064). Between the
+    drop and the rebuild every similarity query falls back to a sequential scan:
+    correctness is unaffected and latency is not, which is acceptable offline
+    and is what makes the procedure viable at all. And **an aborted run leaves
+    the index absent until the procedure is re-run** — nothing in the database
+    restores it, no migration recreates it on an already-migrated database, and
+    a retrieval consumer would get correct-but-slow answers with no signal.
+    That residual is carried as **G-7**, whose closure is a startup check
+    reading `pg_indexes` before serving.
+
+    The procedure itself is `src/model/README.md` (T083). It is **not reachable
+    from the ingestion job**: `DROP INDEX` requires ownership of the table, the
+    job connects as `procurement_app`, and that role owns nothing.
+    """
+    if not str(run_id).strip():
+        raise ReportError("FR-072: the report names the run record it describes, by identifier")
+    if chunks_resident <= 0:
+        raise ReportError(
+            f"FR-064 / FR-068: the sequential-scan window is published over "
+            f"{chunks_resident} resident chunks. A window measured over no rows says nothing "
+            f"about whether the window is tolerable, and an empty population fails rather "
+            f"than passes."
+        )
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="corpus-resident",
+        kind="census",
+        unit="chunk",
+        layer="pooled",
+    )
+    body = (
+        f"**The vector index is dropped before a full-corpus load and rebuilt after it**, as "
+        f"an operator procedure under the schema-owning role (FR-064, AD-006, "
+        f"`src/model/README.md`). `{VECTOR_INDEX_NAME}` is E003's object, declared in "
+        f"migration `0004`; `DROP INDEX` requires ownership of `chunk`, and the ingestion "
+        f"job connects as `procurement_app`, which holds table-level grants and owns "
+        f"nothing. **The job cannot perform this and is not meant to.**\n\n"
+        f"**Two states this opens, both disclosed rather than presented as closed.**\n\n"
+        f"1. **While the index is absent, every similarity query falls back to a sequential "
+        f"scan.** Correctness is unaffected — a sequential scan returns the exact nearest "
+        f"neighbours, where the HNSW index returns approximate ones — and latency is. The "
+        f"window ranges over the {chunks_resident} chunks resident at the time of this "
+        f"report, which is the number that decides whether the window is tolerable; E003's "
+        f"scale note records exact scan as viable at this order of magnitude, so the cost is "
+        f"offline latency rather than a wrong answer.\n"
+        f"2. **An aborted run leaves the index absent until the procedure is re-run.** "
+        f"Nothing in the database restores it. No migration recreates it on an "
+        f"already-migrated database — the drop and rebuild is deliberately not a revision, "
+        f"since a revision would run on every fresh database where there is nothing to load "
+        f"and nothing to gain. A retrieval consumer starting against such a database gets "
+        f"correct-but-slow answers **with no signal at all**, which is the failure this "
+        f"paragraph exists to make visible. Carried as **G-7**; its closure is a startup "
+        f"check reading `pg_indexes` before serving, and it belongs to the consumer rather "
+        f"than to this epic.\n\n"
+        f"**The rebuild reproduces the declaration verbatim** — same name, same operator "
+        f"class, same `m` and `ef_construction`. Any deviation makes the live schema "
+        f"disagree with `specs/00003-core-data-schema/data-model.md`, which is normative "
+        f"over `chunk`. Not `CREATE INDEX CONCURRENTLY`: it is slower and buys availability "
+        f"an offline job does not need."
+    )
+    return Section(
+        item=18,
+        body=body,
+        figures=(
+            Figure(
+                label="Chunks a sequential scan ranges over while the index is absent",
+                value=chunks_resident,
+                scope=labels,
+                note=f"`{VECTOR_INDEX_NAME}` dropped and rebuilt around a full-corpus load",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 19 — FR-074, the reproduction tolerance in force for each figure (T087)
+# ---------------------------------------------------------------------------
+
+#: FR-074's committed artifact, beside the report it describes. Relative to the
+#: repository root, like `REPORT_PATH`: this module writes no file, so nothing
+#: here depends on a working directory.
+RESULTS_MANIFEST_PATH = Path("specs/00006-document-ingestion-and-extraction/results-manifest.json")
+
+
+def reproduction_section(*, run_id: str, sections: Sequence[Section]) -> Section:
+    """Item 19: the tolerance in force for each figure the report publishes.
+
+    Args:
+        run_id: the run this report describes.
+        sections: the report's other sections. Item 19 is built **from** them,
+            as item 20 is, so a figure added anywhere is covered here without
+            anyone remembering to — a hand-kept list is how a figure ends up
+            published with no stated tolerance.
+
+    Returns:
+        Item 19, with the census of tolerances over the report's figures.
+
+    Raises:
+        ReportError: a figure carries a tolerance outside the two declared
+            classes, or no figure is published at all.
+
+    **The tolerance is printed beside every figure, not only counted here.**
+    `Figure.tolerance` is a field with no way to omit it and it is rendered as a
+    column of every figure table in this report, so the band a reader is
+    checking against is in the same row as the number. This section publishes
+    the *census* — how many figures fall in each class — and the reason the two
+    classes are what they are.
+
+    **A reproduction outside the stated band is published as a failure of the
+    gate.** Widening the band to admit an observed value is adjusting a target
+    to match a result, which Principle VII forbids; the band is declared here,
+    before the comparison, and the reproduction job compares against it.
+    """
+    if not str(run_id).strip():
+        raise ReportError("FR-072: the report names the run record it describes, by identifier")
+    figures = collect_figures(sections)
+    if not figures:
+        raise ReportError(
+            "FR-074 / FR-068: no figure was published, so 'every figure carries its "
+            "reproduction tolerance' is true of nothing. An empty population fails rather "
+            "than passes."
+        )
+    undeclared = sorted({f.tolerance for f in figures} - set(REPRODUCTION_TOLERANCES))
+    if undeclared:
+        raise ReportError(
+            f"FR-074: {undeclared} is outside the declared reproduction classes "
+            f"{list(REPRODUCTION_TOLERANCES)}. A third band invented at a call site is a "
+            f"band nobody declared before the comparison, which is the direction Principle "
+            f"VII forbids."
+        )
+    tally = {
+        tolerance: sum(1 for figure in figures if figure.tolerance == tolerance)
+        for tolerance in REPRODUCTION_TOLERANCES
+    }
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="published figure",
+        layer="pooled",
+    )
+    rows = "\n".join(
+        f"| {tolerance} | {tally[tolerance]} |" for tolerance in REPRODUCTION_TOLERANCES
+    )
+    body = (
+        f"**Every figure this report publishes carries the tolerance it must reproduce "
+        f"within, in its own row** (FR-074). The band is a field on the figure with no way "
+        f"to omit it, rendered as a column of the same table the value is in — a figure "
+        f"without its tolerance is not reproducible, and a reader checking a reproduction "
+        f"should never have to resolve a reference to find what they are checking "
+        f"against.\n\n"
+        f"| Reproduction tolerance | Figures |\n|---|---|\n{rows}\n\n"
+        f"**Exact means bit equality**, and it covers every count, every rate derived from "
+        f"counts, every interval computed from them, and every stored confidence. None of "
+        f"those is floating-point-sensitive in the way the phrase usually implies: the "
+        f"confidences are deductions applied left to right in a declared order from weights "
+        f"read off the run's own row, and the intervals are computed from integer counts.\n\n"
+        f"**One class is not claimed exact, and it is named rather than left to be "
+        f"discovered.** The near-duplicate cluster counts at each declared similarity "
+        f"threshold (item 11, FR-061) are computed from floating-point vectors produced by "
+        f"the exported encoder, so they reproduce within the encoder parity band ADR-0018 "
+        f"declares and FR-019 measures: **{REPRODUCTION_ENCODER_PARITY}**. The observed "
+        f"maxima are published beside the bound in item 21. The exact-match cluster counts "
+        f"in the same section are **not** in this class — they compare normalized text, so "
+        f"no vector enters them.\n\n"
+        f"**Reproduction is measured by a replay-mode run from a clean checkout** (FR-045) "
+        f"against the committed results manifest at `{RESULTS_MANIFEST_PATH}`, which carries "
+        f"every figure's label, value and tolerance. A reproduction outside the stated band "
+        f"is published as a **failure of the gate**; widening the band to admit it would be "
+        f"adjusting a target to match a result, which Principle VII forbids."
+    )
+    return Section(
+        item=19,
+        body=body,
+        figures=(
+            Figure(
+                label="Figures reproducing exactly",
+                value=tally[REPRODUCTION_EXACT],
+                scope=labels,
+            ),
+            Figure(
+                label="Figures reproducing within the encoder parity band",
+                value=tally[REPRODUCTION_ENCODER_PARITY],
+                scope=labels,
+                note=REPRODUCTION_ENCODER_PARITY,
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every published figure names the tolerance it reproduces within",
+                population="every figure the report's other sections publish",
+                count=len(figures),
+                scope=labels,
+            ),
+        ),
+    )
+
+
+def results_manifest(sections: Sequence[Section], *, run_id: str) -> str:
+    """FR-074's committed artifact: every figure, its value, and its tolerance.
+
+    Args:
+        sections: the report's sections. The manifest is built from the same
+            objects the report renders, so the two cannot disagree — a manifest
+            assembled from a second list is a second set of numbers.
+        run_id: the run these figures were computed under.
+
+    Returns:
+        The manifest as JSON text, ready to replace the committed artifact at
+        `RESULTS_MANIFEST_PATH`. Sorted by figure label and rendered with a
+        fixed indent, so a reproduction diff shows a changed *value* rather than
+        a reordering.
+
+    Raises:
+        ReportError: no figure was published, a figure names a run other than
+            the one given, or two figures share a label. The last is what makes
+            the manifest checkable at all: a comparison keyed on a label that
+            names two different numbers cannot report which one moved.
+
+    **The run identifier is recorded and is not part of the comparison key.** It
+    changes on every run by construction, so a reproduction compares labels,
+    values and tolerances; the identifier is carried so the manifest says which
+    run produced the values it holds.
+    """
+    if not str(run_id).strip():
+        raise ReportError("FR-072: the manifest names the run record it describes, by identifier")
+    figures = collect_figures(sections)
+    if not figures:
+        raise ReportError(
+            "FR-074 / FR-068: the results manifest would carry no figure, so a reproduction "
+            "against it would pass having compared nothing."
+        )
+    foreign = sorted({f.scope.run_id for f in figures if f.scope.run_id != run_id})
+    if foreign:
+        raise ReportError(
+            f"FR-072: the manifest describes run {run_id!r} and carries figures computed "
+            f"under {foreign}."
+        )
+    seen: dict[str, Figure] = {}
+    for figure in figures:
+        if figure.label in seen:
+            raise ReportError(
+                f"FR-074: two figures are published under the label {figure.label!r}. The "
+                f"manifest is keyed on the label, so a duplicate makes a reproduction unable "
+                f"to say which of the two moved."
+            )
+        seen[figure.label] = figure
+    payload = {
+        "run_id": run_id,
+        "figures": [
+            {
+                "label": label,
+                "value": seen[label].value,
+                "tolerance": seen[label].tolerance,
+                "unit": seen[label].scope.unit,
+                "layer": seen[label].scope.layer,
+                "kind": seen[label].scope.kind,
+                "generation_set": seen[label].scope.generation_set,
+            }
+            for label in sorted(seen)
+        ],
+    }
+    return json.dumps(payload, indent=2, sort_keys=False, ensure_ascii=False) + "\n"

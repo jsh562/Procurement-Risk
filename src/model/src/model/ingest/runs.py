@@ -63,20 +63,42 @@ schema-owning role and is §Operator Procedures 3 ({SAD:ADR-0020}); the writer
 **refuses** a resident predecessor rather than attempting a removal it has no
 privilege for.
 
-**What this module does not own.** The run-level failure columns of FR-056 are
-T077's.
+**The input tuple is per document, and the skip decision reads the row**
+(FR-043, T076). `InputTuple` is that document's own content hash, the chunker
+version, the embedding model identity and revision, the provider model, and the
+extraction prompt and schema digests — seven members, digested to the
+`sha256:<64 hex>` form `ck_ingestion_run_document__tuple_digest_format` admits.
+"Unchanged" is a property of the **recorded** digest on the document's active
+generation, never of the file alone: a corpus whose bytes are untouched under a
+new chunker version, a new encoder revision or a new provider model is a corpus
+every one of whose documents must be reloaded, and a comparison against the file
+would skip all 51 of them.
+
+**The run-level failure is written after the rollback, in a fresh transaction**
+(FR-056, T077, HINT-002). `record_run_failure` refuses a connection that is
+inside a transaction, because a row written inside document *d*'s transaction to
+explain why *d* failed rolls back with it — which is the one record that has to
+survive. It is an `UPDATE` on `ingestion_run` and never an `extraction_failure`
+row: that table's `source_chunk_id` is NOT NULL against a chunk the rollback has
+just removed, so a per-field row for a rolled-back document has no referent and
+is unstorable.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 from uuid import UUID
 
+import psycopg
+
 from model.compute.confidence import DeductionWeights
+from model.ingest.documents import DocumentRecord
 
 __all__ = [
     "AGENT_PART_PATTERN",
@@ -87,22 +109,30 @@ __all__ = [
     "DECLARED_DEDUCTION_REPAIRED",
     "DECLARED_POLICY",
     "GENERATION_STATUSES",
+    "INPUT_TUPLE_MEMBERS",
     "PRINCIPAL_KINDS",
+    "RUN_FAILURE_KINDS",
     "RUN_POLICY_COLUMNS",
     "RUN_STATES",
     "STATUS_ACTIVE",
     "STATUS_SUPERSEDED",
     "AgentIdentity",
     "ConfidencePolicy",
+    "DocumentPlan",
+    "InputTuple",
     "PromotionOutcome",
     "RunError",
     "RunIdentity",
     "active_generation",
     "finish_run",
+    "input_tuple_for",
+    "plan_documents",
     "promote_generation",
     "read_confidence_policy",
     "read_run_state",
     "record_confidence_policy",
+    "record_run_failure",
+    "recorded_input_tuple_digests",
     "write_run_record",
 ]
 
@@ -796,3 +826,393 @@ def promote_generation(connection: object, document_id: str) -> PromotionOutcome
         removed["generation"] = cursor.rowcount
 
     return PromotionOutcome(document_id=document_id, superseded_run_id=run_id, removed=removed)
+
+
+# ---------------------------------------------------------------------------
+# FR-043 — the per-document input tuple, and the skip it decides (T076)
+# ---------------------------------------------------------------------------
+
+#: FR-043's seven members, in the order they are digested. The order is part of
+#: the digest and is therefore written down once: a member list assembled at a
+#: call site would produce a different digest for the same inputs the moment two
+#: callers disagreed about it, and every document would then reload for ever.
+#:
+#: **The corpus-wide manifest digests are deliberately not members.** They are
+#: recorded on the run for attribution (FR-038), and putting them here would
+#: make every document's tuple move whenever any one document did — which
+#: reloads all 51 on a single change and inverts the requirement.
+#:
+#: **The provider model is a member**, and it is the member most easily left
+#: out: without it an unchanged document is skipped under a model whose fixtures
+#: differ, so its stored values would be attributed to a model that never
+#: produced them.
+INPUT_TUPLE_MEMBERS: Final[tuple[str, ...]] = (
+    "content_hash",
+    "chunker_version",
+    "embedding_model_id",
+    "embedding_model_revision",
+    "provider_model",
+    "extraction_prompt_digest",
+    "extraction_schema_digest",
+)
+
+
+@dataclass(frozen=True)
+class InputTuple:
+    """One document's inputs, as FR-043 defines them.
+
+    Per document, never per corpus. The content hash is **that document's own**,
+    read from the manifest entry E002 committed for it, so a change to one
+    document reloads one document.
+    """
+
+    content_hash: str
+    chunker_version: str
+    embedding_model_id: str
+    embedding_model_revision: str
+    provider_model: str
+    extraction_prompt_digest: str
+    extraction_schema_digest: str
+
+    def __post_init__(self) -> None:
+        for name in INPUT_TUPLE_MEMBERS:
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise RunError(
+                    f"FR-043: the input tuple member {name!r} is {value!r}. Every member is "
+                    f"present on every document; a blank one digests to a value that two "
+                    f"different configurations share, which is the collision the skip rule "
+                    f"would then act on."
+                )
+
+    @property
+    def members(self) -> tuple[tuple[str, str], ...]:
+        """The seven, name and value, in `INPUT_TUPLE_MEMBERS` order."""
+        return tuple((name, getattr(self, name)) for name in INPUT_TUPLE_MEMBERS)
+
+    @property
+    def digest(self) -> str:
+        """`sha256:<64 hex>` over the named members (FR-043).
+
+        **Names are digested beside values**, so two members swapping values
+        produce different digests. A digest over the values alone would treat a
+        chunker version of `x` with a provider model of `y` as identical to the
+        pair reversed — improbable, and free to exclude.
+
+        JSON with a fixed separator and no ASCII escaping is the serialization,
+        chosen over a delimiter-joined string because no delimiter is outside
+        the value domain: a model identifier legitimately contains `/`, `@`, `+`
+        and `-`, and a digest whose framing a value can forge is a digest two
+        different tuples can share.
+        """
+        payload = json.dumps(list(self.members), separators=(",", ":"), ensure_ascii=False)
+        return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
+
+
+def input_tuple_for(record: DocumentRecord, identity: RunIdentity) -> InputTuple:
+    """This document's tuple, from its record and the run's own identity.
+
+    Args:
+        record: the document. Only its `content_hash` is read — the per-document
+            half of the tuple, and the reason the digest is per document at all.
+        identity: what the run runs with. The other six members come from here
+            rather than from arguments, so the digest a run computes and the
+            columns its run record carries cannot disagree.
+
+    Returns:
+        The tuple, whose `digest` is written on the generation row.
+    """
+    return InputTuple(
+        content_hash=record.content_hash,
+        chunker_version=identity.chunker_version,
+        embedding_model_id=identity.embedding_model_id,
+        embedding_model_revision=identity.embedding_model_revision,
+        provider_model=identity.provider_model,
+        extraction_prompt_digest=identity.extraction_prompt_digest,
+        extraction_schema_digest=identity.extraction_schema_digest,
+    )
+
+
+@dataclass(frozen=True)
+class DocumentPlan:
+    """Whether this document is skipped, first-ingested, or reloaded (FR-043).
+
+    Carries the **recorded** digest beside the computed one rather than a
+    boolean, because the two are what makes the decision checkable after the
+    fact: a ledger saying "skipped" with no pair of digests beside it is a claim
+    about a comparison nobody can re-run.
+    """
+
+    document_id: str
+    digest: str
+    recorded_digest: str | None
+    recorded_run_id: UUID | None = None
+
+    @property
+    def resident(self) -> bool:
+        """Whether this document already has an active generation."""
+        return self.recorded_digest is not None
+
+    @property
+    def unchanged(self) -> bool:
+        """FR-043's skip condition, as a property of the **recorded** tuple.
+
+        Never of the file alone. A corpus whose bytes are untouched under a new
+        chunker version, encoder revision or provider model is a corpus every
+        document of which must be reloaded, and comparing against the file would
+        skip all of them.
+        """
+        return self.recorded_digest == self.digest
+
+    @property
+    def reloads(self) -> bool:
+        """Whether this document is written this run — first ingest or reload."""
+        return not self.unchanged
+
+    @property
+    def promotes(self) -> bool:
+        """Whether writing it replaces a resident generation.
+
+        The line between an unattended run and an operator one
+        (`data-model.md` §Write Order): a run of first ingests and skips alone
+        runs under the application role, and a run promoting anything runs under
+        the schema-owning role for its whole length.
+        """
+        return self.resident and self.reloads
+
+
+_RECORDED_DIGESTS = """
+SELECT document_id, run_id, input_tuple_digest
+  FROM ingestion_run_document
+ WHERE status = 'active' AND document_id = ANY(%s)
+"""
+
+
+def recorded_input_tuple_digests(
+    connection: object, document_ids: Iterable[str]
+) -> dict[str, tuple[UUID, str]]:
+    """The digest and run of each document's **active** generation (FR-043).
+
+    Args:
+        connection: a psycopg connection.
+        document_ids: the documents the run enumerated.
+
+    Returns:
+        A mapping from document identifier to `(run_id, input_tuple_digest)`,
+        holding an entry only for documents with an active generation. A missing
+        entry is a first ingest and is distinguishable from a recorded digest
+        that happens to differ, which is what keeps FR-073's `ingested` from
+        absorbing two different things.
+
+    Filtered on `status = 'active'` and not on the document alone. Under
+    {SAD:ADR-0020} a superseded row exists only inside the promotion transaction
+    that is about to delete it, so the predicate is belt and braces — and it is
+    the predicate `ix_ingestion_run_document__single_active` makes single-valued,
+    which is what lets this return one row per document rather than a list.
+    """
+    wanted = list(document_ids)
+    if not wanted:
+        return {}
+    with connection.cursor() as cursor:  # type: ignore[attr-defined]
+        cursor.execute(_RECORDED_DIGESTS, (wanted,))
+        rows = cursor.fetchall()
+    recorded: dict[str, tuple[UUID, str]] = {}
+    for document_id, run_id, digest in rows:
+        if document_id in recorded:
+            raise RunError(
+                f"FR-055: {document_id} has more than one active generation, which "
+                f"`ix_ingestion_run_document__single_active` makes unrepresentable. The skip "
+                f"decision cannot be taken against two recorded tuples."
+            )
+        recorded[document_id] = (run_id, digest)
+    return recorded
+
+
+def plan_documents(
+    connection: object, tuples: Mapping[str, InputTuple]
+) -> tuple[DocumentPlan, ...]:
+    """Decide skip or reload for every enumerated document (FR-043).
+
+    Args:
+        connection: a psycopg connection.
+        tuples: each enumerated document's own input tuple, keyed by identifier.
+
+    Returns:
+        One plan per document, in the order `tuples` enumerates them, so a
+        caller writes them in a stated order rather than in whatever order a
+        query returned. A document whose tuple is unchanged carries
+        `unchanged is True` and **creates no rows at all** — not an empty
+        generation, not a run association, nothing (FR-043).
+
+    Raises:
+        RunError: a document has two active generations.
+
+    The decision is one query for the whole corpus rather than one per document:
+    51 round trips to answer a question the partial unique index already makes
+    single-valued is 51 chances for the answer to move underneath the run.
+    """
+    recorded = recorded_input_tuple_digests(connection, tuples)
+    plans: list[DocumentPlan] = []
+    for document_id, tuple_ in tuples.items():
+        entry = recorded.get(document_id)
+        plans.append(
+            DocumentPlan(
+                document_id=document_id,
+                digest=tuple_.digest,
+                recorded_digest=None if entry is None else entry[1],
+                recorded_run_id=None if entry is None else entry[0],
+            )
+        )
+    return tuple(plans)
+
+
+# ---------------------------------------------------------------------------
+# FR-056 — the run-level failure, written after the rollback (T077)
+# ---------------------------------------------------------------------------
+
+#: `ck_ingestion_run__failure_kind_domain`'s closed five, in the revision's own
+#: order. Restated here because the job has to *choose* one, and a value chosen
+#: from a set nobody wrote down is a value the CHECK rejects at the one moment
+#: the run has no other way to explain itself.
+#:
+#: **The seven per-field outcomes share none of these**, which
+#: `src/model/tests/schema/test_failure_domains.py` (T078) asserts by reading
+#: both `CHECK` bodies out of the catalog rather than by comparing this tuple
+#: with `failures.FAILURE_OUTCOMES` — two Python lists agreeing with each other
+#: says nothing about the two constraints that decide what is storable.
+#:
+#: **One abort is deliberately outside the set**: FR-019's encoder-artifact
+#: check runs before the run record exists, so it is a startup refusal rather
+#: than a run that failed.
+RUN_FAILURE_KINDS: Final[tuple[str, ...]] = (
+    "corpus_digest_mismatch",
+    "document_id_collision",
+    "oversized_sentence",
+    "fixture_missing",
+    "provider_unreachable",
+)
+
+#: FR-056's required diagnostic content, per kind. Held as data so the check
+#: below names the subject the aborting requirement names rather than accepting
+#: any non-blank string — a detail reading "failed" satisfies a presence check
+#: and tells a reader nothing about which file, which page, or which key.
+RUN_FAILURE_SUBJECTS: Final[Mapping[str, str]] = {
+    "corpus_digest_mismatch": "the document in flight and the offending file",
+    "document_id_collision": "both colliding files and the identifier they produced",
+    "oversized_sentence": "the document, the page, and the structural unit",
+    "fixture_missing": "the resolution key that missed",
+    "provider_unreachable": "the provider and the model addressed",
+}
+
+#: The `UPDATE` FR-056 names, and one of the four permitted updates in this
+#: epic's whole object set (FR-066). `WHERE run_failure_kind IS NULL` makes a
+#: second failure write a zero-row refusal rather than an overwrite: the first
+#: kind is the one that aborted the run, and a later one recorded over it would
+#: replace the cause with a consequence.
+_RUN_FAILURE_UPDATE = """
+UPDATE ingestion_run
+   SET run_failure_kind = %s, run_failure_detail = %s
+ WHERE run_id = %s
+   AND run_failure_kind IS NULL
+   AND finished_at IS NULL
+"""
+
+
+def _refuse_unless_fresh(connection: object, run_id: UUID | str) -> None:
+    """Refuse to write the failure from inside a transaction (HINT-002).
+
+    The whole content of FR-056's "after the rollback, in a fresh transaction".
+    A row written inside document *d*'s transaction to explain why *d* failed is
+    rolled back along with *d* — and this one is the record that has to survive,
+    because it is the only thing that says why the run stopped.
+
+    Two conditions, and both are checked rather than one standing in for the
+    other. **Autocommit** is what makes the `UPDATE` below its own transaction;
+    on a default connection psycopg opens an implicit transaction at the first
+    execute and holds it, so the write would sit uncommitted behind whatever the
+    caller does next. **`IDLE`** is what says the rollback has already
+    completed: a connection still `INTRANS` is inside the block that is failing,
+    and `INERROR` is inside one that has failed and not yet been unwound — this
+    write would be discarded in the first case and refused outright in the
+    second.
+    """
+    if not getattr(connection, "autocommit", False):
+        raise RunError(
+            f"FR-056: the run-level failure for {run_id} must be written on an autocommit "
+            f"connection. On a default connection psycopg opens one implicit transaction and "
+            f"holds it, so the row explaining why the run stopped would wait, uncommitted, "
+            f"behind the failure it describes."
+        )
+    status = getattr(getattr(connection, "info", None), "transaction_status", None)
+    if status is not None and status != psycopg.pq.TransactionStatus.IDLE:
+        raise RunError(
+            f"FR-056 / HINT-002: the run-level failure for {run_id} was offered on a "
+            f"connection whose transaction status is {status!r} rather than IDLE, so it "
+            f"would be written inside the transaction it exists to explain and would roll "
+            f"back with it. The write happens **after** the rollback has completed, in a "
+            f"fresh transaction."
+        )
+
+
+def record_run_failure(
+    connection: object,
+    run_id: UUID | str,
+    *,
+    kind: str,
+    detail: str,
+) -> None:
+    """Record FR-056's run-level failure on the run record, after the rollback.
+
+    Args:
+        connection: an **autocommit** psycopg connection that is **not** inside
+            a transaction. Both are refused rather than worked around; see
+            `_refuse_unless_fresh`.
+        run_id: the run that aborted.
+        kind: one of `RUN_FAILURE_KINDS`. The five are disjoint from the seven
+            per-field outcomes, so a caller cannot record a per-field outcome
+            here and have it read as a run-level cause.
+        detail: the diagnostic. FR-056 fixes its required content per kind —
+            see `RUN_FAILURE_SUBJECTS` — and it must name the document in flight
+            wherever one exists.
+
+    Raises:
+        RunError: the kind is outside the five, the detail is blank, the
+            connection is not fresh, or the update matched no row. The last
+            covers three cases and each of them matters: the run has no record,
+            it already carries a failure, or it has already recorded a finish —
+            `ck_ingestion_run__failed_run_unfinished` refuses the pair, and a
+            completed run that later claims to have aborted is a contradiction
+            rather than a late correction.
+
+    **Never an `extraction_failure` row.** That table's `source_chunk_id` is NOT
+    NULL with a `RESTRICT` foreign key to a chunk the rollback has just removed,
+    so a per-field row explaining a rolled-back document has no referent and
+    cannot be stored at all. That is the structural reason FR-056's run-level
+    failure needs its own home, and it is why this function updates two columns
+    on `ingestion_run` rather than inserting anywhere.
+    """
+    if kind not in RUN_FAILURE_KINDS:
+        raise RunError(
+            f"FR-056: {kind!r} is outside the closed five "
+            f"{list(RUN_FAILURE_KINDS)}, which `ck_ingestion_run__failure_kind_domain` "
+            f"fixes. The five are disjoint from the seven per-field outcomes: a per-field "
+            f"outcome recorded here would read as the reason the run stopped."
+        )
+    if not detail.strip():
+        raise RunError(
+            f"FR-056: the {kind!r} failure for run {run_id} carries no detail. Every "
+            f"run-level failure records {RUN_FAILURE_SUBJECTS[kind]}, and "
+            f"`ck_ingestion_run__failure_detail_iff_kind` refuses a kind without one."
+        )
+    _refuse_unless_fresh(connection, run_id)
+    with connection.cursor() as cursor:  # type: ignore[attr-defined]
+        cursor.execute(_RUN_FAILURE_UPDATE, (kind, detail, str(run_id)))
+        if cursor.rowcount != 1:
+            state = read_run_state(connection, run_id)
+            raise RunError(
+                f"FR-056: recording a {kind!r} failure on run {run_id} matched "
+                f"{cursor.rowcount} rows; the run reads as {state!r}. A run already carrying "
+                f"a failure keeps the first one — it is the cause, and a later kind written "
+                f"over it would replace the cause with a consequence — and a run that "
+                f"recorded a finish did not abort."
+            )
