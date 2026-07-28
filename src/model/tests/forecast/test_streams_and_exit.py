@@ -29,6 +29,7 @@ from datetime import date
 import pytest
 
 from forecast.conftest import EmittedRun
+from model.forecast.config import CHAINS_MIN
 
 #: An anchor before any line was ordered. Every line's event walk is then empty,
 #: the sojourn frame has no row, and the job refuses before it samples — which
@@ -38,7 +39,15 @@ ANCHOR_BEFORE_THE_COHORT = date(2000, 1, 1)
 #: The shape the two refusing invocations are asked for. Small because neither
 #: reaches the sampler; named rather than defaulted so the refusal is attributable
 #: to the argument under test and not to a shape the job disliked.
-REFUSAL_CHAINS = 2
+#:
+#: **At the chain minimum, not below it.** US4's T081 made a chain count below
+#: `CHAINS_MIN` a pre-sampling precondition that refuses before the job reads
+#: anything, so a two-chain invocation here would refuse for the chain count and
+#: this module's anchor refusal would never be reached — the assertions would
+#: still pass while measuring a different refusal. The value is read from
+#: `config.py` rather than written as a literal, so it tracks the published
+#: minimum instead of agreeing with it today.
+REFUSAL_CHAINS = CHAINS_MIN
 REFUSAL_DRAWS = 50
 
 #: The variable `model.schema.url` reads, removed to produce the second refusal.

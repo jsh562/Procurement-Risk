@@ -1,4 +1,4 @@
-"""T044, T045 — DV-014 / SC-028 and NC-10: the run shape, pinned by test.
+"""T044, T045, T086 — DV-014, DV-035 and NC-10: the run shape, pinned by test.
 
 No delivered constraint binds a run to the published draw count or grid horizon,
 and one must not be added: E003's own schema suite inserts fixture runs at five
@@ -15,6 +15,17 @@ fourth home for a number that already has one.
 T045 is the failing direction. A run emitted at the fixture shape must fail the
 same predicate the emitted run passes, otherwise the predicate is satisfied by
 anything that stores two integers.
+
+**T086 adds DV-035, the third pinned quantity: `chain_count`.** The four-chain
+minimum is a *precondition in the job* (FR-035) and no column, no constraint and
+no other rule asserts it — so without this, a run at two chains would cite the
+four-chain convention its R-hat and ESS thresholds are justified at while
+satisfying every check in the epic. Scoped exactly as DV-014 is, to the runs
+this tier's own invocation emitted, because E003's delivered fixtures are
+legally inserted at other shapes. The failing direction is **NC-14**, in
+`test_refusal_controls.py`, where the job refuses below the minimum with nothing
+sampled — an assertion this file cannot make, since a refused run stores no row
+for it to read.
 """
 
 from __future__ import annotations
@@ -28,13 +39,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from forecast.conftest import EmittedRun, StoredRun
-from model.forecast.config import read_run_shape
+from model.forecast.config import CHAINS_MIN, read_run_shape
 from model.forecast.manifest import draw_digest
 from model.forecast.posterior import survival_grid
 from model.forecast.write import LinePosteriorRow, insert_artifact_set
 
 #: Module-level SQL, never assembled from values (Ruff S608).
 RUN_SHAPE_SQL = text("SELECT draw_count, horizon_days FROM forecast_run WHERE run_id = :run_id")
+CHAIN_COUNT_SQL = text("SELECT chain_count FROM forecast_run WHERE run_id = :run_id")
 POSTERIOR_SHAPE_SQL = text(
     """
     SELECT draw_count, horizon_days, array_length(draws, 1) AS drawn,
@@ -123,6 +135,36 @@ def test_every_artifact_row_repeats_the_runs_own_shape(
         assert row["horizon_days"] == published.horizon_days
         assert row["drawn"] == published.draw_count
         assert row["gridded"] == published.horizon_days
+
+
+def test_every_run_this_tier_emits_records_the_four_chain_minimum(
+    db_session: Session, emitted_run: EmittedRun
+) -> None:
+    """DV-035 / T086: `chain_count` at the published minimum, on an emitted run.
+
+    Read from the stored column rather than from the invocation's own argument
+    list, which is what makes this an assertion about the run and not about the
+    test: the number the run *recorded* is the number a later reader has, and it
+    is the number FR-014 requires the manifest to carry.
+
+    At or above rather than equal. FR-035 sets a *minimum* and permits more; the
+    committed shape happens to run at it, and a rule written as equality would
+    fail a legitimate eight-chain run while catching nothing a `>=` misses.
+    """
+    recorded = db_session.execute(
+        CHAIN_COUNT_SQL, {"run_id": emitted_run.run_id}
+    ).scalar_one()
+
+    assert recorded == emitted_run.chain_count, (
+        f"the run records {recorded} chains against the {emitted_run.chain_count} this "
+        f"invocation asked for; the recorded value is what a later reader has"
+    )
+    assert recorded >= CHAINS_MIN, (
+        f"the run records {recorded} chains against a published minimum of {CHAINS_MIN}. "
+        f"Below it, the R-hat and ESS thresholds this run was judged against cite a "
+        f"convention that does not hold, while the gate would pass or refuse on the same "
+        f"figures (FR-035, DV-035)"
+    )
 
 
 def test_the_comparison_reads_the_published_row_rather_than_a_literal(

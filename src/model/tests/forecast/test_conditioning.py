@@ -45,6 +45,7 @@ from sqlalchemy import Engine, text
 
 from forecast.conftest import EmittedRun, discard_run
 from model.forecast.censoring import censoring_indicator, elapsed_days
+from model.forecast.config import CHAINS, DRAWS_PER_CHAIN
 from model.forecast.design import category_index, vendor_index
 from model.forecast.fit import (
     _flattened,
@@ -97,10 +98,18 @@ IDENTITY_SIGMA_MULTIPLE = 8.0
 FITTED_PERCENTILE = 0.99
 FAR_ANCHOR = date(2027, 10, 1)
 
-#: The shape the two anchor-comparison runs share. Tiny, and identical between
-#: them, so the anchor is the only input that moved.
-ANCHOR_RUN_CHAINS = 2
-ANCHOR_RUN_DRAWS = 50
+#: The shape the two anchor-comparison runs share, identical between them so the
+#: anchor is the only input that moved.
+#:
+#: **The committed shape rather than a tiny one, and US4 is why.** These runs go
+#: through `run_fit`, which now refuses below the four-chain minimum before
+#: sampling (FR-035) and refuses again after sampling on any breached blocking
+#: diagnostic (FR-017) — and a fifty-draw fit breaches R-hat and both ESS bars on
+#: every monitored parameter. A completed run is what this fixture needs, so the
+#: only shape available to it is one that converges. The values are read from
+#: `config.py` rather than written here, so they follow the published shape.
+ANCHOR_RUN_CHAINS = CHAINS
+ANCHOR_RUN_DRAWS = DRAWS_PER_CHAIN
 ANCHOR_RUN_SEED = 20260728
 
 _ERFC = np.vectorize(math.erfc, otypes=[float])

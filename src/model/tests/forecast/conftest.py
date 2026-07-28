@@ -78,6 +78,7 @@ basename local to the tier instead of global to the entry.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -89,18 +90,25 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from alembic import command
 from alembic.script import ScriptDirectory
 from sqlalchemy import URL, Engine, create_engine, text
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
-from model.forecast.config import CHAINS, DRAWS_PER_CHAIN, TUNING_DRAWS_PER_CHAIN
+from model.forecast.config import (
+    CHAINS,
+    CHAINS_MIN,
+    DRAWS_PER_CHAIN,
+    TUNING_DRAWS_PER_CHAIN,
+)
 from model.forecast.manifest import RunManifest
 from model.forecast.model import SojournFrame, training_frame
 from model.forecast.read import ProcurementInput, read_lines_and_events
 from model.forecast.serialize import input_data_hash
 from model.forecast.shrinkage import VendorShrinkage
 from model.forecast.split import TRAIN, SplitAssignment, SplitResult, assign_split
-from model.forecast.write import LinePosteriorRow
+from model.forecast.write import CLEAR_ACTIVE_RUN_SQL, LinePosteriorRow, set_active_run
 from model.procurement.load import load
 from model.schema.cli import build_config
 from model.schema.url import (
@@ -610,6 +618,329 @@ def emitted_run(
             written = set(connection.execute(ALL_RUN_IDS_SQL).scalars()) - pre_existing
         for run_id in written:
             discard_run(engine, run_id)
+
+
+# --------------------------------------------------------------------------
+# The two refusing invocations, emitted once and shared (US4)
+# --------------------------------------------------------------------------
+
+#: The five stores SC-015 and DV-013 enumerate, plus the pointer. Held as a
+#: tuple so a snapshot is taken over the *named* set rather than over whatever
+#: the schema happens to contain — a sixth store added later and not named here
+#: is a store the refusal guarantee stops covering, and that is the failure
+#: STF-002 recorded when splitting the artifact populations created the second.
+SNAPSHOT_TABLES: tuple[str, ...] = (
+    "forecast_run",
+    "line_posterior",
+    "held_out_prediction",
+    "forecast_split_assignment",
+    "forecast_diagnostic",
+)
+
+#: Module-level SQL, never assembled from values (Ruff S608). The active-run
+#: pointer is read through the delivered view rather than through `is_active`,
+#: because the view is what a downstream reader consults.
+ACTIVE_RUN_SQL = text("SELECT run_id FROM v_active_forecast_run")
+
+#: The shape that forces a non-converging fit. Four chains — at the published
+#: minimum, so the pre-sampling precondition is *met* and the refusal is
+#: unambiguously the post-sampling gate's (NC-1, never NC-14) — of five draws
+#: with five tuning draws, which is far too short for R-hat or ESS to clear
+#: their bars. Deliberately tiny: the assertion is about what the refusal
+#: leaves behind, and a longer chain would buy nothing but minutes.
+FORCED_NON_CONVERGENT_CHAINS = CHAINS
+FORCED_NON_CONVERGENT_DRAWS = 5
+FORCED_NON_CONVERGENT_TUNE = 5
+
+#: Below the published minimum, and the *only* thing wrong with the invocation
+#: it configures — so the refusal is attributable to the chain count rather than
+#: to a shape the job disliked.
+BELOW_MINIMUM_CHAINS = CHAINS_MIN - 2
+
+#: An anchor after every terminal event in the committed cohort. E005's latest
+#: terminal event is in early 2026; a date this far out is past the cohort by a
+#: margin no reload can close.
+ANCHOR_PAST_EVERY_TERMINAL_EVENT = date(2035, 1, 1)
+
+#: Where the zero-open-line database is created, and under what name.
+#: **A scratch database is unavoidable here, and the reason is a property of the
+#: committed dataset rather than a convenience.** Twenty-four of E005's 199
+#: lines carry no terminal event at all, and `censoring_indicator` answers a
+#: dated question — a line with no terminal event is open at *every* as-of date
+#: — so no anchor whatsoever empties the open population on the shared database.
+#: NC-2's condition therefore has to be constructed, and it is constructed by
+#: removing exactly those lines from a database of the fixture's own, which the
+#: shared one must not be: `forecast-fit` runs as a separate process, so the
+#: state it reads has to be committed, and committing a deletion of E005's rows
+#: into the tier's database would be a mutation of data of record.
+MAINTENANCE_DATABASE = "postgres"
+CLOSED_ONLY_DATABASE_PREFIX = "e007_no_open_line_"
+SAFE_IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9_]+$")
+
+#: Module-level SQL, never assembled from values (Ruff S608). Events first:
+#: `fk_lifecycle_event__line` is `ON DELETE RESTRICT`, deliberately, so a line
+#: cannot be removed while its history still names it.
+DELETE_EVENTS_OF_NEVER_TERMINAL_LINES = text(
+    """
+    DELETE FROM lifecycle_event e
+    WHERE NOT EXISTS (
+        SELECT 1 FROM lifecycle_event t
+        WHERE t.po_line_id = e.po_line_id AND t.is_terminal
+    )
+    """
+)
+DELETE_NEVER_TERMINAL_LINES = text(
+    """
+    DELETE FROM purchase_order_line l
+    WHERE NOT EXISTS (
+        SELECT 1 FROM lifecycle_event t WHERE t.po_line_id = l.po_line_id AND t.is_terminal
+    )
+    """
+)
+
+
+@dataclass(frozen=True, slots=True)
+class RefusedInvocation:
+    """One refusing `forecast-fit`, with the five stores snapshotted around it.
+
+    The snapshots bracket the invocation rather than being taken by the test,
+    because DV-013 is a claim about a *transition*: "no row was added or
+    modified" needs a before and an after taken around the same process, and a
+    test that only looked afterwards would pass on a database that already held
+    the row it was checking for.
+    """
+
+    completed: subprocess.CompletedProcess[str]
+    argv: tuple[str, ...]
+    report_root: Path
+    as_of_date: date
+    chain_count: int
+    draws_per_chain: int
+    tuning_draws: int
+    before: dict[str, object]
+    after: dict[str, object]
+    sampled: bool
+
+    @property
+    def emitted_reports(self) -> tuple[Path, ...]:
+        """Every file the attempt left under its own report root, sorted."""
+        return tuple(sorted(self.report_root.iterdir()))
+
+
+def snapshot_stores(engine: Engine) -> dict[str, object]:
+    """Row counts for the five stores and the current active-run pointer.
+
+    Counts rather than full row sets: the claim is that nothing was **added or
+    modified**, and the addition half is a count while the modification half is
+    covered by the pointer plus the fact that E007 holds no `UPDATE` grant on
+    any artifact table (FR-034, DV-032). Reading whole tables would make this
+    fixture the most expensive thing in the tier for no extra claim.
+    """
+    with engine.connect() as connection:
+        snapshot: dict[str, object] = {
+            table: int(connection.execute(text(f"SELECT count(*) FROM {table}")).scalar_one())  # noqa: S608 - fixed identifiers from SNAPSHOT_TABLES
+            for table in SNAPSHOT_TABLES
+        }
+        snapshot["active_run"] = sorted(
+            str(run_id) for run_id in connection.execute(ACTIVE_RUN_SQL).scalars()
+        )
+    return snapshot
+
+
+def _refusing_invocation(
+    engine: Engine,
+    root: Path,
+    *,
+    as_of_date: date,
+    chains: int,
+    draws: int,
+    tune: int,
+    sampled: bool,
+    environment: dict[str, str] | None = None,
+) -> RefusedInvocation:
+    """Snapshot, invoke, snapshot — one refusing run with its evidence."""
+    argv = [
+        "--as-of-date",
+        as_of_date.isoformat(),
+        "--seed",
+        str(FIT_SEED_ENTROPY),
+        "--chains",
+        str(chains),
+        "--draws",
+        str(draws),
+        "--tune",
+        str(tune),
+        "--report-root",
+        str(root),
+    ]
+    before = snapshot_stores(engine)
+    completed = _invoke(argv, environment)
+    after = snapshot_stores(engine)
+    return RefusedInvocation(
+        completed=completed,
+        argv=tuple(argv),
+        report_root=root,
+        as_of_date=as_of_date,
+        chain_count=chains,
+        draws_per_chain=draws,
+        tuning_draws=tune,
+        before=before,
+        after=after,
+        sampled=sampled,
+    )
+
+
+@pytest.fixture(scope="package")
+def refused_after_sampling(
+    engine: Engine, committed_dataset: int, emitted_run: EmittedRun, tmp_path_factory
+) -> RefusedInvocation:
+    """NC-1's run: four chains of five draws, refused by the diagnostics gate.
+
+    **The shipped run is made active around the invocation, and restored after
+    it.** DV-013's pointer clause is that `v_active_forecast_run` still returns
+    *the previously active run* — a claim that needs one. By the time this
+    fixture runs, other tests in the tier have published and discarded runs of
+    their own, and discarding the last-published one leaves nothing active; the
+    assertion would then be that empty stayed empty, which an inert job
+    satisfies. The pointer is restored to whatever it held before, inside the
+    same fixture, so no test that runs afterwards sees a state this one created.
+    """
+    del committed_dataset  # requested so the rows exist, not for its value
+    with engine.begin() as connection:
+        previously_active = list(connection.execute(ACTIVE_RUN_SQL).scalars())
+        set_active_run(connection, emitted_run.run_id)
+    try:
+        return _refusing_invocation(
+            engine,
+            tmp_path_factory.mktemp("refusal-diagnostics"),
+            as_of_date=FIT_AS_OF_DATE,
+            chains=FORCED_NON_CONVERGENT_CHAINS,
+            draws=FORCED_NON_CONVERGENT_DRAWS,
+            tune=FORCED_NON_CONVERGENT_TUNE,
+            sampled=True,
+        )
+    finally:
+        with engine.begin() as connection:
+            connection.execute(CLEAR_ACTIVE_RUN_SQL)
+            for run_id in previously_active:
+                set_active_run(connection, run_id)
+
+
+@pytest.fixture(scope="package")
+def refused_below_the_chain_minimum(
+    engine: Engine, committed_dataset: int, emitted_run: EmittedRun, tmp_path_factory
+) -> RefusedInvocation:
+    """NC-14's run: below the published chain minimum, refused before sampling."""
+    del committed_dataset, emitted_run  # requested for the rows and the pointer
+    return _refusing_invocation(
+        engine,
+        tmp_path_factory.mktemp("refusal-chains"),
+        as_of_date=FIT_AS_OF_DATE,
+        chains=BELOW_MINIMUM_CHAINS,
+        draws=FORCED_NON_CONVERGENT_DRAWS,
+        tune=FORCED_NON_CONVERGENT_TUNE,
+        sampled=False,
+    )
+
+
+@pytest.fixture(scope="package")
+def database_with_no_line_that_can_stay_open(
+    database_url: URL, schema_at_head: str
+) -> Iterator[URL]:
+    """A database of its own holding only lines that eventually delivered.
+
+    Built rather than found, because the committed cohort cannot produce NC-2's
+    condition: twenty-four of its lines have no terminal event, and a line with
+    no terminal event is open at every as-of date by the dated indicator. With
+    those lines removed, every remaining line closes at its own terminal event
+    and an anchor past all of them leaves the open population empty — which is
+    the state FR-021 refuses on.
+
+    Migrated through the same chain the deployed runner applies, and loaded
+    through the same `load()` the `procurement-load` entry calls, so the rows
+    the job reads are E005's own and not a hand-built stand-in. `DATABASE_URL`
+    is repointed for the migration because that variable is the only channel the
+    Alembic environment reads, and restored in a `finally` so the tier's shared
+    database is never touched.
+    """
+    del schema_at_head  # requested for its assertion, not for its value
+    name = f"{CLOSED_ONLY_DATABASE_PREFIX}{uuid.uuid4().hex}"
+    if not SAFE_IDENTIFIER_PATTERN.fullmatch(name):
+        raise AssertionError(f"refusing to build DDL around the identifier {name!r}")
+    maintenance = create_engine(
+        database_url.set(database=MAINTENANCE_DATABASE),
+        isolation_level="AUTOCOMMIT",
+        poolclass=NullPool,
+    )
+    try:
+        with maintenance.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{name}"'))
+        scratch = database_url.set(database=name)
+        previous = os.environ.get(DATABASE_URL_ENV_VAR)
+        try:
+            os.environ[DATABASE_URL_ENV_VAR] = scratch.render_as_string(hide_password=False)
+            command.upgrade(build_config(), "head")
+        finally:
+            if previous is None:
+                os.environ.pop(DATABASE_URL_ENV_VAR, None)
+            else:
+                os.environ[DATABASE_URL_ENV_VAR] = previous
+        try:
+            load(url=scratch)
+            scratch_engine = create_engine(scratch, poolclass=NullPool)
+            try:
+                with scratch_engine.begin() as connection:
+                    connection.execute(DELETE_EVENTS_OF_NEVER_TERMINAL_LINES)
+                    removed = connection.execute(DELETE_NEVER_TERMINAL_LINES).rowcount
+                    remaining = int(connection.execute(LOADED_LINE_COUNT_SQL).scalar_one())
+            finally:
+                scratch_engine.dispose()
+
+            assert removed > 0 and remaining > 0, (
+                f"removing the never-terminal lines left {remaining} of "
+                f"{remaining + removed}; NC-2 needs a cohort that is non-empty and wholly "
+                f"closed, so neither number may be zero"
+            )
+            yield scratch
+        finally:
+            with maintenance.connect() as connection:
+                connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+    finally:
+        maintenance.dispose()
+
+
+@pytest.fixture(scope="package")
+def refused_with_no_open_line(
+    database_with_no_line_that_can_stay_open: URL, tmp_path_factory
+) -> Iterator[RefusedInvocation]:
+    """NC-2's run: an anchor past every terminal event, at the chain minimum.
+
+    Four chains, so the chain precondition is met and the refusal is
+    attributable to FR-021 rather than to FR-035 — the two are separate
+    obligations and a test that let one mask the other would evidence neither.
+
+    Snapshotted against the scratch database this attempt actually reads, so
+    "no row was added to any of the five stores" is a claim about the database
+    the job wrote to rather than about a different one that happened to sit
+    still.
+    """
+    scratch = database_with_no_line_that_can_stay_open
+    environment = dict(os.environ)
+    environment[DATABASE_URL_ENV_VAR] = scratch.render_as_string(hide_password=False)
+    scratch_engine = create_engine(scratch, poolclass=NullPool)
+    try:
+        yield _refusing_invocation(
+            scratch_engine,
+            tmp_path_factory.mktemp("refusal-anchor"),
+            as_of_date=ANCHOR_PAST_EVERY_TERMINAL_EVENT,
+            chains=CHAINS_MIN,
+            draws=FORCED_NON_CONVERGENT_DRAWS,
+            tune=FORCED_NON_CONVERGENT_TUNE,
+            sampled=False,
+            environment=environment,
+        )
+    finally:
+        scratch_engine.dispose()
 
 
 @pytest.fixture

@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from forecast.conftest import EmittedRun, discard_run
 from model.corpus.manifest import DIGEST_PATTERN
+from model.forecast.config import CHAINS, DRAWS_PER_CHAIN
 from model.forecast.fit import run_fit
 from model.forecast.manifest import read_fixture_provenance
 from model.forecast.paths import run_report_path
@@ -72,11 +73,16 @@ MUTATION_MARKER = "-moved-for-dv-016"
 #: inside the compared-content projection the row hash is defined over.
 ROW_MUTATION_SUFFIX = " (moved for DV-016)"
 
-#: The shape the warning run is emitted at. Tiny, because the disposition under
-#: assertion is decided before the sampler starts and the run only has to reach
-#: the other side of it.
-WARNING_RUN_CHAINS = 2
-WARNING_RUN_DRAWS = 50
+#: The shape the warning run is emitted at. **The committed shape, and US4 is
+#: why it is no longer a tiny one.** The disposition under assertion is still
+#: decided before the sampler starts — a moved fixture digest against unchanged
+#: rows is a warning and not a refusal — but the run has to *complete* for that
+#: to be observable, and `run_fit` now refuses below the four-chain minimum
+#: before sampling (FR-035) and on any breached blocking diagnostic after it
+#: (FR-017). A fifty-draw fit breaches every ESS bar there is, so the only shape
+#: that reaches the other side of the warning is one that converges.
+WARNING_RUN_CHAINS = CHAINS
+WARNING_RUN_DRAWS = DRAWS_PER_CHAIN
 WARNING_RUN_SEED = 20260728
 
 
