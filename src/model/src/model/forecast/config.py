@@ -245,20 +245,44 @@ MONITORED_PARAMETERS: tuple[str, ...] = (
     "rework_approval_cycle_beta",
 )
 
-#: The two monitored families whose members are indexed by the *data* — one
-#: offset per vendor and one per material category. They are fitted parameters
-#: and so are inside AD-006's set, but their members cannot be a committed
-#: constant without hard-coding a dataset fact into published configuration.
+#: The monitored families whose members are indexed by the *data* — one entry
+#: per vendor and one per material category. They are fitted parameters and so
+#: are inside AD-006's set, but their members cannot be a committed constant
+#: without hard-coding a dataset fact into published configuration.
 #: `monitored_parameter_names()` enumerates them from the run's own index.
+#:
+#: **`vendor_offset_z` and `vendor_offset` are both here, and one does not stand
+#: in for the other** (AD-012). The vendor hierarchy is non-centered, so `z` is
+#: what the sampler moves and `vendor_offset = tau_vendor · z` is a
+#: `Deterministic` derived from it — and R-hat on a derived quantity can look
+#: healthy while the coordinate it derives from has not mixed. `vendor_offset`
+#: stays monitored because it is the number FR-019 publishes a shrinkage weight
+#: from; `z` stays monitored because it is the number the sampler actually
+#: explored. This is also the one place AD-006's implicit assumption that every
+#: monitored name is a *sampled* parameter no longer holds.
 #:
 #: They widen the set past AD-006's literal three groups, and the cost is a
 #: number worth stating: at the committed dataset's 12 vendors and 20 material
-#: categories the monitored set is 51 parameters and `forecast_diagnostic` takes
-#: 156 rows per run, against the "order of 80" `data-model.md` § Volumetrics
+#: categories the monitored set is 63 parameters and `forecast_diagnostic` takes
+#: 192 rows per run, against the "order of 80" `data-model.md` § Volumetrics
 #: sizes the table at. Storage is trivial either way; what the widening buys is
 #: that a vendor offset which did not converge refuses the run instead of being
 #: published as a shrinkage weight nobody monitored.
-MONITORED_VECTOR_FAMILIES: tuple[str, ...] = ("vendor_offset", "category_offset")
+MONITORED_VECTOR_FAMILIES: tuple[str, ...] = (
+    "vendor_offset_z",
+    "vendor_offset",
+    "category_offset",
+)
+
+#: Which index each vector family is enumerated over. A mapping rather than two
+#: parallel tuples, so a family added to `MONITORED_VECTOR_FAMILIES` and not to
+#: the enumeration below is a `KeyError` at the first call rather than a family
+#: silently missing from every run's monitored set.
+_VECTOR_FAMILY_INDEX: dict[str, str] = {
+    "vendor_offset_z": "vendor",
+    "vendor_offset": "vendor",
+    "category_offset": "material_category",
+}
 
 
 def monitored_parameter_names(
@@ -268,20 +292,31 @@ def monitored_parameter_names(
 
     FR-016 requires the set to be *named*, and DV-011 asserts that no parameter
     is partially covered — both need an enumeration, which is what this returns:
-    the committed scalar parameters followed by one member per vendor and one per
-    material category, each in the caller's order. The caller passes the index
-    `design.py` built, so the monitored set and the fitted graph cannot disagree
-    about which vendors exist.
+    the committed scalar parameters followed by every member of every vector
+    family, each in the caller's order. The caller passes the index `design.py`
+    built, so the monitored set and the fitted graph cannot disagree about which
+    vendors exist.
+
+    The families are walked from `MONITORED_VECTOR_FAMILIES` rather than spelled
+    out here, so AD-012's third family is declared in exactly one place. Names
+    are in the bracket form ArviZ flattens a dimensioned variable into, which is
+    what lets the result be compared against an `az.summary` index directly —
+    including `vendor_offset`, which is a `Deterministic` and appears there
+    beside the sampled variables rather than instead of them.
     """
     if not vendor_ids or not material_categories:
         raise ValueError(
             "the monitored set is enumerated over the run's own vendor and material "
             "category index; an empty index would silently monitor neither hierarchy"
         )
+    members = {"vendor": vendor_ids, "material_category": material_categories}
     return (
         *MONITORED_PARAMETERS,
-        *(f"vendor_offset[{vendor_id}]" for vendor_id in vendor_ids),
-        *(f"category_offset[{category}]" for category in material_categories),
+        *(
+            f"{family}[{member}]"
+            for family in MONITORED_VECTOR_FAMILIES
+            for member in members[_VECTOR_FAMILY_INDEX[family]]
+        ),
     )
 
 

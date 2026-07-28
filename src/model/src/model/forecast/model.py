@@ -45,6 +45,8 @@ __all__ = [
     "TRANSITION_DIM",
     "TRANSITION_KEYS",
     "VENDOR_DIM",
+    "VENDOR_OFFSET",
+    "VENDOR_OFFSET_Z",
     "ModelError",
     "SojournFrame",
     "build_model",
@@ -95,6 +97,15 @@ REWORK_TARGET = "revise_and_resubmit"
 #: into the log-density without being stored once per draw.
 LOG_CONTRIBUTION = "sojourn_log_contribution"
 REWORK_OBSERVATION = "rework_observed"
+
+#: The non-centered vendor hierarchy's two nodes (AD-012). `VENDOR_OFFSET_Z` is
+#: the sampled unit-scale vector and `VENDOR_OFFSET` the `Deterministic` product
+#: `tau_vendor · z` that the design matrix multiplies. Named because a caller
+#: reaching into the graph now has to know that the second is derived — every
+#: other monitored name in this module is a sampled parameter, and AD-006's set
+#: assumed that of all of them until this decision.
+VENDOR_OFFSET_Z = "vendor_offset_z"
+VENDOR_OFFSET = "vendor_offset"
 
 #: FR-002's three covariates under AD-001's mapping. `covariate_names` reports
 #: which of them a given frame actually carries, which is the measurement
@@ -578,6 +589,26 @@ def build_model(frame: SojournFrame) -> pm.Model:
     identify only weakly and which shows up as an unconverged `mu_population`
     rather than as an error. Constraining the offsets to sum to zero removes the
     ridge instead of asking the sampler to negotiate it.
+
+    The **vendor** hierarchy is additionally non-centered (AD-012):
+    `vendor_offset = tau_vendor · z` with `z ~ ZeroSumNormal(1)`, so the sampled
+    coordinates are `z` and `tau_vendor` and `vendor_offset` is a
+    `Deterministic`. `tau_vendor` posts a mean near 0.15 against residual
+    log-scales of 0.71–1.13, which puts the vendor level at the neck of a funnel
+    a centered parameterization occasionally sticks a chain in. The zero-sum
+    constraint is kept: it is what removes the additive ridge, and that reason is
+    unchanged by the change of coordinates.
+
+    **The category hierarchy stays centered, and that was measured rather than
+    assumed.** `tau_category` posts near 0.22 — only about 1.5× `tau_vendor`, so
+    the scales alone do not settle it — but across the same six seeds the
+    centered category level breached nothing in either parameterization, and
+    non-centering it as well costs efficiency for no gain: E-BFMI minimum falls
+    from 0.76–0.87 to 0.69–0.77, `tau_category`'s worst bulk ESS falls from 2,310
+    to 1,386, and maximum tree depth rises from 6 to 7. Twenty categories against
+    twelve vendors is the likely reason — the category level is the better
+    identified of the two, and non-centering a level the data already identifies
+    trades one funnel for its mirror image.
     """
     _validated_topology()
     if len(frame.vendor_ids) < MIN_HIERARCHY_MEMBERS:
@@ -607,7 +638,15 @@ def build_model(frame: SojournFrame) -> pm.Model:
         tau_category = pm.HalfStudentT(
             "tau_category", nu=PRIOR_GROUP_SCALE_NU, sigma=PRIOR_GROUP_SCALE_SD
         )
-        vendor_offset = pm.ZeroSumNormal("vendor_offset", sigma=tau_vendor, dims=VENDOR_DIM)
+        # AD-012. `z` is sampled at unit scale and `tau_vendor` multiplies it
+        # afterwards, so the two are a priori independent and the sampler never
+        # has to traverse a neck whose width is one of its own coordinates. Both
+        # are monitored alongside the product: R-hat on the product can look
+        # healthy while the `z` it derives from has not mixed.
+        vendor_offset_z = pm.ZeroSumNormal(VENDOR_OFFSET_Z, sigma=1.0, dims=VENDOR_DIM)
+        vendor_offset = pm.Deterministic(
+            VENDOR_OFFSET, tau_vendor * vendor_offset_z, dims=VENDOR_DIM
+        )
         category_offset = pm.ZeroSumNormal("category_offset", sigma=tau_category, dims=CATEGORY_DIM)
         mu_sojourn = pm.Normal(
             "mu_sojourn",

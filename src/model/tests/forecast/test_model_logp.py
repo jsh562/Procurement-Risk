@@ -209,8 +209,14 @@ def parameters_at(model: object, point: dict[str, NDArray[np.float64]]) -> dict[
     Read back from the graph rather than recomputed. The zero-sum transform in
     particular maps `n − 1` free values onto `n` offsets summing to zero, and a
     test that reimplemented it would be asserting its own arithmetic.
+
+    The deterministics are read alongside the free variables because AD-012
+    made `vendor_offset` one of them — it is `tau_vendor · z` rather than a
+    sampled vector, and the oracle wants the product the design matrix is
+    actually multiplied by. Recomputing it here from `tau_vendor` and `z` would
+    be this test re-deriving the very expression under test.
     """
-    free = list(model.free_RVs)  # type: ignore[attr-defined]
+    free = [*model.free_RVs, *model.deterministics]  # type: ignore[attr-defined]
     replaced = model.replace_rvs_by_values(free)  # type: ignore[attr-defined]
     inputs = list(model.value_vars)  # type: ignore[attr-defined]
     compiled = pytensor.function(inputs, replaced, on_unused_input="ignore")
