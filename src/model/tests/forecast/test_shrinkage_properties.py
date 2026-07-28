@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from statistics import NormalDist
 from typing import Any
 
 import numpy as np
@@ -27,8 +26,20 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from numpy.typing import NDArray
+from sqlalchemy import Engine, text
 
-from model.forecast.shrinkage import vendor_shrinkage
+from forecast.conftest import EmittedRun
+from model.forecast.fit import _fitted_scales, _posterior_dataset
+from model.forecast.model import build_model, training_frame
+from model.forecast.read import read_lines_and_events
+from model.forecast.sample import sample_posterior
+from model.forecast.serialize import input_data_hash
+from model.forecast.shrinkage import (
+    vendor_effect_interval,
+    vendor_effect_spread,
+    vendor_shrinkage,
+)
+from model.forecast.split import TRAIN, assign_split
 
 # ---------------------------------------------------------------------------
 # The interface this file pins
@@ -85,8 +96,16 @@ SPARSE_VENDOR = "VND-001"
 DENSE_VENDOR = "VND-002"
 ABSENT_VENDOR = "VND-003"
 
-#: The realized counts: five lines at the smallest vendor and thirty-five at the
-#: largest, from `spec.md` § Edge Cases and `research.md`.
+#: The plan's domain column, as **cohort** counts: five lines at the smallest
+#: vendor and thirty-five at the largest, from `spec.md` § Edge Cases and
+#: `research.md`. They are sweep points for the ρ invariants below and nothing
+#: else — SC-005's operands are **not** these numbers. A vendor's cohort total
+#: is not its training count: the split moves roughly a fifth of every vendor's
+#: lines to the held-out side, so the realized `n` these were once used for was
+#: never the number written here. The criterion says where its operands come
+#: from — "counted from the run's own `forecast_split_assignment` rows with
+#: `split_side = 'train'`" — and `realized_training_counts` is where they now
+#: come from.
 SPARSE_COUNT = 5
 DENSE_COUNT = 35
 
@@ -567,9 +586,14 @@ def test_a_non_positive_residual_scale_is_refused(scale: float) -> None:
 #   threshold and without a regime condition. That is the relation NC-11 asks for
 #   a **strict** comparison of.
 #
-# The two are one algebraic step apart — `sd² = ρ·σ²/n` — so the assertions below
-# are tied back to the module's own weight rather than being a second formula
-# written beside it.
+# The two are one algebraic step apart — `sd² = ρ·σ²/n` — and both are read out
+# of `shrinkage.py`. **An earlier revision of this section computed the spread
+# here**, in a helper beside the tests, which made SC-005 a claim about a formula
+# in a test file: nothing shipped in the package could have been wrong in a way
+# these assertions would notice. `vendor_effect_spread` and
+# `vendor_effect_interval` are the delivered functions, they take the same two
+# draw sequences `vendor_shrinkage` takes, and the identity test below still
+# ties them back to the published weight.
 
 #: The credible level the vendor-effect interval is reported at. Stated because
 #: "wider" is undefined between intervals of different mass (SC-005), and equal
@@ -581,50 +605,232 @@ VENDOR_EFFECT_LEVEL = HDI_PROBABILITY
 #: rather than asserted.
 VENDOR_EFFECT_SWEEP = (0, 1, 2, 3, 5, 8, 13, 21, 34, 55)
 
+#: A roster key for a sweep over one count at a time. The module publishes per
+#: vendor, so a sweep asks about a nominal vendor rather than about a bare `n`.
+SWEPT_VENDOR = "VND-777"
 
-def vendor_effect_sd(
+#: Module-level SQL, never assembled from values (Ruff S608).
+#:
+#: The **left** join and the filtered count are what make this the roster rather
+#: than the vendors that happen to have training rows: a vendor whose lines all
+#: landed on the held-out side has no `train` assignment at all, and an inner
+#: join would drop it from the comparison instead of giving it `n = 0`.
+REALIZED_TRAINING_COUNTS_SQL = text(
+    """
+    SELECT l.vendor_id AS vendor_id,
+           count(a.po_line_id) FILTER (WHERE a.split_side = :train) AS training_lines
+      FROM purchase_order_line l
+      LEFT JOIN forecast_split_assignment a
+        ON a.po_line_id = l.po_line_id AND a.run_id = :run_id
+     GROUP BY l.vendor_id
+     ORDER BY l.vendor_id
+    """
+)
+RUN_PROVENANCE_SQL = text(
+    """
+    SELECT seed_entropy, chain_count, draw_count, tuning_count, as_of_date,
+           training_line_count
+      FROM forecast_run WHERE run_id = :run_id
+    """
+)
+
+
+def swept_spread(
     tau: NDArray[np.float64], sigma: NDArray[np.float64], count: int
 ) -> NDArray[np.float64]:
-    """`sd(θⱼ | data) = τσ/√(nτ² + σ²)`, draw by draw.
-
-    Written with `nτ²` in the radicand so `n = 0` is a value rather than a
-    division: a vendor with no training line has learned nothing of its own, and
-    its effect is then the population's spread τ exactly.
-    """
-    return tau * sigma / np.sqrt(count * tau**2 + sigma**2)
+    """`sd(θⱼ | data)` at one count, read out of the module under test."""
+    return vendor_effect_spread(tau, sigma, {SWEPT_VENDOR: count})[SWEPT_VENDOR]
 
 
-def vendor_effect_width(
+def swept_width(
     tau: NDArray[np.float64], sigma: NDArray[np.float64], count: int, level: float
-) -> NDArray[np.float64]:
-    """The width of the θⱼ interval at the stated mass, per posterior draw.
+) -> float:
+    """The published θⱼ interval's width at one count and one stated mass."""
+    return vendor_effect_interval(tau, sigma, {SWEPT_VENDOR: count}, level)[SWEPT_VENDOR].width
 
-    A normal posterior conditional on `(τ, σ)`, so the width is `2·z·sd` with `z`
-    the standard normal quantile at that mass. The level is an argument for the
-    reason SC-005 gives: a comparison between intervals of different mass is not
-    a comparison at all.
+
+# ---------------------------------------------------------------------------
+# SC-005's two operands, and the posterior they are read against
+# ---------------------------------------------------------------------------
+#
+# SC-005 fixes where its operands come from, by name: "the two counted from the
+# run's own `forecast_split_assignment` rows with `split_side = 'train'`, so the
+# operands are fixed by stored data rather than chosen after the intervals are
+# seen". The two fixtures below are that clause. Nothing here names a count, and
+# nothing here names a vendor — which of the twelve is sparsest is whatever the
+# run's own split made sparsest, and a run that split differently moves the
+# operands with it.
+#
+# DV-010 is tiered "asserted over the fitted posterior **as an in-memory
+# artifact**". So the scales are the run's own, reconstructed from the
+# provenance the run row records — its seed entropy, its chain count, its
+# tuning count, its anchor — and read out through `fit.py`'s own aggregation
+# rather than a second one written here. A stand-in posterior would satisfy the
+# arithmetic below and evidence nothing about the delivered run.
+
+
+@pytest.fixture(scope="module")
+def realized_training_counts(engine: Engine, emitted_run: EmittedRun) -> dict[str, int]:
+    """Training lines per vendor, counted from the shared run's stored split rows.
+
+    Cross-checked against `forecast_run.training_line_count`, the run's own
+    published scalar: the counts are the operands of a comparison the run does
+    not ship without, so a query that silently ranged over another run's rows —
+    or over none — must fail here rather than produce a well-formed roster of
+    zeros.
     """
-    z = NormalDist().inv_cdf(0.5 + 0.5 * level)
-    return 2.0 * z * vendor_effect_sd(tau, sigma, count)
+    with engine.connect() as connection:
+        parameters = {"run_id": emitted_run.run_id, "train": TRAIN}
+        rows = connection.execute(REALIZED_TRAINING_COUNTS_SQL, parameters).all()
+        published = int(
+            connection.execute(RUN_PROVENANCE_SQL, {"run_id": emitted_run.run_id})
+            .mappings()
+            .one()["training_line_count"]
+        )
 
+    counts = {str(vendor): int(lines) for vendor, lines in rows}
 
-def test_the_vendor_effect_interval_is_strictly_wider_at_the_sparsest_vendor() -> None:
-    """NC-11: a strict comparison between the two extremes, not a threshold.
-
-    Asserted draw by draw rather than between two summaries. Every posterior draw
-    of `(τ, σ)` gives the 5-line vendor a strictly wider interval than the 35-line
-    vendor, so the claim survives whatever summary is published — which is what
-    distinguishes it from a width threshold any pair of intervals could satisfy.
-    """
-    tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
-    sparse = vendor_effect_width(tau, sigma, SPARSE_COUNT, VENDOR_EFFECT_LEVEL)
-    dense = vendor_effect_width(tau, sigma, DENSE_COUNT, VENDOR_EFFECT_LEVEL)
-
-    assert np.all(sparse > dense), (
-        f"{int(np.count_nonzero(sparse <= dense))} draw(s) give the {DENSE_COUNT}-line vendor "
-        f"an interval at least as wide as the {SPARSE_COUNT}-line vendor's"
+    assert counts, "the run stored no split assignment, so SC-005 has no operands"
+    assert sum(counts.values()) == published, (
+        f"the per-vendor training counts sum to {sum(counts.values())} while the run "
+        f"published {published} training lines; the operands and the run disagree"
     )
-    assert float(np.median(sparse)) > float(np.median(dense))
+    return counts
+
+
+@pytest.fixture(scope="module")
+def fitted_scales(
+    engine: Engine, emitted_run: EmittedRun
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """The shared run's own fitted `(τ, σ)`, as the in-memory pair ρ was built on.
+
+    Reconstructed by re-sampling at the run's recorded provenance, which is the
+    same route `test_conditioning.py` takes to the run's parent law and for the
+    same reason: no column stores the scales, and the posterior a claim about
+    the run is made against has to be *that run's*. `_fitted_scales` is imported
+    rather than re-derived, so the σ here is the root-mean-square across the
+    transition set the job itself used — a second aggregation would be a second
+    opinion about which residual scale the run was fitted against.
+    """
+    with engine.connect() as connection:
+        provenance = (
+            connection.execute(RUN_PROVENANCE_SQL, {"run_id": emitted_run.run_id}).mappings().one()
+        )
+        procurement_input = read_lines_and_events(connection)
+
+    as_of_date = provenance["as_of_date"]
+    chains = int(provenance["chain_count"])
+    split = assign_split(procurement_input.lines, as_of_date, input_data_hash(procurement_input))
+    vendors = tuple(sorted({line.vendor_id for line in procurement_input.lines}))
+    categories = tuple(sorted({line.material_category for line in procurement_input.lines}))
+    frame = training_frame(procurement_input.lines, split, vendors, categories, as_of_date)
+
+    streams = np.random.SeedSequence(int(provenance["seed_entropy"])).spawn(2)
+    chain_seeds = [
+        int(child.generate_state(1, dtype=np.uint32)[0]) for child in streams[0].spawn(chains)
+    ]
+    return _fitted_scales(
+        _posterior_dataset(
+            sample_posterior(
+                build_model(frame),
+                random_seed=chain_seeds,
+                chains=chains,
+                draws=int(provenance["draw_count"]) // chains,
+                tune=int(provenance["tuning_count"]),
+                cores=1,
+            )
+        )
+    )
+
+
+def extreme_vendors(counts: Mapping[str, int]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Every vendor tied at the fewest training lines, and every one at the most.
+
+    Tuples rather than two names because SC-005 says what to do about a tie:
+    "where either extreme is tied across vendors, every tied pairing must
+    satisfy the comparison". Picking one of a tied group would make the
+    criterion's verdict depend on a dictionary's iteration order.
+    """
+    fewest, most = min(counts.values()), max(counts.values())
+    return (
+        tuple(sorted(vendor for vendor, count in counts.items() if count == fewest)),
+        tuple(sorted(vendor for vendor, count in counts.items() if count == most)),
+    )
+
+
+def test_the_run_has_two_distinguishable_extremes_to_compare(
+    realized_training_counts: dict[str, int],
+) -> None:
+    """The positive control for SC-005: the comparison below is not vacuous.
+
+    A roster whose vendors all carry the same training count would make every
+    tied pairing compare a vendor against itself, which every implementation
+    passes. Stated as its own test so a run that ever produced a flat roster
+    reports *that* rather than a green comparison of nothing.
+    """
+    sparse, dense = extreme_vendors(realized_training_counts)
+
+    assert min(realized_training_counts.values()) < max(realized_training_counts.values()), (
+        f"every vendor carries the same training count, so SC-005's two extremes are the "
+        f"same vendors: {realized_training_counts}"
+    )
+    assert not set(sparse) & set(dense)
+
+
+def test_the_vendor_effect_interval_is_strictly_wider_at_the_sparsest_vendor(
+    fitted_scales: tuple[NDArray[np.float64], NDArray[np.float64]],
+    realized_training_counts: dict[str, int],
+) -> None:
+    """NC-11 / SC-005 / DV-010, over the run's own posterior and its own split.
+
+    Two assertions rather than one, because they fail differently. The published
+    intervals are what SC-005 compares — "both measured as highest-posterior-
+    density intervals at the same stated credible level" — and the draw-by-draw
+    spreads are why the comparison is a relation rather than a threshold: every
+    single draw of `(τ, σ)` orders the two vendors the same way, so the claim
+    survives whatever summary is published.
+
+    Every tied pairing is compared, per SC-005's own tie clause.
+    """
+    tau, sigma = fitted_scales
+    published = vendor_effect_interval(tau, sigma, realized_training_counts, VENDOR_EFFECT_LEVEL)
+    spreads = vendor_effect_spread(tau, sigma, realized_training_counts)
+    sparse_vendors, dense_vendors = extreme_vendors(realized_training_counts)
+
+    for sparse in sparse_vendors:
+        for dense in dense_vendors:
+            assert published[sparse].width > published[dense].width, (
+                f"{sparse} carries {realized_training_counts[sparse]} training lines and "
+                f"{dense} carries {realized_training_counts[dense]}, but the sparser "
+                f"vendor's interval is {published[sparse].width} against "
+                f"{published[dense].width}"
+            )
+            assert np.all(spreads[sparse] > spreads[dense]), (
+                f"{int(np.count_nonzero(spreads[sparse] <= spreads[dense]))} draw(s) give "
+                f"{dense} a spread at least as large as {sparse}'s"
+            )
+
+
+def test_every_vendor_in_the_runs_roster_gets_an_effect_interval(
+    fitted_scales: tuple[NDArray[np.float64], NDArray[np.float64]],
+    realized_training_counts: dict[str, int],
+) -> None:
+    """Including a vendor the split left with no training line at all.
+
+    The same membership rule DV-009 puts on the weight, applied to the quantity
+    SC-005 compares: a vendor dropped here would be a vendor the criterion
+    cannot range over, and the drop would be invisible because the remaining
+    comparison still succeeds.
+    """
+    published = vendor_effect_interval(
+        *fitted_scales, realized_training_counts, VENDOR_EFFECT_LEVEL
+    )
+
+    assert set(published) == set(realized_training_counts)
+    for vendor, effect in published.items():
+        assert effect.hpdi_low < 0.0 < effect.hpdi_high, f"{vendor} published a degenerate interval"
+        assert effect.spread_median > 0.0
+        assert effect.width == pytest.approx(effect.hpdi_high - effect.hpdi_low)
 
 
 @pytest.mark.parametrize(("tau_median", "sigma_median"), [(0.30, 0.50), (0.11, 0.50), (0.45, 0.40)])
@@ -640,10 +846,7 @@ def test_the_vendor_effect_interval_narrows_with_every_extra_training_line(
     ratio σ/τ happens to be.
     """
     tau, sigma = posterior(tau_median, 0.25, sigma_median, 0.10)
-    widths = [
-        float(np.median(vendor_effect_width(tau, sigma, count, VENDOR_EFFECT_LEVEL)))
-        for count in VENDOR_EFFECT_SWEEP
-    ]
+    widths = [swept_width(tau, sigma, count, VENDOR_EFFECT_LEVEL) for count in VENDOR_EFFECT_SWEEP]
     steps = np.diff(widths)
 
     assert np.all(steps < 0.0), (
@@ -685,7 +888,7 @@ def test_the_vendor_effect_spread_is_one_algebraic_step_from_the_published_weigh
     module that computed ρ from something else would break this as well.
     """
     tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
-    spread = vendor_effect_sd(tau, sigma, count)
+    spread = swept_spread(tau, sigma, count)
     from_weight = np.sqrt(plug_in(tau, sigma, count) * sigma**2 / count)
 
     assert np.allclose(spread, from_weight, rtol=1e-12, atol=0.0)
@@ -701,10 +904,10 @@ def test_a_vendor_with_no_training_line_carries_the_populations_whole_spread() -
     weight would confuse the second fact for the first.
     """
     tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
-    starved = vendor_effect_sd(tau, sigma, 0)
+    starved = swept_spread(tau, sigma, 0)
 
     assert np.allclose(starved, tau, rtol=1e-12, atol=0.0)
-    assert np.all(starved > vendor_effect_sd(tau, sigma, 1))
+    assert np.all(starved > swept_spread(tau, sigma, 1))
     assert weights(tau, sigma, {ABSENT_VENDOR: 0})[ABSENT_VENDOR] == (0.0, 0.0, 0.0)
 
 
@@ -718,7 +921,7 @@ def test_a_wider_credible_level_gives_a_wider_vendor_effect_interval(level: floa
     here rather than a default.
     """
     tau, sigma = posterior(0.30, 0.25, 0.50, 0.10)
-    narrow = vendor_effect_width(tau, sigma, SPARSE_COUNT, level)
-    wide = vendor_effect_width(tau, sigma, SPARSE_COUNT, 0.99)
+    narrow = swept_width(tau, sigma, SPARSE_COUNT, level)
+    wide = swept_width(tau, sigma, SPARSE_COUNT, 0.99)
 
-    assert np.all(wide > narrow)
+    assert wide > narrow

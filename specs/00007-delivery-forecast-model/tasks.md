@@ -121,10 +121,10 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T041 [US1] {FR-002} DV-036 / SC-006 — `covariate_names` equals the design matrix's covariate set, over the input frame — TST/test_covariates.py
 - [X] T042 [US1] {FR-019} DV-009 / SC-004 — exactly the twelve roster `vendor_id`s including a vendor with no training line, each triple ordered — TST/test_shrinkage_membership.py
 - [X] T043 [US1] {FR-019} [COMPLETES FR-019] **NC-11** / DV-010 / SC-005 — a **strict** comparison between the two extremes, not a threshold — TST/test_shrinkage_properties.py after:T031
-- [X] T044 [US1] {FR-030} DV-014 / SC-028 — every run this test emits carries the shape in `schema_constants` **read over the connection** (HINT-005) — TST/test_run_shape.py
+- [X] T044 [US1] {FR-030} DV-014 / SC-028, SC-042 — the shape in `schema_constants` **read over the connection** (HINT-005) — TST/test_run_shape.py
 - [X] T045 [US1] {FR-030} **NC-10** — a run emitted at 5 draws over a 3-day horizon **fails** the assertion, the shape E003's suite legally passes — TST/test_run_shape.py
 - [X] T046 [US1] {FR-034} DV-032 / SC-031 — the grant read from `information_schema`, and **no `UPDATE`** anywhere in `model.forecast` — TST/test_artifact_immutability.py
-- [X] T047 [US1] {FR-013,FR-015} SC-020 and SC-023 — every manifest field present, the pointer set explicitly, and the write order asserted — TST/test_write_order.py after:T035
+- [X] T047 [US1] {FR-013,FR-015} SC-020, SC-023, SC-042 — every manifest field present, the pointer set explicitly, and the write order asserted — TST/test_write_order.py after:T035
 
 ---
 
@@ -187,9 +187,9 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T086 [US4] {FR-016,FR-035} [COMPLETES FR-016] DV-035 — every run this test emits records `chain_count` at the four-chain minimum — TST/test_run_shape.py after:T084
 - [X] T087 [US4] {FR-017} [COMPLETES FR-017] **NC-1** / DV-013 / SC-014 / SC-015 — a forced non-converging run leaves five tables and the pointer as found — TST/test_refusal_guarantee.py
 - [X] T088 [US4] {FR-021} **NC-2** / SC-017 — an as-of date past every terminal event refuses rather than writing `open_line_count = 0` — TST/test_refusal_controls.py
-- [X] T089 [US4] {FR-035} [COMPLETES FR-035] **NC-14** — below four chains, a non-zero exit naming the precondition **with nothing sampled** — TST/test_refusal_controls.py
+- [X] T089 [US4] {FR-035} [COMPLETES FR-035] **NC-14** / SC-036 — below four chains, a non-zero exit naming the precondition **with nothing sampled** — TST/test_refusal_controls.py
 - [X] T090 [US4] {FR-006} [COMPLETES FR-006] **NC-16** — three planted cases: a split row removed, an `ess_tail` row omitted, a vendor absent — TST/test_completeness_controls.py
-- [X] T091 [US4] {FR-036} [COMPLETES FR-036] **NC-18** — `0300` against a **populated** `forecast_run` raises the migration's named error — TST/test_migration_guard.py after:T012
+- [X] T091 [US4] {FR-036} [COMPLETES FR-036] **NC-18** / SC-037 — `0300` against a **populated** `forecast_run` raises the migration's named error — TST/test_migration_guard.py after:T012
 - [X] T092 [US4] {FR-037} DV-038 / SC-033 — the refusal file exists **and** carries the stream's whole field set, post- and pre-sampling — TST/test_refusal_report.py after:T087
 - [X] T093 [US4] {FR-037} [COMPLETES FR-037] **NC-19** — two directions: no report file at all fails, and a report omitting a threshold or direction fails — TST/test_refusal_report_controls.py
 
@@ -207,8 +207,8 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T099 [US5] {FR-023} Refuse before sampling on a moved `input_data_hash` or `split_assignment_hash` in PKG/reproduce.py, naming which moved and both values (DV-015, DV-017 / SC-019)
 - [X] T100 [US5] {FR-023} A moved `input_fixture_digest` against an unchanged row hash **warns and completes with a zero exit** in PKG/reproduce.py (DV-016), never refuses
 - [X] T101 [US5] {FR-023} **NC-3** — two cases, a mutated row and a mutated split assignment, each naming *that* input — TST/test_reproduce_refusals.py after:T099
-- [X] T102 [US5] {FR-023} [COMPLETES FR-023] **NC-4** — a mutated fixture against unchanged rows warns **and the run completes** — TST/test_provenance_warning.py after:T100
-- [X] T103 [US5] {FR-022} DV-018 / SC-018 — per-line agreement in both stores within the tolerance and **exact** provenance equality — TST/test_reproduction.py after:T098
+- [X] T102 [US5] {FR-023} [COMPLETES FR-023] **NC-4** / SC-039 — a mutated fixture against unchanged rows warns **and the run completes** — TST/test_provenance_warning.py after:T100
+- [X] T103 [US5] {FR-022} DV-018 / SC-018, SC-041 — per-line agreement in both stores within the tolerance and **exact** provenance equality — TST/test_reproduction.py after:T098
 - [X] T104 [US5] {FR-022} [COMPLETES FR-022] **NC-17** — one line's P80 perturbed beyond the tolerance makes the harness exit non-zero naming it — TST/test_reproduction_controls.py
 - [X] T105 [US5] {FR-032} DV-019 / SC-030 — a digest mismatch under a version outside the **whole** recorded pin is a scope limit, not a failure — TST/test_pin_scope.py after:T098
 - [X] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit; the same mismatch inside the pin fails — TST/test_pin_scope_controls.py
@@ -330,7 +330,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 |---|---|
 | Task IDs contiguous from T001 | **127** — T001–T127, no gap and no withdrawal. T114–T127 were appended at the Analyze gate; an earlier revision of this row still said 113 |
 | Every FR carries at least one `{FR-###}` tag | **40 / 40** (FR-001…FR-040) |
-| Every SC reachable from at least one task | **35 / 35** (SC-001…SC-035). SC-032's prohibition half is reachable only by commit-history review (G-11) and T077 says so rather than claiming a check; SC-022's tie-breaking half is argued (G-13) |
+| Every SC reachable from at least one task | **42 / 42** (SC-001…SC-042). SC-032's prohibition half is reachable only by commit-history review (G-11) and T077 says so rather than claiming a check; SC-022's tie-breaking half is argued (G-13). **This row read "35 / 35 (SC-001…SC-035)" while `spec.md` carried 42**, and the count was not merely stale: SC-039, SC-041 and SC-042 carried no task tag at all. The tags now exist — SC-039 on T102, SC-041 on T103, SC-042 on T047 for the manifest's own field set and on T044 for the two fields pinned to `schema_constants`, with its wall-clock clause carried by T103's provenance-field comparison, which excludes it. **How the omission survived**: `plan.md`'s SC coverage map is split across a main table ending at SC-035 and two Analyze-gate appendices holding SC-036–SC-042, so a reader checking this row against "the coverage map" found the main table's range and agreed with it. The appended criteria are not a second class of criterion and the split is presentational only |
 | `[COMPLETES FR-###]` on the last task of every requirement spanning 3+ tasks | **28 markers**, no task carrying two |
 | Every DV rule implemented or asserted, at the tier `data-model.md` assigns it | **41 / 41** (DV-001…DV-041, including the appended DV-040 and DV-041) |
 | Every negative control lands as a task | **21 / 21** (NC-1…NC-21), with the multi-case controls enumerated above |
@@ -343,7 +343,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | No orphan `after:` reference; graph acyclic | **0 orphans**, and no cycle. **But the "lower ID" invariant no longer holds and an earlier revision of this row asserted it.** The Analyze gate appended T114–T126, and four of their edges run from a lower-numbered task to a higher one — `T027→T115`, `T051→T118`, `T055→T117`, `T073→T098`. Task IDs are never reused or renumbered, so Foundational work discovered after decomposition necessarily lands at a high number. **Execution order is the dependency graph, not the ID order**, and the graph was verified acyclic by traversal rather than assumed acyclic by construction |
 | No `[P]` pair sharing a file; no `[P]` batch containing a task and its dependency | **0 violations after correction.** An earlier revision of this table asserted zero while T043 carried `[P]` against two of its own rules — it shares `TST/test_shrinkage_properties.py` with T030, and it sits inside the T038–T048 live-database range this document declares to hold no `[P]`. The marker is removed. The claim was false in the same breath as the rule it was claiming to satisfy, which is the failure mode a self-reported validation table is most prone to |
 | Every `← T###:Symbol` has a matching `→ exports:` on T### | **5 / 5** — T022←T020, T027←T024, T033←T032, T035←T033, T096←T095 |
-| No task line exceeds 200 characters | **pass** — measured, not asserted |
+| No task line exceeds 200 characters | **fail — 17 lines exceed it**, measured again while correcting the row above. The claim was true when written and is not true of the document as delivered: the Analyze-gate appends (T114–T127) and the QC bug tasks (T128–T133) are among them, and the longest is T111 at 506 characters. Recorded rather than silently re-measured — the limit is a readability convention with no consumer, and shortening thirty-odd delivered task lines to satisfy a row about them would edit the record of what was done to make a self-report come out green |
 | Migration tasks emitted | **4** — `0300`–`0303` inside the claimed block, each `downgrade()` raising |
 | Tasks for `G-1`–`G-19` other than G-1 | **0**, by design — a disclosed gap is a record, not work |
 | Tasks for `P-1`–`P-8` | **0**, by design — each belongs to another epic or to a registered document |
@@ -352,11 +352,11 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 
 Appended by `/sddp-qc` 2026-07-28. Numbering continues from T127; no existing ID is reused or renumbered.
 
-- [ ] T128 [BUG:ERROR] {FR-030} [test-failure] E007 moved the chain head to 0303 and gateway's ledger test still asserts 0103 — src/gateway/tests/test_migrations.py:242
-- [ ] T129 [BUG:ERROR] {FR-019} [requirement-gap] SC-005's vendor-effect interval is computed only in the test; implement sd(theta_j|data) in shrinkage.py and drive the comparison from the run's own fitted tau/sigma — src/model/src/model/forecast/shrinkage.py:24
-- [ ] T130 [BUG:ERROR] {FR-019} [requirement-gap] SC-005's operands must be counted from the run's forecast_split_assignment train rows, not hard-coded at 5 and 35 — src/model/tests/forecast/test_shrinkage_properties.py:90 after:T129
-- [ ] T131 [BUG:WARNING] {FR-027} [requirement-gap] L-5 is declared under AD-013 but never emitted; add it to LIMITATION_IDENTIFIERS and widen DV-037's scope — src/model/src/model/forecast/report.py:220
-- [ ] T132 [BUG:WARNING] {FR-022} [coverage-gap] SC-018's outside-basis outcome has no covering test in either direction; construct a below-half predictive-ESS comparison — src/model/tests/forecast/test_reproduction.py:89
-- [ ] T133 [BUG:WARNING] {FR-041} [requirement-gap] Traceability stops at SC-035; SC-039, SC-041 and SC-042 carry no task tag and SC-041/SC-042 are named by no test — specs/00007-delivery-forecast-model/tasks.md:333
+- [X] T128 [BUG:ERROR] {FR-030} [test-failure] E007 moved the chain head to 0303 and gateway's ledger test still asserts 0103 — src/gateway/tests/test_migrations.py:242
+- [X] T129 [BUG:ERROR] {FR-019} [requirement-gap] SC-005's vendor-effect interval is computed only in the test; implement sd(theta_j|data) in shrinkage.py and drive the comparison from the run's own fitted tau/sigma — src/model/src/model/forecast/shrinkage.py:24
+- [X] T130 [BUG:ERROR] {FR-019} [requirement-gap] SC-005's operands must be counted from the run's forecast_split_assignment train rows, not hard-coded at 5 and 35 — src/model/tests/forecast/test_shrinkage_properties.py:90 after:T129
+- [X] T131 [BUG:WARNING] {FR-027} [requirement-gap] L-5 is declared under AD-013 but never emitted; add it to LIMITATION_IDENTIFIERS and widen DV-037's scope — src/model/src/model/forecast/report.py:220
+- [X] T132 [BUG:WARNING] {FR-022} [coverage-gap] SC-018's outside-basis outcome has no covering test in either direction; construct a below-half predictive-ESS comparison — src/model/tests/forecast/test_reproduction.py:89
+- [X] T133 [BUG:WARNING] {FR-041} [requirement-gap] Traceability stops at SC-035; SC-039, SC-041 and SC-042 carry no task tag and SC-041/SC-042 are named by no test — specs/00007-delivery-forecast-model/tasks.md:333
 
 **B-3 is not a separate task**: DV-010's declared tier disagrees with its delivered tier only because the quantity is unimplemented. T129 closes it.

@@ -30,7 +30,7 @@ from model.forecast.ablation import (
     KaplanMeierFloor,
     RealizedDelta,
 )
-from model.forecast.censoring import terminal_event
+from model.forecast.censoring import censoring_indicator, terminal_event
 from model.forecast.config import CHAINS_MIN
 from model.forecast.diagnostics import DiagnosticRow, direction_prose
 from model.forecast.manifest import VENDOR_SHRINKAGE_HDI_PROBABILITY, RunManifest
@@ -47,6 +47,7 @@ from model.forecast.shrinkage import VendorShrinkage
 
 __all__ = [
     "ABLATION_COMPARATOR_LABEL",
+    "DECISION_STATE",
     "EMITTED_REPORT_KINDS",
     "LIMITATION_IDENTIFIERS",
     "LIMITATION_PARTS",
@@ -68,6 +69,7 @@ __all__ = [
     "check_limitations",
     "limitations",
     "maximum_observed_duration_days",
+    "open_lines_at_the_decision_state",
     "render_refusal_report",
     "render_run_report",
     "vendor_claim_observation_floor",
@@ -214,10 +216,26 @@ LIMITATION_PARTS: tuple[str, ...] = (
     "production_scale_alternative",
 )
 
-#: The four records `data-model.md` § Disclosed Limitations declares, **by
-#: identity**. DV-037 requires each to be present rather than requiring four
-#: well-formed limitations of some kind, which DV-024 already covers.
-LIMITATION_IDENTIFIERS: tuple[str, ...] = ("L-1", "L-2", "L-3", "L-4")
+#: The records `data-model.md` § Disclosed Limitations declares, **by identity**.
+#: DV-037 requires each to be present rather than requiring well-formed
+#: limitations of some kind, which DV-024 already covers.
+#:
+#: **`L-5` was declared and not emitted**, and the omission survived because
+#: this tuple was the whole of DV-037's scope: a rule that looks for L-1 through
+#: L-4 cannot report a fifth that is missing, so the presence check agreed with
+#: the gap it existed to find. AD-013 recorded L-5 — the rework-loop bias that
+#: forecasts an open line at a decision point short — *specifically so it would
+#: not live in a source comment*, and a source comment in `fit.py` is where it
+#: stayed. Adding a declared limitation is an edit to this tuple first and to
+#: `limitations()` second; the presence check then fails until the record
+#: exists, which is the order that makes the declaration binding.
+LIMITATION_IDENTIFIERS: tuple[str, ...] = ("L-1", "L-2", "L-3", "L-4", "L-5")
+
+#: The one state the lifecycle graph branches at. `under_review` leads either to
+#: `approved` or to `revise_and_resubmit`; every other legal edge has exactly one
+#: successor, so a line observed here is a line whose remaining path is not
+#: determined by its history. That is the population L-5 is about.
+DECISION_STATE = "under_review"
 
 #: The coverage band `specs/prd.md` registers, restated here and **asserted by
 #: nothing in this epic**. FR-026 forbids E007 publishing a coverage threshold of
@@ -388,9 +406,10 @@ def check_limitations(records: Sequence[LimitationRecord]) -> int:
     absent = [name for name in LIMITATION_IDENTIFIERS if name not in present]
     if absent:
         raise ReportError(
-            f"the limitation set omits {', '.join(absent)}. `data-model.md` declares four by "
-            f"identity, and a set of four well-formed records that happens not to include "
-            f"L-2 discloses nothing about the horizon's extrapolation (DV-037)"
+            f"the limitation set omits {', '.join(absent)}. `data-model.md` declares "
+            f"{len(LIMITATION_IDENTIFIERS)} by identity, and a set of that many well-formed "
+            f"records that happens not to include L-2 discloses nothing about the horizon's "
+            f"extrapolation (DV-037)"
         )
     return len(records)
 
@@ -422,20 +441,50 @@ def maximum_observed_duration_days(
     return max(durations) if durations else None
 
 
+def open_lines_at_the_decision_state(procurement_input: ProcurementInput, as_of_date: date) -> int:
+    """How many lines still open at the anchor sit at the two-way decision state.
+
+    L-5's measurement. The forward path a line's remaining duration is drawn
+    over is the path it walks from its *current* state, so a line observed at
+    `under_review` may still be sent back for rework and take legs the parent
+    distribution never included — while a line past that state cannot be. The
+    count is what turns "biased short" from an argument into a figure a reader
+    can size the exposure with.
+
+    The observed state is the last event dated at or before the anchor, under
+    the same UTC convention `maximum_observed_duration_days` uses: `read.py`
+    returns each line's events in `sequence_no` order and never truncates them,
+    so an event the anchor has not reached must be excluded here rather than
+    assumed absent.
+    """
+    at_decision = 0
+    for line in procurement_input.lines:
+        if not censoring_indicator(line, as_of_date):
+            continue
+        observed = [
+            event for event in line.events if event.occurred_at.astimezone(UTC).date() <= as_of_date
+        ]
+        if observed and observed[-1].to_state == DECISION_STATE:
+            at_decision += 1
+    return at_decision
+
+
 def limitations(
     manifest: RunManifest,
     *,
     maximum_observed_days: int | None,
     smallest_vendor_training_lines: int,
     observation_floor: int | None,
+    open_lines_at_decision_state: int,
 ) -> tuple[LimitationRecord, ...]:
-    """`L-1`–`L-4`, each in four parts, with every figure a measurement.
+    """`L-1`–`L-5`, each in four parts, with every figure a measurement.
 
-    Three of the four carry a number this run produced rather than a number
+    Four of the five carry a number this run produced rather than a number
     quoted from another document: `L-2` the computed maximum observed duration,
     `L-3` the realized held-out uncensored event count, `L-4` the realized
-    observation floor and the smallest vendor's realized training count. That is
-    the difference between disclosing a limitation and restating one.
+    observation floor and the smallest vendor's realized training count, `L-5`
+    the realized count of open lines standing at the decision state. That is the
+    difference between disclosing a limitation and restating one.
     """
     horizon = manifest.horizon_days
     if maximum_observed_days is None:
@@ -534,6 +583,28 @@ def limitations(
             "More lines per vendor, or a vendor-level claim that survives at the realized "
             "shrinkage.",
             "A real vendor population, where every vendor has enough observations to stand on.",
+        ),
+        LimitationRecord(
+            "L-5",
+            "A line's remaining duration does not predict future rework loops",
+            "The conditional draw is taken over the legs remaining in the forward path from "
+            "the line's current state (AD-013). A line that will be sent back for rework "
+            "takes legs the parent distribution never included, so its forecast is biased "
+            "**short**. The rework sub-model is fitted and gates the diagnostics, but it "
+            "informs the likelihood rather than the forward simulation of the remaining "
+            "path — a scope decision taken because only a closed-form parent gives the "
+            "exact conditional-survival identity the stored draws are checked against.",
+            f"Measured on this run: **{open_lines_at_decision_state}** of the "
+            f"{manifest.open_line_count} open lines stand at `{DECISION_STATE}`, the one "
+            f"two-way decision state in the lifecycle graph, and carry the forward legs "
+            f"only. Every other open line is past the branch, so its remaining path is "
+            f"determined and the bias does not apply to it.",
+            "A forward simulation that draws the rework branch per decision point and sums "
+            "the realized path, replacing the closed-form parent — which costs the exact "
+            "`S(e+k)/S(e)` identity and would need it restated as a Monte-Carlo tolerance.",
+            "At production volume, a per-line forward simulation over the fitted transition "
+            "matrix, with the survival identity checked against the simulation's own "
+            "empirical CDF rather than against a closed form.",
         ),
     )
 
@@ -814,6 +885,9 @@ def render_run_report(
         maximum_observed_days=maximum_observed_days,
         smallest_vendor_training_lines=min(int(count) for count in training_line_counts.values()),
         observation_floor=observation_floor,
+        open_lines_at_decision_state=open_lines_at_the_decision_state(
+            procurement_input, manifest.as_of_date
+        ),
     )
     check_limitations(records)
 

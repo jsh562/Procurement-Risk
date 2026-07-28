@@ -1,27 +1,35 @@
-"""T121 — NC-23: four well-formed records that omit `L-2` must **fail**.
+"""T121 — NC-23: a full-length set of well-formed records omitting `L-2` must **fail**.
 
 DV-037 is the presence half of FR-027 and it is a different claim from DV-024's
-form half. `data-model.md` § Disclosed Limitations declares four limitations **by
+form half. `data-model.md` § Disclosed Limitations declares its limitations **by
 identity**, and the failure it is aimed at is not a malformed record: it is a
-report that discloses four impeccable limitations and never mentions that the far
-tail of every survival curve is extrapolation.
+report that discloses a set of impeccable limitations and never mentions that the
+far tail of every survival curve is extrapolation.
 
 **NC-8 cannot reach that failure and this file exists because of it.** NC-8
 plants a three-part record, so it exercises *form* — the checker it constrains
-walks the records that are there. A set of four four-part records that happens
-not to include `L-2` satisfies every assertion NC-8 makes, and a DV-037
+walks the records that are there. A full-length set of four-part records that
+happens not to include `L-2` satisfies every assertion NC-8 makes, and a DV-037
 implementation that never looks for `L-2` would pass both. The discriminator is
 asserted here rather than argued: each planted set is shown to satisfy the form
 predicate before it is shown to fail the checker.
 
 **The omitted identifier is parametrized rather than fixed on `L-2`.** L-2 is the
 one FR-031 and SC-029 name, but a checker looking for exactly `L-2` and nothing
-else would pass three quarters of the rule and fail nothing — the declared set is
-four, and each of them is owed for its own reason.
+else would pass most of the rule and fail nothing — every declared limitation is
+owed for its own reason.
 
-The set is kept at four records throughout, so the failure cannot be attributed
-to a set that is merely short. What changes is *which* limitations were written,
-never how many.
+The planted set is always exactly as long as the declared one, so the failure
+cannot be attributed to a set that is merely short. What changes is *which*
+limitations were written, never how many.
+
+**The declared set is five and was four.** `L-5` — AD-013's rework-loop bias —
+was declared in `data-model.md` and emitted by nothing, and the omission was
+invisible precisely here: every case below ranges over
+`LIMITATION_IDENTIFIERS`, so a tuple that stopped at `L-4` made this file agree
+with the gap. The oracle at the foot of the file is the one assertion that does
+not read the tuple, and it is what a future declared-but-unemitted limitation
+has to get past.
 """
 
 from __future__ import annotations
@@ -37,8 +45,8 @@ from model.forecast.report import (
 )
 
 #: A well-formed record naming a limitation this epic does not declare. It is the
-#: filler that keeps a planted set at four records: without it the set is three
-#: and a checker counting records would refuse for the wrong reason.
+#: filler that keeps a planted set at full length: without it the set is one
+#: record short and a checker counting records would refuse for the wrong reason.
 UNDECLARED_IDENTIFIER = "L-9"
 
 
@@ -70,7 +78,7 @@ def carries_four_parts(records: tuple[LimitationRecord, ...]) -> bool:
 
 
 def set_omitting(identifier: str) -> tuple[LimitationRecord, ...]:
-    """Four well-formed records, one declared identifier swapped for a filler.
+    """A full-length well-formed set, one declared identifier swapped for a filler.
 
     The result is exactly as long as the declared set and every record in it is
     exactly as complete, so the only observable difference is that one
@@ -83,7 +91,9 @@ def set_omitting(identifier: str) -> tuple[LimitationRecord, ...]:
 
 
 @pytest.mark.parametrize("omitted", LIMITATION_IDENTIFIERS)
-def test_four_well_formed_records_that_omit_a_declared_limitation_fail(omitted: str) -> None:
+def test_a_full_set_of_well_formed_records_omitting_a_declared_limitation_fails(
+    omitted: str,
+) -> None:
     """NC-23, planted once per declared identifier, `L-2` among them.
 
     The form predicate is asserted first and asserted to *pass*: that is the
@@ -107,9 +117,8 @@ def test_four_well_formed_records_that_omit_a_declared_limitation_fail(omitted: 
 def test_the_complete_set_of_declared_identifiers_is_accepted() -> None:
     """The positive control, without which every case above is satisfied by refusing.
 
-    A checker that raised on any set at all would pass the four planted cases
-    and disclose nothing, so the accepted case is what makes the refusals
-    evidence.
+    A checker that raised on any set at all would pass every planted case and
+    disclose nothing, so the accepted case is what makes the refusals evidence.
     """
     records = tuple(well_formed(identifier) for identifier in LIMITATION_IDENTIFIERS)
 
@@ -118,9 +127,9 @@ def test_the_complete_set_of_declared_identifiers_is_accepted() -> None:
 
 
 def test_a_superset_carrying_every_declared_identifier_is_accepted() -> None:
-    """Presence is a containment, not an equality — a fifth limitation is legal.
+    """Presence is a containment, not an equality — one more limitation is legal.
 
-    `data-model.md` declares the four a run **owes**; disclosing a fifth is
+    `data-model.md` declares what a run **owes**; disclosing more than that is
     Principle VII working rather than failing. An implementation that compared
     the emitted identifiers against the declared set for equality would refuse a
     report that told the reader more, which is the wrong direction to be strict
@@ -134,13 +143,14 @@ def test_a_superset_carrying_every_declared_identifier_is_accepted() -> None:
     assert check_limitations(records) == len(LIMITATION_IDENTIFIERS) + 1
 
 
-def test_the_declared_identifiers_are_the_four_the_data_model_names() -> None:
+def test_the_declared_identifiers_are_the_ones_the_data_model_names() -> None:
     """The parametrization's oracle, written independently of the module.
 
     Every case above ranges over `LIMITATION_IDENTIFIERS`, so shrinking that
-    tuple would silently shrink this file. `L-2` is named here because FR-031
-    and SC-029 rest on it specifically: it is the horizon's extrapolation past
-    the longest observed duration, and it is the one whose absence DV-037 was
-    written for.
+    tuple would silently shrink this file — which is exactly what happened to
+    `L-5` until it was noticed. `L-2` is named here because FR-031 and SC-029
+    rest on it specifically: it is the horizon's extrapolation past the longest
+    observed duration, and it is the one whose absence DV-037 was written for.
+    `L-5` is here because it is the one the tuple has already been short of.
     """
-    assert LIMITATION_IDENTIFIERS == ("L-1", "L-2", "L-3", "L-4")
+    assert LIMITATION_IDENTIFIERS == ("L-1", "L-2", "L-3", "L-4", "L-5")

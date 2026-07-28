@@ -8,10 +8,13 @@ one because each fails on its own:
   A record short of a part is not a shorter record — it is a limitation whose
   reversal condition nobody stated, and Principle VII names the four together for
   that reason.
-- **`L-1` through `L-4` are present by identity** (DV-037). DV-024 quantifies
-  over the records that are there, so a set of four impeccable limitations that
-  omits the horizon's extrapolation satisfies it completely. `NC-23` plants that
-  set against the checker; this file asserts it over the emitted document.
+- **every limitation `data-model.md` declares is present by identity** (DV-037).
+  DV-024 quantifies over the records that are there, so a set of impeccable
+  limitations that omits the horizon's extrapolation satisfies it completely.
+  `NC-23` plants that set against the checker; this file asserts it over the
+  emitted document. The declared set is read from the module rather than written
+  here, which is what let it widen from four to five — `L-5` was declared under
+  AD-013 and emitted by nothing — without this claim having to be restated.
 - **the observation count below which no vendor-level claim stands is stated**
   (SC-024, FR-020) — in the reader-facing artifact, with each vendor's realized
   weight and training count paired against it and given an explicit verdict.
@@ -41,6 +44,7 @@ from forecast.conftest import EmittedRun
 from forecast.test_no_verdict import report_fields
 from model.forecast.paths import run_report_path
 from model.forecast.report import (
+    DECISION_STATE,
     LIMITATION_IDENTIFIERS,
     SECTION_FIELDS,
     SHRINKAGE_SUPPORT_THRESHOLD,
@@ -67,6 +71,11 @@ HORIZON_LIMITATION = "L-2"
 #: The record stating the vendor-claim observation floor's consequence.
 VENDOR_LIMITATION = "L-4"
 
+#: The record AD-013 opened, on the rework-loop bias. Named here for the same
+#: reason `L-2` is: it carries a figure this run measured, and a record naming
+#: the bias without the count is a sentence about lognormals in general.
+REWORK_LIMITATION = "L-5"
+
 #: Module-level SQL, never assembled from values (Ruff S608). The longest
 #: duration the input observes at the run's own anchor, under `data-model.md`
 #: § Conventions' whole-day convention — the same question `report.py` asks in
@@ -81,7 +90,31 @@ MAXIMUM_OBSERVED_SQL = text(
     """
 )
 RUN_HORIZON_SQL = text(
-    "SELECT horizon_days, vendor_shrinkage FROM forecast_run WHERE run_id = :run_id"
+    "SELECT horizon_days, vendor_shrinkage, open_line_count "
+    "FROM forecast_run WHERE run_id = :run_id"
+)
+
+#: L-5's figure, reached by SQL rather than by the module that publishes it. A
+#: line is open at the anchor when no terminal event has occurred by then, and it
+#: stands at the decision state when the last event it has walked by then landed
+#: there — the two halves the Python helper applies in the same order.
+OPEN_AT_DECISION_SQL = text(
+    """
+    SELECT count(*)
+      FROM purchase_order_line l
+      JOIN forecast_run r ON r.run_id = :run_id
+     WHERE NOT EXISTS (
+               SELECT 1 FROM lifecycle_event t
+                WHERE t.po_line_id = l.po_line_id AND t.is_terminal
+                  AND (t.occurred_at AT TIME ZONE 'UTC')::date <= r.as_of_date
+           )
+       AND (
+               SELECT e.to_state FROM lifecycle_event e
+                WHERE e.po_line_id = l.po_line_id
+                  AND (e.occurred_at AT TIME ZONE 'UTC')::date <= r.as_of_date
+                ORDER BY e.sequence_no DESC LIMIT 1
+           ) = :decision_state
+    """
 )
 
 _FIELD = re.compile(r"^- \*\*(.+?)\*\*: (.*)$")
@@ -232,16 +265,16 @@ def test_every_declared_limitation_is_present_by_identity(
 ) -> None:
     """DV-037: the limitations that were *owed* were written.
 
-    A containment rather than an equality — disclosing a fifth limitation is
-    Principle VII working rather than failing — and the four declared ones are
-    named from the module so this cannot pass by agreeing with whatever the
-    report happens to carry.
+    A containment rather than an equality — disclosing one more than the
+    declared set is Principle VII working rather than failing — and the declared
+    ones are named from the module so this cannot pass by agreeing with whatever
+    the report happens to carry.
     """
     assert set(LIMITATION_IDENTIFIERS) <= set(records), (
         f"the emitted report omits {sorted(set(LIMITATION_IDENTIFIERS) - set(records))}; "
-        f"`data-model.md` declares four limitations by identity, and a set of four "
-        f"well-formed records that happens not to include one of them discloses nothing "
-        f"about it"
+        f"`data-model.md` declares {len(LIMITATION_IDENTIFIERS)} limitations by identity, "
+        f"and a set of well-formed records that happens not to include one of them "
+        f"discloses nothing about it"
     )
 
 
@@ -375,3 +408,39 @@ def test_limitation_l4_states_the_consequence_measured_on_this_run(
     assert str(smallest) in record["Supporting evidence"]
     assert f"{SHRINKAGE_SUPPORT_THRESHOLD:.2f}" in record["Scope decision"]
     assert "observation floor published in § Per-Vendor Shrinkage" in record["Scope decision"]
+
+
+def test_limitation_l5_states_the_rework_bias_with_the_count_it_exposes(
+    records: dict[str, dict[str, str]], db_session: Session, emitted_run: EmittedRun
+) -> None:
+    """AD-013's stated cost, in the report rather than in a source comment.
+
+    L-5 says an open line standing at the two-way decision state is forecast
+    **short**, because the conditional draw walks the forward legs only and a
+    future rework loop adds legs the parent never included. The exposure is a
+    count, and the count is recomputed here by SQL — a second derivation, as
+    with L-2's maximum — so a record quoting a plausible number it did not
+    measure fails rather than reads as measured.
+
+    The direction is asserted too. A record disclosing the omission without
+    saying which way it biases the forecast leaves the reader unable to act on
+    it, which is the half Principle VII's "cause" clause is about.
+    """
+    parameters = {"run_id": emitted_run.run_id, "decision_state": DECISION_STATE}
+    at_decision = int(db_session.execute(OPEN_AT_DECISION_SQL, parameters).scalar_one())
+    open_lines = int(
+        db_session.execute(RUN_HORIZON_SQL, {"run_id": emitted_run.run_id})
+        .mappings()
+        .one()["open_line_count"]
+    )
+    record = records[REWORK_LIMITATION]
+
+    assert "rework" in record["Subject"].lower()
+    assert "short" in record["Scope decision"]
+    assert f"**{at_decision}**" in record["Supporting evidence"], (
+        f"L-5 does not publish the measured count; {at_decision} of {open_lines} open lines "
+        f"stand at {DECISION_STATE!r} on this run. Evidence reads: "
+        f"{record['Supporting evidence']}"
+    )
+    assert str(open_lines) in record["Supporting evidence"]
+    assert DECISION_STATE in record["Supporting evidence"]

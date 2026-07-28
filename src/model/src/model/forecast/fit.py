@@ -607,10 +607,8 @@ def _training_line_counts(
     return counts
 
 
-def _vendor_shrinkage(
-    posterior: xr.Dataset, training_line_counts: Mapping[str, int]
-) -> dict[str, VendorShrinkage]:
-    """Realized ρⱼ per vendor, as a median with an interval (FR-019).
+def _fitted_scales(posterior: xr.Dataset) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """The run's two fitted scales `(τ, σ)`, paired draw by draw.
 
     `tau_vendor` is the between-vendor spread the fit posted. The residual scale
     is the **root mean square of `sigma_sojourn` across the transition set**,
@@ -618,10 +616,23 @@ def _vendor_shrinkage(
     observations is measured against — a representative aggregate, stated here
     because the sojourn model has seven residual scales and ρ is defined against
     one.
+
+    Separated from the weight below because two published quantities are
+    plug-ins of this one pair: the shrinkage weight ρⱼ and the vendor-effect
+    spread `sd(θⱼ|data)` that SC-005 compares between vendors. A second
+    derivation of the aggregation for the second quantity would be a second
+    opinion about which σ the run was fitted against.
     """
     tau = _flattened(posterior, "tau_vendor", None)
     scales = _flattened(posterior, "sigma_sojourn", "transition")
-    sigma = np.sqrt(np.mean(np.square(scales), axis=1))
+    return tau, np.sqrt(np.mean(np.square(scales), axis=1))
+
+
+def _vendor_shrinkage(
+    posterior: xr.Dataset, training_line_counts: Mapping[str, int]
+) -> dict[str, VendorShrinkage]:
+    """Realized ρⱼ per vendor, as a median with an interval (FR-019)."""
+    tau, sigma = _fitted_scales(posterior)
     return vendor_shrinkage(tau, sigma, training_line_counts, VENDOR_SHRINKAGE_HDI_PROBABILITY)
 
 

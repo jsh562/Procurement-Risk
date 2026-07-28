@@ -1,9 +1,36 @@
 # QC Report: Delivery Forecast Model
 
-**Feature**: E007 · **Branch**: `00007-delivery-forecast-model` · **Date**: 2026-07-28 · **Iteration**: 1
+**Feature**: E007 · **Branch**: `00007-delivery-forecast-model` · **Date**: 2026-07-28 · **Iterations**: 2
 **Governing**: `project-instructions.md` v1.2.4 · **QC profile**: standard · **Required categories**: linting, coverage · **Coverage target**: 80
 
-## Overall Verdict: **FAIL**
+## Overall Verdict: **PASS** (iteration 2)
+
+Iteration 1 returned FAIL with two ERROR and four WARNING findings. All six were fixed and **independently re-verified in code**, with the database-backed evidence executed rather than inferred. The iteration-1 detail below is kept in full — a QC report that overwrites the failure it found leaves nothing to check the fix against.
+
+| Iteration | Verdict | Findings | Model tests | Gateway |
+|---|---|---|---|---|
+| 1 | FAIL | 2 ERROR, 4 WARNING | 2562 | 1 failed / 400 passed |
+| 2 | **PASS** | 0 open | **2569** | **402 passed**, 5 skipped |
+
+### Iteration 2 closure
+
+| ID | Closed by | Verified |
+|---|---|---|
+| B-1 | The gateway ledger test now asserts what its docstring described — E004's block contiguous and in order, head equal to the **last revision on disk** rather than the literal `0103`. Split into two tests | `test_migrations.py` 15 passed |
+| B-2 / B-3 | `sd(θⱼ\|data)` is now package code — `vendor_effect_spread`, `vendor_effect_interval`, `VendorEffect` in `shrinkage.py`, marginal over the scale mixture rather than evaluated at median scales. The comparison reconstructs the run's **own** posterior from its recorded provenance and reads τ/σ through `fit.py`'s `_fitted_scales`; operands are counted from `forecast_split_assignment` train rows and cross-checked against `training_line_count`. ρ's interior turning point survives as a live test | 3 DB-backed SC-005 tests passed against a real fit; 48 non-DB shrinkage tests passed |
+| B-4 | `LIMITATION_IDENTIFIERS` widened to L-5; the record carries all four parts and a **measured** figure — `open_lines_at_the_decision_state` counts censored lines whose last event at-or-before the anchor landed on the graph's only branching state. DV-037's presence check widened | `test_limitations.py` recomputes the count by independent SQL |
+| B-5 | A below-threshold comparison moves **one** line's realized predictive ESS, so an all-quantified implementation still fails. Asserts outside-basis, exit **zero**, neither pass nor failure, with breaches and unpaired both empty so the verdict is attributable to the basis alone. The inclusive boundary is pinned one representable step apart from the other side | 3 tests passed |
+| B-6 | All 42 criteria now appear on task lines; SC-036→T089, SC-037→T091, SC-039→T102, SC-041→T103, SC-042→T044/T047. **Nothing renumbered** — task IDs contiguous T001–T133, `spec.md` unmodified | verified programmatically |
+
+**Regression spot-checks clean**: the struck DV-005 items — the decile comparison and the fit-derived `survival[1]` floor — appear only in prose explaining why they were struck, nowhere as a live assertion. Refusal-by-ordering still holds; `fit.py`'s only change this round was the `_fitted_scales` extraction.
+
+**Coverage re-measured**: all 21 `model/forecast` modules carry real hits, model entry **92%**.
+
+---
+
+## Iteration 1 detail (retained)
+
+### Verdict at iteration 1: FAIL
 
 Both required categories pass. The failure is one test regression this epic caused and three success criteria that are not achievable as implemented. Nothing here is a marker or bookkeeping problem — every item below is a real defect with a named location.
 

@@ -20,10 +20,24 @@ would be satisfied by the wrong behaviour on its own:
 The failing direction is `test_reproduction_controls.py`'s (NC-17); this file is
 the passing one, and without a control it would be satisfied by a harness that
 compared nothing.
+
+**SC-018's third outcome is asserted at the foot of this file, in both
+directions.** "Outside the tolerance's stated basis" is live code — AD-004
+places the predictive-ESS condition ahead of the day tolerance, and a comparison
+below it is neither a pass nor a failure and still exits zero — and every
+assertion above it observes a run where the condition holds, so none of them can
+tell a harness that resolves the outcome from one that never looks. A real
+re-fit at the committed shape cannot produce the condition on demand, so the
+comparison is **constructed**: one line's realized predictive ESS is moved
+across the published floor and the outcome is resolved again. `plan.md`
+§ Negative Controls' own rule is why it is here at all — a claim outside the
+three exclusion classes with no entry is a miss.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import math
 import uuid
 
 import pytest
@@ -42,6 +56,7 @@ from model.forecast.reproduce import (
     OUTCOME_OUTSIDE_BASIS,
     PROVENANCE_FIELDS,
     ReproductionOutcome,
+    render_reproduction_report,
 )
 
 #: The seven fields FR-043 names, re-typed here rather than imported for the
@@ -242,3 +257,105 @@ def test_the_reproduction_wrote_no_run_and_left_the_stores_alone(
     assert emitted == [reproduced_run.reproduction.report]
     assert str(emitted_run.run_id) in emitted[0].name
     assert emitted[0].read_text(encoding="utf-8").startswith("# Forecast Reproduction Report")
+
+
+# ---------------------------------------------------------------------------
+# SC-018's third outcome: outside the tolerance's stated basis
+# ---------------------------------------------------------------------------
+#
+# The realized run sits inside the basis, which is what a converged fit at the
+# committed shape does — so the branch cannot be reached by asking for a
+# different run and is reached by moving one operand instead. Only the realized
+# predictive ESS moves: the deltas, the provenance and the pairing are the shared
+# reproduction's own, so whatever the outcome resolves to is attributable to the
+# basis condition and to nothing else. That is the same discipline NC-17 applies
+# to the tolerance, one level down.
+
+
+def with_realized_basis(outcome: ReproductionOutcome, predictive_ess: float) -> ReproductionOutcome:
+    """The shared outcome with **one** line's realized predictive ESS moved.
+
+    One rather than all of them: `outside_basis` is any-quantified, so moving
+    every line would also pass an implementation that required all of them, and
+    the weaker reading is the one that would let a single unsupported line be
+    reported as an agreement.
+    """
+    first, *rest = outcome.comparisons
+    return dataclasses.replace(
+        outcome,
+        comparisons=(dataclasses.replace(first, predictive_ess=predictive_ess), *rest),
+    )
+
+
+def published_floor(outcome: ReproductionOutcome) -> float:
+    """`REPRODUCTION_PREDICTIVE_ESS_FRACTION_MIN × draw_count`, as AD-004 states it."""
+    return REPRODUCTION_PREDICTIVE_ESS_FRACTION_MIN * outcome.draw_count
+
+
+def test_a_line_below_the_predictive_ess_floor_resolves_to_outside_the_basis(
+    outcome: ReproductionOutcome,
+) -> None:
+    """SC-018's third outcome, evidenced rather than only enumerated.
+
+    Three claims in one place because the outcome is defined by all three
+    together: the verdict is the outside-basis one, it is **neither** of the
+    other two, and it still **exits zero**. A scope limit that exited non-zero
+    would be a failure wearing another name, and one that resolved to `agrees`
+    would publish a comparison as supported by a condition it does not meet.
+
+    Everything else about the outcome is left alone and asserted to be clean, so
+    the verdict cannot be arriving from a tolerance breach or a provenance
+    difference that happened to be present.
+    """
+    below = with_realized_basis(outcome, math.nextafter(published_floor(outcome), 0.0))
+
+    assert below.verdict == OUTCOME_OUTSIDE_BASIS
+    assert below.verdict not in (OUTCOME_AGREES, OUTCOME_DISAGREES)
+    assert below.exit_status == 0, (
+        "the outside-basis outcome exited non-zero, which makes it a failure rather than "
+        "the reported scope limit AD-004 defines it as"
+    )
+    assert len(below.outside_basis) == 1
+    assert below.breaches == () and below.unpaired == ()
+    assert below.differing_provenance_fields == ()
+
+
+def test_a_line_exactly_at_the_predictive_ess_floor_is_still_a_pass(
+    outcome: ReproductionOutcome,
+) -> None:
+    """The other direction, at the boundary rather than somewhere comfortable.
+
+    Without it, an implementation that resolved to outside-basis regardless of
+    the measurement would satisfy the case above. The floor is inclusive — the
+    condition is `≥` — so the boundary value itself is inside the basis, and the
+    two cases are one representable step apart: the pair pins the comparison as
+    well as the direction.
+    """
+    floor = published_floor(outcome)
+    at_floor = with_realized_basis(outcome, floor)
+    above = with_realized_basis(outcome, math.nextafter(floor, math.inf))
+
+    assert at_floor.outside_basis == ()
+    assert at_floor.verdict == OUTCOME_AGREES
+    assert at_floor.exit_status == 0
+    assert above.outside_basis == ()
+    assert above.verdict == OUTCOME_AGREES
+
+
+def test_the_outside_basis_outcome_is_reported_as_a_scope_limit(
+    outcome: ReproductionOutcome, reproduced_run: ReproducedRun
+) -> None:
+    """The reader-facing half: the report says which of the three it resolved to.
+
+    The verdict a job exits on and the verdict its report states have to be the
+    same one — FR-038's unit is the realized value, the criterion and the
+    disposition together — and a reader holding a zero exit status with no
+    statement beside it cannot tell an agreement from a comparison taken outside
+    the tolerance's stated basis.
+    """
+    below = with_realized_basis(outcome, math.nextafter(published_floor(outcome), 0.0))
+    rendered = render_reproduction_report(below, reproduced_run.reproduction.recorded)
+
+    assert OUTCOME_OUTSIDE_BASIS in rendered
+    assert "neither a pass nor a failure" in rendered
+    assert f"{REPRODUCTION_PREDICTIVE_ESS_FRACTION_MIN:.2f}" in rendered

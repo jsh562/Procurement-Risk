@@ -10,6 +10,17 @@ arithmetic rather than a special case: every draw of ρ is then exactly 0, the
 honest triple is `(0, 0, 0)`, and it is published rather than omitted. A missing
 vendor reads as an oversight, and `[0, 1]` would claim the fit cannot tell how
 much of that vendor's estimate is its own data when the answer is none of it.
+
+**The second quantity here is the vendor *effect* interval** — the posterior of
+θⱼ, the vendor's own offset, whose spread is `sd(θⱼ|data) = τσ/√(nτ² + σ²)`.
+SC-005 and DV-010 are claims about *that* interval and not about the ρ triple,
+and the difference is measured rather than stylistic: ρ's own interval is
+widest where the median weight is nearest 0.5 and collapses at both ends, so
+"wider at the sparser vendor" is false of it for some rosters, while the
+vendor-effect interval is strictly narrower at every extra training line for
+every draw of the two scales. Both functions take **the same two draw
+sequences**, so a caller holding a run's fitted τ and σ gets the weight and the
+effect interval off one posterior rather than off a stand-in.
 """
 
 from __future__ import annotations
@@ -17,11 +28,19 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from statistics import NormalDist
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-__all__ = ["ShrinkageError", "VendorShrinkage", "vendor_shrinkage"]
+__all__ = [
+    "ShrinkageError",
+    "VendorEffect",
+    "VendorShrinkage",
+    "vendor_effect_interval",
+    "vendor_effect_spread",
+    "vendor_shrinkage",
+]
 
 
 class ShrinkageError(ValueError):
@@ -45,6 +64,28 @@ class VendorShrinkage:
     median: float
     hpdi_low: float
     hpdi_high: float
+
+
+@dataclass(frozen=True, slots=True)
+class VendorEffect:
+    """One vendor's effect interval, and the spread the interval came from.
+
+    `spread_median` is the posterior median of `sd(θⱼ|data)`; `hpdi_low` and
+    `hpdi_high` bound θⱼ itself at the stated credible level. Both are published
+    because they answer different questions — the spread is the quantity DV-010
+    is written in terms of, the interval is what a reader compares between two
+    vendors — and reporting one without the other would leave the comparison
+    resting on a number nothing else in the run states.
+    """
+
+    spread_median: float
+    hpdi_low: float
+    hpdi_high: float
+
+    @property
+    def width(self) -> float:
+        """`hpdi_high − hpdi_low`, the quantity SC-005's comparison ranges over."""
+        return self.hpdi_high - self.hpdi_low
 
 
 def _paired_scales(
@@ -203,5 +244,146 @@ def vendor_shrinkage(
         low, high = _hpdi(ordered, level)
         published[vendor] = VendorShrinkage(
             median=_nearest_rank_median(ordered), hpdi_low=low, hpdi_high=high
+        )
+    return published
+
+
+# ---------------------------------------------------------------------------
+# The vendor-effect interval (SC-005, DV-010)
+# ---------------------------------------------------------------------------
+
+#: `math.erf` over an array. NumPy carries no error function and neither entry
+#: declares SciPy, so the scalar one is vectorized — the same arrangement
+#: `test_conditioning.py` uses for `erfc`.
+_ERF = np.vectorize(math.erf, otypes=[float])
+
+_SQRT_TWO = math.sqrt(2.0)
+
+#: Bisection steps used to solve the marginal interval below. The bracket is
+#: exact, so each step halves it: sixty steps take a bracket of any width to
+#: `2⁻⁶⁰` of it, which is beyond double precision long before the last step and
+#: cheaper than carrying a convergence test that could fail to converge.
+_INTERVAL_SOLVER_STEPS = 60
+
+
+def _effect_spread(
+    tau: NDArray[np.float64], sigma: NDArray[np.float64], count: int
+) -> NDArray[np.float64]:
+    """`sd(θⱼ|data) = τσ/√(nτ² + σ²)`, draw by draw.
+
+    Written with `nτ²` inside the radicand so `n = 0` is a value rather than a
+    division: a vendor with no training line has learned nothing of its own, and
+    its effect then carries the population's whole spread τ exactly — which is
+    the boundary at which this quantity and the weight part company most
+    visibly, the weight there being known exactly at 0.
+    """
+    return tau * sigma / np.sqrt(count * np.square(tau) + np.square(sigma))
+
+
+def _marginal_interval(spread: NDArray[np.float64], level: float) -> tuple[float, float]:
+    """The HPDI of θⱼ, marginal over the posterior of the two scales.
+
+    Conditional on one draw of `(τ, σ)` the vendor effect is normal about the
+    population mean with the spread above, so the posterior of θⱼ is a **scale
+    mixture of mean-zero normals** — one component per draw. That mixture is
+    symmetric and unimodal, so its highest-density interval is the symmetric one
+    `[−h, h]` where `h` solves `mean(erf(h / (sᵢ√2))) = level`.
+
+    Marginal rather than evaluated at the median scales, which would be the
+    cheaper thing to write: collapsing the posterior of `(τ, σ)` to a point in
+    order to report an interval is the move Principle II exists to refuse, and
+    it understates the interval by exactly the fit's uncertainty about its own
+    scales — largest at the sparse vendor, which is the vendor SC-005 is about.
+
+    Solved by bisection on a bracket that is exact rather than guessed: coverage
+    is zero at `h = 0` and at `h = z·max(s)` every component covers at least
+    `level`, so the root is enclosed from the first step and no starting guess
+    can miss it.
+    """
+    widest = float(np.max(spread))
+    if widest <= 0.0:
+        # Every draw put the vendor exactly on the population mean — τ of zero
+        # throughout. The honest interval is the degenerate one; anything wider
+        # would report uncertainty the fit does not have.
+        return 0.0, 0.0
+
+    # `inf` where the spread is zero: that component is a point mass at the
+    # centre and lies inside every interval of positive width, which is what
+    # `erf(inf) = 1` gives without a special case in the loop.
+    scaled = np.divide(
+        1.0,
+        spread * _SQRT_TWO,
+        out=np.full_like(spread, np.inf),
+        where=spread > 0.0,
+    )
+
+    low = 0.0
+    high = NormalDist().inv_cdf(0.5 + 0.5 * level) * widest
+    for _ in range(_INTERVAL_SOLVER_STEPS):
+        middle = 0.5 * (low + high)
+        if float(np.mean(_ERF(middle * scaled))) < level:
+            low = middle
+        else:
+            high = middle
+    half_width = 0.5 * (low + high)
+    return -half_width, half_width
+
+
+def vendor_effect_spread(
+    tau_draws: ArrayLike,
+    sigma_draws: ArrayLike,
+    training_line_counts: Mapping[str, int],
+) -> dict[str, NDArray[np.float64]]:
+    """`sd(θⱼ|data)` per posterior draw, one sequence per vendor in the roster.
+
+    The draw-level quantity rather than a summary of it, because the relation
+    DV-010 rests on holds **draw by draw** — every draw of `(τ, σ)` gives a
+    vendor with fewer training lines the larger spread — and a comparison
+    between two summaries is a weaker statement that two different summaries
+    could disagree about.
+
+    Takes the same two sequences and the same roster as `vendor_shrinkage`, so
+    the effect spread and the published weight are two readings of one fitted
+    posterior. They are one algebraic step apart: `sd² = ρ·σ²/n`.
+    """
+    tau, sigma = _paired_scales(tau_draws, sigma_draws)
+    _checked_roster(training_line_counts)
+    return {
+        vendor: _effect_spread(tau, sigma, int(count))
+        for vendor, count in training_line_counts.items()
+    }
+
+
+def vendor_effect_interval(
+    tau_draws: ArrayLike,
+    sigma_draws: ArrayLike,
+    training_line_counts: Mapping[str, int],
+    hdi_probability: float,
+) -> dict[str, VendorEffect]:
+    """One vendor-effect interval per vendor, at one stated credible level.
+
+    The quantity SC-005 and DV-010 compare between the vendor with the fewest
+    training lines and the vendor with the most. The level is an argument for
+    the reason SC-005 gives directly: "wider" is undefined between intervals of
+    different mass, so a comparison against an interval carrying another mass is
+    not a comparison at all — and A-027 records that no requirement fixes a
+    level, so there is no default to fall back on.
+
+    Not a stored quantity — `data-model.md` says so — and therefore computed
+    from the caller's own fitted draws each time it is wanted, never read back
+    from a column that would have to be trusted.
+    """
+    tau, sigma = _paired_scales(tau_draws, sigma_draws)
+    _checked_roster(training_line_counts)
+    level = _checked_level(hdi_probability)
+
+    published: dict[str, VendorEffect] = {}
+    for vendor, count in training_line_counts.items():
+        spread = _effect_spread(tau, sigma, int(count))
+        low, high = _marginal_interval(spread, level)
+        published[vendor] = VendorEffect(
+            spread_median=_nearest_rank_median(np.sort(spread)),
+            hpdi_low=low,
+            hpdi_high=high,
         )
     return published
