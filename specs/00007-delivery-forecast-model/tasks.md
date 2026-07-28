@@ -161,14 +161,14 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T067 [US3] {FR-008} [COMPLETES FR-008] DV-030 — the three populations exhaustive and disjoint; no line holds rows in both stores (G-5) — TST/test_population_disjointness.py
 - [X] T068 [US3] {FR-044} DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
 - [X] T069 [US3] {FR-005} [COMPLETES FR-005] **NC-13** / AD-011 — a re-run gives the **same** `split_assignment_hash`, one mutated row a **different** one — TST/test_split_determinism.py
-- [ ] T070 [US3] {FR-028} DV-025 / SC-025 — the realized event count published **with** a statement of whether it supports the band's precision (L-3) — TST/test_report_event_count.py after:T036
-- [ ] T071 [US3] {FR-020,FR-027,FR-031} DV-024, DV-037 / SC-024, SC-029 — four parts on each limitation, the observation count stated, `L-1`–`L-4` present by identity — TST/test_limitations.py
-- [ ] T072 [US3] {FR-027} [COMPLETES FR-027] **NC-8** — a deliberately three-part limitation record **fails** the checker — TST/test_limitation_controls.py after:T071
+- [X] T070 [US3] {FR-028} DV-025 / SC-025 — the realized event count published **with** a statement of whether it supports the band's precision (L-3) — TST/test_report_event_count.py after:T036
+- [X] T071 [US3] {FR-020,FR-027,FR-031} DV-024, DV-037 / SC-024, SC-029 — four parts on each limitation, the observation count stated, `L-1`–`L-4` present by identity — TST/test_limitations.py
+- [X] T072 [US3] {FR-027} [COMPLETES FR-027] **NC-8** — a deliberately three-part limitation record **fails** the checker — TST/test_limitation_controls.py after:T071
 - [ ] T073 [US3] {FR-040} DV-041 / SC-035 — the emitted set is an **equality** against FR-040's three files, every report field in its declared schema — TST/test_emitted_set.py after:T098
-- [ ] T074 [US3] {FR-040} **NC-21** — a planted fourth file fails the equality and a planted unlisted field fails schema validation — TST/test_emitted_set_controls.py
-- [ ] T075 [US3] {FR-026} DV-021 / SC-026 — no emitted artifact carries a threshold or verdict, by the **closed-schema predicate**, never a term search — TST/test_no_verdict.py
-- [ ] T076 [US3] {FR-026} **NC-7** — a planted artifact containing a coverage threshold **fails** the absence check — TST/test_no_verdict_controls.py after:T075
-- [ ] T077 [US3] {FR-028} [COMPLETES FR-028] SC-032 — no flag or env var overrides `HELD_OUT_FRACTION` or `SPLIT_SEED`; pre-registration uncovered (G-11) — TST/test_pre_registration.py after:T014
+- [X] T074 [US3] {FR-040} **NC-21** — a planted fourth file fails the equality and a planted unlisted field fails schema validation — TST/test_emitted_set_controls.py
+- [X] T075 [US3] {FR-026} DV-021 / SC-026 — no emitted artifact carries a threshold or verdict, by the **closed-schema predicate**, never a term search — TST/test_no_verdict.py
+- [X] T076 [US3] {FR-026} **NC-7** — a planted artifact containing a coverage threshold **fails** the absence check — TST/test_no_verdict_controls.py after:T075
+- [X] T077 [US3] {FR-028} [COMPLETES FR-028] SC-032 — no flag or env var overrides `HELD_OUT_FRACTION` or `SPLIT_SEED`; pre-registration uncovered (G-11) — TST/test_pre_registration.py after:T014
 
 ---
 
@@ -238,15 +238,17 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [X] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015
 - [ ] T119 [COMPLETES FR-038] {FR-038} Assert SC-034's reportable unit over the **run** report as well, so a P1-only cut still evidences it — TST/test_reportable_unit.py — A-016
 - [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
-- [ ] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
+- [X] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
 - [X] T122 {FR-039} **DV-042 / SC-038 / NC-24** — stdout carries exactly the `run_id` and nothing on refusal; every diagnostic on stderr; exit zero exactly on completion — TST/test_streams_and_exit.py after:T035
-- [ ] T123 [COMPLETES FR-045] {FR-045} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068
-- [ ] T124 {FR-041} SC-036 and SC-037 assertions, plus the pre-registration duty for any estimated band, asserted as a committed-constant check (G-11 bounds it) — TST/test_band_preregistration.py after:T077
-- [ ] T125 {FR-010} [COMPLETES FR-010] Assert the day-grid identity `survival[k] = count(draws > k)/draw_count` over emitted rows in **both** stores — TST/test_grid_identity.py after:T117
-- [ ] T126 {FR-029} [COMPLETES FR-029] Assert both recorded duration semantics over emitted rows: conditional-remaining for open lines, total-from-order-date for held-out — TST/test_duration_semantics.py after:T117
+- [X] T123 [COMPLETES FR-045] {FR-045} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068
+- [X] T124 {FR-041} Any bound this epic judges a stored quantity against is a single module-level literal, published before the draws it judges — DV-040's held-out band is the instance — TST/test_band_preregistration.py after:T077
+- [X] T125 {FR-010} [COMPLETES FR-010] Assert the day-grid identity `survival[k] = count(draws > k)/draw_count` over emitted rows in **both** stores — TST/test_grid_identity.py after:T117
+- [X] T126 {FR-029} [COMPLETES FR-029] Assert both recorded duration semantics over emitted rows: conditional-remaining for open lines, total-from-order-date for held-out — TST/test_duration_semantics.py after:T117
 - [X] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
 
 **A-015 — and the pair rule reaches them by this sentence, not by a label.** T055 and T051 add behaviour to property-tier modules outside any of the ten pairs. T117 and T118 are their RED halves and T055 and T051 are the corresponding GREEN halves, **so the `test:`-before-`feat:` commit ordering binds those two couples exactly as it binds the ten** — they are recorded here rather than in the table because the table is keyed by module and both modules already appear in it. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
+
+**T124's scope was corrected during implementation.** Its line named SC-036 and SC-037, which are US4 criteria already carried by T089 and T091 against machinery US3 does not have. T124 owns FR-041 only.
 
 **A-016**: the P1-viable claim had two counterexamples. SC-034 is tagged `[US1]` but was asserted only by T109/T110 in Phase 8 — T119 fixes that. SC-035's equality ranges over the reproduction report emitted by T098 in Phase 7 (P2); T073 now carries `after:T098`, and the P1 boundary note below records that SC-035 is **P1-scoped to the kinds a P1 cut emits**.
 
