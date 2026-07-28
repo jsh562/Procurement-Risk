@@ -23,6 +23,7 @@ import numpy as np
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
+
 from model.forecast.compare import (
     MEDIAN_PROBABILITY,
     P80_PROBABILITY,
