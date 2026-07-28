@@ -40,11 +40,17 @@ import pytest
 
 from model.ingest.artifacts import artifact_path, verified_encoder
 from model.ingest.embed import ParityMeasurement, parity_against_reference
+from model.ingest.report import encoder_parity_section
 
 #: How close to a bound counts as "near" it. An order of magnitude: an observed
 #: maximum inside a tenth of the declared tolerance is comfortable, and anything
 #: above that is a fact about the export worth publishing.
 NEAR_BOUND_FACTOR = 0.1
+
+#: The run identifier item 21's figures are labelled under. Any identifier will
+#: do — this file measures the export, not a run — but FR-072 admits no figure
+#: without one, so the section cannot be built with a blank.
+RUN_ID = "00000000-0000-4000-8000-00000000e006"
 
 
 @pytest.fixture(scope="module")
@@ -133,6 +139,29 @@ def test_no_observation_sits_near_a_bound(measurement: ParityMeasurement) -> Non
         "the observed maximum per-dimension difference sits near the declared bound; "
         "publish it as a finding about the export rather than widening the bound"
     )
+
+
+def test_the_real_measurement_renders_as_report_item_21(
+    measurement: ParityMeasurement,
+) -> None:
+    """T096. Part 3 again, from the other side: what the report publishes.
+
+    The section is built from **this** measurement rather than from a fixture,
+    so the bounds it prints are the bounds these assertions enforced and the
+    maxima it prints are the ones they observed. `encoder_parity_section` re-reads
+    `declared_bounds` from `probes.json` and refuses a measurement taken against
+    a different pair, which is what makes "declared before the comparison"
+    checkable across the two files instead of within each of them.
+    """
+    section = encoder_parity_section(run_id=RUN_ID, measurement=measurement)
+    assert section.item == 21
+    published = {figure.label: figure.value for figure in section.figures}
+    assert published["Declared bound — minimum cosine similarity"] == (
+        measurement.declared_cosine_minimum
+    )
+    assert published["Observed minimum cosine similarity"] == measurement.observed_minimum_cosine
+    assert published["Probes compared"] == len(measurement.per_probe)
+    assert section.total_checks[0].outcome == "held"
 
 
 def test_the_artifact_identity_is_the_one_recorded_on_every_chunk() -> None:

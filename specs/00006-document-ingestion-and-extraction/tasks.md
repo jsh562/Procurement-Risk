@@ -184,10 +184,10 @@ module, T042 restricted its scope, T046 placed its citation, and nothing invoked
 it. Recorded here rather than folded silently into Polish, because a task list
 that acquires work without saying so stops being a record.
 
-- [ ] T093 [US2] {FR-025,FR-026,FR-030} Drive the extraction stage — chunks → extract_fields → coerce, confidence, citation, line items → writer — in src/model/src/model/ingest/extract.py after:T087 → exports: run_extraction_stage
-- [ ] T094 {FR-054} Build report item 8 — chunk counts, total and per layer, against the 5,000–15,000 estimate with the cause of any deviation — in ingest/report.py after:T087
-- [ ] T095 {FR-058} Build report item 14 — the count of fields printed but not attempted — in src/model/src/model/ingest/report.py after:T093
-- [ ] T096 {FR-019} Build report item 21 — encoder parity bounds declared before the comparison, with observed maxima — in ingest/report.py after:T087
+- [X] T093 [US2] {FR-025,FR-026,FR-030} Drive the extraction stage — chunks → extract_fields → coerce, confidence, citation, line items → writer — in src/model/src/model/ingest/extract.py after:T087 → exports: run_extraction_stage
+- [X] T094 {FR-054} Build report item 8 — chunk counts, total and per layer, against the 5,000–15,000 estimate with the cause of any deviation — in ingest/report.py after:T087
+- [X] T095 {FR-058} Build report item 14 — the count of fields printed but not attempted — in src/model/src/model/ingest/report.py after:T093
+- [X] T096 {FR-019} Build report item 21 — encoder parity bounds declared before the comparison, with observed maxima — in ingest/report.py after:T087
 
 ---
 
@@ -208,8 +208,12 @@ that acquires work without saying so stops being a record.
   outside this epic's scope. Marked `[ ]` rather than `[X]` deliberately: the task
   names committing fixtures, and none were committed.
 - **T089 — regenerated ingestion report.** Blocked transitively on T081, because a
-  full replay pipeline cannot reach extraction without fixtures, and on T093–T096,
-  because `build_report` refuses any incomplete content list.
+  full replay pipeline cannot reach extraction without fixtures. It was also
+  blocked on T093–T096, because `build_report` refuses any incomplete content
+  list; those four are now `[X]` and all 21 items have builders —
+  `src/model/tests/ingest/test_report_items.py` renders a complete
+  twenty-one-item set from real builders with no placeholders — so **T081 is the
+  only remaining blocker**.
 
 ---
 

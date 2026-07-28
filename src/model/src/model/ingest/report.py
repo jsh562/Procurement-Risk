@@ -43,6 +43,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -59,19 +60,32 @@ from model.compute.metrics import (
     wilson_interval,
 )
 from model.corpus.derive import normalize_page_text
+from model.ingest.artifacts import artifact_path
 from model.ingest.baseline import BASELINE_ID, BASELINE_INDEPENDENCE
 from model.ingest.chunker import BOUNDARY_CLASSES, DocumentChunking
 from model.ingest.documents import SHARED_LIBRARY_PROJECT
 from model.ingest.failures import FAILURE_OUTCOMES
 from model.ingest.runs import ConfidencePolicy
 from model.ingest.writer import MultiChunkCounts
+from model.llm.schemas import EXCLUDED_TERMS, TRANSMITTAL_FIELD_SUBSET
+
+if TYPE_CHECKING:  # pragma: no cover - a type reference, not a dependency
+    # `model.ingest.embed` opens the ONNX Runtime session, and this module runs
+    # no inference: item 21 publishes a measurement its caller took. Importing
+    # it only for the annotation would make every consumer of the report — the
+    # orchestrator among them — pay for `onnxruntime` to render Markdown.
+    from model.ingest.embed import ParityMeasurement
 
 __all__ = [
     "ATTEMPT_UNIT",
     "BASELINE_LABELS",
+    "CHUNK_DEVIATION_CAUSES",
+    "CHUNK_ESTIMATE_MAXIMUM",
+    "CHUNK_ESTIMATE_MINIMUM",
     "COUNTING_UNITS",
     "DECLARED_BASELINE_CRITERION",
     "DECLARED_BASELINE_LABEL",
+    "DECLARED_BOUND_KEYS",
     "DECLARED_SIMILARITY_GRID",
     "DISPOSITIONS",
     "DISPOSITION_INGESTED",
@@ -87,12 +101,14 @@ __all__ = [
     "LAYERS",
     "NEAR_DUPLICATE_CAUSES",
     "PERCENTILE_POINTS",
+    "PROBE_SET_ARTIFACT",
     "REPORT_CONTENTS",
     "REPORT_PATH",
     "REPRODUCTION_ENCODER_PARITY",
     "REPRODUCTION_EXACT",
     "REPRODUCTION_TOLERANCES",
     "RESULTS_MANIFEST_PATH",
+    "RETIRED_AT_RUN_TIME_REASON",
     "RULE_OF_THREE_MINIMUM",
     "AttemptLedger",
     "CarriedClaim",
@@ -113,6 +129,7 @@ __all__ = [
     "TotalCheck",
     "attempt_ledger_section",
     "build_report",
+    "chunk_count_section",
     "chunk_identity_section",
     "census_of_labels",
     "chunking_section",
@@ -121,7 +138,9 @@ __all__ = [
     "confidence_domain",
     "confidence_section",
     "declared_baseline_label",
+    "declared_parity_bounds",
     "disposition_section",
+    "encoder_parity_section",
     "extraction_quality_section",
     "failure_breakdown_section",
     "human_inspection_section",
@@ -140,6 +159,7 @@ __all__ = [
     "scope_labels_section",
     "tally_confidence",
     "total_checks_section",
+    "unattempted_fields_section",
 ]
 
 #: FR-069's three counting units, named so a figure can carry the one it counts
@@ -1132,6 +1152,178 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
                     unit="chunk",
                     layer="pooled",
                 ),
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 8 — SC-005, the chunk counts against the architecture's estimate (T094)
+# ---------------------------------------------------------------------------
+
+#: The architecture's estimate for the whole corpus, as a closed interval and
+#: **inclusive at both ends**. Written down here, once, because SC-005's whole
+#: content is that the observed count is published *against* it: a bound
+#: restated at a call site is a bound someone can quietly move to match a
+#: result, which is the adjustment Principle VII forbids and the reason the
+#: criterion says "rather than the estimate restated to match the result".
+CHUNK_ESTIMATE_MINIMUM: int = 5_000
+CHUNK_ESTIMATE_MAXIMUM: int = 15_000
+
+#: The candidate causes for a total outside the estimate, each paired with the
+#: direction it would push the count. Enumerated in advance rather than written
+#: when a deviation is first observed: a cause chosen after seeing the number is
+#: a story fitted to it, and the point of publishing a cause is that it was one
+#: of the things that could have been wrong before anybody looked.
+CHUNK_DEVIATION_CAUSES: tuple[tuple[str, str], ...] = (
+    (
+        "below",
+        "the 254-piece content budget is wider than the estimate assumed, so more of "
+        "each page survives as one chunk and fewer chunks are cut from it",
+    ),
+    (
+        "below",
+        "the real layer's specifications are shorter, or fewer of them are structurally "
+        "marked, than the estimate's page-count assumption",
+    ),
+    (
+        "above",
+        "sentence-level splitting fired more often than assumed, which multiplies one "
+        "over-long leaf into several chunks",
+    ),
+    (
+        "above",
+        "the page-terminal fallback fired on more pages than assumed, cutting a chunk "
+        "per residual run of lines where a structural marker was expected",
+    ),
+)
+
+
+def chunk_count_section(*, run_id: str, profile: ChunkingProfile) -> Section:
+    """Item 8: the chunk counts, total and per layer, against the estimate (SC-005).
+
+    Args:
+        run_id: the run the report describes.
+        profile: the run's own chunking profile — the same object item 9's
+            distribution is measured from, so the total published here and the
+            population that distribution ranges over cannot be two numbers.
+
+    Returns:
+        Item 8, with the pooled total, the two per-layer counts, and both ends
+        of the declared estimate as figures of their own.
+
+    Raises:
+        ReportError: the profile counted zero chunks. A corpus that produced
+            none is not a count outside the estimate — it is an empty
+            population, which FR-068 fails rather than publishes.
+
+    **A count outside the estimate is a published result, not an error.** SC-005
+    requires the deviation published *with its cause*, and explicitly forbids
+    the other repair: restating the estimate to match the result. So this
+    function returns a section either way and the verdict is in the prose and in
+    the total check's outcome, never in an exception — an estimate is a
+    prediction about the corpus, and a prediction that turned out wrong is a
+    finding about the prediction.
+
+    **The estimate is corpus-wide and the per-layer counts are published beside
+    it, not against it.** The architecture estimated one number for both layers
+    together; splitting it into two invented bounds nobody declared would be the
+    same adjustment in the other direction.
+    """
+    pooled = profile.by_layer["pooled"]
+    if pooled.chunks <= 0:
+        raise ReportError(
+            "SC-005 / FR-068: the chunking profile counted zero chunks, so the comparison "
+            "against the 5,000-15,000 estimate would range over an empty corpus and "
+            "would report a deviation nobody could act on. An empty population fails "
+            "rather than passes."
+        )
+
+    within = CHUNK_ESTIMATE_MINIMUM <= pooled.chunks <= CHUNK_ESTIMATE_MAXIMUM
+    direction = "below" if pooled.chunks < CHUNK_ESTIMATE_MINIMUM else "above"
+    nearer = CHUNK_ESTIMATE_MINIMUM if direction == "below" else CHUNK_ESTIMATE_MAXIMUM
+    causes = [
+        f"- {cause}" for side, cause in CHUNK_DEVIATION_CAUSES if not within and side == direction
+    ]
+    verdict = (
+        f"**The observed total is inside the estimate.** {pooled.chunks} chunks against "
+        f"{CHUNK_ESTIMATE_MINIMUM:,}-{CHUNK_ESTIMATE_MAXIMUM:,}, inclusive at both ends. "
+        f"The estimate is published beside the observation rather than only when the two "
+        f"disagree: a prediction reported only when it fails is one nobody can see was "
+        f"ever made."
+        if within
+        else (
+            f"**The observed total is {direction} the estimate, and that is published as a "
+            f"result.** {pooled.chunks} chunks against "
+            f"{CHUNK_ESTIMATE_MINIMUM:,}-{CHUNK_ESTIMATE_MAXIMUM:,}, a deviation of "
+            f"{pooled.chunks - nearer:+,} chunks from the nearer bound. **The estimate is "
+            f"not restated to match the result** (SC-005, Principle VII); what follows is "
+            f"the cause, chosen from the candidates declared before any count existed:"
+            f"\n\n" + "\n".join(causes)
+        )
+    )
+
+    body = (
+        f"The architecture's estimate is **{CHUNK_ESTIMATE_MINIMUM:,}-"
+        f"{CHUNK_ESTIMATE_MAXIMUM:,} chunks for the whole corpus**, both layers together. "
+        f"It is a corpus-wide interval, so the per-layer counts below are published "
+        f"beside it and not against it — splitting one declared bound into two would "
+        f"invent bounds nobody declared.\n\n"
+        f"{verdict}\n\n"
+        f"Every count here is a **census over the chunks this run cut** and is the same "
+        f"population item 9's leaf-length distribution ranges over, measured from the "
+        f"same profile object rather than counted a second time."
+    )
+
+    def scope(layer: str) -> FigureScope:
+        return FigureScope(
+            run_id=run_id,
+            generation_set="run-scoped",
+            kind="census",
+            unit="chunk",
+            layer=layer,
+        )
+
+    figures = [
+        Figure(
+            label="Chunks cut — total",
+            value=pooled.chunks,
+            scope=scope("pooled"),
+            note=f"against the {CHUNK_ESTIMATE_MINIMUM:,}-{CHUNK_ESTIMATE_MAXIMUM:,} estimate",
+        ),
+        *(
+            Figure(
+                label=f"Chunks cut — {layer}",
+                value=profile.by_layer[layer].chunks,
+                scope=scope(layer),
+                note=f"{profile.by_layer[layer].documents} document(s) on this layer",
+            )
+            for layer in ("REAL", "SYNTHETIC")
+        ),
+        Figure(
+            label="Declared estimate — lower bound",
+            value=CHUNK_ESTIMATE_MINIMUM,
+            scope=scope("pooled"),
+            note="declared by the architecture before this corpus was chunked",
+        ),
+        Figure(
+            label="Declared estimate — upper bound",
+            value=CHUNK_ESTIMATE_MAXIMUM,
+            scope=scope("pooled"),
+            note="not restated to match the observation (SC-005)",
+        ),
+    ]
+    return Section(
+        item=8,
+        body=body,
+        figures=tuple(figures),
+        total_checks=(
+            TotalCheck(
+                name="The corpus-wide chunk total falls inside the declared estimate",
+                population="every chunk this run cut, over both layers",
+                count=pooled.chunks,
+                scope=scope("pooled"),
+                outcome="held" if within else f"DEVIATION ({direction}), published with cause",
             ),
         ),
     )
@@ -2629,6 +2821,207 @@ def attempt_ledger_section(
 
 
 # ---------------------------------------------------------------------------
+# Item 14 — FR-058, the fields printed but not attempted (T095)
+# ---------------------------------------------------------------------------
+
+#: The reason a term in the committed subset went unattempted anyway. FR-024's
+#: mechanism, not a mistake in the declaration: `schemas.attempted_terms`
+#: filters the subset to the terms whose `field_vocabulary.retired_at` is null,
+#: so a retirement narrows the run without editing anything. Recorded as a
+#: reason of its own rather than left to fall through to "none recorded",
+#: because a retirement and a forgotten term look identical in a table that
+#: cannot tell them apart — and only one of them is a defect.
+RETIRED_AT_RUN_TIME_REASON: str = (
+    "in the committed transmittal subset, but retired in `field_vocabulary` at run time "
+    "(FR-024) — the run attempted the unretired subset, so this is a narrowed run rather "
+    "than a gap in the declaration"
+)
+
+
+def unattempted_fields_section(
+    *,
+    run_id: str,
+    printed_counts: Mapping[str, int],
+    attempted_fields: Sequence[str],
+) -> Section:
+    """Item 14: how many printed fields nobody attempted, and which (FR-058).
+
+    Args:
+        run_id: the run the report describes.
+        printed_counts: printed fields per vocabulary term over the synthetic
+            layer, from `reference.ReferenceSet.printed_counts` — the
+            generator's pre-render record of what each document actually
+            printed, which is also FR-060's recall denominator. Counted per
+            printed field and not per distinct term: a transmittal listing five
+            items prints `manufacturer` five times.
+        attempted_fields: the subset this run attempted, in declared order
+            (FR-024, FR-058). The run's own, not the committed declaration: a
+            run whose vocabulary was narrowed by a retirement attempted fewer
+            terms than the declaration names, and publishing the declaration
+            here would report a field as attempted that this run never asked
+            for.
+
+    Returns:
+        Item 14, with the count of unattempted-but-printed fields, the count of
+        distinct terms behind it, and the reason recorded for each.
+
+    Raises:
+        ReportError: nothing was attempted, or the generator recorded nothing
+            printed. Either makes the count vacuous — zero unattempted fields
+            out of zero printed ones is not a result — and FR-068 fails an empty
+            population rather than publishing it as a success.
+
+    **This is the escape hatch that makes declaring the subset in advance safe**
+    (FR-058). The declaration is fixed before any extraction runs, so it can be
+    wrong; when it is, the mistake is published **here, as a count**, instead of
+    being absorbed into the miss total where it would read as the model failing
+    to find something nobody looked for.
+
+    **A term with no recorded reason is named as a defect in the declaration.**
+    There are exactly three reasons a printed term goes unattempted and only the
+    third is a defect: `schemas.EXCLUDED_TERMS` pairs a term the declaration
+    excluded with why it cannot appear on a transmittal; a term the declaration
+    *includes* and this run did not attempt was retired in `field_vocabulary` at
+    run time, which is FR-024's mechanism working; and a term in neither is
+    unattempted and unreported at once, which is the case FR-058's "no printed
+    field goes unattempted by construction" exists to catch. The third is
+    published under its own heading and fails this item's total check, rather
+    than being folded into the same list as the two with a stated reason —
+    a retirement and a forgotten term look identical in a table that cannot tell
+    them apart.
+    """
+    attempted = list(attempted_fields)
+    if not attempted:
+        raise ReportError(
+            "FR-058 / FR-068: this run attempted zero fields, so every printed field is "
+            "unattempted and the count is the whole corpus. An empty attempted subset is "
+            "a vocabulary or configuration failure, not a narrow run."
+        )
+    printed = {term: int(count) for term, count in printed_counts.items()}
+    if any(count < 0 for count in printed.values()):
+        raise ReportError("FR-058: a printed-field count is negative")
+    printed_total = sum(printed.values())
+    if printed_total <= 0:
+        raise ReportError(
+            "FR-058 / FR-068: the generator recorded zero printed fields, so 'printed but "
+            "not attempted' ranges over nothing and reports zero for no reason at all. An "
+            "empty population fails rather than passes."
+        )
+
+    unattempted = {term: count for term, count in sorted(printed.items()) if term not in attempted}
+    unattempted_fields = sum(unattempted.values())
+    # Three reasons a printed term went unattempted, and only the third is a
+    # defect. A term the *declaration* excluded carries the exclusion's own
+    # stated reason; a term the declaration includes but this run did not
+    # attempt was retired at run time, which is FR-024's mechanism and not a
+    # mistake in the subset; a term in neither is unattempted and unreported at
+    # once, which is what FR-058's construction claim forbids.
+    declared_subset = {entry.name for entry in TRANSMITTAL_FIELD_SUBSET}
+    explained = {
+        term: EXCLUDED_TERMS.get(
+            term, RETIRED_AT_RUN_TIME_REASON if term in declared_subset else None
+        )
+        for term in unattempted
+    }
+    unexplained = sorted(term for term, reason in explained.items() if reason is None)
+
+    if not unattempted:
+        detail = (
+            "**Every term the generator recorded as printed was attempted.** The declared "
+            "subset covers the printed vocabulary for this corpus, which is what FR-058's "
+            "'no printed field goes unattempted by construction' claims — published as an "
+            "enumerated zero rather than left as an absent table, because a zero nobody "
+            "printed is indistinguishable from a check nobody ran."
+        )
+    else:
+        rows = [
+            "| Term | Printed fields | Recorded reason it was not attempted |",
+            "|---|---|---|",
+            *(
+                f"| `{term}` | {unattempted[term]} | "
+                f"{explained[term] or '**none recorded — see below**'} |"
+                for term in sorted(unattempted)
+            ),
+        ]
+        detail = (
+            f"**{unattempted_fields} printed field(s) across "
+            f"{len(unattempted)} vocabulary term(s) were printed and not attempted.** They "
+            f"are published here as a count rather than absorbed into the miss total, "
+            f"where they would read as the extractor failing to find something nobody "
+            f"looked for.\n\n" + "\n".join(rows)
+        )
+        if unexplained:
+            detail += (
+                f"\n\n**Defect in the declaration.** "
+                f"{', '.join(f'`{term}`' for term in unexplained)} "
+                f"were printed by the generator, were not attempted by this run, and carry "
+                f"no recorded reason. FR-058 requires the declared subset to cover every "
+                f"vocabulary term the generator can print on a transmittal; a term in "
+                f"neither the subset nor the recorded exclusions is unattempted and "
+                f"unreported at once, which is exactly what this item exists to surface."
+            )
+
+    body = (
+        f"This run attempted **{len(attempted)} of the seeded vocabulary's terms**: "
+        + ", ".join(f"`{term}`" for term in attempted)
+        + ".\n\nThe attempted subset is declared before any extraction runs, so it is "
+        "capable of being wrong; this item is where a mistake in it surfaces.\n\n"
+        f"{detail}\n\n"
+        "The counting unit is the **printed field** — one label-and-value the generator "
+        "recorded on a document — not the distinct term, because a transmittal listing "
+        "five items prints `manufacturer` five times and a count of terms would report "
+        "that as one."
+    )
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="printed field",
+        layer="SYNTHETIC",
+    )
+    return Section(
+        item=14,
+        body=body,
+        figures=(
+            Figure(
+                label="Printed fields not attempted",
+                value=unattempted_fields,
+                scope=labels,
+                note="published as a count, never folded into the miss total (FR-058)",
+            ),
+            Figure(
+                label="Vocabulary terms printed and not attempted",
+                value=len(unattempted),
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="run-scoped",
+                    kind="census",
+                    unit="vocabulary term",
+                    layer="SYNTHETIC",
+                ),
+                note=f"{len(unexplained)} of them carry no recorded reason",
+            ),
+            Figure(
+                label="Printed fields the generator recorded",
+                value=printed_total,
+                scope=labels,
+                note="the denominator, from the verified reference set (FR-067)",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every printed field is either attempted or published as unattempted",
+                population="every field the generator recorded as printed on the synthetic layer",
+                count=printed_total,
+                scope=labels,
+                outcome="held" if not unexplained else "FAILED — see the declaration defect above",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Item 17 — FR-068, the population and count behind every total check
 # ---------------------------------------------------------------------------
 
@@ -3147,6 +3540,246 @@ def index_procedure_section(*, run_id: str, chunks_resident: int) -> Section:
                 value=chunks_resident,
                 scope=labels,
                 note=f"`{VECTOR_INDEX_NAME}` dropped and rebuilt around a full-corpus load",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 21 — FR-019, the encoder parity bounds and the observed maxima (T096)
+# ---------------------------------------------------------------------------
+
+#: The committed probe set, which is also where the bounds live. Named as a
+#: constant because two things read it — `embed.parity_against_reference`, which
+#: asserts against the bounds, and this module, which publishes them — and a
+#: second spelling of the file name is a second file nobody notices is missing.
+PROBE_SET_ARTIFACT: str = "probes.json"
+
+#: The two keys `declared_bounds` carries. Read rather than restated: a bound
+#: written out here would be a third copy of a number whose whole content is
+#: that it was fixed **before** the comparison, and the copy that disagreed
+#: would be the one the report printed.
+DECLARED_BOUND_KEYS: tuple[str, ...] = (
+    "cosine_similarity_min",
+    "max_absolute_per_dimension_difference",
+)
+
+
+def declared_parity_bounds() -> Mapping[str, float]:
+    """FR-019's bounds, read from the committed probe set (ADR-0018).
+
+    Returns:
+        `cosine_similarity_min` and `max_absolute_per_dimension_difference`, as
+        `data/encoder/probes.json` declares them beside the probe texts they
+        were declared for.
+
+    Raises:
+        ReportError: the artifact is unreadable, or a declared bound is absent
+            or not a number. Refused rather than defaulted — a default here
+            would publish a tolerance nobody declared, under a heading saying it
+            was declared in advance.
+
+    **Read, never restated.** "Declared before the comparison" is the whole of
+    FR-019's first part, and a report carrying its own copy of the number can be
+    edited to match an observation exactly as a test carrying its own copy can.
+    `src/model/tests/ingest/test_encoder_parity.py` reads the same file for the
+    same reason, so the bound the assertion enforced and the bound the report
+    publishes are one value in one place.
+    """
+    path = artifact_path(PROBE_SET_ARTIFACT)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ReportError(
+            f"FR-019: the declared parity bounds cannot be read from {path}: {error}. The "
+            f"bounds are declared before the comparison and are published from the "
+            f"artifact rather than restated, so an unreadable artifact publishes no bound."
+        ) from error
+    bounds = document.get("declared_bounds") if isinstance(document, dict) else None
+    if not isinstance(bounds, dict):
+        raise ReportError(f"FR-019: {path} carries no `declared_bounds` object")
+    read: dict[str, float] = {}
+    for key in DECLARED_BOUND_KEYS:
+        value = bounds.get(key)
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            raise ReportError(
+                f"FR-019: {path} declares {key}={value!r}, which is not a number. A bound "
+                f"that cannot be compared against is not a bound."
+            )
+        read[key] = float(value)
+    return read
+
+
+def encoder_parity_section(*, run_id: str, measurement: ParityMeasurement) -> Section:
+    """Item 21: the declared bounds and the maxima observed against them (FR-019).
+
+    Args:
+        run_id: the run the report describes.
+        measurement: what `embed.parity_against_reference` scored the export at,
+            over the committed probe set. Passed in rather than computed here:
+            this module runs no inference session, and a report that created one
+            would be measuring the export a second time under a heading that
+            says it is publishing the first measurement.
+
+    Returns:
+        Item 21, with both declared bounds and both observed maxima as figures,
+        the probe count and layer coverage, and the verdict.
+
+    Raises:
+        ReportError: the measurement's declared bounds disagree with the
+            committed artifact's, the probe set spans fewer than E002's two
+            layers, or it is empty. The first is the one that matters: a
+            measurement asserted against one bound and published against another
+            would satisfy FR-019's wording in two places and its meaning in
+            neither.
+
+    **A breach is published as a failure of the gate, and the bound is never
+    widened to admit it** (FR-019, Principle VII). This section returns a
+    section either way — a report that refused to render on a breach would hide
+    the finding the requirement exists to surface — and the verdict is in the
+    prose and in the total check's outcome. The run itself is what fails: the
+    embedding path refuses to embed when either bound is breached, and this is
+    the record of that refusal rather than a substitute for it.
+    """
+    if not measurement.per_probe:
+        raise ReportError(
+            "FR-019 / FR-068: the parity measurement covers zero probes, so both maxima "
+            "range over nothing and the comparison passes for no reason at all."
+        )
+    declared = declared_parity_bounds()
+    supplied = {
+        "cosine_similarity_min": measurement.declared_cosine_minimum,
+        "max_absolute_per_dimension_difference": measurement.declared_max_absolute_difference,
+    }
+    disagreements = sorted(key for key in DECLARED_BOUND_KEYS if declared[key] != supplied[key])
+    if disagreements:
+        raise ReportError(
+            f"FR-019: the measurement was taken against "
+            f"{ {key: supplied[key] for key in disagreements} } and the committed probe set "
+            f"declares { {key: declared[key] for key in disagreements} }. The bound the "
+            f"assertion enforced and the bound this report publishes must be one number: "
+            f"'declared before the comparison' means nothing if the two can differ."
+        )
+    missing_layers = sorted({"REAL", "SYNTHETIC"} - set(measurement.layers))
+    if missing_layers:
+        raise ReportError(
+            f"FR-019: the probe set covers {sorted(measurement.layers)} and omits "
+            f"{missing_layers}. ADR-0018 accepts the export only against a probe set "
+            f"spanning both corpus layers; a set silently reduced to one layer would pass "
+            f"over a narrower population than the corpus it is used on."
+        )
+
+    within = measurement.within_bounds
+    verdict = (
+        f"**Both bounds hold.** Every one of the {len(measurement.per_probe)} probes scored "
+        f"at or above the declared cosine minimum and at or below the declared "
+        f"per-dimension difference. The observed maxima are published beside the bounds "
+        f"rather than only when they are breached — a tolerance reported without its "
+        f"observation is unfalsifiable, and an observation reported without its declared "
+        f"bound cannot be read as a pass or a fail."
+        if within
+        else (
+            f"**A declared bound is breached, and it is published as a failure of the "
+            f"gate.** The observed minimum cosine is "
+            f"{measurement.observed_minimum_cosine:.9f} against a declared "
+            f"{measurement.declared_cosine_minimum}, and the observed maximum "
+            f"per-dimension difference is "
+            f"{measurement.observed_maximum_absolute_difference:.3e} against a declared "
+            f"{measurement.declared_max_absolute_difference}. **The bound is not widened "
+            f"to admit the observation** (Principle VII, FR-019): the repair is to publish "
+            f"the observation as a finding about the export and decide whether the export "
+            f"is acceptable at that margin. A run breaching either bound refuses to embed."
+        )
+    )
+
+    reference = measurement.reference
+    body = (
+        f"**Declared before the comparison, and read from the artifact that declared "
+        f"them.** The bounds live in `data/encoder/{PROBE_SET_ARTIFACT}` beside the probe "
+        f"texts, committed with them; this section reads them from there rather than "
+        f"restating them, and refuses to render if the measurement was taken against a "
+        f"different pair. A report carrying its own copy of a bound can be edited to match "
+        f"an observation, which is the failure the 'declared before' clause exists to "
+        f"prevent.\n\n"
+        f"**Measured over a committed probe set spanning both corpus layers.** "
+        f"{len(measurement.per_probe)} probes across {sorted(measurement.layers)}, compared "
+        f"against reference vectors produced once by "
+        f"`{reference.get('library', 'the reference implementation')}` "
+        f"{reference.get('sentence_transformers', '')} on torch "
+        f"{reference.get('torch', '')} and committed — so the comparison runs offline from "
+        f"a clean checkout. The oracle is a **derived** one: it proves agreement with the "
+        f"reference, which is the claim ADR-0018 needs, and not that the reference is "
+        f"itself correct.\n\n"
+        f"{verdict}\n\n"
+        f"These two bounds are also the reproduction tolerance the near-duplicate cluster "
+        f"counts of item 11 are published under (FR-074, item 19) — the one class in this "
+        f"report not claimed exact — which is why they are printed here in full rather "
+        f"than cited."
+    )
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="descriptive",
+        unit="probe",
+        layer="pooled",
+    )
+    return Section(
+        item=21,
+        body=body,
+        figures=(
+            Figure(
+                label="Declared bound — minimum cosine similarity",
+                value=measurement.declared_cosine_minimum,
+                scope=labels,
+                note=f"read from `data/encoder/{PROBE_SET_ARTIFACT}`, declared before the run",
+            ),
+            Figure(
+                label="Declared bound — maximum absolute per-dimension difference",
+                value=measurement.declared_max_absolute_difference,
+                scope=labels,
+                note="never widened to admit an observation (Principle VII)",
+            ),
+            Figure(
+                label="Observed minimum cosine similarity",
+                value=measurement.observed_minimum_cosine,
+                scope=labels,
+                tolerance=REPRODUCTION_ENCODER_PARITY,
+                note="the worst probe, not the mean over them",
+            ),
+            Figure(
+                label="Observed maximum absolute per-dimension difference",
+                value=measurement.observed_maximum_absolute_difference,
+                scope=labels,
+                tolerance=REPRODUCTION_ENCODER_PARITY,
+                note="the worst probe, not the mean over them",
+            ),
+            Figure(
+                label="Probes compared",
+                value=len(measurement.per_probe),
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="run-scoped",
+                    kind="census",
+                    unit="probe",
+                    layer="pooled",
+                ),
+                note=f"spanning {sorted(measurement.layers)}",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every probe scores inside both bounds declared before the comparison",
+                population="every probe of the committed probe set, both corpus layers",
+                count=len(measurement.per_probe),
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="run-scoped",
+                    kind="census",
+                    unit="probe",
+                    layer="pooled",
+                ),
+                outcome="held" if within else "FAILED — published, not absorbed",
             ),
         ),
     )
