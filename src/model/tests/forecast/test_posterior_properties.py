@@ -24,7 +24,11 @@ from hypothesis import given
 from hypothesis import strategies as st
 from numpy.typing import NDArray
 
-from model.forecast.posterior import conditional_remaining_draws, survival_grid
+from model.forecast.posterior import (
+    PosteriorError,
+    conditional_remaining_draws,
+    survival_grid,
+)
 
 # ---------------------------------------------------------------------------
 # The interface this file pins
@@ -59,6 +63,17 @@ Z99 = 2.3263478740408408
 #: median, at the `σ = 0.527` AD-004 back-solves from that median and the P80.
 MU_FIT = 4.06
 SIGMA_FIT = 0.527
+
+#: Elapsed times at that scale a run can legitimately reach — a line ordered
+#: today, one at the median, and one open for the better part of three years.
+#: Every one of them is representable and must draw a strictly positive
+#: remainder.
+LONG_OPEN_ELAPSED_DAYS = (0.0, 1.0, 10.0, 58.0, 250.0, 500.0, 1000.0)
+
+#: Elapsed times past the point where `S(e)` underflows at that scale. Measured
+#: rather than chosen: every draw came back negative from about 5,000 days, and
+#: −15,610 at 20,000, before `conditional_remaining_draws` refused instead.
+UNDERFLOWED_ELAPSED_DAYS = (5_000.0, 20_000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -699,6 +714,53 @@ def test_a_non_positive_scale_is_refused(sigma: float) -> None:
     """
     with pytest.raises(ValueError):
         conditional_remaining_draws(uniforms=[0.5], mu=MU_FIT, sigma=sigma, elapsed_days=10.0)
+
+
+@pytest.mark.parametrize("elapsed", LONG_OPEN_ELAPSED_DAYS)
+def test_a_long_open_line_still_draws_a_strictly_positive_remainder(elapsed: float) -> None:
+    """The healthy direction, over the elapsed times a real run reaches.
+
+    A line open for a few years at this scale is far into the tail and still
+    perfectly representable: `S(e)` is small but not zero, so `F*` still varies
+    with `u` and `T` still exceeds `e`. Asserted on its own so the refusal below
+    cannot be satisfied by a module that refuses everything past the median.
+    """
+    assert np.all(remaining_of(midpoint_uniforms(256), MU_FIT, SIGMA_FIT, elapsed) > 0.0)
+
+
+@pytest.mark.parametrize("elapsed", UNDERFLOWED_ELAPSED_DAYS)
+def test_an_underflowed_survival_is_refused_and_names_the_elapsed_time(elapsed: float) -> None:
+    """The failing direction, and the point of this pair.
+
+    Once `S(e)` underflows, `1 − S(e)(1 − u)` rounds to exactly 1 for every `u`,
+    the precision cap pins `F*` to a single quantile, and `T` becomes a ceiling
+    independent of `e` — so `T − e` went negative without bound: every draw
+    negative from about 5,000 days and −15,610 at 20,000. A test that only
+    checked positivity in the healthy range is satisfied by that implementation.
+    """
+    with pytest.raises(PosteriorError) as refused:
+        conditional_remaining_draws(
+            uniforms=midpoint_uniforms(256), mu=MU_FIT, sigma=SIGMA_FIT, elapsed_days=elapsed
+        )
+
+    assert f"{elapsed:g}" in str(refused.value)
+
+
+@pytest.mark.parametrize("elapsed", LONG_OPEN_ELAPSED_DAYS + UNDERFLOWED_ELAPSED_DAYS)
+def test_no_elapsed_time_yields_a_non_positive_draw_by_either_route(elapsed: float) -> None:
+    """The invariant the two directions above are the halves of.
+
+    Every returned draw is strictly positive **or** the call refuses; there is
+    no elapsed time at which a non-positive remainder reaches the caller. That
+    is what `ck_line_posterior__draws_non_negative` would otherwise be left to
+    catch, a whole sampling run later and naming a column instead of a cause.
+    """
+    try:
+        drawn = remaining_of(midpoint_uniforms(256), MU_FIT, SIGMA_FIT, elapsed)
+    except PosteriorError:
+        return
+
+    assert np.all(drawn > 0.0)
 
 
 @pytest.mark.parametrize("u", [0.0, 1.0, -0.1, 1.5])

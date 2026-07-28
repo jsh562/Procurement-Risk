@@ -486,4 +486,4 @@ The Analyze gate re-ran both audits against the artifacts as amended by three ch
 | SC-040 | DV-043 — layer label and datasheet reference present in the reader-facing artifact | — *(presence over an emitted artifact; exclusion class: covered by DV-021's emitted-set enumeration)* |
 | FR-041 | Pre-registration of any estimated band, enforced as AD-005 enforces the fraction and seed — a committed constant plus commit history (G-11) | — *(pre-registration is unfalsifiable by check; exclusion class named)* |
 
-**Carried forward, disclosed rather than closed**: the nineteen gaps `G-1`–`G-19` in `data-model.md`, and the eleven propagation obligations `P-1`–`P-11` above — each of which is a statement in a document this branch may not edit.
+**Carried forward, disclosed rather than closed**: the twenty gaps `G-1`–`G-20` in `data-model.md`, and the eleven propagation obligations `P-1`–`P-11` above — each of which is a statement in a document this branch may not edit.
