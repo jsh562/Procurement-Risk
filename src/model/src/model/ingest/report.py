@@ -45,6 +45,12 @@ from pathlib import Path
 
 import numpy as np
 
+from model.compute.confidence import (
+    DEDUCTION_ORDER,
+    SIGNAL_DOMAIN,
+    ParseSignals,
+    compute_confidence,
+)
 from model.compute.metrics import (
     F1_OMISSION_REASON,
     INTERVAL_METHOD,
@@ -55,38 +61,52 @@ from model.corpus.derive import normalize_page_text
 from model.ingest.baseline import BASELINE_ID, BASELINE_INDEPENDENCE
 from model.ingest.chunker import BOUNDARY_CLASSES, DocumentChunking
 from model.ingest.documents import SHARED_LIBRARY_PROJECT
+from model.ingest.failures import FAILURE_OUTCOMES
+from model.ingest.runs import ConfidencePolicy
 
 __all__ = [
+    "ATTEMPT_UNIT",
     "BASELINE_LABELS",
+    "COUNTING_UNITS",
     "DECLARED_BASELINE_CRITERION",
     "DECLARED_BASELINE_LABEL",
     "DECLARED_SIMILARITY_GRID",
+    "DOCUMENT_UNIT",
     "FIGURE_KINDS",
     "GENERATION_SETS",
+    "HEURISTIC_ORDERING_STATEMENT",
+    "INVOCATION_UNIT",
     "LAYERS",
     "NEAR_DUPLICATE_CAUSES",
     "PERCENTILE_POINTS",
     "REPORT_CONTENTS",
     "REPORT_PATH",
     "RULE_OF_THREE_MINIMUM",
+    "AttemptLedger",
     "CarriedClaim",
     "ChunkVector",
     "ChunkingProfile",
+    "ConfidenceDistribution",
     "ContentItem",
     "Figure",
     "FigureScope",
+    "InvocationLedger",
     "LayerChunking",
     "NearDuplicateCounts",
     "ReportError",
     "SampledClaim",
     "Section",
     "TotalCheck",
+    "attempt_ledger_section",
     "build_report",
     "chunk_identity_section",
     "chunking_section",
     "collect_total_checks",
+    "confidence_domain",
+    "confidence_section",
     "declared_baseline_label",
     "extraction_quality_section",
+    "failure_breakdown_section",
     "human_inspection_section",
     "measure_near_duplicates",
     "near_duplicate_section",
@@ -96,8 +116,20 @@ __all__ = [
     "read_resident_chunks",
     "recognition_error_section",
     "reconciliation_section",
+    "tally_confidence",
     "total_checks_section",
 ]
+
+#: FR-069's three counting units, named so a figure can carry the one it counts
+#: rather than a word chosen at the call site. `FigureScope.unit` is not
+#: restricted to these — a chunk-length figure counts leaves and a cluster count
+#: counts clusters — but the ledger figures below are, because the whole point
+#: of FR-069 is that an attempt-level and an invocation-level number never share
+#: a table.
+ATTEMPT_UNIT: str = "attempt"
+INVOCATION_UNIT: str = "invocation"
+DOCUMENT_UNIT: str = "document"
+COUNTING_UNITS: tuple[str, ...] = (ATTEMPT_UNIT, INVOCATION_UNIT, DOCUMENT_UNIT)
 
 #: FR-071: one artifact, at a fixed path, regenerated in full. Relative to the
 #: repository root, which is where the caller resolves it — this module writes
@@ -1801,6 +1833,589 @@ def reconciliation_section(*, run_id: str, trace_id: str, attempted: int, record
                 count=attempted,
                 scope=labels,
                 outcome="held" if agrees else "FAILED",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 6 — FR-033, FR-046, FR-057: floor, eight-score distribution, weights
+# ---------------------------------------------------------------------------
+
+#: FR-033's required disclosure, held as one string so the sentence the report
+#: prints and the sentence a reader quotes are the same object. Printed **beside
+#: the distribution** and not only in a limitations table, with the condition
+#: that would reverse it — a claim with no stated way of being wrong is not a
+#: disclosure.
+HEURISTIC_ORDERING_STATEMENT: str = (
+    "**This score is a heuristic ordering, not a calibrated probability.** It is "
+    "deterministic arithmetic over three parse signals (FR-031); it is not a frequency, "
+    "it has not been fitted to any labelled outcome, and two fields' scores are not "
+    "comparable as though they shared a scale. **What would reverse this statement**: a "
+    "frozen, hashed, labelled sample of extracted fields against which the score's "
+    "ordering could be measured — at which point the number would be reported as a "
+    "calibrated quantity with its calibration set named, or withdrawn."
+)
+
+
+@dataclass(frozen=True)
+class ConfidenceDistribution:
+    """FR-033's distribution: all eight scores, stored and rejected apart.
+
+    **Two populations, counted separately, and the rejected half is carried from
+    the run's own tally rather than queried from rows.** A rejected value has no
+    row — it was recorded as a failure with outcome `confidence_below_threshold`
+    and its score was never stored — so a distribution built by querying
+    `extracted_value` would silently be the stored half only, and would report
+    that the floor rejected nothing.
+
+    Keys are the eight `ParseSignals` combinations. A combination nothing took
+    appears with a count of **zero** rather than as an absent row, which is what
+    makes "zero admissible scores are omitted" (SC-017) checkable.
+    """
+
+    stored: Mapping[str, int]
+    rejected: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        expected = {signals.description for signals in confidence_domain()}
+        for name, counts in (("stored", self.stored), ("rejected", self.rejected)):
+            if set(counts) != expected:
+                missing = sorted(expected - set(counts))
+                extra = sorted(set(counts) - expected)
+                raise ReportError(
+                    f"FR-033: the {name} distribution covers {len(counts)} of the eight "
+                    f"combinations FR-057's signals admit; missing={missing} extra={extra}. "
+                    f"A score nothing took is published as a zero, not as an absent row."
+                )
+            if any(value < 0 for value in counts.values()):
+                raise ReportError(f"FR-033: the {name} distribution carries a negative count")
+
+    @property
+    def stored_total(self) -> int:
+        return sum(self.stored.values())
+
+    @property
+    def rejected_total(self) -> int:
+        return sum(self.rejected.values())
+
+    @property
+    def computed_total(self) -> int:
+        """Every confidence the run computed, which is what FR-033 denominates on."""
+        return self.stored_total + self.rejected_total
+
+
+def confidence_domain() -> tuple[ParseSignals, ...]:
+    """The eight signal combinations, from the module that defines the score.
+
+    Imported through a function rather than at module scope so the report states
+    the domain by reference to `model.compute.confidence` — a second enumeration
+    here would be a second answer, and the one that disagreed would be the one
+    the report printed.
+    """
+    return SIGNAL_DOMAIN
+
+
+def tally_confidence(
+    stored: Iterable[ParseSignals], rejected: Iterable[ParseSignals]
+) -> ConfidenceDistribution:
+    """Count the run's computed scores into the eight combinations (FR-033).
+
+    Args:
+        stored: the signals of every value the run persisted.
+        rejected: the signals of every score the floor rejected, carried from
+            the run's own tally. These have no rows to be queried from.
+
+    Returns:
+        The distribution, with every one of the eight present and a zero where
+        nothing took that combination.
+    """
+    counts: dict[str, dict[str, int]] = {
+        "stored": {signals.description: 0 for signals in confidence_domain()},
+        "rejected": {signals.description: 0 for signals in confidence_domain()},
+    }
+    # No unknown-key branch: `ParseSignals` validates its own domain, and
+    # `description` is derived from exactly the three binary facts the domain is
+    # built from — so every well-formed signal set lands on one of the eight
+    # keys by construction. A guard here would be a branch nothing can reach.
+    for population, signal_set in (("stored", stored), ("rejected", rejected)):
+        for signals in signal_set:
+            counts[population][signals.description] += 1
+    return ConfidenceDistribution(stored=counts["stored"], rejected=counts["rejected"])
+
+
+def confidence_section(
+    *, run_id: str, policy: ConfidencePolicy, distribution: ConfidenceDistribution
+) -> Section:
+    """Item 6: the floor, the eight-score distribution, the weights, the order.
+
+    Args:
+        run_id: the run the report describes.
+        policy: the floor and the three weights, **read from that run's own
+            `ingestion_run` row** rather than from the declared constants. A
+            report printing today's policy beside last run's distribution would
+            publish a floor that never rejected anything in it.
+        distribution: the run's own tally over the eight combinations.
+
+    Returns:
+        Item 6, with the distribution as a table and the floor, weights and
+        totals as labelled figures.
+
+    Raises:
+        ReportError: the run computed no confidence at all. FR-068's rule
+            applied to the one figure that would otherwise be vacuously
+            complete — a distribution over zero scores omits no admissible
+            score and discloses nothing.
+
+    **A distribution, never a mean** (FR-033, Principle II). A mean confidence
+    would collapse exactly the shape the floor is defined against: two runs with
+    identical means can differ entirely in what the floor rejected.
+    """
+    if distribution.computed_total <= 0:
+        raise ReportError(
+            "FR-033: the run computed zero confidences, so the published distribution "
+            "would omit no admissible score while disclosing nothing. An empty population "
+            "fails rather than passes (FR-068)."
+        )
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="descriptive",
+        unit="extracted value",
+        layer="SYNTHETIC",
+    )
+    policy_labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="descriptive",
+        unit="score",
+        layer="pooled",
+    )
+
+    rows = [
+        "| Label | Provenance | Invocation | Score | Stored | Rejected |",
+        "|---|---|---|---|---|---|",
+    ]
+    for signals in confidence_domain():
+        score = compute_confidence(signals, policy.weights)
+        key = signals.description
+        rows.append(
+            f"| {signals.label_match} | "
+            f"{'page-split' if signals.page_split else 'single-chunk'} | "
+            f"{'repaired' if signals.validated_after_repair else 'first attempt'} | "
+            f"{score!r} | {distribution.stored[key]} | {distribution.rejected[key]} |"
+        )
+
+    weight_rows = [
+        "| Order | Signal | Deduction | Column |",
+        "|---|---|---|---|",
+    ]
+    for position, name in enumerate(DEDUCTION_ORDER, start=1):
+        weight_rows.append(
+            f"| {position} | {name.replace('_', ' ')} | "
+            f"{getattr(policy.weights, name)!r} | `ingestion_run.deduction_{name}` |"
+        )
+
+    body = (
+        f"**Declared floor: {policy.floor!r}**, fixed before the first run and not moved in "
+        f"response to the distribution below (FR-032). It is read from this run's own "
+        f"`ingestion_run.confidence_floor`, not from a code constant, so what is printed "
+        f"here is the floor that actually decided what was stored.\n\n"
+        f"The floor is stated by **what it excludes** rather than by its number: any "
+        f"repaired invocation, and any value both alternate-labelled and page-split. Both "
+        f"are database facts on the run row — `ck_ingestion_run__floor_excludes_repair` and "
+        f"`ck_ingestion_run__floor_excludes_alt_split` — written over the weight columns, "
+        f"so a run declaring a floor that fails to reject either is unstorable.\n\n"
+        f"**Deductions from 1.0, applied left to right in this order** (FR-046, FR-057). "
+        f"The order is part of the record: `double precision` subtraction is not "
+        f"associative, so `1.0 - a - p` and `1.0 - (a + p)` need not be bit-identical, and "
+        f"SC-026's 'reproduces the stored value exactly' means bit equality.\n\n"
+        + "\n".join(weight_rows)
+        + "\n\n"
+        "**Distribution over all eight scores the three signals admit** (FR-033). A score "
+        "nothing took is published as a zero rather than as an absent row. The two "
+        "populations are counted apart: **stored** is the values persisted with their "
+        "confidence intact, **rejected** is every score the floor refused — carried from "
+        "the run's own tally, because a rejected score has no row to be queried from and a "
+        "distribution built from rows alone would report that the floor rejected "
+        "nothing.\n\n" + "\n".join(rows) + "\n\n" + HEURISTIC_ORDERING_STATEMENT
+    )
+
+    return Section(
+        item=6,
+        body=body,
+        figures=(
+            Figure(label="Declared confidence floor", value=policy.floor, scope=policy_labels),
+            *(
+                Figure(
+                    label=f"Deduction weight — {name.replace('_', ' ')}",
+                    value=getattr(policy.weights, name),
+                    scope=policy_labels,
+                    note=f"application order position {position} of {len(DEDUCTION_ORDER)}",
+                )
+                for position, name in enumerate(DEDUCTION_ORDER, start=1)
+            ),
+            Figure(
+                label="Values stored with their confidence intact",
+                value=distribution.stored_total,
+                scope=labels,
+            ),
+            Figure(
+                label="Scores the floor rejected",
+                value=distribution.rejected_total,
+                scope=labels,
+                note="carried from the run's own tally; a rejected score has no row",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every computed confidence is counted in exactly one of the two populations",
+                population="every confidence this run computed, stored and rejected",
+                count=distribution.computed_total,
+                scope=labels,
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 7 — FR-034, the failure count broken down by each of the seven
+# ---------------------------------------------------------------------------
+
+
+def failure_breakdown_section(*, run_id: str, counts: Mapping[str, int], attempts: int) -> Section:
+    """Item 7: the failure count by each of the seven outcomes, zeros included.
+
+    Args:
+        run_id: the run the report describes.
+        counts: one entry per member of `FAILURE_OUTCOMES`, as
+            `failures.outcome_counts` produces. An outcome no failure took
+            carries a `0`.
+        attempts: the run's attempt total, which is the denominator FR-069
+            assigns to per-field outcomes.
+
+    Returns:
+        Item 7, with one labelled figure per outcome and the attempt
+        denominator beside them.
+
+    Raises:
+        ReportError: an outcome is missing from `counts`, an outcome outside the
+            closed seven appears, a count is negative, the failure total exceeds
+            the attempt total, or the attempt total is not positive. The missing
+            case matters most: an omitted outcome reads as an outcome that took
+            no failures, and the two are what the zero-inclusion rule exists to
+            distinguish.
+
+    **Denominated per attempt, and the unit is on every figure** (FR-069,
+    SC-018). Per-field outcomes and any failure rate are attempt-level; the
+    valid, repaired and failed counts of item 13 are invocation-level. They are
+    two tables in two items rather than one table whose rows do not share a
+    denominator.
+    """
+    missing = [outcome for outcome in FAILURE_OUTCOMES if outcome not in counts]
+    if missing:
+        raise ReportError(
+            f"FR-034: the failure breakdown omits {missing}. An outcome no failure took is "
+            f"published as a zero — an omitted row and a zero row read the same to a "
+            f"reader, and only one of them is a measurement."
+        )
+    unknown = sorted(set(counts) - set(FAILURE_OUTCOMES))
+    if unknown:
+        raise ReportError(
+            f"FR-034: {unknown} are outside the closed set of seven "
+            f"{list(FAILURE_OUTCOMES)}. No new outcome value is introduced."
+        )
+    if any(value < 0 for value in counts.values()):
+        raise ReportError("FR-034: the failure breakdown carries a negative count")
+    if attempts <= 0:
+        raise ReportError(
+            "FR-069: the failure breakdown is denominated on attempts, and this run "
+            "reports none. An empty population fails rather than passes (FR-068)."
+        )
+    total = sum(counts.values())
+    if total > attempts:
+        raise ReportError(
+            f"FR-069: {total} failures against {attempts} attempts. Every attempt resolves "
+            f"to exactly one stored value or one failure, so failures cannot exceed "
+            f"attempts — the ledger does not reconcile."
+        )
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit=ATTEMPT_UNIT,
+        layer="SYNTHETIC",
+    )
+    body = (
+        f"**Every extraction failure carries one outcome from the closed set of seven** "
+        f"(FR-034), which restates `ck_extraction_failure__outcome`; no eighth value is "
+        f"introduced, and an eighth would be a migration and an amendment rather than a "
+        f"new label.\n\n"
+        f"The breakdown below names **all seven**, an outcome no failure took appearing as "
+        f"a **zero** rather than as an absent row — an omitted row and a zero row read the "
+        f"same to a reader and only one of them is a measurement.\n\n"
+        f"**Counting unit: the attempt** — one field on one chunk, except a field absent "
+        f"from a whole document, which is one attempt for that document (FR-069). The "
+        f"denominator is this run's {attempts} attempts. The valid, repaired and failed "
+        f"counts of item 13 are **invocation**-level and are published in their own table "
+        f"for that reason: the two units do not share a denominator and a single table "
+        f"would imply they did.\n\n"
+        f"Total failures: **{total}** of {attempts} attempts."
+    )
+    return Section(
+        item=7,
+        body=body,
+        figures=tuple(
+            Figure(
+                label=f"Failures with outcome `{outcome}`",
+                value=counts[outcome],
+                scope=labels,
+                note="zero published rather than omitted" if counts[outcome] == 0 else None,
+            )
+            for outcome in FAILURE_OUTCOMES
+        )
+        + (
+            Figure(
+                label="Failures, all outcomes",
+                value=total,
+                scope=labels,
+                note=f"denominator: {attempts} attempts",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every failure carries one outcome from the closed set of seven",
+                population="every extraction failure this run recorded",
+                count=total if total else attempts,
+                scope=labels,
+                outcome="held" if total else "held (no failure recorded)",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 13 — FR-069, the attempt ledger and its two counting units
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InvocationLedger:
+    """SC-018's three counts, at the **invocation** unit.
+
+    One invocation is one model request covering one chunk's declared field
+    subset — the unit FR-025's validity and FR-026's repair budget are counted
+    in. `repaired` is a success: the value validated, on the second attempt.
+    """
+
+    valid: int
+    repaired: int
+    failed: int
+
+    def __post_init__(self) -> None:
+        if min(self.valid, self.repaired, self.failed) < 0:
+            raise ReportError("FR-069: invocation counts are non-negative")
+
+    @property
+    def total(self) -> int:
+        return self.valid + self.repaired + self.failed
+
+    @property
+    def repaired_rate(self) -> float:
+        """SC-018 requires the repaired rate in its own right, not folded in.
+
+        Raises:
+            ReportError: the run issued no invocation. A rate over an empty
+                denominator is not zero — it is undefined, and publishing it as
+                zero would report a run that repaired nothing.
+        """
+        if self.total <= 0:
+            raise ReportError(
+                "FR-069: the repaired rate has no denominator — this run issued no "
+                "invocation. An empty population fails rather than passing as a zero rate."
+            )
+        return self.repaired / self.total
+
+
+@dataclass(frozen=True)
+class AttemptLedger:
+    """FR-069's ledger, at the **attempt** unit.
+
+    An attempt is one field on one chunk, except a field absent from a whole
+    document, which is one attempt for that document. Every attempt resolves to
+    exactly one stored value or one failure record, with zero unaccounted for —
+    which is what `unaccounted` measures rather than assumes.
+    """
+
+    attempted: int
+    stored: int
+    failed: int
+
+    def __post_init__(self) -> None:
+        if min(self.attempted, self.stored, self.failed) < 0:
+            raise ReportError("FR-069: attempt counts are non-negative")
+        if self.attempted <= 0:
+            raise ReportError(
+                "FR-069: the attempt ledger reports zero attempts, which reconciles with "
+                "zero resolutions for no reason at all. An empty population fails rather "
+                "than passes (FR-068)."
+            )
+
+    @property
+    def resolved(self) -> int:
+        return self.stored + self.failed
+
+    @property
+    def unaccounted(self) -> int:
+        """Attempts that resolved to neither a stored value nor a failure.
+
+        Signed deliberately: a negative value means more resolutions than
+        attempts, which is a different defect from a lost attempt and would be
+        hidden by an absolute difference.
+        """
+        return self.attempted - self.resolved
+
+    @property
+    def reconciles(self) -> bool:
+        return self.unaccounted == 0
+
+
+def attempt_ledger_section(
+    *, run_id: str, invocations: InvocationLedger, attempts: AttemptLedger
+) -> Section:
+    """Item 13: valid, repaired and failed, as two tables with their units.
+
+    Args:
+        run_id: the run the report describes.
+        invocations: SC-018's three counts, at the invocation unit.
+        attempts: FR-069's ledger, at the attempt unit.
+
+    Returns:
+        Item 13, with the two units in two tables and each figure labelled with
+        the unit it counts.
+
+    Raises:
+        ReportError: the run issued no invocation, or the ledger reports no
+            attempt. Both are refused rather than published as zeros, for the
+            reason FR-068 gives.
+
+    **Two tables and not one.** A single table would put an invocation count and
+    an attempt count in adjacent rows, which reads as though they shared a
+    denominator. They do not: one invocation covers a chunk's whole declared
+    field subset, so one invocation is many attempts.
+    """
+    if invocations.total <= 0:
+        raise ReportError(
+            "FR-069: the invocation ledger reports zero invocations. A run that issued "
+            "none has no valid, repaired or failed counts to publish, and three zeros "
+            "would read as a run that tried and failed at nothing."
+        )
+
+    invocation_labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit=INVOCATION_UNIT,
+        layer="SYNTHETIC",
+    )
+    attempt_labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit=ATTEMPT_UNIT,
+        layer="SYNTHETIC",
+    )
+
+    body = (
+        f"**The counting units are named beside every figure, and there are three** "
+        f"(FR-069). An **attempt** is one field on one chunk, except a field absent from a "
+        f"whole document, which is one attempt for that document (FR-058). An "
+        f"**invocation** is one model request covering one chunk's declared field subset, "
+        f"and is the unit FR-025's validity and FR-026's repair budget are counted in. A "
+        f"**document** is the unit of the whole-document absence record and of the "
+        f"transaction (FR-054).\n\n"
+        f"**Invocation-level** (SC-018). `repaired` is a success — the value validated, on "
+        f"the second attempt — and it is published in its own right rather than folded "
+        f"into `valid`, because the repair is FR-057's third deduction signal and a run "
+        f"that repaired half its invocations is not the same run as one that repaired "
+        f"none.\n\n"
+        f"| Outcome | Count | Unit |\n|---|---|---|\n"
+        f"| valid | {invocations.valid} | invocation |\n"
+        f"| repaired | {invocations.repaired} | invocation |\n"
+        f"| failed | {invocations.failed} | invocation |\n"
+        f"| **total** | {invocations.total} | invocation |\n"
+        f"| repaired rate | {invocations.repaired_rate:.4f} | proportion of invocations |\n\n"
+        f"**Attempt-level** (FR-069). Every attempt resolves to exactly one stored value or "
+        f"one failure record, with zero unaccounted for. The unaccounted count is published "
+        f"whether or not it is zero: a ledger that printed only its verdict would be a "
+        f"claim about itself.\n\n"
+        f"| Term | Count | Unit |\n|---|---|---|\n"
+        f"| attempted | {attempts.attempted} | attempt |\n"
+        f"| resolved to a stored value | {attempts.stored} | attempt |\n"
+        f"| resolved to a failure record | {attempts.failed} | attempt |\n"
+        f"| **unaccounted for** | {attempts.unaccounted} | attempt |\n"
+    )
+
+    return Section(
+        item=13,
+        body=body,
+        figures=(
+            Figure(
+                label="Invocations valid on the first attempt",
+                value=invocations.valid,
+                scope=invocation_labels,
+            ),
+            Figure(
+                label="Invocations valid only after a repair",
+                value=invocations.repaired,
+                scope=invocation_labels,
+                note="FR-057's third deduction signal",
+            ),
+            Figure(
+                label="Invocations that produced no schema-valid value",
+                value=invocations.failed,
+                scope=invocation_labels,
+            ),
+            Figure(
+                label="Repaired rate",
+                value=round(invocations.repaired_rate, 6),
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="run-scoped",
+                    kind="descriptive",
+                    unit="proportion of invocations",
+                    layer="SYNTHETIC",
+                ),
+            ),
+            Figure(
+                label="Field extractions attempted", value=attempts.attempted, scope=attempt_labels
+            ),
+            Figure(
+                label="Attempts resolved to a stored value",
+                value=attempts.stored,
+                scope=attempt_labels,
+            ),
+            Figure(
+                label="Attempts resolved to a failure record",
+                value=attempts.failed,
+                scope=attempt_labels,
+            ),
+            Figure(
+                label="Attempts unaccounted for",
+                value=attempts.unaccounted,
+                scope=attempt_labels,
+                note="published whether or not it is zero",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every attempt resolves to exactly one stored value or one failure",
+                population="every field extraction this run attempted",
+                count=attempts.attempted,
+                scope=attempt_labels,
+                outcome="held" if attempts.reconciles else "FAILED",
             ),
         ),
     )

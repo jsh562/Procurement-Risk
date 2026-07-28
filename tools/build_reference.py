@@ -60,7 +60,12 @@ payload = {
         for probe, vector in zip(probes, vectors, strict=True)
     },
 }
+# newline="\n" is load-bearing — see the note in build_probes.py. The digest is
+# taken over these bytes; Windows text mode would write CRLF and record a hash
+# that no Linux checkout can reproduce.
 (ENCODER / "parity-reference.json").write_text(
-    json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n", "utf-8"
+    json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+    encoding="utf-8",
+    newline="\n",
 )
 print("wrote", len(payload["vectors"]), "vectors of", len(next(iter(payload["vectors"].values()))))

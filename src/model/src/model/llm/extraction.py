@@ -23,15 +23,34 @@ through the error rather than through the return. `max_tokens` is the gateway's
 there is no temperature, no system prompt, and no structured-output parameter —
 so the JSON contract is prompt text and `output_schema` is what checks it.
 
+**Validate, repair at most once, then fail closed** (FR-025, FR-026). The order
+is fixed and there is no branch out of it. `output_schema` is submitted with the
+request, so the gateway validates the first response against *the caller's*
+schema; a failure spends the single repair; a second failure raises. Nothing
+unvalidated is returned, persisted, or logged — this module re-validates the
+returned content against the same schema before it constructs an outcome, and no
+message it raises interpolates `result.content`. `REPAIR_BUDGET` is imported from
+`gateway.validation` rather than written as `1` here, because a budget restated
+on this side is a second number that can disagree with the one actually enforced.
+
 **Two failure classes, and the split is FR-056's.** A missing fixture in replay
 or an unreachable provider is a **run-level** failure that aborts the run: it is
 not one of the seven per-field outcomes, because nothing was ever asked of the
-model and no source chunk explains it. A model output that will not validate
-after its one repair is a **per-field** failure with outcome `schema_violation`.
-`ExtractionRunFailure` and `ExtractionSchemaViolation` are those two, kept apart
-here so a caller cannot record one as the other by catching too widely. FR-025
-and FR-026's full outcome mapping is T055's; what this module fixes is that the
-two classes never merge.
+model and no source chunk explains it. A model output that will not validate is a
+**per-field** failure. `ExtractionRunFailure` and `ExtractionSchemaViolation` are
+those two, kept apart here so a caller cannot record one as the other by catching
+too widely.
+
+**FR-026's fail-closed outcome is `repair_budget_exhausted`, and it is not the
+same row as `schema_violation`.** Both are members of FR-034's closed seven and
+E003's `ck_extraction_failure__outcome` admits both, so collapsing them would
+publish a repair budget that was never observed to be spent. The rule is the
+gateway's own `repair_attempt_count`: a validation failure reported with the
+budget spent is `repair_budget_exhausted`; one reported with nothing spent — a
+name outside the vocabulary (FR-024), or content that does not satisfy the
+submitted schema at all — is `schema_violation`. `ExtractionSchemaViolation`
+carries the outcome and the attempt count, so the caller writes FR-035's fields
+from the error rather than deciding them again.
 
 **The trace identifier is explicit.** The gateway reads no thread-local and no
 context variable (TR-080), so the run's one trace identifier is a parameter on
@@ -49,16 +68,20 @@ from gateway.api import InvocationRequest, InvocationResult
 from gateway.api import invoke as gateway_invoke
 from gateway.errors import GatewayError, GatewayValidationError
 from gateway.fixtures import FixtureMissError
+from gateway.validation import MAX_REPAIR_ATTEMPTS
 from pydantic import ValidationError
 
 from model.llm.prompts import PROMPT_TEMPLATE_ID, render_extraction_prompt
 from model.llm.schemas import ChunkExtraction, ExtractedField, FieldTerm
 
 __all__ = [
+    "OUTCOME_REPAIR_BUDGET_EXHAUSTED",
+    "OUTCOME_SCHEMA_VIOLATION",
     "PROMPT_TEMPLATE_ID",
     "REPAIR_BUDGET",
     "RUN_FAILURE_FIXTURE_MISSING",
     "RUN_FAILURE_PROVIDER_UNREACHABLE",
+    "VALIDATED_OUTCOMES",
     "ExtractionChunk",
     "ExtractionError",
     "ExtractionOutcome",
@@ -68,16 +91,32 @@ __all__ = [
     "extract_fields",
 ]
 
-#: TR-007's budget, fixed by the gateway and restated here only so a reader of
-#: this module does not have to go looking. It is **not** configurable from this
-#: side: `validate_or_repair` enforces it and raises when it is spent.
-REPAIR_BUDGET: Final[int] = 1
+#: TR-007's budget, taken from the gateway's own constant rather than written as
+#: `1` here. It is **not** configurable from this side: `validate_or_repair`
+#: enforces it and raises when it is spent, so a literal on this side would be a
+#: second number that can disagree with the one that actually runs — which is
+#: exactly the disagreement FR-026's "at most one" would then be measured
+#: against.
+REPAIR_BUDGET: Final[int] = MAX_REPAIR_ATTEMPTS
 
 #: Two of FR-056's five run-level kinds — the two this module can produce.
 #: `corpus_digest_mismatch`, `document_id_collision` and `oversized_sentence`
 #: arise before any invocation and belong to the intake path.
 RUN_FAILURE_FIXTURE_MISSING: Final[str] = "fixture_missing"
 RUN_FAILURE_PROVIDER_UNREACHABLE: Final[str] = "provider_unreachable"
+
+#: FR-025: the only two gateway outcomes that accompany a validated value. The
+#: third, `failed`, is never *returned* — TR-006 makes it a raise — so a result
+#: carrying it is a gateway that handed back an unvalidated value, and this
+#: module refuses it rather than reading its content.
+VALIDATED_OUTCOMES: Final[tuple[str, ...]] = ("valid", "repaired")
+
+#: FR-034's members this module can produce, both from `ck_extraction_failure__
+#: outcome`'s closed seven. Named constants rather than inline strings so the
+#: caller writing the row and the classifier choosing the value are the same
+#: two objects.
+OUTCOME_SCHEMA_VIOLATION: Final[str] = "schema_violation"
+OUTCOME_REPAIR_BUDGET_EXHAUSTED: Final[str] = "repair_budget_exhausted"
 
 
 class ExtractionError(RuntimeError):
@@ -113,19 +152,39 @@ class ExtractionRunFailure(ExtractionError):
 
 
 class ExtractionSchemaViolation(ExtractionError):
-    """FR-025 / FR-026: no schema-valid output after the one repair.
+    """FR-025 / FR-026: no schema-valid output, with or without the one repair.
 
-    Per-field, and recorded as an `extraction_failure` row with outcome
-    `schema_violation`. Carries the failing field paths the gateway reported and
-    **never the model's output** — the output is what failed validation, so
-    passing it along would be handing back the unvalidated value FR-025 forbids,
-    arriving by a quieter route.
+    Per-field, and recorded as an `extraction_failure` row. Carries the failing
+    field paths the gateway reported and **never the model's output** — the
+    output is what failed validation, so passing it along would be handing back
+    the unvalidated value FR-025 forbids, arriving by a quieter route.
+
+    `outcome` is one of FR-034's seven and is decided from `repair_attempt_count`
+    rather than from the call site: `repair_budget_exhausted` when the single
+    repair was spent and the second response failed too, `schema_violation` when
+    the output was refused without a repair having been available or attempted.
+    `repair_attempt_count` is FR-035's fourth required field and is carried here
+    so the caller writes the row from the error rather than counting again.
     """
 
-    def __init__(self, detail: str, *, field_paths: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        detail: str,
+        *,
+        field_paths: tuple[str, ...] = (),
+        repair_attempt_count: int = 0,
+    ) -> None:
         super().__init__(detail)
         self.detail = detail
         self.field_paths = field_paths
+        self.repair_attempt_count = repair_attempt_count
+
+    @property
+    def outcome(self) -> str:
+        """The `extraction_failure.outcome` this refusal is recorded under."""
+        if self.repair_attempt_count >= REPAIR_BUDGET:
+            return OUTCOME_REPAIR_BUDGET_EXHAUSTED
+        return OUTCOME_SCHEMA_VIOLATION
 
 
 @dataclass(frozen=True)
@@ -195,8 +254,9 @@ def _classify(error: GatewayError) -> ExtractionError:
     """
     if isinstance(error, GatewayValidationError):
         return ExtractionSchemaViolation(
-            f"no schema-valid output after {REPAIR_BUDGET} repair attempt (FR-026): {error}",
+            f"no schema-valid output within the repair budget of {REPAIR_BUDGET} (FR-026): {error}",
             field_paths=error.field_paths,
+            repair_attempt_count=error.repair_attempt_count,
         )
     if isinstance(error, FixtureMissError):
         return ExtractionRunFailure(
@@ -248,9 +308,11 @@ def extract_fields(
         ExtractionRunFailure: a missing fixture in `replay`, or a provider that
             could not be reached. FR-056: the run aborts and the failure is
             recorded on the run record, never as a per-field row.
-        ExtractionSchemaViolation: the model produced nothing schema-valid
-            within the one repair the gateway allows. Per-field, outcome
-            `schema_violation`.
+        ExtractionSchemaViolation: the model produced nothing schema-valid.
+            Per-field, and the error's own `outcome` names which of FR-034's
+            seven the row takes — `repair_budget_exhausted` when the single
+            repair was spent, `schema_violation` when the output was refused
+            without one.
         ValueError: the chunk carries no text, or the field subset is empty.
             Refused before the request is built, so it costs no invocation.
     """
@@ -273,6 +335,21 @@ def extract_fields(
         result = call(request)
     except GatewayError as error:
         raise _classify(error) from None
+
+    if result.outcome not in VALIDATED_OUTCOMES:
+        # FR-025's prohibition read from the other side: a returned result whose
+        # outcome is not one of the two that accompany a validated value is an
+        # unvalidated value arriving through the return. TR-006 makes this
+        # unreachable through a conforming gateway; it is refused rather than
+        # asserted so one malformed result costs one chunk instead of the run,
+        # and the content is neither read nor named in the message.
+        raise ExtractionSchemaViolation(
+            f"the gateway returned outcome {result.outcome!r} for "
+            f"{chunk.document_id} ordinal {chunk.ordinal}, which is outside "
+            f"{list(VALIDATED_OUTCOMES)}. Only a validated value is returned "
+            f"(TR-006); an unvalidated one is not persisted, returned, or logged.",
+            field_paths=(),
+        )
 
     try:
         extraction = ChunkExtraction.model_validate_json(result.content)

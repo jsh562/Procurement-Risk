@@ -38,8 +38,9 @@ from gateway.errors import (
     ProviderUnavailableError,
 )
 from gateway.fixtures import FixtureMissError
+from gateway.validation import MAX_REPAIR_ATTEMPTS
 
-from model.llm import prompts, schemas
+from model.llm import extraction, prompts, schemas
 from model.llm.extraction import (
     RUN_FAILURE_FIXTURE_MISSING,
     RUN_FAILURE_PROVIDER_UNREACHABLE,
@@ -464,6 +465,112 @@ def test_an_exhausted_repair_budget_is_a_per_field_schema_violation() -> None:
         extract_fields(CHUNK, schemas.TRANSMITTAL_FIELD_SUBSET, trace_id=TRACE_ID, invoke=invoker)
     assert caught.value.field_paths == ("values.0.value_text",)
     assert not isinstance(caught.value, ExtractionRunFailure)
+
+
+# ---------------------------------------------------------------------------
+# T055 / FR-025, FR-026 — validate, one repair, fail closed
+# ---------------------------------------------------------------------------
+
+
+def test_the_repair_budget_is_the_gateways_own_and_not_a_second_number() -> None:
+    """FR-026. A budget restated on this side can disagree with the enforced one.
+
+    Asserted against `gateway.validation.MAX_REPAIR_ATTEMPTS` itself rather than
+    against `1`, so a gateway that ever widened its budget fails this test rather
+    than leaving "at most one repair" true only in this file's comments.
+    """
+    assert extraction.REPAIR_BUDGET is MAX_REPAIR_ATTEMPTS
+    assert extraction.REPAIR_BUDGET == 1
+
+
+def test_a_spent_repair_is_recorded_as_repair_budget_exhausted() -> None:
+    """FR-026 / FR-034: fail-closed after the one repair has its own outcome.
+
+    `repair_budget_exhausted` and `schema_violation` are both members of E003's
+    `ck_extraction_failure__outcome`, so collapsing the two would publish a
+    repair budget nothing was ever observed to spend.
+    """
+    invoker = RecordingInvoker(
+        raises=GatewayValidationError(
+            "output failed validation after one repair",
+            field_paths=("values.0.value_text",),
+            repair_attempt_count=1,
+        )
+    )
+    with pytest.raises(ExtractionSchemaViolation) as caught:
+        extract_fields(CHUNK, schemas.TRANSMITTAL_FIELD_SUBSET, trace_id=TRACE_ID, invoke=invoker)
+    assert caught.value.outcome == extraction.OUTCOME_REPAIR_BUDGET_EXHAUSTED
+    assert caught.value.repair_attempt_count == 1
+
+
+def test_a_refusal_with_no_repair_spent_is_a_schema_violation() -> None:
+    """The other side of the same mapping, so neither outcome is unreachable."""
+    invoker = RecordingInvoker(
+        raises=GatewayValidationError(
+            "the submitted schema refused the first response",
+            field_paths=("values.0.field_name",),
+            repair_attempt_count=0,
+        )
+    )
+    with pytest.raises(ExtractionSchemaViolation) as caught:
+        extract_fields(CHUNK, schemas.TRANSMITTAL_FIELD_SUBSET, trace_id=TRACE_ID, invoke=invoker)
+    assert caught.value.outcome == extraction.OUTCOME_SCHEMA_VIOLATION
+    assert caught.value.repair_attempt_count == 0
+
+
+def test_both_mapped_outcomes_are_members_of_the_closed_seven() -> None:
+    """FR-034: no new outcome value is introduced, here or anywhere."""
+    revision = MODEL_PACKAGE / "schema" / "versions" / "0006_extraction.py"
+    body = revision.read_text(encoding="utf-8")
+    admitted = set(re.findall(r"'([a-z_]+)'", body.split("ck_extraction_failure__outcome", 1)[1]))
+    assert extraction.OUTCOME_SCHEMA_VIOLATION in admitted
+    assert extraction.OUTCOME_REPAIR_BUDGET_EXHAUSTED in admitted
+
+
+def test_a_result_whose_outcome_is_not_validated_is_refused_unread() -> None:
+    """FR-025: an unvalidated value arriving through the return is still one.
+
+    TR-006 makes `failed` a raise rather than a return, so this is unreachable
+    through a conforming gateway. It is refused rather than asserted so that one
+    malformed result costs one chunk instead of the run — and the content is
+    neither parsed nor named in the message.
+    """
+    withheld = "THE MODEL'S UNVALIDATED OUTPUT"
+    invoker = RecordingInvoker(content=withheld, outcome="failed")
+    with pytest.raises(ExtractionSchemaViolation) as caught:
+        extract_fields(CHUNK, schemas.TRANSMITTAL_FIELD_SUBSET, trace_id=TRACE_ID, invoke=invoker)
+    assert "failed" in str(caught.value)
+    assert withheld not in str(caught.value)
+    assert caught.value.outcome == extraction.OUTCOME_SCHEMA_VIOLATION
+
+
+def test_the_caller_schema_is_what_the_gateway_is_asked_to_validate_against() -> None:
+    """FR-025: "the caller's schema", submitted rather than described.
+
+    The same class object, not an equal one — `output_schema` is what the
+    gateway validates and digests into the fixture key, so a copy would validate
+    against a schema no fixture was recorded for.
+    """
+    invoker = RecordingInvoker()
+    extract_fields(CHUNK, schemas.TRANSMITTAL_FIELD_SUBSET, trace_id=TRACE_ID, invoke=invoker)
+    assert invoker.seen is not None
+    assert invoker.seen[0].output_schema is schemas.ChunkExtraction
+
+
+def test_exactly_one_invocation_is_issued_per_chunk() -> None:
+    """FR-069's invocation unit, and FR-026's "at most one repair" from outside.
+
+    The repair is the gateway's second request under one invocation record, not
+    a second call through this function — so a caller counting calls here counts
+    invocations, which is the unit SC-018 publishes against.
+    """
+    invoker = RecordingInvoker(content=_values_json(MANUFACTURER_VALUE), outcome="repaired")
+    outcome = extract_fields(
+        CHUNK, schemas.TRANSMITTAL_FIELD_SUBSET, trace_id=TRACE_ID, invoke=invoker
+    )
+    assert invoker.seen is not None
+    assert len(invoker.seen) == 1
+    assert outcome.repaired
 
 
 def test_the_violation_carries_field_paths_and_not_the_model_output() -> None:

@@ -33,23 +33,41 @@ would reconcile trivially against itself.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from uuid import uuid4
 
 from model.corpus.manifest import LAYER_REAL, LAYER_SYNTHETIC
 from model.ingest.documents import DocumentRecord
-from model.ingest.report import Figure, FigureScope, Section, TotalCheck
+from model.ingest.report import (
+    ATTEMPT_UNIT,
+    COUNTING_UNITS,
+    DOCUMENT_UNIT,
+    INVOCATION_UNIT,
+    AttemptLedger,
+    Figure,
+    FigureScope,
+    InvocationLedger,
+    Section,
+    TotalCheck,
+)
 
 __all__ = [
+    "ATTEMPT_UNIT",
+    "COUNTING_UNITS",
+    "DOCUMENT_UNIT",
     "EXCLUDED_DOCUMENT_TYPE",
     "EXCLUSION_REASON",
     "EXTRACTED_DOCUMENT_TYPE",
+    "INVOCATION_UNIT",
+    "AttemptLedger",
     "ExtractionScope",
+    "InvocationLedger",
     "InvocationReconciliation",
     "OrchestrationError",
     "RunTrace",
     "attempted_invocation_count",
+    "count_attempts",
     "count_recorded_invocations",
     "documents_by_layer",
     "exclusion_section",
@@ -413,6 +431,85 @@ def attempted_invocation_count(
                 f"ledger with an unknown term does not reconcile."
             )
         total += count
+    return total
+
+
+# ---------------------------------------------------------------------------
+# FR-069 — the attempt ledger, and the units it is counted in
+# ---------------------------------------------------------------------------
+
+
+def count_attempts(
+    *,
+    chunks_by_document: Mapping[str, int],
+    attempted_fields: Collection[str],
+    absent_fields_by_document: Mapping[str, Collection[str]] | None = None,
+) -> int:
+    """How many field extractions this run attempted (FR-069).
+
+    Args:
+        chunks_by_document: chunk count per document extraction reached. The
+            documents extraction did *not* reach contribute nothing and must not
+            appear — a specification carries zero attempts, and that is a
+            recorded exclusion (FR-022) rather than a zero in this ledger.
+        attempted_fields: the declared transmittal subset, unretired at run time
+            (FR-024, FR-058). One set for the run, because the subset is
+            declared before it and not chosen per document.
+        absent_fields_by_document: for each document, the attempted fields it
+            printed nowhere. Those collapse from one attempt per chunk to **one
+            attempt for the document**, which is the exception FR-069 states.
+
+    Returns:
+        The attempt total: for each document, one attempt per present field per
+        chunk, plus one attempt for each field the document printed nowhere.
+
+    Raises:
+        OrchestrationError: the field subset is empty, a document reports a
+            non-positive chunk count, or a document's absent set names a field
+            outside the attempted subset. Each is refused rather than defaulted:
+            a zero-chunk document has no attempt to count and would silently
+            drop out of the denominator, which is how an unaccounted attempt
+            hides.
+
+    **Derived, never incremented at the call site.** A counter bumped by the
+    loop that issues the work is the same number twice — it would be compared
+    against the rows that work produced, and a loop that skipped a chunk would
+    decrement its own expectation along with it. This computes the expectation
+    from the corpus shape instead, so a skip shows up as a discrepancy.
+    """
+    fields = set(attempted_fields)
+    if not fields:
+        raise OrchestrationError(
+            "FR-069: the run attempted zero fields, so every attempt count is zero and the "
+            "ledger reconciles for no reason at all. An empty subset is a vocabulary or "
+            "configuration failure, not a narrow run."
+        )
+    absences = dict(absent_fields_by_document or {})
+    unknown_documents = sorted(set(absences) - set(chunks_by_document))
+    if unknown_documents:
+        raise OrchestrationError(
+            f"FR-069: {unknown_documents} report absent fields but have no chunk count, so "
+            f"their attempts cannot be counted. An attempt ledger with an unknown term "
+            f"does not reconcile."
+        )
+
+    total = 0
+    for document_id, chunks in chunks_by_document.items():
+        if chunks <= 0:
+            raise OrchestrationError(
+                f"FR-069: {document_id} is selected for extraction and reports {chunks} "
+                f"chunks. A document with no chunk has nothing to attempt a field on, and "
+                f"counting it as zero attempts would hide it in the denominator."
+            )
+        absent = set(absences.get(document_id, ()))
+        outside = sorted(absent - fields)
+        if outside:
+            raise OrchestrationError(
+                f"FR-069: {document_id} reports {outside} absent, but they are not in the "
+                f"attempted subset. A field nobody attempted is published as "
+                f"unattempted-but-printed (FR-058), never as an absence."
+            )
+        total += (len(fields) - len(absent)) * chunks + len(absent)
     return total
 
 

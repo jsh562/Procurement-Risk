@@ -120,17 +120,17 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 ## Phase 5: US3 - An Untrustworthy Value Is Absent, Not Wrong (Priority: P1) 🎯 MVP
 
-- [ ] T055 [US3] {FR-025,FR-026} Validate every model output against the caller's schema and attempt at most one repair, then fail closed, in llm/extraction.py after:T040
-- [ ] T056 [US3] {FR-030,FR-031,FR-057} Write failing tests over all eight signal combinations in src/model/tests/compute/test_confidence.py — done only on an observed collection error
-- [ ] T057 [US3] {FR-030,FR-031,FR-057} Compute confidence as 1.0 less deductions applied alternate → page-split → repair in compute/confidence.py after:T056 → exports: compute_confidence
-- [ ] T058 [US3] {FR-032,FR-057} [COMPLETES FR-057] Record the declared floor 0.80 and the three deduction weights on the run row before the first document in ingest/runs.py after:T009
-- [ ] T059 [US3] {FR-063} Write one parse-signal row per stored value carrying label form, source chunk count, and repair flag in ingest/writer.py after:T012
-- [ ] T060 [US3] {FR-063} [COMPLETES FR-063] Recompute every stored confidence from its signal row and its own run's weights in src/model/tests/schema/test_parse_signals.py ← T057:compute_confidence
-- [ ] T061 [P] [US3] {FR-034,FR-035,FR-036} Classify failures over the closed seven with the five required fields and no value or confidence in src/model/src/model/ingest/failures.py
-- [ ] T062 [US3] {FR-037} Record a field the document does not print as no_value_found once per document, on its lowest-ordinal chunk, in ingest/failures.py after:T061
-- [ ] T063 [US3] {FR-069} Keep the attempt ledger and resolve every attempt to a stored value or a failure, naming its unit, in ingest/cli.py and report.py after:T061
-- [ ] T064 [US3] {FR-033,FR-046} Publish the floor, all eight scores with stored and rejected counts, the weights, and their order in ingest/report.py after:T058
-- [ ] T065 [US3] {FR-034} Publish the failure count broken down by each of the seven outcomes, zeros included, in src/model/src/model/ingest/report.py after:T061
+- [X] T055 [US3] {FR-025,FR-026} Validate every model output against the caller's schema and attempt at most one repair, then fail closed, in llm/extraction.py after:T040
+- [X] T056 [US3] {FR-030,FR-031,FR-057} Write failing tests over all eight signal combinations in src/model/tests/compute/test_confidence.py — done only on an observed collection error (observed 2026-07-28: `ModuleNotFoundError: No module named 'model.compute.confidence'`, 1 error during collection, 0 tests run)
+- [X] T057 [US3] {FR-030,FR-031,FR-057} Compute confidence as 1.0 less deductions applied alternate → page-split → repair in compute/confidence.py after:T056 → exports: compute_confidence
+- [X] T058 [US3] {FR-032,FR-057} [COMPLETES FR-057] Record the declared floor 0.80 and the three deduction weights on the run row before the first document in ingest/runs.py after:T009
+- [X] T059 [US3] {FR-063} Write one parse-signal row per stored value carrying label form, source chunk count, and repair flag in ingest/writer.py after:T012
+- [X] T060 [US3] {FR-063} [COMPLETES FR-063] Recompute every stored confidence from its signal row and its own run's weights in src/model/tests/schema/test_parse_signals.py ← T057:compute_confidence
+- [X] T061 [P] [US3] {FR-034,FR-035,FR-036} Classify failures over the closed seven with the five required fields and no value or confidence in src/model/src/model/ingest/failures.py
+- [X] T062 [US3] {FR-037} Record a field the document does not print as no_value_found once per document, on its lowest-ordinal chunk, in ingest/failures.py after:T061
+- [X] T063 [US3] {FR-069} Keep the attempt ledger and resolve every attempt to a stored value or a failure, naming its unit, in ingest/cli.py and report.py after:T061
+- [X] T064 [US3] {FR-033,FR-046} Publish the floor, all eight scores with stored and rejected counts, the weights, and their order in ingest/report.py after:T058
+- [X] T065 [US3] {FR-034} Publish the failure count broken down by each of the seven outcomes, zeros included, in src/model/src/model/ingest/report.py after:T061
 
 ---
 

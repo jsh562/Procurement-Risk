@@ -23,6 +23,15 @@ to be true at that moment are all here rather than distributed over the callers:
    mis-attributed chunk aborts its document rather than being found later by the
    verification suite. The suite's half is
    `src/model/tests/ingest/test_page_attribution.py`.
+4. **Every stored value carries the signals its score was computed from**
+   (FR-063), and the two are checked to agree *before* either is written. The
+   weights come from this run's own `ingestion_run` row rather than from a code
+   constant, so a score is compared against the policy that produced it; the
+   comparison is bit equality, because the deductions are applied left to right
+   in a declared order and `double precision` subtraction is not associative
+   (SC-026). A value below the run's declared floor is refused here rather than
+   stored (FR-032) — it belongs in `extraction_failure` with outcome
+   `confidence_below_threshold`.
 
 **The error handler catches outside the `with` block** (HINT-002,
 `data-model.md` §Write Order). A nested `transaction()` in psycopg 3 is a
@@ -55,16 +64,19 @@ import psycopg
 from pgvector.psycopg import register_vector
 from sqlalchemy import URL
 
+from model.compute.confidence import ParseSignals, compute_confidence
 from model.corpus.derive import normalize_page_text
 from model.ingest.chunker import Chunk, DocumentChunking, chunk_pages
 from model.ingest.documents import DocumentRecord
 from model.ingest.embed import embed_chunks, embedding_identity
 from model.ingest.parse import ParsedPage, page_by_number, read_pages
+from model.ingest.runs import ConfidencePolicy, read_confidence_policy
 from model.schema.url import get_database_url
 
 __all__ = [
     "CHUNK_COLUMNS",
     "EXTRACTED_VALUE_COLUMNS",
+    "PARSE_SIGNAL_COLUMNS",
     "CitedChunk",
     "ContainmentMiss",
     "ContainmentResult",
@@ -73,6 +85,7 @@ __all__ = [
     "PreparedValue",
     "ValueCitation",
     "WriterError",
+    "check_confidence_agrees",
     "cite_value",
     "connect",
     "prepare_document",
@@ -530,13 +543,26 @@ def cite_value(value_chunk: CitedChunk, label_chunks: Sequence[CitedChunk] = ())
 
 @dataclass(frozen=True)
 class PreparedValue:
-    """One `extracted_value` row, before the chunk identifiers exist.
+    """One `extracted_value` row and its parse-signal row, before the identifiers.
 
     Everything except the identifiers, which are minted inside the transaction.
     `value_text` and `value_number` come from `model.compute.coerce`; the
     `confidence` comes from `model.compute.confidence`. Both are computed by the
     orchestrator and passed in, because `model.ingest` applies the computation
     and never performs it inside the module that talks to the provider.
+
+    **The signals travel with the score** (FR-063). They are what
+    `extracted_value_parse_signal` records, and carrying them beside the
+    confidence is what lets the write check that the two agree before either is
+    stored — SC-026's recomputation asserted at the boundary rather than only
+    afterwards. Two of the three exist in no E003 column, so without this the
+    recomputation would read the score and compare it with itself.
+
+    The page-split signal is held equal to the citation's own chunk count here,
+    as `fk_extracted_value_parse_signal__value_count` holds it equal in the
+    database: a signal row saying "one chunk" beside a value assembled from two
+    is a disagreement the recomputation cannot see, because it would read the
+    copy while the citation read the original.
     """
 
     field_name: str
@@ -545,8 +571,18 @@ class PreparedValue:
     value_number: object | None
     confidence: float
     citation: ValueCitation
+    signals: ParseSignals
 
     def __post_init__(self) -> None:
+        if self.signals.source_chunk_count != self.citation.source_chunk_count:
+            raise WriterError(
+                f"{self.field_name}: the parse signal records "
+                f"{self.signals.source_chunk_count} source chunk(s) and the citation "
+                f"records {self.citation.source_chunk_count}. "
+                f"`fk_extracted_value_parse_signal__value_count` refuses the pair, and the "
+                f"page-split deduction would otherwise be computed from a copy that can "
+                f"disagree with the value's own provenance."
+            )
         if not self.value_text.strip():
             raise WriterError(
                 f"{self.field_name}: `ck_extracted_value__value_text_present` refuses a "
@@ -584,6 +620,64 @@ _EXTRACTED_VALUE_INSERT = (
     f"INSERT INTO extracted_value ({', '.join(EXTRACTED_VALUE_COLUMNS)}) "  # noqa: S608
     f"VALUES ({', '.join('%s' for _ in EXTRACTED_VALUE_COLUMNS)})"
 )
+
+#: FR-063's row, one per stored value. `extracted_value_id` is the whole primary
+#: key, so a second, disagreeing signal row for one value is unrepresentable
+#: rather than merely wrong.
+PARSE_SIGNAL_COLUMNS: tuple[str, ...] = (
+    "extracted_value_id",
+    "run_id",
+    "document_id",
+    "label_match",
+    "source_chunk_count",
+    "validated_after_repair",
+)
+
+_PARSE_SIGNAL_INSERT = (
+    f"INSERT INTO extracted_value_parse_signal ({', '.join(PARSE_SIGNAL_COLUMNS)}) "  # noqa: S608
+    f"VALUES ({', '.join('%s' for _ in PARSE_SIGNAL_COLUMNS)})"
+)
+
+
+def check_confidence_agrees(value: PreparedValue, policy: ConfidencePolicy) -> None:
+    """The stored score is the one its signals compute to, under this run's policy.
+
+    Raises:
+        WriterError: the score disagrees with its signals, or it is below the
+            run's declared floor.
+
+    **Bit equality, not a tolerance** (SC-026, FR-057). The deductions are
+    applied left to right in the declared order and `double precision`
+    subtraction is not associative, so a comparison within a tolerance would
+    accept exactly the grouping error the declared order exists to exclude.
+
+    **The floor is enforced here because here is the storage boundary**
+    (FR-032, Principle III). A value below the run's declared floor is recorded
+    as a failure with outcome `confidence_below_threshold` and is not persisted;
+    reaching this function with one means the orchestrator tried to store it,
+    and a value stored wrong is the silent failure the principle biases against.
+
+    The policy is read from the run's **own row**, never from the declared
+    constants: a check against today's policy would recompute a score under
+    weights the row was never scored with, succeed, and report agreement.
+    """
+    expected = compute_confidence(value.signals, policy.weights)
+    if value.confidence != expected:
+        raise WriterError(
+            f"FR-063 / SC-026: {value.field_name} carries confidence "
+            f"{value.confidence!r}, but its parse signals "
+            f"({value.signals.description}) compute to {expected!r} under this run's own "
+            f"weights. The recomputation is bit equality, not equality within a "
+            f"tolerance: the deductions are applied left to right in the declared order "
+            f"and `double precision` subtraction is not associative."
+        )
+    if not policy.admits(value.confidence):
+        raise WriterError(
+            f"FR-032: {value.field_name} scores {value.confidence!r}, below this run's "
+            f"declared floor of {policy.floor!r}. A value below the floor is recorded as "
+            f"an extraction failure with outcome `confidence_below_threshold` and is not "
+            f"persisted — recorded absent rather than stored wrong."
+        )
 
 
 def _write_extracted_values(
@@ -637,6 +731,47 @@ def _write_extracted_values(
     return tuple(minted)
 
 
+def _write_parse_signals(
+    cursor: psycopg.Cursor,
+    run_id: UUID | str,
+    document_id: str,
+    values: Sequence[PreparedValue],
+    value_ids: Sequence[UUID],
+) -> int:
+    """§Write Order step 6 — one `extracted_value_parse_signal` row per value.
+
+    FR-063. Two of the three signals exist in no column anywhere: nothing
+    records that a printed label matched a known alternate rather than the
+    canonical form, and nothing records that an invocation validated only after
+    a repair — `extraction_failure.repair_attempt_count` covers failures, and a
+    value that repaired successfully produces no failure row. Without these rows
+    SC-026's "recompute every stored confidence from the signals recorded with
+    it" reduces to reading the confidence and comparing it with itself.
+
+    Step 6 and not earlier: the row references
+    `ingestion_run_extracted_value (extracted_value_id, run_id, document_id)`,
+    written at step 5, and the value's own `(id, source_chunk_count)` key from
+    step 2. It is written for **every** stored value with no exemption, which is
+    what makes the recomputation total rather than a sample.
+
+    Returns:
+        The number of signal rows written, which is the number of stored values.
+    """
+    for value, value_id in zip(values, value_ids, strict=True):
+        cursor.execute(
+            _PARSE_SIGNAL_INSERT,
+            (
+                value_id,
+                str(run_id),
+                document_id,
+                value.signals.label_match,
+                value.signals.source_chunk_count,
+                value.signals.validated_after_repair,
+            ),
+        )
+    return len(value_ids)
+
+
 # ---------------------------------------------------------------------------
 # The write itself — `data-model.md` §Write Order, first-ingest path
 # ---------------------------------------------------------------------------
@@ -668,6 +803,18 @@ VALUES (%s, %s, 'active', %s)
 _RUN_CHUNK_INSERT = """
 INSERT INTO ingestion_run_chunk (chunk_id, run_id, document_id)
 SELECT chunk_id, %s, %s FROM chunk WHERE document_id = %s
+"""
+
+#: §Write Order step 5's second association. Written here rather than left to
+#: T070 because the parse-signal row of step 6 targets
+#: `uq_ingestion_run_extracted_value__value_generation` through
+#: `fk_extracted_value_parse_signal__run_output` — without this row the signal
+#: row has no referent and FR-063 is unstorable. T070 adds the third association
+#: (`ingestion_run_extraction_failure`) and the corpus-wide anti-join that makes
+#: SC-021 a fact rather than a habit.
+_RUN_VALUE_INSERT = """
+INSERT INTO ingestion_run_extracted_value (extracted_value_id, run_id, document_id)
+VALUES (%s, %s, %s)
 """
 
 
@@ -793,9 +940,11 @@ def write_document_generation(
     Step 2 sits after step 1 because a value's cited page has to resolve to a
     chunk this transaction has already written — `fk_extracted_value__chunk_page`
     is a composite foreign key against `chunk (chunk_id, page_number)`, so the
-    ordering is the constraint's rather than a preference. Steps 3, 4 and 6 —
-    contributing chunks, failures, and the line-item and parse-signal rows —
-    attach here in T066, T061 and T059; the seam is the same.
+    ordering is the constraint's rather than a preference. Step 6's parse-signal
+    rows sit after step 5's value association for the same kind of reason: they
+    reference `ingestion_run_extracted_value`, not `extracted_value` directly.
+    Steps 3 and 4 — contributing chunks and failure rows — and step 6's
+    line-item rows attach at the same seams in T066, T061 and T047.
     """
     if not connection.autocommit:
         raise WriterError(
@@ -813,6 +962,18 @@ def write_document_generation(
 
     record = prepared.record
     width = vector_dimension(connection) if dimension is None else dimension
+
+    # FR-046 / SC-026: the run's own floor and weights, read from its row before
+    # anything is written. A run whose row is absent fails here rather than
+    # scoring a document against a policy nobody recorded — which is what makes
+    # "the policy is recorded before the first document" (FR-032) enforced
+    # rather than sequenced. Read only when there is a score to check, so a
+    # specification — which extraction does not reach (FR-022) — needs no run
+    # policy to be chunked.
+    policy = read_confidence_policy(connection, run_id) if values else None
+    if policy is not None:
+        for value in values:
+            check_confidence_agrees(value, policy)
     # Read **before** the transaction opens and from the document's own bytes:
     # this is FR-010's independent extraction, and reading it inside the block
     # would not make it any fresher while making the transaction longer.
@@ -864,8 +1025,15 @@ def write_document_generation(
         # 2 — the extracted values, citing chunks written at step 1.
         written_values = _write_extracted_values(cursor, record.document_id, values, minted)
 
-        # 5 — the run-output association for the chunks written at step 1.
+        # 5 — the run-output associations. Chunks first, then the values written
+        # at step 2; step 6's rows target the value association and not
+        # `extracted_value` directly, which is what fixes this order.
         cursor.execute(_RUN_CHUNK_INSERT, (str(run_id), record.document_id, record.document_id))
+        for value_id in written_values:
+            cursor.execute(_RUN_VALUE_INSERT, (value_id, str(run_id), record.document_id))
+
+        # 6 — FR-063's parse-signal rows, one per stored value.
+        _write_parse_signals(cursor, run_id, record.document_id, values, written_values)
 
     return DocumentOutcome(
         document_id=record.document_id,

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pytest
 
+from model.compute.confidence import ParseSignals
 from model.ingest.writer import CitedChunk, PreparedValue, ValueCitation, WriterError, cite_value
 
 
@@ -99,9 +100,33 @@ def prepared(**overrides: object) -> PreparedValue:
         "value_number": None,
         "confidence": 1.0,
         "citation": cite_value(CitedChunk(3, 2)),
+        "signals": ParseSignals("canonical", 1, False),
     }
     fields.update(overrides)
     return PreparedValue(**fields)  # type: ignore[arg-type]
+
+
+def test_the_signal_row_cannot_disagree_with_the_citations_chunk_count() -> None:
+    """FR-063: the page-split signal *is* the value's own `source_chunk_count`.
+
+    `fk_extracted_value_parse_signal__value_count` holds the two equal in the
+    database; this makes the disagreeing pair unconstructible, so the deduction
+    can never be computed from a copy that drifted from the provenance.
+    """
+    with pytest.raises(WriterError, match="parse signal records"):
+        prepared(
+            citation=cite_value(CitedChunk(3, 2), [CitedChunk(2, 1)]),
+            signals=ParseSignals("canonical", 1, False),
+        )
+    # The agreeing pair is accepted, so the refusal above is about the
+    # disagreement rather than about multi-chunk values in general.
+    assert (
+        prepared(
+            citation=cite_value(CitedChunk(3, 2), [CitedChunk(2, 1)]),
+            signals=ParseSignals("canonical", 2, False),
+        ).signals.page_split
+        is True
+    )
 
 
 def test_a_blank_value_cannot_be_prepared() -> None:

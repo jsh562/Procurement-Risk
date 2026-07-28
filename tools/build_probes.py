@@ -85,5 +85,13 @@ payload = {
     },
     "probes": probes,
 }
-OUT.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n", "utf-8")
+# newline="\n" is load-bearing: the digest in digests.json is taken over these
+# bytes, and Python's text mode translates "\n" to "\r\n" on Windows. Writing
+# without it recorded a CRLF digest for a file git committed as LF, which passed
+# on the author's machine and failed on the Linux runner.
+OUT.write_text(
+    json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+    encoding="utf-8",
+    newline="\n",
+)
 print(f"{len(probes)} probes", {p["layer"] for p in probes})
