@@ -85,15 +85,15 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 - [X] T028 [US1] {FR-019} Verify the committed encoder and tokenizer digests before the session is created, failing rather than fetching, in ingest/artifacts.py after:T027
 - [X] T029 [US1] {FR-019} Implement the ONNX Runtime session with attention-masked mean pooling and L2 normalization in ingest/embed.py after:T028 → exports: embed_chunks
 - [X] T030 [US1] {FR-019} [COMPLETES FR-019] Assert pre-declared cosine ≥ 0.999999 and max per-dim ≤ 1e-5 over the probe set in src/model/tests/ingest/test_encoder_parity.py ← T029:embed_chunks
-- [ ] T031 [US1] {FR-020,FR-021} Record the embedding identity and revision on every chunk and read the vector dimension from schema_constants in ingest/writer.py after:T013
-- [ ] T032 [US1] {FR-010} Re-check chunk-text containment inside each document's transaction before it commits in src/model/src/model/ingest/writer.py after:T031
-- [ ] T033 [US1] {FR-010} Assert containment for every chunk against a fresh post-run read, publishing its population, in src/model/tests/ingest/test_page_attribution.py after:T032
-- [ ] T034 [US1] {FR-071,FR-068} Build the closed-content-list report, failing on a missing item and on an empty population, in ingest/report.py after:T032 → exports: build_report
-- [ ] T035 [US1] {FR-009,FR-018} Publish the per-layer zero-recognition-error bound and the chunk-identity contract in src/model/src/model/ingest/report.py after:T034
-- [ ] T036 [US1] {FR-011} Publish the enumerated human-inspection claim set with inspected and defect counts and the 3/n or Wilson bound in ingest/report.py after:T034
-- [ ] T037 [US1] {FR-053} Publish leaf-length distribution, sentence-split count, boundary-class counts, and page-terminal documents per layer in ingest/report.py after:T034
-- [ ] T038 [US1] {FR-061} Publish near-duplicate cluster counts by cause as exact matches and at the declared grid 0.80–0.99 in ingest/report.py after:T034
-- [ ] T039 [US1] {FR-068} Assert every total check names its population and count and that an empty population fails in src/model/tests/ingest/test_total_checks.py after:T034
+- [X] T031 [US1] {FR-020,FR-021} Record the embedding identity and revision on every chunk and read the vector dimension from schema_constants in ingest/writer.py after:T013
+- [X] T032 [US1] {FR-010} Re-check chunk-text containment inside each document's transaction before it commits in src/model/src/model/ingest/writer.py after:T031
+- [X] T033 [US1] {FR-010} Assert containment for every chunk against a fresh post-run read, publishing its population, in src/model/tests/ingest/test_page_attribution.py after:T032
+- [X] T034 [US1] {FR-071,FR-068} Build the closed-content-list report, failing on a missing item and on an empty population, in ingest/report.py after:T032 → exports: build_report
+- [X] T035 [US1] {FR-009,FR-018} Publish the per-layer zero-recognition-error bound and the chunk-identity contract in src/model/src/model/ingest/report.py after:T034
+- [X] T036 [US1] {FR-011} Publish the enumerated human-inspection claim set with inspected and defect counts and the 3/n or Wilson bound in ingest/report.py after:T034
+- [X] T037 [US1] {FR-053} Publish leaf-length distribution, sentence-split count, boundary-class counts, and page-terminal documents per layer in ingest/report.py after:T034
+- [X] T038 [US1] {FR-061} Publish near-duplicate cluster counts by cause as exact matches and at the declared grid 0.80–0.99 in ingest/report.py after:T034
+- [X] T039 [US1] {FR-068} Assert every total check names its population and count and that an empty population fails in src/model/tests/ingest/test_total_checks.py after:T034
 
 ---
 

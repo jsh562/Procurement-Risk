@@ -1,0 +1,1493 @@
+"""The ingestion report: its closed content list, its labels, and its figures.
+
+FR-068 / FR-071 / FR-072, and the US1 sections FR-003, FR-009, FR-011, FR-018,
+FR-053 and FR-061 oblige. The report is **one committed artifact** at
+`specs/00006-document-ingestion-and-extraction/ingestion-report.md`, one per
+repository rather than one per run, regenerated in full by any run that writes
+or replaces a generation.
+
+**The content list is closed, and the builder enforces it in both directions**
+(FR-071). An item in the report but absent from the list is a defect in the
+list; a list entry with nothing under it is a defect in the report. So
+`build_report` refuses a section whose item number is not on the list *and*
+refuses to emit a report with an item missing or with an empty body. A short
+report is not a smaller report — it is a report making a claim it did not
+publish the basis for.
+
+**Every figure is a labelled record, never a bare number** (FR-072). A `Figure`
+carries the run it was computed under, the generation set it ranges over, its
+kind — census, sampled, or descriptive — its counting unit, and its layer.
+There is no constructor that omits them, which is what keeps the labelling from
+being a documentation convention.
+
+**A total check publishes what it enumerated, and an empty population fails**
+(FR-068). `TotalCheck` refuses a count of zero at construction. That is the one
+rule that stops "100% of chunks are attributable" from being true and worthless
+because nothing was enumerated.
+
+**What this module does not do.** It computes no confidence, invokes no
+provider, and imports no `gateway`. The three arithmetic families it does carry
+— the nearest-rank percentiles of FR-053's distribution, the rule-of-three
+bound of FR-011, and the cosine comparison behind FR-061's cluster counts — are
+assigned to this file by `plan.md` §Requirement Coverage Map. The one figure the
+map assigns elsewhere is FR-011's Wilson branch, which is FR-060's interval and
+lives in `model/compute/metrics.py`; it is reached by a deferred import so this
+module states the method whether or not that module has landed yet.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from model.corpus.derive import normalize_page_text
+from model.ingest.chunker import BOUNDARY_CLASSES, DocumentChunking
+from model.ingest.documents import SHARED_LIBRARY_PROJECT
+
+__all__ = [
+    "DECLARED_SIMILARITY_GRID",
+    "FIGURE_KINDS",
+    "GENERATION_SETS",
+    "LAYERS",
+    "NEAR_DUPLICATE_CAUSES",
+    "PERCENTILE_POINTS",
+    "REPORT_CONTENTS",
+    "REPORT_PATH",
+    "RULE_OF_THREE_MINIMUM",
+    "CarriedClaim",
+    "ChunkVector",
+    "ChunkingProfile",
+    "ContentItem",
+    "Figure",
+    "FigureScope",
+    "LayerChunking",
+    "NearDuplicateCounts",
+    "ReportError",
+    "SampledClaim",
+    "Section",
+    "TotalCheck",
+    "build_report",
+    "chunk_identity_section",
+    "chunking_section",
+    "collect_total_checks",
+    "human_inspection_section",
+    "measure_near_duplicates",
+    "near_duplicate_section",
+    "profile_chunkings",
+    "prj_000_section",
+    "read_resident_chunks",
+    "recognition_error_section",
+    "total_checks_section",
+]
+
+#: FR-071: one artifact, at a fixed path, regenerated in full. Relative to the
+#: repository root, which is where the caller resolves it — this module writes
+#: no file, so nothing here depends on a working directory.
+REPORT_PATH = Path("specs/00006-document-ingestion-and-extraction/ingestion-report.md")
+
+#: FR-072's three kinds, closed. A census carries a population and a count and
+#: **no** interval; a sampled estimate is one of FR-011's claims with its counts
+#: and bound; a descriptive figure ranges over a designed set.
+FIGURE_KINDS: tuple[str, ...] = ("census", "sampled", "descriptive")
+
+#: FR-072: computed by query over the resident generations, or over one run's
+#: own work and not recomputable from rows.
+GENERATION_SETS: tuple[str, ...] = ("corpus-resident", "run-scoped")
+
+#: E002's two layers plus the pooled figure. FR-053 and FR-061 require both the
+#: per-layer and the pooled form, so `pooled` is a member rather than the
+#: absence of one.
+LAYERS: tuple[str, ...] = ("REAL", "SYNTHETIC", "pooled")
+
+
+class ReportError(ValueError):
+    """Raised when the report cannot be built, or must not be.
+
+    One type for every failure. Each of them means the same thing to a caller:
+    this report is not emitted, because emitting it would publish a claim
+    without its basis.
+    """
+
+
+# ---------------------------------------------------------------------------
+# FR-071 — the closed content list
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ContentItem:
+    """One entry of FR-071's closed list."""
+
+    number: int
+    title: str
+    obliged_by: tuple[str, ...]
+
+
+#: FR-071's table, item for item and in its order. This tuple **is** the closed
+#: list: `build_report` accepts no section outside it and emits no report
+#: missing one, so adding a section to the report means adding a row here and
+#: amending the requirement, which is the point of writing it down.
+REPORT_CONTENTS: tuple[ContentItem, ...] = (
+    ContentItem(1, "`PRJ-000` convention and its unenforced reservation", ("FR-003",)),
+    ContentItem(2, "Zero-recognition-error upper bound, per layer", ("FR-009",)),
+    ContentItem(3, "Human-inspection claims with counts and bound", ("FR-011",)),
+    ContentItem(4, "Chunk-identity contract", ("FR-018",)),
+    ContentItem(5, "Recorded exclusion of the 26 real specifications", ("FR-022",)),
+    ContentItem(
+        6,
+        "Floor, eight-score distribution with rejected and stored counted apart, "
+        "weights, application order",
+        ("FR-033", "FR-046", "FR-057"),
+    ),
+    ContentItem(7, "Failure count by each of the seven outcomes", ("FR-034",)),
+    ContentItem(
+        8,
+        "Chunk counts, total and per layer, against the 5,000-15,000 estimate "
+        "with cause of deviation",
+        ("SC-005",),
+    ),
+    ContentItem(
+        9,
+        "Leaf-length distribution, sentence-split count, boundary-class counts, "
+        "page-terminal documents with counts",
+        ("FR-053",),
+    ),
+    ContentItem(10, "Multi-chunk value and contributing-chunk row counts", ("FR-029",)),
+    ContentItem(11, "Near-duplicate cluster counts by cause, exact and per threshold", ("FR-061",)),
+    ContentItem(
+        12,
+        "Per-field precision and recall with intervals and denominators, the baseline's "
+        "figures, both labels and any disagreement, F1's omission and reason",
+        ("FR-050", "FR-060"),
+    ),
+    ContentItem(
+        13,
+        "Valid, repaired, failed counts as invocation- and attempt-level tables with units",
+        ("FR-069",),
+    ),
+    ContentItem(14, "Count of fields printed but not attempted", ("FR-058",)),
+    ContentItem(15, "Attempted-versus-recorded invocation reconciliation", ("FR-070",)),
+    ContentItem(16, "Per-document disposition ledger and its four counts", ("FR-073",)),
+    ContentItem(17, "Population and count behind every total check", ("FR-068",)),
+    ContentItem(
+        18,
+        "Sequential-scan fallback while the index is absent, and its absence after an abort",
+        ("FR-064",),
+    ),
+    ContentItem(19, "Reproduction tolerance in force for each figure", ("FR-074",)),
+    ContentItem(20, "Scope labels on every figure above", ("FR-072",)),
+    ContentItem(
+        21,
+        "Encoder parity bounds declared before the comparison, with observed maxima",
+        ("FR-019",),
+    ),
+)
+
+_CONTENT_BY_NUMBER: Mapping[int, ContentItem] = {item.number: item for item in REPORT_CONTENTS}
+
+
+# ---------------------------------------------------------------------------
+# FR-072 — labelled figures; FR-068 — total checks
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FigureScope:
+    """The five labels FR-072 requires on every published figure.
+
+    Constructed with all five or not at all. A default for any of them would be
+    a figure whose scope was guessed by whoever forgot to state it, and the
+    label most often forgotten — the layer — is the one that decides whether a
+    number about the 25 transmittals may be read as a number about the corpus.
+    """
+
+    run_id: str
+    generation_set: str
+    kind: str
+    unit: str
+    layer: str
+
+    def __post_init__(self) -> None:
+        if not str(self.run_id).strip():
+            raise ReportError("FR-072: every figure names the run record it was computed under")
+        if self.generation_set not in GENERATION_SETS:
+            raise ReportError(
+                f"FR-072: generation set {self.generation_set!r} is outside {GENERATION_SETS}"
+            )
+        if self.kind not in FIGURE_KINDS:
+            raise ReportError(f"FR-072: figure kind {self.kind!r} is outside {FIGURE_KINDS}")
+        if not self.unit.strip():
+            raise ReportError("FR-072: every figure names its counting unit")
+        if self.layer not in LAYERS:
+            raise ReportError(f"FR-072: layer {self.layer!r} is outside {LAYERS}")
+
+
+@dataclass(frozen=True)
+class Figure:
+    """One published number with its labels attached, never a bare value."""
+
+    label: str
+    value: object
+    scope: FigureScope
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ReportError("a figure carries a label naming what it counts")
+
+    def row(self) -> str:
+        note = self.note or ""
+        return (
+            f"| {self.label} | {self.value} | {self.scope.run_id} | "
+            f"{self.scope.generation_set} | {self.scope.kind} | {self.scope.unit} | "
+            f"{self.scope.layer} | {note} |"
+        )
+
+
+_FIGURE_HEADER = (
+    "| Figure | Value | Run | Generation set | Kind | Unit | Layer | Note |\n"
+    "|---|---|---|---|---|---|---|---|"
+)
+
+
+@dataclass(frozen=True)
+class TotalCheck:
+    """A check claimed over a whole population, with what it enumerated (FR-068).
+
+    Raises at construction on an empty population, which is the requirement
+    stated as a type rather than as a review step: `MUST fail rather than report
+    success when that count is zero`. A total check that enumerated nothing has
+    not passed, and there is no way to build one that says it has.
+    """
+
+    name: str
+    population: str
+    count: int
+    scope: FigureScope
+    outcome: str = "held"
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ReportError("FR-068: a total check is published under a name")
+        if not self.population.strip():
+            raise ReportError(
+                f"FR-068: the total check {self.name!r} publishes no enumerated population. "
+                f"A '100%' or 'zero' claim without the population it ranged over is not "
+                f"checkable."
+            )
+        if self.count <= 0:
+            raise ReportError(
+                f"FR-068: the total check {self.name!r} enumerated {self.count} members of "
+                f"{self.population}. An empty population fails rather than passes, so this "
+                f"check is not published as a success."
+            )
+
+    def row(self) -> str:
+        return (
+            f"| {self.name} | {self.population} | {self.count} | {self.outcome} | "
+            f"{self.scope.run_id} | {self.scope.generation_set} | {self.scope.unit} | "
+            f"{self.scope.layer} |"
+        )
+
+
+_TOTAL_CHECK_HEADER = (
+    "| Total check | Enumerated population | Count | Outcome | Run | Generation set | "
+    "Unit | Layer |\n|---|---|---|---|---|---|---|---|"
+)
+
+
+@dataclass(frozen=True)
+class Section:
+    """One item of the closed list, with its prose, figures, and total checks."""
+
+    item: int
+    body: str
+    figures: tuple[Figure, ...] = ()
+    total_checks: tuple[TotalCheck, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.item not in _CONTENT_BY_NUMBER:
+            raise ReportError(
+                f"FR-071: item {self.item} is not on the closed content list, whose members "
+                f"are {sorted(_CONTENT_BY_NUMBER)}. An item in the report but absent from "
+                f"the list is a defect in the list."
+            )
+        if not self.body.strip():
+            raise ReportError(
+                f"FR-071: item {self.item} "
+                f"({_CONTENT_BY_NUMBER[self.item].title}) has nothing under it, which is a "
+                f"defect in the report. A short report is not emitted."
+            )
+
+    def render(self) -> str:
+        entry = _CONTENT_BY_NUMBER[self.item]
+        parts = [
+            f"## {entry.number}. {entry.title}",
+            "",
+            f"*Obliged by {', '.join(entry.obliged_by)}.*",
+            "",
+            self.body.strip(),
+        ]
+        if self.figures:
+            parts += ["", _FIGURE_HEADER, *(figure.row() for figure in self.figures)]
+        if self.total_checks:
+            parts += ["", _TOTAL_CHECK_HEADER, *(check.row() for check in self.total_checks)]
+        return "\n".join(parts)
+
+
+def build_report(sections: Sequence[Section], *, run_id: str) -> str:
+    """Render the report, or refuse (FR-071, FR-068).
+
+    Args:
+        sections: one `Section` per item of the closed content list.
+        run_id: the run record the report describes, named by identifier
+            (FR-072).
+
+    Returns:
+        The whole report as Markdown, ready to replace the committed artifact.
+
+    Raises:
+        ReportError: when an item is missing, when an item appears twice, or
+            when `run_id` is blank. A section whose item is not on the list, or
+            whose body is empty, is refused earlier by `Section` itself.
+
+    **Regeneration replaces** (FR-071): the return value is the whole report,
+    not a fragment to be merged into the previous one. There is no incremental
+    path, deliberately — a report assembled from a previous run's sections plus
+    this run's would carry figures under a run identifier that did not produce
+    them.
+    """
+    if not str(run_id).strip():
+        raise ReportError("FR-072: the report names the run record it describes, by identifier")
+
+    seen: dict[int, Section] = {}
+    for section in sections:
+        if section.item in seen:
+            raise ReportError(
+                f"FR-071: item {section.item} is supplied twice. The content list is closed "
+                f"and each entry has exactly one place in the report."
+            )
+        seen[section.item] = section
+
+    missing = [item for item in REPORT_CONTENTS if item.number not in seen]
+    if missing:
+        detail = "; ".join(
+            f"{item.number} ({item.title}) — {', '.join(item.obliged_by)}" for item in missing
+        )
+        raise ReportError(
+            f"FR-071: {len(missing)} of {len(REPORT_CONTENTS)} required items have nothing "
+            f"under them, so no report is emitted: {detail}"
+        )
+
+    head = [
+        "# Ingestion Report — Document Ingestion and Extraction",
+        "",
+        f"**Run**: `{run_id}`",
+        "",
+        "Every figure below carries the run it was computed under, the generation set it "
+        "ranges over, its kind (census / sampled / descriptive), its counting unit, and its "
+        "layer (FR-072). Every total check carries the population it enumerated and that "
+        "population's count; a check enumerating zero members fails rather than passing "
+        "(FR-068).",
+        "",
+        "This report's contents are the closed list FR-071 fixes. It is regenerated in full "
+        "and replaces its predecessor wholesale.",
+    ]
+    body = [seen[item.number].render() for item in REPORT_CONTENTS]
+    return "\n\n".join(["\n".join(head), *body]) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Item 1 — FR-003, the `PRJ-000` convention
+# ---------------------------------------------------------------------------
+
+
+def prj_000_section(*, run_id: str, real_documents: int) -> Section:
+    """Item 1: the shared-library project, published as a convention (FR-003)."""
+    scope = FigureScope(
+        run_id=run_id,
+        generation_set="corpus-resident",
+        kind="census",
+        unit="document",
+        layer="REAL",
+    )
+    body = (
+        f"Real specifications are governing documents shared by every project, so each is "
+        f"recorded once under the reserved shared-library project `{SHARED_LIBRARY_PROJECT}` "
+        f"rather than duplicated per referencing project.\n\n"
+        f"**The reservation is a convention and nothing in the schema enforces it.** E003's "
+        f"`ck_document__project_id_format` admits `{SHARED_LIBRARY_PROJECT}` exactly as it "
+        f"admits any other well-formed project identifier, so nothing prevents a future "
+        f"writer minting an ordinary project under it. What this epic does instead is refuse "
+        f"to mint it for a synthetic document (`model/ingest/documents.py`) and publish the "
+        f"absence of enforcement here, which is the honest form of the claim."
+    )
+    return Section(
+        item=1,
+        body=body,
+        figures=(
+            Figure(
+                label=f"Documents recorded under {SHARED_LIBRARY_PROJECT}",
+                value=real_documents,
+                scope=scope,
+                note="every real specification; enforcement is by convention only",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 2 — FR-009, the zero-recognition-error upper bound, per layer
+# ---------------------------------------------------------------------------
+
+
+def recognition_error_section(*, run_id: str, documents_by_layer: Mapping[str, int]) -> Section:
+    """Item 2: the upper bound, stated **per layer** and narrower on one (FR-009).
+
+    The two layers do not carry the same claim and the requirement is explicit
+    that they must not be published as though they did:
+
+    * **Synthetic** — the 25 transmittals are rendered from a document model,
+      so their text layer is the generator's own strings. Recognition error is
+      zero **by construction**, and this is the only layer extraction accuracy
+      is measured on (SC-012), which is what makes every accuracy figure in
+      this report an upper bound a genuinely scanned corpus would not
+      reproduce.
+    * **Real** — the 26 UFGS sections carry the narrower claim: **no
+      recognition step is performed at any point** in this pipeline. Whether
+      the embedded text layer already disagrees with the page it prints is
+      **unmeasured**, and no figure here bounds it.
+    """
+    missing = {"REAL", "SYNTHETIC"} - set(documents_by_layer)
+    if missing:
+        raise ReportError(
+            f"FR-009: the claim is stated per layer and {sorted(missing)} has no document "
+            f"count, so the bound would be published over an unstated population"
+        )
+
+    def scope(layer: str) -> FigureScope:
+        return FigureScope(
+            run_id=run_id,
+            generation_set="corpus-resident",
+            kind="census",
+            unit="document",
+            layer=layer,
+        )
+
+    body = (
+        "No optical character recognition is required for any document in this corpus and "
+        "none is performed. The consequence for every accuracy figure in this report is "
+        "stated here rather than on request: **each is an upper bound that a genuinely "
+        "scanned corpus would not reproduce.** The claim differs by layer and is published "
+        "separately for each.\n\n"
+        "**Synthetic layer — zero recognition error by construction.** The transmittals are "
+        "rendered from a document model, so the text layer is the generator's own strings "
+        "and the datasheet records zero recognition error rather than estimating it. This "
+        "is the only layer extraction accuracy is measured on (SC-012).\n\n"
+        "**Real layer — the narrower claim.** No recognition step is performed at any point. "
+        "Whether the embedded text layer of a UFGS section already disagrees with what the "
+        "page prints is **unmeasured**: nothing in this epic validates the embedded text "
+        "against a rendered page, and no figure below bounds that residual. The claim here "
+        "is the absence of a recognition step, not the correctness of the text layer."
+    )
+    return Section(
+        item=2,
+        body=body,
+        figures=(
+            Figure(
+                label="Documents carrying zero recognition error by construction",
+                value=documents_by_layer["SYNTHETIC"],
+                scope=scope("SYNTHETIC"),
+                note="rendered from a document model; the datasheet records it",
+            ),
+            Figure(
+                label="Documents on which no recognition step is performed",
+                value=documents_by_layer["REAL"],
+                scope=scope("REAL"),
+                note="embedded-text-layer residual unmeasured",
+            ),
+            Figure(
+                label="Documents whose embedded text layer was validated against its printed page",
+                value=0,
+                scope=scope("REAL"),
+                note="the named residual; published as a zero rather than omitted",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 4 — FR-018, the chunk-identity contract
+# ---------------------------------------------------------------------------
+
+
+def chunk_identity_section(*, run_id: str, chunks_minted: int) -> Section:
+    """Item 4: what a consumer may and may not rely on about a chunk id (FR-018).
+
+    Stated over the **run** rather than over the chunker, which is the part
+    most easily got wrong: FR-043's input tuple carries the provider model and
+    the extraction prompt and schema digests, so a prompt change or a
+    provider-model change re-mints every identifier of every document it
+    touches even where the chunker produced byte-identical boundaries.
+    """
+    scope = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="chunk",
+        layer="pooled",
+    )
+    body = (
+        "**A chunk identifier is minted by the run that writes it.** It is stable only while "
+        "that generation is resident, and exactly one generation's rows are resident per "
+        "document ({SAD:ADR-0020}) — so a replacing generation's identifiers are new and the "
+        "predecessor's are gone, not superseded in place.\n\n"
+        "**The contract is over the run, not over the chunker.** FR-043's input tuple carries "
+        "the provider model and the extraction prompt and schema digests alongside the "
+        "chunker version. A prompt change or a provider-model change therefore re-mints every "
+        "identifier of every document it reloads **even where the chunker cut byte-identical "
+        "boundaries**. Reading identifier stability off boundary stability is the mistake this "
+        "paragraph exists to prevent.\n\n"
+        "**Chunk identity is deliberately not a function of content and position.** It is not "
+        "a digest of the body text, the document, and the ordinal, and no consumer should "
+        "derive one and expect it to match.\n\n"
+        "**What a retrieval evaluation set must key on**: the **document identifier, the page "
+        "number, and a quoted span** of the passage, resolved to chunks at harness run time. "
+        "An evaluation set keyed on chunk identifiers silently empties the first time any "
+        "member of the input tuple moves, and it empties without an error — the identifiers "
+        "simply match nothing."
+    )
+    return Section(
+        item=4,
+        body=body,
+        figures=(
+            Figure(
+                label="Chunk identifiers minted by this run",
+                value=chunks_minted,
+                scope=scope,
+                note="stable only while this generation is resident",
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 3 — FR-011, the enumerated human-inspection claim set
+# ---------------------------------------------------------------------------
+
+#: FR-011: `3/n` is never quoted at or below this many inspected items. Below
+#: the threshold the rule of three's approximation to the exact binomial upper
+#: bound is poor enough that quoting it would overstate what the sample
+#: supports.
+RULE_OF_THREE_MINIMUM = 30
+
+
+@dataclass(frozen=True)
+class SampledClaim:
+    """A claim resting on human inspection, with what that inspection supports.
+
+    `bound` is not a stored number: it is derived from `inspected` and `defects`
+    by FR-011's fixed method, so the method cannot be chosen after the counts
+    are known.
+    """
+
+    name: str
+    inspected: int
+    defects: int
+    note: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ReportError("FR-011: an enumerated claim is published under a name")
+        if self.inspected < 0 or self.defects < 0:
+            raise ReportError(f"FR-011: {self.name!r} carries a negative count")
+        if self.defects > self.inspected:
+            raise ReportError(
+                f"FR-011: {self.name!r} records {self.defects} defects among "
+                f"{self.inspected} inspected items"
+            )
+
+    @property
+    def method(self) -> str:
+        """The method FR-011 fixes for this claim's counts, named before the number."""
+        if self.defects == 0:
+            if self.inspected > RULE_OF_THREE_MINIMUM:
+                return f"rule of three (95% upper bound 3/n, n = {self.inspected})"
+            return f"none quoted (3/n is not quoted for n <= {RULE_OF_THREE_MINIMUM})"
+        return "continuity-corrected Wilson 95% interval (FR-060)"
+
+    @property
+    def bound(self) -> str:
+        """The bound the sample supports, or the reason there is none.
+
+        The zero-defect branch is FR-011's rule of three and is computed here,
+        which is where `plan.md` §Requirement Coverage Map assigns FR-011. The
+        one-or-more-defect branch is FR-060's continuity-corrected Wilson
+        interval and belongs to `model/compute/metrics.py`; until that module
+        lands it is **named** rather than approximated, because an interval
+        computed by a second implementation would be a second answer to a figure
+        this epic publishes exactly one of.
+        """
+        if self.defects == 0:
+            if self.inspected > RULE_OF_THREE_MINIMUM:
+                return f"<= {3 / self.inspected:.4f} defect rate (95% upper bound)"
+            if self.inspected == 0:
+                return "no bound — nothing has been inspected"
+            return f"no bound — n = {self.inspected} is at or below {RULE_OF_THREE_MINIMUM}"
+        return _wilson_bound(self.defects, self.inspected)
+
+
+def _wilson_bound(defects: int, inspected: int) -> str:
+    """FR-060's continuity-corrected Wilson interval, from `model.compute`.
+
+    Imported at the point of use rather than at module import: the interval is
+    FR-060's and lands with `compute/metrics.py`, whose test task precedes its
+    implementation task under `plan.md` §The test-first boundary. A module-level
+    import would make this whole module unimportable until that pair completes,
+    and a local reimplementation would be the second answer that boundary exists
+    to prevent.
+    """
+    try:
+        from model.compute.metrics import wilson_interval
+    except ImportError:
+        return (
+            f"continuity-corrected Wilson 95% interval on {defects}/{inspected}, "
+            f"pending model.compute.metrics"
+        )
+    low, high = wilson_interval(defects, inspected)
+    return f"[{low:.4f}, {high:.4f}] defect rate (continuity-corrected Wilson 95%, n = {inspected})"
+
+
+@dataclass(frozen=True)
+class CarriedClaim:
+    """A claim that rests on a total check rather than on inspection.
+
+    FR-011 requires **every** claim to appear in the enumeration: one either
+    carries its inspected count or names the total check that discharges it.
+    This is the second form, and it exists so the enumeration can be read as
+    complete rather than as a list of the claims someone remembered to sample.
+    """
+
+    name: str
+    carried_by: str
+
+    def __post_init__(self) -> None:
+        if not self.name.strip() or not self.carried_by.strip():
+            raise ReportError("FR-011: a carried claim names both the claim and its total check")
+
+
+def human_inspection_section(
+    *,
+    run_id: str,
+    sampled: Sequence[SampledClaim],
+    carried: Sequence[CarriedClaim],
+) -> Section:
+    """Item 3: the enumerated claim set, its counts, and its bounds (FR-011).
+
+    Every member is published, **including the ones whose inspected count is
+    zero**. A claim omitted because nobody inspected anything is the failure
+    mode this enumeration exists to make visible.
+    """
+    if not sampled:
+        raise ReportError(
+            "FR-011: the enumerated claim set is empty. Its known member is structural "
+            "detection on the 26 real specifications, which is published with an inspected "
+            "count of zero rather than omitted."
+        )
+    if not carried:
+        raise ReportError(
+            "FR-011: no claim is recorded as carried by a total check. Every claim appears in "
+            "the enumeration either with its inspected count or naming the check that "
+            "discharges it, and a report publishing total checks (FR-068) while naming none "
+            "of them here leaves the enumeration unreadable as complete."
+        )
+
+    scope = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="sampled",
+        unit="inspected item",
+        layer="pooled",
+    )
+
+    rows = [
+        "| Claim | Inspected | Defects | Method | Bound | Note |",
+        "|---|---|---|---|---|---|",
+        *(
+            f"| {claim.name} | {claim.inspected} | {claim.defects} | {claim.method} | "
+            f"{claim.bound} | {claim.note} |"
+            for claim in sampled
+        ),
+    ]
+    carried_rows = [
+        "| Claim | Total check that carries it |",
+        "|---|---|",
+        *(f"| {claim.name} | {claim.carried_by} |" for claim in carried),
+    ]
+    body = (
+        "**The set of claims resting on human inspection is enumerated below, not summarised.** "
+        "A claim with an inspected count of zero is published as a zero; omitting it would "
+        "make the enumeration a list of the claims someone happened to sample.\n\n"
+        "**The method is fixed and was fixed before the counts existed.** With zero defects "
+        f"the bound is the rule-of-three 95% upper bound `3/n`, stated with *n* and **never "
+        f"quoted for n <= {RULE_OF_THREE_MINIMUM}**. With one or more defects it is the "
+        "continuity-corrected Wilson 95% interval on the observed defect proportion (FR-060), "
+        "with its denominator printed. Neither is chosen after the observation.\n\n"
+        + "\n".join(rows)
+        + "\n\n**Every other claim in this report is carried by a total check rather than by a "
+        "sample.** Each is named here with the check that discharges it, so the enumeration "
+        "above can be read as complete.\n\n" + "\n".join(carried_rows)
+    )
+    return Section(
+        item=3,
+        body=body,
+        figures=tuple(
+            Figure(
+                label=f"{claim.name} — items inspected",
+                value=claim.inspected,
+                scope=scope,
+                note=f"{claim.defects} defects; {claim.method}; {claim.bound}",
+            )
+            for claim in sampled
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 9 — FR-053, the measured chunking profile
+# ---------------------------------------------------------------------------
+
+#: Percentiles published for the leaf-length distribution. Reported under
+#: `schema_constants.percentile_convention` — nearest rank, one-based, no
+#: interpolation — which is the convention every figure in this project is
+#: computed under and is named beside the numbers rather than assumed.
+PERCENTILE_POINTS: tuple[int, ...] = (50, 75, 90, 95, 99)
+
+#: A chunk under no structural marker at all: `structure.py` names a residual
+#: run of lines `p<page>-body<n>`, and a document whose chunks carry those
+#: identifiers was chunked at the page-terminal fallback.
+_PAGE_TERMINAL = re.compile(r"^p[0-9]+-body[0-9]+$")
+
+
+def _percentile(values: Sequence[int], point: int) -> int:
+    """Nearest rank, one-based, no interpolation.
+
+    `schema_constants.percentile_convention` publishes exactly this rule, and
+    the arithmetic is written out rather than delegated to a library default:
+    NumPy's `percentile` interpolates by default and would give a different
+    answer for the same data under the same name.
+    """
+    if not values:
+        raise ReportError("FR-053: a percentile over an empty distribution is not published")
+    ordered = sorted(values)
+    rank = math.ceil(point / 100 * len(ordered))
+    return ordered[max(rank, 1) - 1]
+
+
+@dataclass(frozen=True)
+class LayerChunking:
+    """FR-053's measured figures for one layer, or pooled over both."""
+
+    layer: str
+    documents: int
+    chunks: int
+    leaf_lengths: tuple[int, ...]
+    boundary_class_counts: Mapping[str, int]
+    leaves_split_into_sentences: int
+    page_terminal_chunks_by_document: Mapping[str, int]
+
+    @property
+    def page_terminal_documents(self) -> int:
+        return len(self.page_terminal_chunks_by_document)
+
+    @property
+    def percentiles(self) -> Mapping[int, int]:
+        return {point: _percentile(self.leaf_lengths, point) for point in PERCENTILE_POINTS}
+
+
+@dataclass(frozen=True)
+class ChunkingProfile:
+    """The whole corpus's chunking, per layer and pooled (FR-053, FR-072)."""
+
+    by_layer: Mapping[str, LayerChunking]
+
+    def __post_init__(self) -> None:
+        for layer in LAYERS:
+            if layer not in self.by_layer:
+                raise ReportError(
+                    f"FR-053: every figure is published per layer as well as pooled, and "
+                    f"{layer!r} is absent"
+                )
+
+
+def profile_chunkings(
+    chunkings: Sequence[tuple[str, DocumentChunking]],
+) -> ChunkingProfile:
+    """Measure FR-053's figures over the run's own chunkings.
+
+    Args:
+        chunkings: `(layer, chunking)` for every document the run chunked.
+            The layer travels with the chunking because FR-053 requires every
+            figure per layer, and a chunking carries no layer of its own.
+
+    Returns:
+        The per-layer and pooled profile.
+
+    Raises:
+        ReportError: when nothing was chunked, or when a layer outside E002's
+            two appears.
+
+    **Measured, never inferred.** The 26 real specifications are structurally
+    uncharacterized, so the distribution is taken from the encoder's own word
+    pieces as the chunker counted them, not derived from the standard's format
+    rules.
+    """
+    if not chunkings:
+        raise ReportError("FR-053: the chunking profile enumerated zero documents")
+
+    buckets: dict[str, dict[str, object]] = {
+        layer: {
+            "documents": set(),
+            "chunks": 0,
+            "lengths": [],
+            "classes": dict.fromkeys(BOUNDARY_CLASSES, 0),
+            "split_leaves": set(),
+            "page_terminal": {},
+        }
+        for layer in LAYERS
+    }
+
+    for layer, chunking in chunkings:
+        if layer not in ("REAL", "SYNTHETIC"):
+            raise ReportError(f"FR-053: {layer!r} is not one of the corpus's two layers")
+        for target in (layer, "pooled"):
+            bucket = buckets[target]
+            bucket["documents"].add(chunking.document_id)  # type: ignore[union-attr]
+            bucket["chunks"] = int(bucket["chunks"]) + len(chunking.chunks)
+            for chunk in chunking.chunks:
+                bucket["lengths"].append(chunk.content_pieces)  # type: ignore[union-attr]
+                bucket["classes"][chunk.boundary_class] += 1  # type: ignore[index]
+                if chunk.boundary_class == "sentence":
+                    # One *leaf* per (document, page, structural identifier):
+                    # a leaf split into four chunks is one leaf that required a
+                    # sentence-level split, not four.
+                    bucket["split_leaves"].add(  # type: ignore[union-attr]
+                        (chunking.document_id, chunk.page_number, chunk.structural_identifier)
+                    )
+                if _PAGE_TERMINAL.fullmatch(chunk.structural_identifier):
+                    counts = bucket["page_terminal"]
+                    counts[chunking.document_id] = counts.get(chunking.document_id, 0) + 1  # type: ignore[union-attr,index]
+
+    return ChunkingProfile(
+        by_layer={
+            layer: LayerChunking(
+                layer=layer,
+                documents=len(bucket["documents"]),  # type: ignore[arg-type]
+                chunks=int(bucket["chunks"]),
+                leaf_lengths=tuple(bucket["lengths"]),  # type: ignore[arg-type]
+                boundary_class_counts=dict(bucket["classes"]),  # type: ignore[arg-type]
+                leaves_split_into_sentences=len(bucket["split_leaves"]),  # type: ignore[arg-type]
+                page_terminal_chunks_by_document=dict(bucket["page_terminal"]),  # type: ignore[arg-type]
+            )
+            for layer, bucket in buckets.items()
+        }
+    )
+
+
+def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
+    """Item 9: the measured leaf-length distribution and its companions (FR-053)."""
+
+    def scope(layer: str, unit: str) -> FigureScope:
+        return FigureScope(
+            run_id=run_id,
+            generation_set="run-scoped",
+            kind="descriptive" if unit == "content word piece" else "census",
+            unit=unit,
+            layer=layer,
+        )
+
+    figures: list[Figure] = []
+    for layer in LAYERS:
+        measured = profile.by_layer[layer]
+        percentiles = measured.percentiles
+        figures.append(
+            Figure(
+                label="Leaf length — median (p50)",
+                value=percentiles[50],
+                scope=scope(layer, "content word piece"),
+                note=(
+                    "nearest rank, one-based, no interpolation; "
+                    f"n = {len(measured.leaf_lengths)} chunks"
+                ),
+            )
+        )
+        for point in PERCENTILE_POINTS[1:]:
+            figures.append(
+                Figure(
+                    label=f"Leaf length — p{point}",
+                    value=percentiles[point],
+                    scope=scope(layer, "content word piece"),
+                    note="nearest rank, one-based, no interpolation",
+                )
+            )
+        figures.append(
+            Figure(
+                label="Leaf length — maximum",
+                value=max(measured.leaf_lengths),
+                scope=scope(layer, "content word piece"),
+                note="against the 254-piece content budget",
+            )
+        )
+        figures.append(
+            Figure(
+                label="Leaves requiring a sentence-level split",
+                value=measured.leaves_split_into_sentences,
+                scope=scope(layer, "leaf unit"),
+                note="a leaf split into k chunks counts once",
+            )
+        )
+        for boundary_class in BOUNDARY_CLASSES:
+            figures.append(
+                Figure(
+                    label=f"Chunks closed by a {boundary_class} boundary",
+                    value=measured.boundary_class_counts[boundary_class],
+                    scope=scope(layer, "chunk"),
+                    note="a class holding no boundaries is published as a zero",
+                )
+            )
+        figures.append(
+            Figure(
+                label="Documents chunked at the page-terminal fallback",
+                value=measured.page_terminal_documents,
+                scope=scope(layer, "document"),
+                note="a page with no structural marker; each document's count is below",
+            )
+        )
+
+    pooled = profile.by_layer["pooled"]
+    page_terminal_rows = [
+        "| Document | Page-terminal chunks |",
+        "|---|---|",
+        *(
+            f"| {document_id} | {count} |"
+            for document_id, count in sorted(pooled.page_terminal_chunks_by_document.items())
+        ),
+    ]
+    if not pooled.page_terminal_chunks_by_document:
+        page_terminal_rows = ["No document was chunked at the page-terminal fallback."]
+
+    body = (
+        "**Measured, not inferred.** The 26 real specifications are structurally "
+        "uncharacterized, so the leaf-length distribution below is taken from the encoder's "
+        "own tokenizer as the chunker counted it, in content word pieces against the "
+        "254-piece budget. Percentiles are nearest rank, one-based, with no interpolation — "
+        "the convention `schema_constants.percentile_convention` publishes.\n\n"
+        "**Every figure is published per layer as well as pooled** (FR-053, FR-072), and a "
+        "boundary class holding no boundaries is published as a zero rather than omitted.\n\n"
+        "**Documents chunked at the page-terminal fallback**, each with its own count of "
+        "page-terminal chunks — a page carrying no structural marker at all, where the page "
+        "is the terminal unit:\n\n" + "\n".join(page_terminal_rows)
+    )
+    return Section(
+        item=9,
+        body=body,
+        figures=tuple(figures),
+        total_checks=(
+            TotalCheck(
+                name="Every chunk measured in the encoder's own tokenizer",
+                population="every chunk this run cut, over all documents it chunked",
+                count=pooled.chunks,
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="run-scoped",
+                    kind="census",
+                    unit="chunk",
+                    layer="pooled",
+                ),
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 11 — FR-061, near-duplicate cluster counts by cause
+# ---------------------------------------------------------------------------
+
+#: **Declared before the run and not chosen after the clusters were observed**
+#: (FR-061). The count is published at every point, so what this report carries
+#: is a curve rather than a fitted point — a single threshold picked once the
+#: clusters are visible is a result dressed as a parameter.
+DECLARED_SIMILARITY_GRID: tuple[float, ...] = (0.80, 0.85, 0.90, 0.95, 0.99)
+
+#: FR-061's three causes, with the candidate rule each is measured under. The
+#: rules are lexical properties of the corpus fixed in advance; a cause with no
+#: candidate pair in this corpus is published as a zero rather than dropped.
+NEAR_DUPLICATE_CAUSES: tuple[tuple[str, str], ...] = (
+    (
+        "dense reference-designation list",
+        "chunks whose nearest heading names REFERENCES — the PART 1 article every UFGS "
+        "section prints, carrying the same standards designations",
+    ),
+    (
+        "agency variant of one MasterFormat number",
+        "chunks from two different real documents whose MasterFormat number agrees once the "
+        "trailing agency code is removed; a document sharing its number with no other "
+        "contributes no candidate, since it can form no pair",
+    ),
+    (
+        "resubmittal chain differing only by revision suffix",
+        "chunks from two different synthetic documents whose identifiers agree once the "
+        "trailing revision suffix is removed; a document sharing its stem with no other "
+        "contributes no candidate, since it can form no pair",
+    ),
+)
+
+_REFERENCES_HEADING = re.compile(r"REFERENCES", re.IGNORECASE)
+#: `ufgs-26-11-13-00-20` -> `26-11-13`: three MasterFormat groups, then an
+#: optional two-group agency code that distinguishes the Army, Navy and Air
+#: Force variants of one number.
+_MASTERFORMAT = re.compile(r"^ufgs-(?P<number>[0-9]{2}-[0-9]{2}-[0-9]{2})(?:-[0-9]{2}-[0-9]{2})?$")
+#: `prj-001-t0004-r1` -> `prj-001-t0004`.
+_REVISION_SUFFIX = re.compile(r"^(?P<stem>.+)-r[0-9]+$")
+
+
+@dataclass(frozen=True)
+class ChunkVector:
+    """One stored chunk, as the near-duplicate measurement needs to see it."""
+
+    document_id: str
+    layer: str
+    ordinal: int
+    page_number: int
+    heading: str | None
+    body_text: str
+    embedding: np.ndarray
+
+    @property
+    def normalized_text(self) -> str:
+        """The chunk's text in the one committed comparison form (SC-037).
+
+        `corpus.derive.normalize_page_text` and nothing else — the same
+        function the containment guard compares through, so "exactly equal
+        normalized text" means the same thing in both places.
+        """
+        return normalize_page_text(self.body_text)
+
+
+@dataclass(frozen=True)
+class NearDuplicateCounts:
+    """Cluster counts for one cause, exact and at each declared threshold."""
+
+    cause: str
+    candidate_rule: str
+    candidates: int
+    exact_clusters: int
+    clusters_by_threshold: Mapping[float, int]
+    layer: str
+
+
+#: The chunks of the resident generation set, joined to their document for the
+#: layer the cause rules key on. Ordered so two runs of the measurement over one
+#: database enumerate the same population in the same order — the cluster counts
+#: are order-independent, but the failure message naming a cluster's members is
+#: not.
+_RESIDENT_CHUNKS = """
+SELECT c.document_id, d.source_kind, c.ordinal, c.page_number, c.heading,
+       c.body_text, c.embedding
+FROM chunk AS c
+JOIN document AS d ON d.document_id = c.document_id
+JOIN ingestion_run_chunk AS a ON a.chunk_id = c.chunk_id
+JOIN v_active_ingestion_generation AS g
+  ON g.run_id = a.run_id AND g.document_id = a.document_id
+ORDER BY c.document_id, c.ordinal
+"""
+
+
+def read_resident_chunks(connection: object) -> tuple[ChunkVector, ...]:
+    """Every chunk of the resident generation set, with its stored vector.
+
+    Args:
+        connection: a psycopg connection with pgvector's types registered —
+            `writer.connect` returns one. Typed loosely so this module does not
+            import psycopg for a signature; the only thing required of it is
+            `cursor()`.
+
+    Returns:
+        One `ChunkVector` per resident chunk, ordered by document and ordinal.
+
+    The generation set is read through `v_active_ingestion_generation`, so the
+    population is 'the generations resident when the report was written' —
+    FR-072's **corpus-resident** scope — rather than 'whatever this process
+    happens to hold in memory'. Reading the vector back rather than reusing the
+    run's array is what makes the near-duplicate figure recomputable by query.
+    """
+    with connection.cursor() as cursor:  # type: ignore[attr-defined]
+        cursor.execute(_RESIDENT_CHUNKS)
+        rows = cursor.fetchall()
+    return tuple(
+        ChunkVector(
+            document_id=row[0],
+            layer=row[1],
+            ordinal=row[2],
+            page_number=row[3],
+            heading=row[4],
+            body_text=row[5],
+            embedding=_as_vector(row[6]),
+        )
+        for row in rows
+    )
+
+
+def _as_vector(stored: object) -> np.ndarray:
+    """A stored `vector` column as float32, whichever form the adapter returns.
+
+    pgvector's psycopg adapter returns its own `Vector` wrapper for a text
+    result and a bare NumPy array for a binary one, and which of the two arrives
+    depends on the cursor rather than on anything this module controls. Both are
+    handled here rather than at the call site, because the failure otherwise
+    surfaces as a `TypeError` deep inside NumPy naming neither column nor row.
+    """
+    to_numpy = getattr(stored, "to_numpy", None)
+    if callable(to_numpy):
+        return np.asarray(to_numpy(), dtype=np.float32)
+    return np.asarray(stored, dtype=np.float32)
+
+
+def _masterformat(document_id: str) -> str | None:
+    match = _MASTERFORMAT.fullmatch(document_id)
+    return match.group("number") if match else None
+
+
+def _revision_stem(document_id: str) -> str | None:
+    match = _REVISION_SUFFIX.fullmatch(document_id)
+    return match.group("stem") if match else None
+
+
+def _shared_keys(
+    vectors: Sequence[ChunkVector],
+    layer: str,
+    key: object,
+) -> frozenset[str]:
+    """Keys held by two or more *documents* on `layer`.
+
+    Both the second and third causes are defined over a pair of **different**
+    documents agreeing on a key, so a document holding a key no other document
+    holds can contribute no pair at all. Its chunks are therefore not
+    candidates, and saying so is not a shortcut: publishing 6,391 candidate
+    chunks of which none could ever pair would make the candidate count
+    uninterpretable next to the cluster count it is printed beside.
+    """
+    documents: dict[str, set[str]] = {}
+    for vector in vectors:
+        if vector.layer != layer:
+            continue
+        derived = key(vector.document_id)  # type: ignore[operator]
+        if derived is None:
+            continue
+        documents.setdefault(derived, set()).add(vector.document_id)
+    return frozenset(derived for derived, held in documents.items() if len(held) > 1)
+
+
+def _candidates(cause: str, vectors: Sequence[ChunkVector]) -> tuple[int, ...]:
+    """Indices of the chunks a cause's declared rule admits."""
+    if cause == NEAR_DUPLICATE_CAUSES[0][0]:
+        return tuple(
+            index
+            for index, vector in enumerate(vectors)
+            if vector.heading and _REFERENCES_HEADING.search(vector.heading)
+        )
+    if cause == NEAR_DUPLICATE_CAUSES[1][0]:
+        shared = _shared_keys(vectors, "REAL", _masterformat)
+        return tuple(
+            index
+            for index, vector in enumerate(vectors)
+            if vector.layer == "REAL" and _masterformat(vector.document_id) in shared
+        )
+    shared = _shared_keys(vectors, "SYNTHETIC", _revision_stem)
+    return tuple(
+        index
+        for index, vector in enumerate(vectors)
+        if vector.layer == "SYNTHETIC" and _revision_stem(vector.document_id) in shared
+    )
+
+
+def _pairs_admitted(cause: str, left: ChunkVector, right: ChunkVector) -> bool:
+    """Whether the declared rule admits this pair as a candidate for `cause`."""
+    if cause == NEAR_DUPLICATE_CAUSES[0][0]:
+        return True
+    if cause == NEAR_DUPLICATE_CAUSES[1][0]:
+        return left.document_id != right.document_id and _masterformat(
+            left.document_id
+        ) == _masterformat(right.document_id)
+    return left.document_id != right.document_id and _revision_stem(
+        left.document_id
+    ) == _revision_stem(right.document_id)
+
+
+class _Components:
+    """Union-find, so a cluster is a connected component and not a pair count.
+
+    Counting *pairs* above a threshold would report a group of five identical
+    reference lists as ten near-duplicates. FR-061 asks for cluster counts, so
+    the pairs are unioned and clusters of two or more members are counted.
+    """
+
+    def __init__(self, size: int) -> None:
+        self._parent = list(range(size))
+
+    def find(self, node: int) -> int:
+        while self._parent[node] != node:
+            self._parent[node] = self._parent[self._parent[node]]
+            node = self._parent[node]
+        return node
+
+    def union(self, left: int, right: int) -> None:
+        left_root, right_root = self.find(left), self.find(right)
+        if left_root != right_root:
+            self._parent[left_root] = right_root
+
+    def clusters(self) -> int:
+        sizes: dict[int, int] = {}
+        for node in range(len(self._parent)):
+            root = self.find(node)
+            sizes[root] = sizes.get(root, 0) + 1
+        return sum(1 for size in sizes.values() if size > 1)
+
+
+def measure_near_duplicates(
+    vectors: Sequence[ChunkVector],
+    *,
+    grid: Sequence[float] = DECLARED_SIMILARITY_GRID,
+) -> tuple[NearDuplicateCounts, ...]:
+    """Cluster counts by cause, exact and at every declared threshold (FR-061).
+
+    Args:
+        vectors: the stored chunks with their embeddings — **this epic's own**
+            vectors, read back from `chunk.embedding`, not a second encoding.
+        grid: the declared threshold grid. Defaulted to
+            `DECLARED_SIMILARITY_GRID`, which is fixed in this module before any
+            run; the parameter exists for the test that asserts the curve is
+            monotone, not so a caller can pick a threshold after the fact.
+
+    Returns:
+        One `NearDuplicateCounts` per cause, in `NEAR_DUPLICATE_CAUSES` order.
+
+    Raises:
+        ReportError: when no chunk is supplied — the measurement would then
+            report zero clusters for every cause from an empty population,
+            which FR-068 refuses.
+
+    **The measure is cosine similarity over the chunk embeddings this epic
+    already computes**, which are L2-normalized at write time, so the cosine is
+    the inner product and no second normalization is applied here. Both are
+    fixed before the run: the measure by this requirement and the grid by the
+    constant above.
+    """
+    if not vectors:
+        raise ReportError(
+            "FR-061/FR-068: the near-duplicate measurement enumerated zero chunks. An empty "
+            "population fails rather than reporting zero clusters for every cause."
+        )
+    thresholds = tuple(float(value) for value in grid)
+    results: list[NearDuplicateCounts] = []
+
+    for cause, rule in NEAR_DUPLICATE_CAUSES:
+        indices = _candidates(cause, vectors)
+        layer = "REAL" if cause == NEAR_DUPLICATE_CAUSES[1][0] else "pooled"
+        if cause == NEAR_DUPLICATE_CAUSES[2][0]:
+            layer = "SYNTHETIC"
+        if len(indices) < 2:
+            results.append(
+                NearDuplicateCounts(
+                    cause=cause,
+                    candidate_rule=rule,
+                    candidates=len(indices),
+                    exact_clusters=0,
+                    clusters_by_threshold=dict.fromkeys(thresholds, 0),
+                    layer=layer,
+                )
+            )
+            continue
+
+        members = [vectors[index] for index in indices]
+        matrix = np.array([member.embedding for member in members], dtype=np.float32)
+        similarity = matrix @ matrix.T
+
+        exact = _Components(len(members))
+        per_threshold = {threshold: _Components(len(members)) for threshold in thresholds}
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                if not _pairs_admitted(cause, members[i], members[j]):
+                    continue
+                if members[i].normalized_text == members[j].normalized_text:
+                    exact.union(i, j)
+                score = float(similarity[i, j])
+                for threshold in thresholds:
+                    if score >= threshold:
+                        per_threshold[threshold].union(i, j)
+
+        results.append(
+            NearDuplicateCounts(
+                cause=cause,
+                candidate_rule=rule,
+                candidates=len(members),
+                exact_clusters=exact.clusters(),
+                clusters_by_threshold={
+                    threshold: components.clusters()
+                    for threshold, components in per_threshold.items()
+                },
+                layer=layer,
+            )
+        )
+    return tuple(results)
+
+
+def near_duplicate_section(
+    *,
+    run_id: str,
+    counts: Sequence[NearDuplicateCounts],
+    chunks_measured: int,
+) -> Section:
+    """Item 11: the cluster counts by cause, as a curve over the grid (FR-061)."""
+    if len(counts) != len(NEAR_DUPLICATE_CAUSES):
+        raise ReportError(
+            f"FR-061: three causes are published and {len(counts)} were supplied; a cause "
+            f"with no cluster in this corpus is published as a zero, never dropped"
+        )
+
+    thresholds = tuple(sorted({t for entry in counts for t in entry.clusters_by_threshold}))
+    header = (
+        "| Cause | Candidate chunks | Exact matches | "
+        + " | ".join(f"cos >= {threshold:.2f}" for threshold in thresholds)
+        + " |"
+    )
+    divider = "|---|---|---|" + "---|" * len(thresholds)
+    rows = [
+        f"| {entry.cause} | {entry.candidates} | {entry.exact_clusters} | "
+        + " | ".join(str(entry.clusters_by_threshold[threshold]) for threshold in thresholds)
+        + " |"
+        for entry in counts
+    ]
+    rule_rows = [
+        "| Cause | Declared candidate rule |",
+        "|---|---|",
+        *(f"| {entry.cause} | {entry.candidate_rule} |" for entry in counts),
+    ]
+
+    figures: list[Figure] = []
+    for entry in counts:
+        scope = FigureScope(
+            run_id=run_id,
+            generation_set="corpus-resident",
+            kind="census",
+            unit="cluster",
+            layer=entry.layer,
+        )
+        figures.append(
+            Figure(
+                label=f"{entry.cause} — clusters of exactly equal normalized text",
+                value=entry.exact_clusters,
+                scope=scope,
+                note=f"{entry.candidates} candidate chunks under the declared rule",
+            )
+        )
+        for threshold in thresholds:
+            figures.append(
+                Figure(
+                    label=f"{entry.cause} — clusters at cosine >= {threshold:.2f}",
+                    value=entry.clusters_by_threshold[threshold],
+                    scope=scope,
+                    note="declared grid; not a fitted threshold",
+                )
+            )
+
+    body = (
+        "**The measure and the thresholds were fixed before the run.** The measure is "
+        "**cosine similarity over the chunk embeddings this epic already computes**, read "
+        "back from `chunk.embedding` rather than re-encoded; the vectors are L2-normalized "
+        "at write time, so the cosine is their inner product. The grid is "
+        f"{', '.join(f'{t:.2f}' for t in DECLARED_SIMILARITY_GRID)}, declared as a constant "
+        "in `model/ingest/report.py`, and the count is published **at every point** — what "
+        "follows is a curve, not a fitted threshold chosen once the clusters were visible.\n\n"
+        "A **cluster** is a connected component of two or more chunks, not a pair: five "
+        "identical reference lists are one cluster, not ten near-duplicates.\n\n"
+        + "\n".join([header, divider, *rows])
+        + "\n\n**The candidate rule for each cause was declared before the measurement** and "
+        "is published with it, because a cluster count is only interpretable against the set "
+        "of pairs that were eligible to form one. A cause with no candidate pair in this "
+        "corpus is published as a zero.\n\n" + "\n".join(rule_rows)
+    )
+    return Section(
+        item=11,
+        body=body,
+        figures=tuple(figures),
+        total_checks=(
+            TotalCheck(
+                name="Chunks entering the near-duplicate measurement",
+                population="every chunk of the resident generation set, before the candidate "
+                "rules select from it",
+                count=chunks_measured,
+                scope=FigureScope(
+                    run_id=run_id,
+                    generation_set="corpus-resident",
+                    kind="census",
+                    unit="chunk",
+                    layer="pooled",
+                ),
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 17 — FR-068, the population and count behind every total check
+# ---------------------------------------------------------------------------
+
+
+def total_checks_section(*, run_id: str, checks: Sequence[TotalCheck]) -> Section:
+    """Item 17: every total check, with what it enumerated (FR-068).
+
+    Args:
+        run_id: the run the report describes.
+        checks: every total check the report claims, from every section.
+
+    Raises:
+        ReportError: when no check is supplied. A report claiming nothing total
+            has no basis for any of the '100%' or 'zero' criteria this epic
+            states, so an empty list is a defect rather than a quiet pass. Each
+            individual check has already refused an empty population at
+            construction.
+    """
+    del run_id  # each check carries its own scope; the report head names the run
+    if not checks:
+        raise ReportError(
+            "FR-068: the report publishes no total check. Every criterion phrased as '100%' "
+            "or 'zero' rests on one, so a report with none is not emitted."
+        )
+    body = (
+        "**Every total check this report claims is listed here with the population it "
+        "enumerated and that population's count.** A check whose population is empty is not "
+        "published as a success: `TotalCheck` refuses a count of zero at construction, so a "
+        "'100% of chunks' claim over nothing cannot be written down at all.\n\n"
+        "Each check below is a **census** — it carries a population and a count and no "
+        "interval (FR-072)."
+    )
+    return Section(item=17, body=body, total_checks=tuple(checks))
+
+
+def collect_total_checks(sections: Iterable[Section]) -> tuple[TotalCheck, ...]:
+    """Every total check the given sections publish, in order.
+
+    Used to build item 17 from the sections that already exist rather than from
+    a second list someone maintains by hand — a hand-maintained list is how a
+    check ends up in the report without appearing in the census of checks.
+    """
+    collected: list[TotalCheck] = []
+    for section in sections:
+        collected.extend(section.total_checks)
+    return tuple(collected)
