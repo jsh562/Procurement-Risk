@@ -36,6 +36,7 @@ from model.forecast.diagnostics import DiagnosticRow, direction_prose
 from model.forecast.manifest import VENDOR_SHRINKAGE_HDI_PROBABILITY, RunManifest
 from model.forecast.paths import (
     REFUSAL_REPORT_PREFIX,
+    REPRODUCTION_REPORT_PREFIX,
     RUN_REPORT_PREFIX,
     refusal_report_path,
     refused_attempt_id,
@@ -193,7 +194,8 @@ SECTION_FIELDS: dict[str, tuple[str, ...]] = {
 EMITTED_REPORT_KINDS: tuple[tuple[str, str], ...] = (
     ("run report", f"`{RUN_REPORT_PREFIX}-<run_id>.md`, emitted by the fit job on a run "
      "that ships"),
-    ("reproduction report", "emitted by the reproduction job"),
+    ("reproduction report", f"`{REPRODUCTION_REPORT_PREFIX}-<run_id>.md`, emitted by the "
+     "reproduction job and named after the run it re-derived"),
     ("refusal report", f"`{REFUSAL_REPORT_PREFIX}-<attempt>.md`, emitted on any refusal"),
 )
 

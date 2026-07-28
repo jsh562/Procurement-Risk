@@ -36,8 +36,10 @@ __all__ = [
     "PosteriorError",
     "SurvivalGrid",
     "conditional_remaining_draws",
+    "conditional_remaining_sequence",
     "survival_grid",
     "total_duration_draws",
+    "total_duration_sequence",
 ]
 
 
@@ -160,19 +162,21 @@ def _survival(
     return np.asarray(np.where(open_before_anchor, survives, 1.0), dtype=float)
 
 
-def conditional_remaining_draws(
+def conditional_remaining_sequence(
     uniforms: ArrayLike, mu: ArrayLike, sigma: ArrayLike, elapsed_days: ArrayLike
 ) -> NDArray[np.float64]:
-    """One remaining duration per uniform, ascending, conditioned on `elapsed_days`.
+    """The same draws **in the order the sampler produced them**, unsorted.
 
     AD-002 written out: `F* = F(e) + u·(1 − F(e))` in the `1 − S(e)(1 − u)` form
     that keeps the tail's precision, `T = F⁻¹(F*)`, returned as `T − e`. Every
     argument broadcasts, because each posterior draw carries its own `(μ, σ)` and
     the conditioning is per draw rather than per line.
 
-    Ascending because `ck_line_posterior__draws_sorted` requires it of the stored
-    array and `schema_constants.percentile_convention` reads `draws[ceil(p·n)]` —
-    the canonical order is what makes a percentile a lookup rather than a scan.
+    Separated from the sorted form because AD-004's published **basis condition**
+    is measured on this one: the realized per-line *predictive* effective sample
+    size is a property of the draw sequence, and sorting is a permutation that
+    destroys every autocorrelation an ESS is estimated from. Nothing is stored
+    from here — `conditional_remaining_draws` is what the artifact rows carry.
     """
     drawn = _open_interval_uniforms(uniforms)
     location = _finite_location(mu)
@@ -224,13 +228,30 @@ def conditional_remaining_draws(
             "zero, and this would produce worse."
         )
 
-    return np.sort(remaining)
+    return np.asarray(remaining, dtype=float)
 
 
-def total_duration_draws(
+def conditional_remaining_draws(
+    uniforms: ArrayLike, mu: ArrayLike, sigma: ArrayLike, elapsed_days: ArrayLike
+) -> NDArray[np.float64]:
+    """One remaining duration per uniform, **ascending**, conditioned on `elapsed_days`.
+
+    The stored form, and the sort is the whole of what it adds:
+    `ck_line_posterior__draws_sorted` requires it of the stored array and
+    `schema_constants.percentile_convention` reads `draws[ceil(p·n)]`, so the
+    canonical order is what makes a percentile a lookup rather than a scan.
+
+    A thin wrapper rather than a second derivation, so the sequence AD-004's
+    basis condition is measured on and the vector the artifact row carries are
+    the same numbers in two orders and can never be two draw sets.
+    """
+    return np.sort(conditional_remaining_sequence(uniforms, mu, sigma, elapsed_days))
+
+
+def total_duration_sequence(
     uniforms: ArrayLike, mu: ArrayLike, sigma: ArrayLike
 ) -> NDArray[np.float64]:
-    """One **total** duration per uniform, ascending, from the line's order date.
+    """One **total** duration per uniform, in draw order, from the line's order date.
 
     `T = F⁻¹(u)` and nothing else: the held-out population has already delivered,
     so there is no elapsed time to survive and no mass to condition away. The
@@ -238,10 +259,10 @@ def total_duration_draws(
     through an argument that does not exist, and that is the half of the anchor
     `fk_held_out_prediction__line_anchor` proves nothing about (DV-040, FR-029).
 
-    Ascending, because `ck_held_out_prediction__draws_sorted` requires it and the
-    percentile convention reads `draws[ceil(p·n)]` on this store exactly as it
-    does on the other. Every argument broadcasts: each posterior draw carries its
-    own `(μ, σ)`.
+    Unsorted, for the reason `conditional_remaining_sequence` is: AD-004's basis
+    condition is a predictive effective sample size, and an ESS is estimated from
+    autocorrelations a sort destroys. Every argument broadcasts: each posterior
+    draw carries its own `(μ, σ)`.
     """
     drawn = _open_interval_uniforms(uniforms)
     location = _finite_location(mu)
@@ -261,7 +282,21 @@ def total_duration_draws(
             "spread is far outside anything a fit produces. A stored infinity would sort "
             "last, satisfy every array check and make the residual 1"
         )
-    return np.sort(total)
+    return np.asarray(total, dtype=float)
+
+
+def total_duration_draws(
+    uniforms: ArrayLike, mu: ArrayLike, sigma: ArrayLike
+) -> NDArray[np.float64]:
+    """The stored form of the held-out population's draws: the same, **ascending**.
+
+    `ck_held_out_prediction__draws_sorted` requires it and the percentile
+    convention reads `draws[ceil(p·n)]` on this store exactly as it does on the
+    other. A wrapper rather than a second derivation, so the sequence the basis
+    condition is measured on and the vector the row carries cannot become two
+    different draw sets.
+    """
+    return np.sort(total_duration_sequence(uniforms, mu, sigma))
 
 
 def survival_grid(draws: ArrayLike, horizon_days: int) -> SurvivalGrid:

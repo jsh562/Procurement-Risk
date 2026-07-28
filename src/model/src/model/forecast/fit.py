@@ -86,9 +86,9 @@ from model.forecast.model import (
 from model.forecast.paths import ForecastPathError
 from model.forecast.posterior import (
     PosteriorError,
-    conditional_remaining_draws,
+    conditional_remaining_sequence,
     survival_grid,
-    total_duration_draws,
+    total_duration_sequence,
 )
 from model.forecast.read import LineRow, ProcurementInput, ReadError, read_lines_and_events
 from model.forecast.report import (
@@ -121,13 +121,18 @@ __all__ = [
     "ABLATION_DRAWS_PER_CHAIN",
     "ABLATION_SEEDS",
     "ABLATION_TUNING_DRAWS",
+    "DerivedArtifacts",
     "FitError",
     "RefusedRun",
+    "SampledRun",
     "aggregate_median_forecast",
     "censoring_ablation",
     "censoring_ignoring_frame",
+    "derive_artifacts",
     "main",
+    "roster_index",
     "run_fit",
+    "sample_run",
 ]
 
 
@@ -328,7 +333,7 @@ def _posterior_dataset(idata: xr.DataTree) -> xr.Dataset:
 # ---------------------------------------------------------------------------
 
 
-def _roster(lines: Sequence[LineRow]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def roster_index(lines: Sequence[LineRow]) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """The vendor and material-category index, taken from **every** line read.
 
     Every line, not the training side: FR-019 records a shrinkage weight for
@@ -336,6 +341,10 @@ def _roster(lines: Sequence[LineRow]) -> tuple[tuple[str, ...], tuple[str, ...]]
     index built from the training frame would drop exactly that vendor. Sorted so
     the index is stable across processes — the run that writes a posterior is not
     the run that reads it, and `design.py` refuses to sort on the way in.
+
+    Public because `reproduce.py` re-derives a stored run and must index it the
+    same way: a second sort written there would be a second opinion about which
+    vendor occupies which position, and every offset in the posterior would move.
     """
     vendors = tuple(sorted({line.vendor_id for line in lines}))
     categories = tuple(sorted({line.material_category for line in lines}))
@@ -467,17 +476,22 @@ def _line_posteriors(
     as_of_date: date,
     horizon_days: int,
     rng: np.random.Generator,
-) -> tuple[LinePosteriorRow, ...]:
+) -> tuple[tuple[LinePosteriorRow, ...], dict[uuid.UUID, NDArray[np.float64]]]:
     """One artifact row per open line: conditional remaining draws, grid, residual.
 
     The draws are AD-002's inverse-CDF conditioning on the line's own elapsed
     time, so every stored value is a **remaining** duration and strictly
     positive. Never a re-based total draw — that puts a point mass of size `F(e)`
     at exactly zero and still satisfies every delivered constraint (HINT-004).
+
+    The unsorted sequence is returned beside each row because AD-004's basis
+    condition is measured on it — the realized per-line *predictive* ESS, which
+    the sort would destroy. Nothing stores it; `reproduce.py` is its only reader.
     """
     law = _total_duration_law(posterior, vendors, categories)
 
     rows: list[LinePosteriorRow] = []
+    sequences: dict[uuid.UUID, NDArray[np.float64]] = {}
     for line in open_lines:
         elapsed = elapsed_days(line, as_of_date)
         if elapsed < 0:
@@ -487,10 +501,12 @@ def _line_posteriors(
                 f"to condition on and no remaining duration to forecast"
             )
         mu, sigma = law.for_line(line, _rework_loops(line, as_of_date))
-        draws = conditional_remaining_draws(
+        sequence = conditional_remaining_sequence(
             _uniforms(mu.size, rng), mu, sigma, float(elapsed)
         )
+        draws = np.sort(sequence)
         grid = survival_grid(draws, horizon_days)
+        sequences[line.po_line_id] = sequence
         rows.append(
             LinePosteriorRow(
                 po_line_id=line.po_line_id,
@@ -500,7 +516,7 @@ def _line_posteriors(
                 draw_digest=draw_digest(draws),
             )
         )
-    return tuple(rows)
+    return tuple(rows), sequences
 
 
 def _held_out_delivered(lines: Sequence[LineRow], split: SplitResult) -> tuple[LineRow, ...]:
@@ -534,7 +550,7 @@ def _held_out_predictions(
     categories: Sequence[str],
     horizon_days: int,
     rng: np.random.Generator,
-) -> tuple[HeldOutPredictionRow, ...]:
+) -> tuple[tuple[HeldOutPredictionRow, ...], dict[uuid.UUID, NDArray[np.float64]]]:
     """One gradeable prediction per held-out delivered line, anchored at its order date.
 
     **No as-of date in the signature.** The quantity is a total duration from the
@@ -550,10 +566,13 @@ def _held_out_predictions(
     law = _total_duration_law(posterior, vendors, categories)
 
     rows: list[HeldOutPredictionRow] = []
+    sequences: dict[uuid.UUID, NDArray[np.float64]] = {}
     for line in held_out_lines:
         mu, sigma = law.for_line(line, _walked_rework_loops(line))
-        draws = total_duration_draws(_uniforms(mu.size, rng), mu, sigma)
+        sequence = total_duration_sequence(_uniforms(mu.size, rng), mu, sigma)
+        draws = np.sort(sequence)
         grid = survival_grid(draws, horizon_days)
+        sequences[line.po_line_id] = sequence
         rows.append(
             HeldOutPredictionRow(
                 po_line_id=line.po_line_id,
@@ -564,7 +583,7 @@ def _held_out_predictions(
                 draw_digest=draw_digest(draws),
             )
         )
-    return tuple(rows)
+    return tuple(rows), sequences
 
 
 def _training_line_counts(
@@ -605,6 +624,137 @@ def _vendor_shrinkage(
     scales = _flattened(posterior, "sigma_sojourn", "transition")
     sigma = np.sqrt(np.mean(np.square(scales), axis=1))
     return vendor_shrinkage(tau, sigma, training_line_counts, VENDOR_SHRINKAGE_HDI_PROBABILITY)
+
+
+# ---------------------------------------------------------------------------
+# The two seams a re-fit drives (T096 — FR-022)
+# ---------------------------------------------------------------------------
+#
+# `forecast-reproduce` re-derives a stored run and compares it. It must produce
+# the *same* artifacts the fit produced, which is a property of the code path
+# rather than of anybody's care: a second sequence written there — spawn the
+# streams, seed the chains, sample, condition — would agree today and drift
+# silently, and the drift would surface as a reproduction failure attributed to
+# the model. So the sequence is one function pair, called from both jobs.
+#
+# Two functions rather than one, and the seam between them is the diagnostics
+# gate. The gate refuses **after sampling and before the first statement**
+# (FR-017), and deriving artifacts from an unconverged posterior can raise on its
+# own — which would report a refusal as a `PosteriorError` and lose the field set
+# FR-017 requires. Splitting here is what keeps the gate between the two.
+
+
+# `eq=False` because every field is an array container or a generator.
+@dataclasses.dataclass(frozen=True, slots=True, eq=False)
+class SampledRun:
+    """One sampling pass, with the two derivation streams it has not spent yet.
+
+    The generators travel with the trace because which stream feeds which
+    population is part of the run's identity: `SeedSequence.spawn` keys children
+    by position, so handing the conditioning stream to the held-out draws would
+    reproduce nothing while satisfying every constraint on either store.
+    """
+
+    idata: xr.DataTree
+    shape: SampledShape
+    conditioning_rng: np.random.Generator
+    held_out_rng: np.random.Generator
+
+
+# `eq=False` because both row types hold arrays.
+@dataclasses.dataclass(frozen=True, slots=True, eq=False)
+class DerivedArtifacts:
+    """Both artifact populations, plus the sequences AD-004's basis is measured on.
+
+    `predictive_sequences` is keyed by `po_line_id` across both stores, which is
+    unambiguous because the two populations are disjoint under one run — the
+    writer refuses a line carrying a row in both (DV-030). Nothing stores it: it
+    is the unsorted draw order, and the reproduction harness is its only reader.
+    """
+
+    line_posteriors: tuple[LinePosteriorRow, ...]
+    held_out_predictions: tuple[HeldOutPredictionRow, ...]
+    predictive_sequences: dict[uuid.UUID, NDArray[np.float64]]
+
+
+def sample_run(
+    frame: SojournFrame,
+    *,
+    seed_entropy: int,
+    chains: int,
+    draws: int,
+    tune: int,
+    cores: int = 1,
+) -> SampledRun:
+    """Spawn the run's three streams, seed the chains from the first, and sample.
+
+    Spawned **once**: `SeedSequence.spawn` advances an internal counter, so
+    calling it twice would hand out six children and make which three were used
+    depend on the order the calls happened to be written in. The two streams the
+    sampler does not consume are returned rather than re-derived by the caller,
+    which is what makes a re-fit's conditioning byte-identical to the original's.
+    """
+    streams = np.random.SeedSequence(seed_entropy).spawn(3)
+    chain_seeds = [
+        int(child.generate_state(1, dtype=np.uint32)[0])
+        for child in streams[_SAMPLER_STREAM].spawn(chains)
+    ]
+    idata = sample_posterior(
+        build_model(frame),
+        random_seed=chain_seeds,
+        chains=chains,
+        draws=draws,
+        tune=tune,
+        cores=cores,
+    )
+    return SampledRun(
+        idata=idata,
+        shape=SampledShape(chains, draws, tune),
+        conditioning_rng=np.random.default_rng(streams[_CONDITIONING_STREAM]),
+        held_out_rng=np.random.default_rng(streams[_HELD_OUT_STREAM]),
+    )
+
+
+def derive_artifacts(
+    sampled: SampledRun,
+    lines: Sequence[LineRow],
+    split: SplitResult,
+    vendors: Sequence[str],
+    categories: Sequence[str],
+    *,
+    as_of_date: date,
+    horizon_days: int,
+) -> DerivedArtifacts:
+    """Both stored populations, in the order the streams are consumed.
+
+    Open lines first and held-out lines second, which is not a preference: the
+    two draw from different children of the same root, and each is consumed in
+    the input's canonical order, so the sequence of `random()` calls is fixed by
+    this function rather than by the caller.
+    """
+    posterior = _posterior_dataset(sampled.idata)
+    line_posteriors, open_sequences = _line_posteriors(
+        _open_lines(lines, as_of_date),
+        posterior,
+        vendors,
+        categories,
+        as_of_date,
+        horizon_days,
+        sampled.conditioning_rng,
+    )
+    held_out_predictions, held_out_sequences = _held_out_predictions(
+        _held_out_delivered(lines, split),
+        posterior,
+        vendors,
+        categories,
+        horizon_days,
+        sampled.held_out_rng,
+    )
+    return DerivedArtifacts(
+        line_posteriors=line_posteriors,
+        held_out_predictions=held_out_predictions,
+        predictive_sequences={**open_sequences, **held_out_sequences},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -780,33 +930,22 @@ def _arm_median(
 ) -> float:
     """One arm of one seed: sample, condition every open line, summarise.
 
-    The entropy is respawned from `seed` inside this function rather than passed
+    The entropy is respawned from `seed` inside `sample_run` rather than passed
     in already split, so the two arms of a seed are handed byte-identical chain
     seeds and byte-identical conditioning uniforms. Splitting once outside and
     reusing the generator would advance it between the arms and put sampler
     noise into the difference the ablation reports.
     """
-    streams = np.random.SeedSequence(seed).spawn(2)
-    chain_seeds = [
-        int(child.generate_state(1, dtype=np.uint32)[0])
-        for child in streams[_SAMPLER_STREAM].spawn(chains)
-    ]
-    idata = sample_posterior(
-        build_model(frame),
-        random_seed=chain_seeds,
-        chains=chains,
-        draws=draws,
-        tune=tune,
-        cores=cores,
-    )
-    rows = _line_posteriors(
+    sampled = sample_run(frame, seed_entropy=seed, chains=chains, draws=draws, tune=tune,
+                         cores=cores)
+    rows, _ = _line_posteriors(
         open_lines,
-        _posterior_dataset(idata),
+        _posterior_dataset(sampled.idata),
         vendor_ids,
         material_categories,
         as_of_date,
         horizon_days,
-        np.random.default_rng(streams[_CONDITIONING_STREAM]),
+        sampled.conditioning_rng,
     )
     return aggregate_median_forecast(rows)
 
@@ -1068,7 +1207,7 @@ def _fit_and_publish(
     split = assign_split(lines, as_of_date, row_hash)
     note(f"split assignment hash {split.split_assignment_hash}")
 
-    vendors, categories = _roster(lines)
+    vendors, categories = roster_index(lines)
     frame = training_frame(lines, split, vendors, categories, as_of_date)
     note(
         f"training frame: {frame.row_count} sojourns over {len(vendors)} vendors and "
@@ -1076,24 +1215,12 @@ def _fit_and_publish(
         f"excluded as unstarted at the anchor"
     )
 
-    # Spawned **once**: `SeedSequence.spawn` advances an internal counter, so
-    # calling it twice would hand out six children and make which three were used
-    # depend on the order the calls happened to be written in.
-    streams = np.random.SeedSequence(seed_entropy).spawn(3)
-    chain_seeds = [
-        int(child.generate_state(1, dtype=np.uint32)[0])
-        for child in streams[_SAMPLER_STREAM].spawn(chains)
-    ]
     note(f"sampling {chains} chains x {draws} draws with {tune} tuning draws")
-    idata = sample_posterior(
-        build_model(frame),
-        random_seed=chain_seeds,
-        chains=chains,
-        draws=draws,
-        tune=tune,
-        cores=cores,
+    sampled = sample_run(
+        frame, seed_entropy=seed_entropy, chains=chains, draws=draws, tune=tune, cores=cores
     )
-    progress.sampled_shape = SampledShape(chains, draws, tune)
+    idata = sampled.idata
+    progress.sampled_shape = sampled.shape
 
     # ---- SEAM (T082): the post-sampling diagnostics gate, after sampling and
     # **before the first statement**. Every breached blocking diagnostic carries
@@ -1117,25 +1244,17 @@ def _fit_and_publish(
             f"{shape.draw_count}; the run records what it produced, and DV-014 is what "
             f"asserts the declared pair on a run at the committed shape"
         )
-    line_posteriors = _line_posteriors(
-        open_lines,
-        posterior,
+    derived = derive_artifacts(
+        sampled,
+        lines,
+        split,
         vendors,
         categories,
-        as_of_date,
-        shape.horizon_days,
-        np.random.default_rng(streams[_CONDITIONING_STREAM]),
+        as_of_date=as_of_date,
+        horizon_days=shape.horizon_days,
     )
-
-    held_out_lines = _held_out_delivered(lines, split)
-    held_out_predictions = _held_out_predictions(
-        held_out_lines,
-        posterior,
-        vendors,
-        categories,
-        shape.horizon_days,
-        np.random.default_rng(streams[_HELD_OUT_STREAM]),
-    )
+    line_posteriors = derived.line_posteriors
+    held_out_predictions = derived.held_out_predictions
     note(
         f"{len(held_out_predictions)} held-out line(s) have already delivered and carry a "
         f"gradeable prediction anchored at their own order date"

@@ -28,10 +28,12 @@ __all__ = [
     "REPORT_ROOT",
     "REPORT_SUFFIX",
     "REPO_ROOT",
+    "REPRODUCTION_REPORT_PREFIX",
     "RUN_REPORT_PREFIX",
     "ForecastPathError",
     "refusal_report_path",
     "refused_attempt_id",
+    "reproduction_report_path",
     "run_report_path",
 ]
 
@@ -78,6 +80,14 @@ REPORT_SUFFIX = ".md"
 
 RUN_REPORT_PREFIX = "run-report"
 REFUSAL_REPORT_PREFIX = "refusal-report"
+
+#: FR-040's third kind. Named after the **recorded** run rather than after the
+#: re-run, because a reproduction has no run of its own — it writes no row — and
+#: the question a reader arrives with is "was run X reproduced", which is the
+#: identifier they are holding. The re-run is identified inside the file by its
+#: manifest provenance fields, which is what FR-022 asks for where no `run_id`
+#: was written.
+REPRODUCTION_REPORT_PREFIX = "reproduction-report"
 
 #: How many leading hex characters of the input row hash enter the refused
 #: attempt's name. Sixty-four bits identifies *which input* the attempt read at
@@ -209,6 +219,22 @@ def run_report_path(run_id: uuid.UUID | str, report_root: Path | str | None = No
     report without consulting an index.
     """
     name = f"{RUN_REPORT_PREFIX}-{_run_id_component(run_id)}{REPORT_SUFFIX}"
+    return _root(report_root) / name
+
+
+def reproduction_report_path(
+    run_id: uuid.UUID | str, report_root: Path | str | None = None
+) -> Path:
+    """`<report root>/reproduction-report-<run_id>.md` — FR-040's third kind.
+
+    One file per recorded run, overwritten by a later reproduction of the same
+    run on purpose: unlike a refused attempt, whose history FR-037 requires kept,
+    a reproduction is a *re-derivation* of a fixed artifact and the latest answer
+    against the current environment is the one a reader wants. The `run_id`
+    component goes through the same validation the run report's does, so a value
+    round-tripped out of the database cannot carry a path separator into a name.
+    """
+    name = f"{REPRODUCTION_REPORT_PREFIX}-{_run_id_component(run_id)}{REPORT_SUFFIX}"
     return _root(report_root) / name
 
 
