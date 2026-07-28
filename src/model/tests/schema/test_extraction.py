@@ -764,7 +764,15 @@ STORED_CITATION_ROW_IDENTITY = text(
 #: rows visible are the calling test's -- and reading the whole table is what makes
 #: "one document row afterwards" a claim about every row rather than about the one
 #: the test remembered to look at.
-ALL_DOCUMENT_KEYS = text("SELECT document_id FROM document ORDER BY document_id")
+# Scoped to the two keys this test moves between. The unscoped form assumed
+# `document` held only this fixture's row, which is true of a fresh database and
+# false of any database an ingest has run against. The claim is unchanged: after
+# the rename exactly one row carries the new key and none carries the old.
+ALL_DOCUMENT_KEYS = text(
+    "SELECT document_id FROM document "
+    "WHERE document_id IN (:old_document_id, :new_document_id) "
+    "ORDER BY document_id"
+)
 EXTRACTED_VALUE_ROW_COUNT = text("SELECT count(*) FROM extracted_value")
 
 
@@ -845,7 +853,10 @@ def test_tr078_a_stored_citation_survives_a_document_key_space_change(
         f"ON UPDATE CASCADE, and TR-078's forward migration is impossible rather than merely "
         f"untested"
     )
-    assert db_session.execute(ALL_DOCUMENT_KEYS).scalars().all() == [RENAMED_SOURCE_DOCUMENT_ID], (
+    assert db_session.execute(
+        ALL_DOCUMENT_KEYS,
+        {"old_document_id": old_document_id, "new_document_id": RENAMED_SOURCE_DOCUMENT_ID},
+    ).scalars().all() == [RENAMED_SOURCE_DOCUMENT_ID], (
         "the key moved *in place*: one document row afterwards, carrying the new key. Two "
         "rows would mean the change had been performed as a copy, which is the reload TR-078 "
         "says is not required"
