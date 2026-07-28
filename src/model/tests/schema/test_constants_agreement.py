@@ -3,14 +3,27 @@
 `schema_constants` publishes six values so that neither Python boundary has to
 import the other to learn them (TR-043, TR-047). Two of those six also exist as
 literals inside the DDL -- the dimension in `chunk.embedding vector(384)`, and
-the tolerance inside `ck_line_posterior__residual_matches_grid_tail`. A
-duplicated value that nothing compares is a value that will eventually disagree,
-and the consequence is specific and silent: the serving boundary would compute
-against a schema it does not have. An embedding built to a published 768 does
-not fit a column declared 384 -- that one at least fails loudly on insert -- but
-a published tolerance looser than the declared one produces a residual the
-writer believes acceptable and the database rejects, and a *tighter* published
-one silently narrows a bound the database never enforced.
+the probability-sum tolerance inside the residual-agreement checks. A duplicated
+value that nothing compares is a value that will eventually disagree, and the
+consequence is specific and silent: the serving boundary would compute against a
+schema it does not have. An embedding built to a published 768 does not fit a
+column declared 384 -- that one at least fails loudly on insert -- but a
+published tolerance looser than the declared one produces a residual the writer
+believes acceptable and the database rejects, and a *tighter* published one
+silently narrows a bound the database never enforced.
+
+**The tolerance is audited by a catalog sweep, not by name (E007 G-3).** It was
+audited by name -- `ck_line_posterior__residual_matches_grid_tail`, one
+constraint -- while that was the only place in the schema the literal appeared.
+E007's `0302` adds `ck_held_out_prediction__residual_matches_grid_tail`, which
+mirrors the delivered form deliberately, and a test that names its subject is
+blind to a literal in a constraint it does not name. So the enumeration now
+comes from `pg_constraint`: every `CHECK` in the schema is read, every
+double-precision literal in it is extracted, the structural `0`/`1` bounds are
+set aside, and whatever remains must equal the published tolerance. A fourth
+occurrence is therefore audited the day it lands rather than the day somebody
+remembers it. `test_the_tolerance_sweep_finds_the_constraints_known_to_carry_the_literal`
+is the control that stops an undirected sweep from passing on an empty set.
 
 **Direction of authority (TR-076, ADR-0013): the DDL literal governs and the
 published row is the copy.** The revision that declares `chunk.embedding` cannot
@@ -79,7 +92,46 @@ API_ENTRY = REPO_ROOT / "src" / "api"
 #: naming them here does not go stale when a later migration adds a table.
 EMBEDDING_TABLE = "chunk"
 EMBEDDING_COLUMN = "embedding"
-TOLERANCE_CONSTRAINT = "ck_line_posterior__residual_matches_grid_tail"
+
+#: The constraints the tolerance sweep below must find, as a **floor** and never
+#: as the list it ranges over.
+#:
+#: The sweep itself is undirected — it enumerates every `CHECK` in the catalog
+#: and audits whatever tolerance literal it finds, so a *fourth* occurrence is
+#: caught the moment it lands. That is exactly the property that makes it
+#: capable of passing vacuously: a broken regex, a mistyped schema name, or a
+#: catalog query that returns nothing would produce an empty enumeration and a
+#: green run. These two names are the positive control against that. They are a
+#: minimum, so adding a third carrier does not require editing this set;
+#: removing one of these two does, and should be a deliberate act.
+TOLERANCE_CONSTRAINTS_EXPECTED = frozenset(
+    {
+        "ck_line_posterior__residual_matches_grid_tail",
+        "ck_held_out_prediction__residual_matches_grid_tail",
+    }
+)
+
+#: Double-precision literals that are **not** copies of a published constant and
+#: are therefore outside the drift claim: the endpoints of the unit interval and
+#: of the non-negative half-line.
+#:
+#: G-3's remediation is written as "enumerate every constraint whose definition
+#: carries a double-precision literal and require each to equal
+#: `probability_sum_tolerance`". Read with no exemption that is unsatisfiable
+#: against the schema as delivered, and would have been on the day it was
+#: written: `ck_line_posterior__residual_range`,
+#: `ck_extracted_value__confidence_range` and
+#: `ck_schema_constants__tolerance_range` all carry `0` and `1`, and none of them
+#: is a duplicate of anything the constants row publishes — `0 <= p <= 1` is what
+#: a probability *is*, not a value somebody chose. Exempting them is what the
+#: remediation means; exempting anything else would be reintroducing the hole it
+#: closes, one literal at a time.
+#:
+#: The set is deliberately tiny and deliberately literal-valued rather than
+#: constraint-named. A new bound of `0.5` or a second tolerance of `1e-6` is
+#: audited, named, and fails — which is the whole point of sweeping rather than
+#: naming subjects.
+STRUCTURAL_DOUBLE_LITERALS = frozenset({0.0, 1.0})
 
 #: Module-level SQL, never assembled from values (Ruff S608). `to_regclass`
 #: rather than a `::regclass` cast so a missing table reports as a readable
@@ -93,11 +145,21 @@ WHERE a.attrelid = to_regclass('public.' || :table_name)
   AND NOT a.attisdropped
 """
 
-CONSTRAINT_DEFINITION_SQL = """
-SELECT pg_get_constraintdef(c.oid)
+#: Every `CHECK` in the schema, with its rendered definition. No table list and
+#: no constraint list: the sweep below has to see a constraint the day it is
+#: created, which is the one thing naming a subject cannot do.
+#:
+#: Restricted to `contype = 'c'`. A primary key, unique key or foreign key
+#: carries no expression and so can carry no literal; a column `DEFAULT` could,
+#: but TR-063 admits defaults on an enumerated six columns and none of them is a
+#: `double precision`, which `test_each_declared_default_is_the_expected_expression`
+#: already pins by expression.
+ALL_CHECK_CONSTRAINTS_SQL = """
+SELECT c.conname, pg_get_constraintdef(c.oid)
 FROM pg_constraint c
 JOIN pg_namespace n ON n.oid = c.connamespace
-WHERE n.nspname = 'public' AND c.conname = :constraint_name
+WHERE n.nspname = 'public' AND c.contype = 'c'
+ORDER BY c.conname
 """
 
 PUBLISHED_CONSTANTS_SQL = "SELECT * FROM schema_constants"
@@ -229,39 +291,101 @@ def test_the_varchar_minus_four_convention_does_not_apply_to_the_vector_type(
     )
 
 
-def test_published_tolerance_equals_the_literal_inside_the_residual_check(
+def _tolerance_literals_by_constraint(db_session: Session) -> dict[str, list[float]]:
+    """Every non-structural double-precision literal in the schema, by constraint.
+
+    "Non-structural" is `STRUCTURAL_DOUBLE_LITERALS` removed -- see that
+    constant for why `0` and `1` are outside the drift claim rather than
+    exceptions to it. What remains is, by construction, the set of literals that
+    are copies of something a human chose, which is the set a drift check is
+    about.
+    """
+    found: dict[str, list[float]] = {}
+    for constraint_name, definition in db_session.execute(text(ALL_CHECK_CONSTRAINTS_SQL)):
+        literals = [
+            value
+            for value in (float(raw) for raw in DOUBLE_PRECISION_LITERAL.findall(definition))
+            if value not in STRUCTURAL_DOUBLE_LITERALS
+        ]
+        if literals:
+            found[constraint_name] = literals
+    return found
+
+
+def test_the_tolerance_sweep_finds_the_constraints_known_to_carry_the_literal(
     db_session: Session,
 ) -> None:
-    """TR-048 / SC-019: `probability_sum_tolerance` equals the DDL literal.
+    """The positive control for the sweep below. A check that finds nothing passes.
 
-    Parsed out of `pg_get_constraintdef` rather than out of the migration file,
+    The sweep is deliberately undirected -- it names no subject, so it audits a
+    constraint that does not exist yet. The cost of that is that every way of
+    breaking it (a regex that stops matching `pg_get_constraintdef`'s rendering,
+    a schema name that no longer resolves, an exemption set that has quietly
+    grown to swallow everything) produces an *empty* enumeration and a green
+    run. This asserts the enumeration is non-empty and contains the two
+    constraints known to carry the tolerance today.
+
+    A floor, never a list: a third carrier landing does not touch this set, and
+    that is the property G-3's remediation exists to deliver. Losing one of
+    these two, on the other hand, means either the constraint was dropped or the
+    sweep stopped seeing it, and those are both worth failing on.
+    """
+    found = _tolerance_literals_by_constraint(db_session)
+
+    assert set(found) >= TOLERANCE_CONSTRAINTS_EXPECTED, (
+        f"the double-precision literal sweep found {sorted(found)}, which does not include "
+        f"{sorted(TOLERANCE_CONSTRAINTS_EXPECTED - set(found))}. Either those constraints "
+        f"were dropped, or the sweep no longer sees them -- and if it does not see them it "
+        f"would not see a fourth occurrence either, so the drift assertion below is "
+        f"passing on an empty set (G-3)."
+    )
+
+
+def test_every_tolerance_literal_in_the_ddl_equals_the_published_tolerance(
+    db_session: Session,
+) -> None:
+    """TR-048 / SC-019 / G-3: no DDL literal drifts from `probability_sum_tolerance`.
+
+    **Generalised 2026-07-27 from one constraint to every constraint.** This
+    test previously read `ck_line_posterior__residual_matches_grid_tail` by name,
+    which was a complete audit while that was the only `CHECK` in the schema
+    carrying the tolerance. E007's `0302` adds
+    `ck_held_out_prediction__residual_matches_grid_tail`, mirroring the delivered
+    form deliberately -- and a drift test that names its subject is blind to a
+    literal in a constraint it does not name, so the second copy would have been
+    undrifted against nothing. That is G-3, and this is its remediation: the
+    enumeration comes from the catalog, so a *fourth* occurrence is audited the
+    moment it lands rather than when somebody remembers to add its name here.
+
+    Parsed out of `pg_get_constraintdef` rather than out of the migration files,
     because the question is what the *database* enforces. A migration edited
     after it was applied would leave the two disagreeing and only the catalog
     would know.
 
-    TR-076 again: the constraint governs. A mismatch is repaired by correcting
-    the published row, never by loosening the check -- loosening it would widen
-    an invariant to fit a bookkeeping value.
+    TR-076: the constraint governs and the published row is the copy. A mismatch
+    is repaired by correcting `schema_constants` in a new forward migration,
+    never by loosening a check -- loosening it would widen an invariant to fit a
+    bookkeeping value. The one other repair this failure admits is that a *new*
+    literal is genuinely a different quantity from the probability-sum
+    tolerance, in which case it needs its own published constant and its own
+    comparison; adding it to the exemption set would restore the hole.
     """
     published = _published_constants(db_session)
-    definition = db_session.execute(
-        text(CONSTRAINT_DEFINITION_SQL), {"constraint_name": TOLERANCE_CONSTRAINT}
-    ).scalar_one()
+    tolerance = published["probability_sum_tolerance"]
 
-    literals = DOUBLE_PRECISION_LITERAL.findall(definition)
+    drifted = {
+        constraint_name: literals
+        for constraint_name, literals in _tolerance_literals_by_constraint(db_session).items()
+        if any(literal != tolerance for literal in literals)
+    }
 
-    assert len(literals) == 1, (
-        f"expected exactly one double-precision literal in {TOLERANCE_CONSTRAINT}, found "
-        f"{literals} in {definition!r}. With more than one there is no unambiguous "
-        f"tolerance to compare against; with none, the check no longer carries the "
-        f"constant this test exists to keep aligned."
-    )
-
-    assert float(literals[0]) == published["probability_sum_tolerance"], (
-        f"`schema_constants.probability_sum_tolerance` publishes "
-        f"{published['probability_sum_tolerance']!r} but {TOLERANCE_CONSTRAINT} enforces "
-        f"{literals[0]}. TR-076: the DDL literal governs. Correct the published row in a "
-        f"new forward migration; do not relax the constraint to match it."
+    assert not drifted, (
+        f"these constraints carry a double-precision literal that is not the published "
+        f"`schema_constants.probability_sum_tolerance` ({tolerance!r}): {drifted}. TR-076: "
+        f"the DDL literal governs, so correct the published row in a new forward migration "
+        f"-- do not relax a constraint to match it. If one of these literals is a genuinely "
+        f"different quantity, it needs a published constant of its own and a comparison of "
+        f"its own; exempting it here would restore exactly the blind spot G-3 records."
     )
 
 
@@ -514,8 +638,8 @@ def test_the_seeded_row_carries_the_three_values_tr056_fixes(
     these columns and neither pins a value.
     `test_every_published_constant_is_readable_over_the_connection` asserts they
     are non-null, which a row of `1`, `1`, `0.5` would satisfy.
-    `test_published_tolerance_equals_the_literal_inside_the_residual_check` asserts
-    `probability_sum_tolerance` **agrees with the DDL literal** -- a drift check,
+    `test_every_tolerance_literal_in_the_ddl_equals_the_published_tolerance` asserts
+    `probability_sum_tolerance` **agrees with the DDL literals** -- a drift check,
     and a real one, but it passes just as happily if the row and the constraint
     both say `1e-3`. Agreement between two copies is not the same claim as either
     copy being right, and TR-056 is the requirement that says which number is

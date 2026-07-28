@@ -44,3 +44,7 @@ Thumbs.db
 .vscode/
 
 /gitignored/
+
+# Agent scratch space. Kept inside the project so nothing is written to
+# AppData\Local\Temp, where drop-then-execute trips endpoint protection.
+.tmp/
