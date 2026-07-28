@@ -8,11 +8,20 @@ implementation**: `residual_tail_mass` recomputed from the draws agrees with
 path. **Metamorphic**: AD-002's inverse-CDF conditioning, which the re-based
 alternative violates. The module under test does not exist yet — this file is
 the RED half of T025/T026 and must fail at collection.
+
+**T117 (RED) appends the held-out population's total-duration path** — the
+second population {SAD:ADR-0018} separates by anchor, absent from T025's set
+because T025 predates it. Its relations are the mirror images of the ones
+above: no conditioning, so the draw is `F⁻¹(u)` outright and the tail count is
+the **untruncated** `S(k)` rather than `S(e+k)/S(e)`. The conditional path is
+kept as that section's negative control, because the two are interchangeable to
+every constraint on either store and only these relations separate them.
 """
 
 from __future__ import annotations
 
 import bisect
+import inspect
 import math
 from collections.abc import Mapping, Sequence
 from statistics import NormalDist
@@ -28,6 +37,7 @@ from model.forecast.posterior import (
     PosteriorError,
     conditional_remaining_draws,
     survival_grid,
+    total_duration_draws,
 )
 
 # ---------------------------------------------------------------------------
@@ -185,6 +195,11 @@ def remaining_of(uniforms: Any, mu: Any, sigma: Any, elapsed: Any) -> NDArray[np
         conditional_remaining_draws(uniforms=uniforms, mu=mu, sigma=sigma, elapsed_days=elapsed),
         dtype=float,
     )
+
+
+def total_of(uniforms: Any, mu: Any, sigma: Any) -> NDArray[np.float64]:
+    """The held-out path, called with no elapsed time because it takes none."""
+    return np.asarray(total_duration_draws(uniforms=uniforms, mu=mu, sigma=sigma), dtype=float)
 
 
 # ---------------------------------------------------------------------------
@@ -773,3 +788,233 @@ def test_a_uniform_outside_the_open_unit_interval_is_refused(u: float) -> None:
     """
     with pytest.raises(ValueError):
         conditional_remaining_draws(uniforms=[u], mu=MU_FIT, sigma=SIGMA_FIT, elapsed_days=10.0)
+
+
+# ---------------------------------------------------------------------------
+# T117 (RED) — the held-out population's total-duration path
+# ---------------------------------------------------------------------------
+#
+# `total_duration_draws(uniforms, mu, sigma)` returns one **total** duration per
+# uniform, ascending, measured from the line's own order date — the quantity
+# `held_out_prediction` stores and the only one its observed outcome can be
+# graded against. It takes **no elapsed time**, which is the interface saying
+# what the anchor is: there is no run as-of date anywhere in the signature, so
+# no conditioning can enter by a caller passing one.
+#
+# The grid and the residual are unchanged and are deliberately not re-tested
+# here: `survival_grid` is anchor-blind, and every relation the sections above
+# assert over it holds over any draw vector. What is new is only the law the
+# draws come from.
+
+#: Elapsed times a **held-out delivered** line carries at the run's anchor: it
+#: delivered before the as-of date, so its order date is months behind. These
+#: are the elapsed times the negative control below is evaluated at, and they
+#: are far enough into the tail that conditioning is a large effect rather than
+#: a rounding one.
+HELD_OUT_ELAPSED_DAYS = (60.0, 150.0, 300.0)
+
+
+@given(mu=mus, sigma=sigmas, u=uniforms)
+def test_a_total_duration_draw_is_the_unconditional_inverse_cdf(
+    mu: float, sigma: float, u: float
+) -> None:
+    """`T = F⁻¹(u)` exactly — no `F(e)` term, because there is no `e`.
+
+    Stated on the draw itself rather than on an implied delivery date, which is
+    the difference from the conditional identity above: nothing is subtracted,
+    so there is no cancellation of two nearly equal doubles to blunt a relative
+    tolerance.
+    """
+    assert float(total_of([u], mu, sigma)[0]) == pytest.approx(total_at(u, mu, sigma), rel=1e-9)
+
+
+@given(mu=mus, sigma=sigmas)
+def test_the_total_path_and_the_conditional_path_agree_at_zero_elapsed(
+    mu: float, sigma: float
+) -> None:
+    """Metamorphic: at `e = 0` the conditioning consumes no mass, so the two coincide.
+
+    The one elapsed time at which the two populations' quantities are the same
+    number. Asserted because it pins the total path to AD-002's own parent
+    distribution — a second, independently wrong law would agree with the
+    conditional path nowhere, including here.
+    """
+    grid = midpoint_uniforms(64)
+
+    assert total_of(grid, mu, sigma) == pytest.approx(remaining_of(grid, mu, sigma, 0.0), rel=1e-9)
+
+
+@given(mu=mus, sigma=sigmas)
+def test_the_total_draws_come_back_ascending_one_per_uniform(mu: float, sigma: float) -> None:
+    """`ck_held_out_prediction__draws_sorted`, before the write rather than after.
+
+    The same canonical order the open population stores, for the same reason:
+    `schema_constants.percentile_convention` reads `draws[ceil(p·n)]`, and an
+    unsorted array makes every published percentile the wrong draw while every
+    length and range check still passes.
+    """
+    grid = midpoint_uniforms(37)
+    drawn = total_of(grid, mu, sigma)
+
+    assert drawn.shape == (37,)
+    assert np.all(np.diff(drawn) >= 0.0)
+
+
+@given(mu=mus, sigma=sigmas)
+def test_every_total_duration_draw_is_strictly_positive(mu: float, sigma: float) -> None:
+    """`ck_held_out_prediction__draws_non_negative`, and it is free here.
+
+    `exp` of a finite number is positive, so a total duration from the line's
+    own order date is non-negative by construction with nothing to clip — the
+    data model's own reason the single `draws[1] >= 0.0` subscript is sufficient
+    on this store in a way it is not on `line_posterior`.
+    """
+    assert np.all(total_of(midpoint_uniforms(256), mu, sigma) > 0.0)
+
+
+@given(mu=mus, sigma=sigmas)
+def test_the_total_parameters_may_vary_draw_by_draw(mu: float, sigma: float) -> None:
+    """Each posterior draw carries its own `(μ, σ)` here too.
+
+    The real call site hands in 4,000 sampled pairs. A module that broadcast a
+    scalar correctly and silently recycled the first element of a vector would
+    produce a plausible curve from one posterior draw repeated 4,000 times,
+    which no constraint on either store distinguishes.
+    """
+    grid = midpoint_uniforms(16)
+    per_draw_mu = mu + 0.01 * np.arange(16)
+    per_draw_sigma = sigma + 0.005 * np.arange(16)
+    expected = np.sort(
+        np.array(
+            [
+                total_at(u, float(m), float(s))
+                for u, m, s in zip(grid, per_draw_mu, per_draw_sigma, strict=True)
+            ]
+        )
+    )
+
+    assert total_of(grid, per_draw_mu, per_draw_sigma) == pytest.approx(expected, rel=1e-9)
+
+
+def test_the_total_path_takes_no_elapsed_time_at_all() -> None:
+    """The anchor, stated over the signature rather than in a docstring.
+
+    A held-out prediction is anchored at the line's **own order date**, per row,
+    and `fk_held_out_prediction__line_anchor` proves that of the stored value.
+    What the foreign key cannot reach is the *duration*: it fixes the anchor and
+    says nothing about what the draws measure from it. An elapsed-time parameter
+    here would put the run's as-of date back inside the quantity while every
+    constraint on the store still passed, which is DV-040's failure exactly.
+    """
+    parameters = inspect.signature(total_duration_draws).parameters
+
+    assert tuple(parameters) == ("uniforms", "mu", "sigma")
+
+
+@pytest.mark.parametrize("k", [1, 5, 20, 60, 120])
+def test_the_total_law_is_the_untruncated_survival_function(k: int) -> None:
+    """The measured semantic: `count(draws > k)/n == S(k)`, with no `S(e)` divisor.
+
+    DV-040's in-memory pre-image. The stored grid is this count by construction,
+    so a held-out row's survival curve is the population survivor function read
+    from the line's order date — not a conditional one read from the run's
+    anchor. The uniforms are the deterministic midpoint grid, so the agreement
+    bound is `1/n` exactly rather than a sampling statement.
+    """
+    count = 2000
+    drawn = total_of(midpoint_uniforms(count), MU_FIT, SIGMA_FIT)
+
+    assert np.count_nonzero(drawn > k) / count == pytest.approx(
+        survival_at(k, MU_FIT, SIGMA_FIT), abs=2.0 / count
+    )
+
+
+@pytest.mark.parametrize("elapsed", HELD_OUT_ELAPSED_DAYS)
+def test_the_conditional_path_is_the_negative_control_for_the_total_one(elapsed: float) -> None:
+    """The mixing failure {SAD:ADR-0018} exists to make unrepresentable.
+
+    Conditional remaining draws stored under the total-duration label satisfy
+    every constraint `held_out_prediction` carries — sorted, positive, the right
+    length, a grid that is its own strict tail count, a residual that agrees
+    with it — and `fk_held_out_prediction__line_anchor` still passes, because
+    the anchor is right and only the quantity is wrong. Two relations separate
+    them, asserted here at the elapsed times a held-out delivered line actually
+    carries: the conditional tail count is `S(e+k)/S(e)` rather than `S(k)`, and
+    the conditional median is strictly the smaller of the two.
+    """
+    count = 2000
+    grid = midpoint_uniforms(count)
+    total = total_of(grid, MU_FIT, SIGMA_FIT)
+    conditional = remaining_of(grid, MU_FIT, SIGMA_FIT, elapsed)
+    survives_elapsed = survival_at(elapsed, MU_FIT, SIGMA_FIT)
+
+    for k in (5, 30, 90):
+        truncated = survival_at(elapsed + k, MU_FIT, SIGMA_FIT) / survives_elapsed
+        assert np.count_nonzero(conditional > k) / count == pytest.approx(
+            truncated, abs=2.0 / count
+        )
+        assert np.count_nonzero(total > k) / count == pytest.approx(
+            survival_at(k, MU_FIT, SIGMA_FIT), abs=2.0 / count
+        )
+
+    assert float(np.median(conditional)) < float(np.median(total))
+
+
+def test_a_total_duration_beyond_the_horizon_lands_in_the_residual() -> None:
+    """The reachable horizon case, which is this population's and not the other's.
+
+    A held-out line that took 380 days under a 365-day grid gives a survival
+    array that never reaches its own outcome and a residual above zero. The grid
+    cannot express the observation; the draws can, and the draws are what the
+    evaluation harness grades. Recorded rather than truncated (FR-011).
+    """
+    horizon = 365
+    drawn = total_of(midpoint_uniforms(1000), MU_FIT, SIGMA_FIT)
+    beyond = np.concatenate([drawn, np.full(1000, float(horizon) + 15.0)])
+    survival, residual = grid_of(beyond, horizon)
+
+    assert residual > 0.0
+    assert abs(residual - survival[-1]) <= PROBABILITY_SUM_TOLERANCE
+    assert residual == pytest.approx(residual_by_bisect(beyond, horizon), abs=1e-12)
+
+
+def test_an_empty_uniform_set_is_refused_on_the_total_path() -> None:
+    """A line with no draws has no prediction, and an empty array reaches the store.
+
+    `ck_held_out_prediction__draws_length` compares `coalesce(array_length(…),
+    0)` against a positive `draw_count`, so the row would be refused — a whole
+    sampling run later, naming a constraint instead of the caller.
+    """
+    with pytest.raises(ValueError):
+        total_duration_draws(uniforms=[], mu=MU_FIT, sigma=SIGMA_FIT)
+
+
+@pytest.mark.parametrize("u", [0.0, 1.0, -0.1, 1.5])
+def test_a_uniform_outside_the_open_unit_interval_is_refused_on_the_total_path(u: float) -> None:
+    """`F⁻¹(0)` is zero and `F⁻¹(1)` is infinite, and neither is a total duration.
+
+    Zero would pass `draws[1] >= 0.0` as a line that delivered on its own order
+    date; an infinity sorts last, passes every check and turns the residual into
+    1 on a line nothing is wrong with.
+    """
+    with pytest.raises(ValueError):
+        total_duration_draws(uniforms=[u], mu=MU_FIT, sigma=SIGMA_FIT)
+
+
+@pytest.mark.parametrize("sigma", [0.0, -0.5])
+def test_a_non_positive_scale_is_refused_on_the_total_path(sigma: float) -> None:
+    """The same refusal, in the same place, for the same reason as the other path."""
+    with pytest.raises(ValueError):
+        total_duration_draws(uniforms=[0.5], mu=MU_FIT, sigma=sigma)
+
+
+@pytest.mark.parametrize("mu", [float("nan"), float("inf")])
+def test_a_non_finite_location_is_refused_on_the_total_path(mu: float) -> None:
+    """A NaN or an infinity here produces a whole draw vector no constraint attributes.
+
+    `fn_is_sorted_ascending` refuses a NULL element and NaN compares unequal to
+    itself, so the row fails — naming an array property rather than the
+    parameter that was never a location.
+    """
+    with pytest.raises(ValueError):
+        total_duration_draws(uniforms=[0.5], mu=mu, sigma=SIGMA_FIT)
