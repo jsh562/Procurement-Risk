@@ -6,8 +6,26 @@ a **console entry point** invoked through the entry's own environment
 (`{SAD:ADR-0011}`), never a container job and never a request path.
 
 ```
-uv run --directory src/model ingest --mode replay
+DATABASE_URL=postgresql://procurement@<host>:<port>/procurement \
+GATEWAY_PRICE_TABLE_VERSION=2026-07-26-published \
+  uv run --directory src/model ingest --mode replay
 ```
+
+**Both variables are required, and the second is the surprising one.** Every
+invocation is priced against a pinned price-table version (TR-048) — a replayed
+one from the fixture's recorded token counts — so `replay` needs the pin exactly
+as `record` does. The value is a `price_table_version.version_id`; revision
+`0103` seeds `2026-07-26-published`. The entry refuses an unset pin before it
+enumerates anything, because the gateway's own refusal arrives on the first
+invocation, which this job reaches only after committing every document
+extraction does not reach: 26 documents and 6,391 chunks written before a
+missing variable is reported, and reported as `provider_unreachable`.
+
+The exit codes are **0** (the run resolved), **2** (refused, nothing written)
+and **3** (aborted part-way: the documents before the abort are committed and
+active, the one in flight rolled back, the rest never begun). A run at the
+committed corpus with no extraction fixtures (T081) exits 3 by design — see
+`ingest/cli.py`'s `main`.
 
 ## Operator procedures
 
@@ -236,6 +254,7 @@ opt-in is a deliberate one.
 ```
 GATEWAY_MODE=record \
 GATEWAY_ALLOW_PROVIDER_CALLS=1 \
+GATEWAY_PRICE_TABLE_VERSION=2026-07-26-published \
 DATABASE_URL=postgresql://procurement@<host>:<port>/procurement \
   uv run --directory src/model ingest --mode record
 ```

@@ -79,10 +79,10 @@ only arithmetic is the containment comparison, which is a substring test.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -117,7 +117,9 @@ __all__ = [
     "ContainmentMiss",
     "ContainmentResult",
     "ContributingChunk",
+    "DocumentExtraction",
     "DocumentOutcome",
+    "ExtractionHook",
     "MultiChunkCounts",
     "PreparedDocument",
     "PreparedValue",
@@ -1568,6 +1570,48 @@ def write_document_generation(
     )
 
 
+# ---------------------------------------------------------------------------
+# The extraction hook — how a document's values reach its own transaction
+# ---------------------------------------------------------------------------
+
+
+class DocumentExtraction(Protocol):
+    """What one document's extraction produced, in the shapes the write takes.
+
+    A **structural** type rather than an imported one, and that is the point:
+    `ingest.extract.ExtractionStageResult` satisfies it without this module
+    importing `ingest.extract`, which imports this one. The three members are
+    exactly `write_document_generation`'s three sequences, so a hook's result is
+    passed straight through and nothing here reorders what the write order fixes.
+    """
+
+    @property
+    def values(self) -> Sequence[PreparedValue]: ...
+
+    @property
+    def failures(self) -> Sequence[ExtractionFailure]: ...
+
+    @property
+    def line_items(self) -> Sequence[LineItemMembership]: ...
+
+
+#: The per-document extraction step, called by `write_generations` **before** the
+#: document's transaction opens.
+#:
+#: `None` is a legitimate return and means *extraction did not reach this
+#: document* — FR-022's excluded specifications, whose zero values are a recorded
+#: exclusion rather than an empty result. It is distinct from a result carrying
+#: three empty sequences, which means extraction ran and found nothing.
+#:
+#: **A hook that cannot produce this document's values raises `WriterError`.**
+#: The generator's own handler then treats the document as the one in flight when
+#: the run aborted — it yields the errored outcome and stops — and the caller
+#: records the run-level failure, because the caller is the module that knows
+#: which of FR-056's five kinds it was. Classifying it here would put the closed
+#: five in two places.
+type ExtractionHook = Callable[[PreparedDocument], DocumentExtraction | None]
+
+
 def write_generations(
     connection: psycopg.Connection,
     *,
@@ -1575,6 +1619,7 @@ def write_generations(
     documents: Iterable[tuple[PreparedDocument, str]],
     promote: bool = False,
     fresh_pages_by_document: Mapping[str, Sequence[ParsedPage]] | None = None,
+    extract: ExtractionHook | None = None,
 ) -> Iterator[DocumentOutcome]:
     """Write each document in its own transaction, and stop when one fails.
 
@@ -1595,6 +1640,14 @@ def write_generations(
             under the application role; a run replacing anything sets it and
             must be connected as the schema-owning role for its whole length
             (`data-model.md` §Write Order).
+        extract: the per-document extraction step (`ExtractionHook`), or `None`
+            for a chunks-only run. Called **before** the document's transaction
+            opens and inside the same handler the write is, so the values it
+            produces are written at §Write Order step 2 of that one transaction
+            — extraction feeds the value rows and gets no pass of its own over
+            the database. A hook returning `None` for a document is FR-022's
+            recorded exclusion; a hook raising `WriterError` aborts the run on
+            the document it was called for.
 
     Yields:
         One `DocumentOutcome` per document **begun**, in the order given, the
@@ -1635,6 +1688,11 @@ def write_generations(
     supplied = dict(fresh_pages_by_document or {})
     for prepared, digest in documents:
         try:
+            # Inside the handler and outside the transaction, which is both
+            # constraints at once: a hook failure aborts this document like any
+            # other write failure, and the transaction it feeds has not opened
+            # yet, so nothing is rolled back to a savepoint (HINT-002).
+            extraction = None if extract is None else extract(prepared)
             outcome = write_document_generation(
                 connection,
                 run_id=run_id,
@@ -1643,6 +1701,9 @@ def write_generations(
                 dimension=dimension,
                 promote=promote,
                 fresh_pages=supplied.get(prepared.record.document_id),
+                values=() if extraction is None else extraction.values,
+                failures=() if extraction is None else extraction.failures,
+                line_items=() if extraction is None else extraction.line_items,
             )
         except (WriterError, psycopg.Error) as exc:
             yield DocumentOutcome(

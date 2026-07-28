@@ -22,27 +22,44 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from gateway.config import (
     MODE_ENV_VAR,
+    PRICE_TABLE_PIN_ENV_VAR,
     PROVIDER_OPT_IN_ENV_VAR,
     PROVIDER_OPT_IN_PERMITTED_VALUE,
     RECORD_MODE,
     REPLAY_MODE,
 )
+from gateway.provider import DEFAULT_MODEL
 
 from model.ingest.cli import (
     DISPOSITIONS,
+    EXIT_ABORTED,
+    EXIT_OK,
+    EXIT_REFUSED,
     OrchestrationError,
     RunLevelFailure,
+    RunOutcome,
     build_disposition_ledger,
+    build_revision,
+    build_run_identity,
     corpus_digest_mismatch,
     document_id_collision,
     fixture_missing,
+    main,
     oversized_sentence,
     provider_unreachable,
+    require_price_table_pin,
     resolve_resolution_mode,
+)
+from model.ingest.cli import (
+    PRICE_TABLE_PIN_ENV_VAR as INGEST_PRICE_PIN_VAR,
+)
+from model.ingest.cli import (
+    PROVIDER_MODEL as INGEST_PROVIDER_MODEL,
 )
 from model.ingest.cli import (
     PROVIDER_OPT_IN_ENV_VAR as INGEST_OPT_IN_VAR,
@@ -67,6 +84,8 @@ from model.ingest.runs import (
     input_tuple_for,
 )
 from model.ingest.writer import DocumentOutcome
+from model.llm.prompts import prompt_template_digest
+from model.llm.schemas import TRANSMITTAL_FIELD_SUBSET, output_schema_digest
 
 TUPLE = InputTuple(
     content_hash=f"sha256:{'a' * 64}",
@@ -98,6 +117,12 @@ def test_the_restated_gateway_controls_match_the_module_that_owns_them() -> None
     assert INGEST_OPT_IN_VAR == PROVIDER_OPT_IN_ENV_VAR
     assert INGEST_OPT_IN_VALUE == PROVIDER_OPT_IN_PERMITTED_VALUE
     assert set(INGEST_MODES) == {RECORD_MODE, REPLAY_MODE}
+    assert INGEST_PRICE_PIN_VAR == PRICE_TABLE_PIN_ENV_VAR
+    assert INGEST_PROVIDER_MODEL == DEFAULT_MODEL, (
+        "the job names the model it addresses on every invocation and records it on the run; "
+        "a literal that had drifted from the gateway's own would record one model while "
+        "addressing another"
+    )
 
 
 def test_replay_needs_no_opt_in_and_is_written_into_the_environment() -> None:
@@ -138,6 +163,146 @@ def test_a_mode_outside_the_two_is_refused() -> None:
     env: dict[str, str] = {}
     with pytest.raises(OrchestrationError, match="FR-045"):
         resolve_resolution_mode("dry-run", env)
+
+
+# ---------------------------------------------------------------------------
+# TR-048 / T097 — the price pin, refused before the corpus is enumerated
+# ---------------------------------------------------------------------------
+
+
+def test_a_run_with_no_price_pin_is_refused() -> None:
+    """The refusal that costs nothing, in place of the one that costs a corpus.
+
+    The gateway asks the same question, and asks it on the first invocation —
+    which this job reaches only after committing every document extraction does
+    not reach. Measured on the committed corpus that was 26 documents and 6,391
+    chunks written before a missing environment variable was reported, and
+    reported as `provider_unreachable` rather than as a configuration nobody set.
+    """
+    for value in ({}, {PRICE_TABLE_PIN_ENV_VAR: "   "}):
+        with pytest.raises(OrchestrationError, match="TR-048"):
+            require_price_table_pin(value)
+
+
+def test_a_configured_price_pin_is_returned_unvalidated() -> None:
+    """Whether it *resolves* is the gateway's question, asked on its own connection."""
+    assert require_price_table_pin({PRICE_TABLE_PIN_ENV_VAR: " 2026-07-26-published "}) == (
+        "2026-07-26-published"
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-038 / T097 — the build revision and the assembled run identity
+# ---------------------------------------------------------------------------
+
+
+def test_the_declared_revision_is_taken_before_git_is_consulted() -> None:
+    """A run outside a checkout states its revision rather than losing it."""
+    assert build_revision({"INGEST_VCS_REVISION": " 0123abc "}) == "0123abc"
+
+
+def test_the_revision_falls_back_to_the_checkout() -> None:
+    """With nothing declared, the commit under test is what the run records."""
+    revision = build_revision({})
+    assert 7 <= len(revision) <= 40
+    assert set(revision) <= set("0123456789abcdef")
+
+
+def test_the_run_identity_is_derived_from_committed_things_alone() -> None:
+    """FR-038: nothing at the call site could have written any of these."""
+    identity = build_run_identity(
+        mode=REPLAY_MODE,
+        trace_id="a" * 32,
+        fields=TRANSMITTAL_FIELD_SUBSET,
+        manifest_digests=(f"sha256:{'f' * 64}",),
+        env={"INGEST_VCS_REVISION": "0123abc"},
+    )
+    assert identity.resolution_mode == REPLAY_MODE
+    assert identity.run_trace_id == "a" * 32
+    assert identity.provider_model == DEFAULT_MODEL
+    assert identity.extraction_prompt_digest == prompt_template_digest(TRANSMITTAL_FIELD_SUBSET)
+    assert identity.extraction_schema_digest == output_schema_digest()
+    assert str(identity.agent_id).endswith("+0123abc")
+    assert "principal=automation:ingest" in str(identity.agent_id)
+
+
+def test_a_narrowed_vocabulary_moves_the_prompt_digest() -> None:
+    """FR-043's tuple has to move when every resolved prompt does.
+
+    The identity is assembled from the terms the run will *attempt*, after the
+    run-time retirement filter — an identity built from the committed
+    declaration would sit still while every request changed.
+    """
+    wide = build_run_identity(
+        mode=REPLAY_MODE,
+        trace_id="a" * 32,
+        fields=TRANSMITTAL_FIELD_SUBSET,
+        manifest_digests=(f"sha256:{'f' * 64}",),
+        env={"INGEST_VCS_REVISION": "0123abc"},
+    )
+    narrow = build_run_identity(
+        mode=REPLAY_MODE,
+        trace_id="a" * 32,
+        fields=TRANSMITTAL_FIELD_SUBSET[:-1],
+        manifest_digests=(f"sha256:{'f' * 64}",),
+        env={"INGEST_VCS_REVISION": "0123abc"},
+    )
+    assert wide.extraction_prompt_digest != narrow.extraction_prompt_digest
+
+
+# ---------------------------------------------------------------------------
+# T097 — the three exit codes an operator reads from a runbook
+# ---------------------------------------------------------------------------
+
+
+def test_the_exit_codes_are_three_distinct_values_and_exclude_one() -> None:
+    """0, 2 and 3. Never 1, which is what an unhandled traceback exits with."""
+    assert {EXIT_OK, EXIT_REFUSED, EXIT_ABORTED} == {0, 2, 3}
+    assert 1 not in {EXIT_OK, EXIT_REFUSED, EXIT_ABORTED}
+
+
+def _ledger() -> object:
+    return build_disposition_ledger(
+        enumerated=["a"],
+        plans=[DocumentPlan(document_id="a", digest=TUPLE.digest, recorded_digest=None)],
+        outcomes=[_outcome("a")],
+    )
+
+
+def test_a_run_that_resolved_exits_zero_and_one_that_aborted_exits_three() -> None:
+    """The distinction a runbook acts on: retry a refusal, resume a partial run."""
+    resolved = RunOutcome(run_id=uuid4(), ledger=_ledger())
+    assert resolved.complete and resolved.exit_code == EXIT_OK
+
+    recorded = RunOutcome(
+        run_id=uuid4(),
+        ledger=_ledger(),
+        failure=fixture_missing(resolution_key=f"sha256:{'c' * 64}"),
+        detail="WriterError: FR-056",
+    )
+    assert not recorded.complete and recorded.exit_code == EXIT_ABORTED
+
+    unrecorded = RunOutcome(run_id=uuid4(), ledger=_ledger(), detail="ChunkerError: FR-014")
+    assert not unrecorded.complete and unrecorded.exit_code == EXIT_ABORTED
+    assert unrecorded.failure is None, (
+        "an abort outside FR-056's closed five is recorded nowhere, which is why the two "
+        "fields are separate rather than one nullable string"
+    )
+
+
+def test_the_entry_refuses_before_it_reads_anything(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Each refusal is an exit code rather than a traceback (FR-044)."""
+    monkeypatch.delenv(PROVIDER_OPT_IN_ENV_VAR, raising=False)
+    monkeypatch.delenv(PRICE_TABLE_PIN_ENV_VAR, raising=False)
+    assert main(["--mode", RECORD_MODE]) == EXIT_REFUSED, "record without its opt-in"
+    assert main(["--mode", REPLAY_MODE]) == EXIT_REFUSED, "replay with no price pin"
+
+    monkeypatch.setenv(PRICE_TABLE_PIN_ENV_VAR, "2026-07-26-published")
+    assert main(["--mode", REPLAY_MODE, "--corpus-root", str(tmp_path)]) == EXIT_REFUSED, (
+        "a corpus root holding no manifest is refused before the first transaction"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -52,3 +52,12 @@ Thumbs.db
 .vscode/
 
 /gitignored/
+
+# The gateway's local write-ahead spool (ADR-0015, TR-041). It is created in the
+# working directory of whichever process invokes the gateway, so an ingestion run
+# through the modeling entry drops one at `src/model/`. It holds only
+# unreconciled invocation records and drains to empty, which is what keeps it
+# outside the "no second datastore of record" rule (project-instructions v1.2.1)
+# — and a committed one would be a snapshot of exactly the records that had not
+# yet reached Postgres.
+gateway-invocation-spool.sqlite3

@@ -188,6 +188,28 @@ that acquires work without saying so stops being a record.
 - [X] T094 {FR-054} Build report item 8 — chunk counts, total and per layer, against the 5,000–15,000 estimate with the cause of any deviation — in ingest/report.py after:T087
 - [X] T095 {FR-058} Build report item 14 — the count of fields printed but not attempted — in src/model/src/model/ingest/report.py after:T093
 - [X] T096 {FR-019} Build report item 21 — encoder parity bounds declared before the comparison, with observed maxima — in ingest/report.py after:T087
+- [X] T097 [US1] {FR-044,FR-073} Drive the write and extraction stages from the console entry — plan_documents → write_generations → run_extraction_stage → abort_run or finish_run — in src/model/src/model/ingest/cli.py after:T093
+
+**T097 is the top-level pipeline, and it was nobody's task.** `cli.main`
+enumerates, hash-verifies, mints identifiers and prints the partition, then
+stops; its own docstring records the write stage as a stated gap. The reason it
+gives — that an entry writing chunks and reporting zero extracted values would
+publish a corpus which looks ingested and is not — was correct while the
+extraction stage did not exist, and it names its own unblocking condition:
+*once the extraction stage it feeds is assembled*. T093 assembled it. The
+residual objection is answered by T086's disposition ledger, which publishes the
+four-way per-document outcome, so a run that commits the 26 real specifications
+and stops at the first synthetic transmittal reports itself as exactly that.
+Without T097 every component of this epic exists and nothing runs them, which is
+the one defect a per-task check cannot see.
+
+**Measured, from a clean database at `b03c7c0`**: `ingested=26
+skipped_unchanged=0 rolled_back=1 not_reached=24 enumerated=51`, 6,391 chunks
+committed, `fixture_missing` recorded on `ingestion_run` naming
+`prj-001-t0001-r0` and the resolution key that missed, no finish, exit code 3.
+`rolled_back` is **one** document and not twenty-five: `write_generations` stops
+at the first failure (FR-042), so the twenty-four behind it were never begun,
+which is what `not_reached` means and why the two dispositions are separate.
 
 ---
 
@@ -207,6 +229,26 @@ that acquires work without saying so stops being a record.
   gaining a configurable fixture root or `plan.md` being corrected — a decision
   outside this epic's scope. Marked `[ ]` rather than `[X]` deliberately: the task
   names committing fixtures, and none were committed.
+- **T081 is blocked by a second cause, and it is the harder one: no fixture can
+  currently be replayed at all.** `gateway.compute.hashing.fixture_key` digests
+  `request.model_dump_json()`, and `trace_id` is a declared field on
+  `InvocationRequest` carrying no `exclude=True`, so the correlation identifier is
+  part of the key. FR-070 mints **one trace id per run**, which means the same
+  request keys differently on every run. Measured directly on the committed code:
+  two requests differing only in trace id give
+  `sha256:667b82331c676441…` and `sha256:b32df59be116cbd7…`. Recording fixtures
+  would therefore not close T081 — every lookup on the next run would miss.
+  This survived E004's QC because `resolve_trace_id` mints an identifier when the
+  caller supplies none, so E004's own tests key with `trace_id` null and stay
+  stable; E006 is the first caller obliged to supply one. Both epics are
+  internally correct and the defect exists only at the seam, which is why no
+  per-epic check could see it. **The fix is E004's**, is one field attribute, and
+  does not need a provider: only one fixture is committed
+  (`src/gateway/fixtures/sha256/72/72a4e4a4…`), and re-keying it is a recomputation
+  over the stored request, not a re-recording. It is left unfixed here because
+  changing a shipped, QC-passed epic's hashing is outside this epic's scope and
+  does not by itself unblock T081, which still needs a credential to record
+  anything.
 - **T089 — regenerated ingestion report.** Blocked transitively on T081, because a
   full replay pipeline cannot reach extraction without fixtures. It was also
   blocked on T093–T096, because `build_report` refuses any incomplete content
@@ -219,10 +261,41 @@ that acquires work without saying so stops being a record.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T088 {FR-074} Add the replay-mode reproduction job comparing a clean-checkout run against the committed results manifest in .github/workflows/verify.yml after:T087
+- [X] T088 {FR-074} Add the replay-mode reproduction job comparing a clean-checkout run against the committed results manifest in .github/workflows/verify.yml after:T087
 - [ ] T089 {FR-071} Run the full replay pipeline and commit the regenerated specs/00006-document-ingestion-and-extraction/ingestion-report.md after:T087
-- [ ] T090 [P] Verify ingest, llm, and compute each reach the 80% per-package coverage floor in the combined report after:T005
-- [ ] T091 [P] Verify the four architecture checks stay green — computation boundary, gateway placement, single page reader, baseline independence after:T051
+- [X] T090 [P] Verify ingest, llm, and compute each reach the 80% per-package coverage floor in the combined report after:T005
+- [X] T091 [P] Verify the four architecture checks stay green — computation boundary, gateway placement, single page reader, baseline independence after:T051
+
+**T088 compares the reachable portion, and says so in the workflow.** FR-074's
+figure-level comparison is unreachable today: `results-manifest.json` is not
+committed, because T089 is blocked on T081. The job therefore runs the replay
+pipeline from a clean checkout and compares the **disposition ledger** against an
+expectation derived from the committed corpus manifests — R real documents
+`ingested`, one `rolled_back`, S−1 `not_reached`, exit 3, `fixture_missing`
+recorded — and fails loudly on any deviation. It also **fails when a results
+manifest is committed**, because the entry emits no report and a figure-level
+gate silently downgraded to a ledger-level one is the do-nothing job the task
+forbids. Five negative controls were run against the comparison — exit 0, a
+moved count, a different abort kind, no ledger printed, and a manifest present —
+and each failed it.
+
+**T090, measured** on the combined model data file (2,392 passed, 0 skipped):
+`ingest` **89%**, `llm` **95%**, `compute` **92%**, each asserted alone with
+`--fail-under=80` and each exiting 0; the model aggregate is 92%. `ingest/cli.py`
+is 91% after T097. No test was added to move a number: the two new files exist
+because T097 added a pipeline that nothing exercised.
+
+**T091, each named with its result.** Computation boundary — `lint-imports` in
+`src/model` and `src/api`, "Model-facing code does not reach the computation
+package" KEPT in both. Gateway placement — `tests/checks/
+test_model_facing_placement.py` and `test_single_import_site.py`, 28 passed;
+`model.ingest.cli` gained imports of `model.llm.extraction` and
+`model.ingest.extract` under T097 and neither is `gateway`, which is what the
+placement check exists to hold. Single page reader —
+`src/model/tests/ingest/test_single_page_reader.py`, green (79 passed with the
+baseline file). Baseline independence — "The baseline extractor does not reach
+the corpus generator" KEPT, plus `test_baseline_and_reference.py`. The gateway
+entry's own four contracts are KEPT as well.
 
 ---
 
