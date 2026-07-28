@@ -111,6 +111,14 @@ select = ["E", "F", "I", "UP", "B", "SIM", "S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Keep pytest's scratch inside the checkout. Without this it derives its base
+# temp from `tempfile.gettempdir()`, which on Windows is %LOCALAPPDATA%\Temp —
+# where a build's unsigned compiler probes and a 1 GB throwaway environment
+# once tripped the machine's antivirus as a dropper. `.tmp/` is gitignored, and
+# pytest clears its own basetemp at start, so nothing else may live there.
+# Belt and braces with the TMPDIR rule in AGENTS.md: this holds even when a
+# command is run without it.
+addopts = "--basetemp=../../.tmp/pytest"
 
 [tool.coverage.run]
 branch = true
