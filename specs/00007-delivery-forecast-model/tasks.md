@@ -64,8 +64,8 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 ## Phase 1: Setup (Repository / Workspace Delta)
 
-- [ ] T001 [P] Add `model/forecast` to coverage `source` **and** a `forecast` entry to `[tool.coverage.paths]` in pyproject.toml — two edits, or the package is uncounted
-- [ ] T002 [P] Declare the `forecast-fit` and `forecast-reproduce` console entry points in src/model/pyproject.toml
+- [X] T001 [P] Add `model/forecast` to coverage `source` **and** a `forecast` entry to `[tool.coverage.paths]` in pyproject.toml — two edits, or the package is uncounted
+- [X] T002 [P] Declare the `forecast-fit` and `forecast-reproduce` console entry points in src/model/pyproject.toml
 
 ---
 
@@ -73,16 +73,16 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 **The schema and four shared pure modules gate every delivery phase.** `serialize.py` gates all three recomputable digests, `censoring.py` gates the split's stratum and the likelihood, `split.py` gates the fit's own input frame, `likelihood.py` gates the graph. **T003 → T004 → T005 land as one change** — see § Dependencies.
 
-- [ ] T003 AD-007's six parts in one change — (a)–(e) in CHK/test_migration_ranges.py, (f) the second `DECLARED_BLOCKS` in SCH/test_migration_chain.py; graph checks unaltered
-- [ ] T004 {FR-036} Migration `0300` in MIG/0300_forecast_run_provenance.py — empty-table guard with a named error, `fn_vendor_shrinkage_wellformed`, fourteen NOT NULL columns
-- [ ] T005 {FR-036} G-2 — extend **all three** `forecast_run` builders in SCH/test_forecast.py: two `INSERT` constants *and* `FIXTURE_RUN`, fourteen values each after:T004
-- [ ] T006 {FR-005} Migration `0301` in MIG/0301_forecast_split_assignment.py — table, `uq_…__run_ordinal`, `ix_…__po_line`, explicit `GRANT SELECT, INSERT, DELETE`
-- [ ] T007 {FR-012} Migration `0302` in MIG/0302_held_out_prediction.py — `uq_purchase_order_line__order_anchor` **and** `held_out_prediction` in one revision (HINT-001)
-- [ ] T008 {FR-016} Migration `0303` in MIG/0303_forecast_diagnostic.py — the table and `uq_forecast_diagnostic__run_metric_parameter` `NULLS NOT DISTINCT`; same grant
-- [ ] T009 G-3 — generalise the drift test in SCH/test_constants_agreement.py to every constraint carrying a double-precision literal, so the fourth `1e-9` is audited after:T007
-- [ ] T010 DV-026 — no second `CREATE FUNCTION` in the four revisions and `pg_proc` counted before and after the chain, in TST/test_function_inventory.py
-- [ ] T011 **NC-12** — AD-007 verified: `0400` probes fail as outside, `0200`–`0299` passes as declared-but-unpopulated, part (a) alone leaves the suite red; DV-033/DV-034 green
-- [ ] T012 Create the forecast fixtures — live PostgreSQL on `${PRC_DB_PORT:-5434}` at head `0303`, tmp report roots — in TST/conftest.py, following SCH/conftest.py
+- [X] T003 AD-007's six parts in one change — (a)–(e) in CHK/test_migration_ranges.py, (f) the second `DECLARED_BLOCKS` in SCH/test_migration_chain.py; graph checks unaltered
+- [X] T004 {FR-036} Migration `0300` in MIG/0300_forecast_run_provenance.py — empty-table guard with a named error, `fn_vendor_shrinkage_wellformed`, fourteen NOT NULL columns
+- [X] T005 {FR-036} G-2 — extend **all three** `forecast_run` builders in SCH/test_forecast.py: two `INSERT` constants *and* `FIXTURE_RUN`, fourteen values each after:T004
+- [X] T006 {FR-005} Migration `0301` in MIG/0301_forecast_split_assignment.py — table, `uq_…__run_ordinal`, `ix_…__po_line`, explicit `GRANT SELECT, INSERT, DELETE`
+- [X] T007 {FR-012} Migration `0302` in MIG/0302_held_out_prediction.py — `uq_purchase_order_line__order_anchor` **and** `held_out_prediction` in one revision (HINT-001)
+- [X] T008 {FR-016} Migration `0303` in MIG/0303_forecast_diagnostic.py — the table and `uq_forecast_diagnostic__run_metric_parameter` `NULLS NOT DISTINCT`; same grant
+- [X] T009 G-3 — generalise the drift test in SCH/test_constants_agreement.py to every constraint carrying a double-precision literal, so the fourth `1e-9` is audited after:T007
+- [X] T010 DV-026 — no second `CREATE FUNCTION` in the four revisions and `pg_proc` counted before and after the chain, in TST/test_function_inventory.py
+- [X] T011 **NC-12** — AD-007 verified: `0400` probes fail as outside, `0200`–`0299` passes as declared-but-unpopulated, part (a) alone leaves the suite red; DV-033/DV-034 green
+- [X] T012 Create the forecast fixtures — live PostgreSQL on `${PRC_DB_PORT:-5434}` at head `0303`, tmp report roots — in TST/conftest.py, following SCH/conftest.py
 - [ ] T013 [P] Create `PKG/__init__.py` and the artifact/report path resolution in PKG/paths.py → exports: run_report_path(), refusal_report_path()
 - [ ] T014 [P] {FR-005,FR-016,FR-028} Publish the constants in PKG/config.py — thresholds, four-chain minimum, `HELD_OUT_FRACTION`, `SPLIT_SEED`, day tolerance, monitored set (AD-006)
 - [ ] T015 {FR-024,FR-025} Declare the forbidden `import-linter` contract from `model.forecast` to `model.llm` and `gateway`, indirect detection on, in src/model/pyproject.toml
@@ -246,7 +246,7 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [ ] T126 {FR-029} [COMPLETES FR-029] Assert both recorded duration semantics over emitted rows: conditional-remaining for open lines, total-from-order-date for held-out — TST/test_duration_semantics.py after:T117
 - [ ] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
 
-**A-015**: T055 and T051 add behaviour to property-tier modules outside any pair. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
+**A-015 — and the pair rule reaches them by this sentence, not by a label.** T055 and T051 add behaviour to property-tier modules outside any of the ten pairs. T117 and T118 are their RED halves and T055 and T051 are the corresponding GREEN halves, **so the `test:`-before-`feat:` commit ordering binds those two couples exactly as it binds the ten** — they are recorded here rather than in the table because the table is keyed by module and both modules already appear in it. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
 
 **A-016**: the P1-viable claim had two counterexamples. SC-034 is tagged `[US1]` but was asserted only by T109/T110 in Phase 8 — T119 fixes that. SC-035's equality ranges over the reproduction report emitted by T098 in Phase 7 (P2); T073 now carries `after:T098`, and the P1 boundary note below records that SC-035 is **P1-scoped to the kinds a P1 cut emits**.
 
@@ -282,6 +282,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | 7 | `ablation.py` | **T049** | **T050** | US2 |
 | 8 | `diagnostics.py` | **T078** | **T079** | US4 |
 | 9 | `compare.py` | **T094** | **T095** | US5 |
+| 10 | `design.py` | **T114** | **T115** | Foundational *(appended; must precede T027)* |
 
 `model.py`, `sample.py`, `read.py`, `write.py`, `manifest.py`, `report.py`, `config.py`, `paths.py`, `fit.py` and `reproduce.py` are test-after under the admission rule — but `model.py`'s `logp` is asserted against `likelihood.py` at **T028**, which is the only check that reaches the PyMC graph at all.
 
@@ -325,13 +326,13 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 
 | Check | Result |
 |---|---|
-| Task IDs contiguous from T001 | **113** — T001–T113, no gap and no withdrawal |
+| Task IDs contiguous from T001 | **127** — T001–T127, no gap and no withdrawal. T114–T127 were appended at the Analyze gate; an earlier revision of this row still said 113 |
 | Every FR carries at least one `{FR-###}` tag | **40 / 40** (FR-001…FR-040) |
 | Every SC reachable from at least one task | **35 / 35** (SC-001…SC-035). SC-032's prohibition half is reachable only by commit-history review (G-11) and T077 says so rather than claiming a check; SC-022's tie-breaking half is argued (G-13) |
 | `[COMPLETES FR-###]` on the last task of every requirement spanning 3+ tasks | **28 markers**, no task carrying two |
 | Every DV rule implemented or asserted, at the tier `data-model.md` assigns it | **41 / 41** (DV-001…DV-041, including the appended DV-040 and DV-041) |
 | Every negative control lands as a task | **21 / 21** (NC-1…NC-21), with the multi-case controls enumerated above |
-| Mandatory red-green pairs present and correctly ordered | **9 / 9** named, each RED immediately preceding its GREEN. The evidence is a `test:` commit before the `feat:` commit per pair, verified at implementation — it is **not** asserted here, because a list that claimed it in advance is the miss E005 recorded |
+| Mandatory red-green pairs present and correctly ordered | **10 / 10** named, each RED immediately preceding its GREEN. The evidence is a `test:` commit before the `feat:` commit per pair, verified at implementation — it is **not** asserted here, because a list that claimed it in advance is the miss E005 recorded |
 | AD-007 emitted as one task across both files | **yes** — T003. Splitting it is what HINT-003 forbids, and part (f) alone leaves the chain unverified |
 | `0300` and the G-2 fixture extension adjacent and undivided | **yes** — T004 → T005, one change, one phase |
 | `0302` creates the unique key and the table in one revision | **yes** — T007 |
