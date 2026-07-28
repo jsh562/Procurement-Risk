@@ -72,12 +72,12 @@ TINY_DRAWS = 50
 #:
 #: **`az.InferenceData` no longer exists.** ArviZ 1.x moved the role to
 #: `xarray.DataTree` and left the old attribute as a shim that raises a
-#: `MigrationWarning` on access, so `isinstance(x, az.InferenceData)` warns and
-#: `typing.get_type_hints(sample_posterior)` fails under `-W error`. `sample.py`
-#: still annotates its return as `az.InferenceData`; the annotation is deferred
-#: and therefore never evaluated, so nothing breaks today. That is recorded here
-#: rather than worked around silently, and asserting on the real type is what
-#: keeps the record from going stale.
+#: `MigrationWarning` on access, so `isinstance(x, az.InferenceData)` warns and a
+#: return annotation naming it fails `typing.get_type_hints` under `-W error`.
+#: `sample.py` annotated it that way and survived only because the annotation was
+#: deferred and never evaluated; it now annotates `xarray.DataTree` behind a
+#: `TYPE_CHECKING` guard, so no runtime dependency on xarray is implied. Asserting
+#: on the real type here is what keeps this record from going stale.
 INFERENCE_DATA_TYPE = type(az.convert_to_datatree({"x": np.zeros((1, 1))}))
 
 

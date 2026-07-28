@@ -17,11 +17,27 @@ because a per-run split seed lets a re-fit reshuffle until a vendor lands well
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-import arviz as az
 import pymc as pm
 
 from model.forecast.config import CHAINS, DRAWS_PER_CHAIN, TUNING_DRAWS_PER_CHAIN
+
+if TYPE_CHECKING:  # pragma: no cover - imported for the annotation only
+    # `az.InferenceData` no longer exists. ArviZ 1.x moved the role to
+    # `xarray.DataTree` and left the old attribute as a shim that raises a
+    # `MigrationWarning` on *access*, so annotating the return as
+    # `az.InferenceData` made `typing.get_type_hints(sample_posterior)` fail under
+    # `-W error` — deferred annotations were the only reason nothing broke.
+    #
+    # Guarded rather than imported at runtime so naming the type implies no
+    # dependency decision: xarray reaches this entry transitively through ArviZ
+    # and is not declared, and this module wants the name and never a value. The
+    # cost is the ordinary one of a guarded import — a caller resolving the
+    # annotation at runtime must supply this module's `TYPE_CHECKING` names — and
+    # it is preferred to a runtime import because the alternative would have this
+    # module assert a dependency the entry's manifest does not.
+    import xarray as xr
 
 __all__ = ["SampleError", "sample_posterior"]
 
@@ -65,13 +81,15 @@ def sample_posterior(
     tune: int = TUNING_DRAWS_PER_CHAIN,
     cores: int | None = None,
     progressbar: bool = False,
-) -> az.InferenceData:
+) -> xr.DataTree:
     """Sample `model` and return the posterior with its sampler statistics.
 
-    An `InferenceData` rather than a trace, because the diagnostics gate reads
+    A grouped container rather than a trace, because the diagnostics gate reads
     `sample_stats` — `diverging` and `energy` — beside the draws, and a
     container that separated them would let a run be summarised without the two
-    run-scope metrics FR-017 refuses on (`research.md` § Posterior storage).
+    run-scope metrics FR-017 refuses on (`research.md` § Posterior storage). The
+    container is an `xarray.DataTree`: ArviZ 1.x retired `InferenceData` and moved
+    the role there, which is why the annotation names xarray's type.
 
     `random_seed` is passed through unchanged: PyMC derives one stream per chain
     from it, so the same seed at the same shape and library versions reproduces

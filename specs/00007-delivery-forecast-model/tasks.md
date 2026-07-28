@@ -109,12 +109,12 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T029 [US1] {FR-016} Seeded sampling at 4 chains × 1,000 draws with 1,000 tuning draws in PKG/sample.py, fitting the `train` side only
 - [X] T030 [P] [US1] {FR-019} **RED** Failing shrinkage property tests in TST/test_shrinkage_properties.py — ρ monotone in nⱼ, triple ordered inside `[0,1]`, interval widens as nⱼ falls
 - [X] T031 [US1] {FR-019} **GREEN** ρⱼ = τ²/(τ² + σ²/nⱼ) as a median with an HPDI per vendor in PKG/shrinkage.py → exports: vendor_shrinkage() after:T030
-- [ ] T032 [US1] {FR-002,FR-006,FR-009,FR-043,FR-044} [COMPLETES FR-009] Assemble the manifest in PKG/manifest.py — every SC-020 field, both digests, both SC-022 labels → exports: build_manifest()
-- [ ] T033 [US1] {FR-008,FR-013,FR-034} Transaction 1 in PKG/write.py — run row, split assignments, `line_posterior`; both arrays one row ← T032:build_manifest → exports: write_artifact_set()
-- [ ] T034 [US1] {FR-015} Transaction 2 in PKG/write.py — clear the active flag, then set it on this run; explicit, never implied by recency
-- [ ] T035 [US1] {FR-039} Wire `forecast-fit` in PKG/fit.py — read, censor, split, sample, condition, write, publish — and print **one** stdout line, the `run_id` ← T033:write_artifact_set
-- [ ] T036 [US1] {FR-027,FR-031,FR-040} Render the run report as a **closed schema** in PKG/report.py — layer label, datasheet reference, `L-1`–`L-4` four-part with the computed maximum (G-10)
-- [ ] T037 [US1] {FR-019,FR-020} Report each vendor's shrinkage weight beside its training observation count and a per-vendor supported/not-supported verdict, in PKG/report.py
+- [X] T032 [US1] {FR-002,FR-006,FR-009,FR-043,FR-044} [COMPLETES FR-009] Assemble the manifest in PKG/manifest.py — every SC-020 field, both digests, both SC-022 labels → exports: build_manifest()
+- [X] T033 [US1] {FR-008,FR-013,FR-034} Transaction 1 in PKG/write.py — run row, split assignments, `line_posterior`; both arrays one row ← T032:build_manifest → exports: write_artifact_set()
+- [X] T034 [US1] {FR-015} Transaction 2 in PKG/write.py — clear the active flag, then set it on this run; explicit, never implied by recency
+- [X] T035 [US1] {FR-039} Wire `forecast-fit` in PKG/fit.py — read, censor, split, sample, condition, write, publish — and print **one** stdout line, the `run_id` ← T033:write_artifact_set
+- [X] T036 [US1] {FR-027,FR-031,FR-040} Render the run report as a **closed schema** in PKG/report.py — layer label, datasheet reference, `L-1`–`L-4` four-part with the computed maximum (G-10)
+- [X] T037 [US1] {FR-019,FR-020} Report each vendor's shrinkage weight beside its training observation count and a per-vendor supported/not-supported verdict, in PKG/report.py
 - [ ] T038 [US1] {FR-008} DV-001 / SC-001 — one `line_posterior` row per open line and `open_line_count` equal to that count — TST/test_open_population.py after:T035
 - [ ] T039 [US1] {FR-010,FR-011} DV-003 and DV-004 over stored `line_posterior` rows — SC-002 and SC-003 for the open population — TST/test_stored_arrays.py after:T035
 - [ ] T040 [US1] {FR-029} DV-005 / SC-027 — the longest-elapsed decile's median draw is no smaller than the shortest's, and no `survival[1]` below the floor — TST/test_conditioning.py
