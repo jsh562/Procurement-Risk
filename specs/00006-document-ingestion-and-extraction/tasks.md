@@ -136,20 +136,20 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 ## Phase 6: US4 - A Value Split Across A Page Break Keeps Both Pages (Priority: P2)
 
-- [ ] T066 [US4] {FR-029} Write one contributing-chunk row per additional page, the anchor never appearing among them, in ingest/writer.py after:T046
-- [ ] T067 [US4] {FR-029} Publish the count of multi-chunk values and of their contributing-chunk rows in src/model/src/model/ingest/report.py after:T066
-- [ ] T068 [US4] {FR-029} [COMPLETES FR-029] Assert the seeded page-split value cites the page printing it and reassembles in page order in src/model/tests/ingest/test_page_split.py after:T066
+- [X] T066 [US4] {FR-029} Write one contributing-chunk row per additional page, the anchor never appearing among them, in ingest/writer.py after:T046
+- [X] T067 [US4] {FR-029} Publish the count of multi-chunk values and of their contributing-chunk rows in src/model/src/model/ingest/report.py after:T066
+- [X] T068 [US4] {FR-029} [COMPLETES FR-029] Assert the seeded page-split value cites the page printing it and reassembles in page order in src/model/tests/ingest/test_page_split.py after:T066
 
 ---
 
 ## Phase 7: US5 - Every Value Names The Run That Produced It (Priority: P2)
 
-- [ ] T069 [US5] {FR-038} Write the run record with the composite principal-and-build agent identity and a finish only on completion in ingest/runs.py after:T009 → exports: write_run_record
-- [ ] T070 [US5] {FR-039} Insert the three run-output associations in the document transaction and hold value-level rows' run and document equal in ingest/writer.py after:T011
-- [ ] T071 [US5] {FR-039} [COMPLETES FR-039] Anti-join every chunk, value, and failure against its association corpus-wide in src/model/tests/schema/test_run_attribution.py after:T070
-- [ ] T072 [US5] {FR-055} Mark the prior generation superseded and remove it leaf-up before inserting the successor as active in ingest/runs.py (HINT-003) after:T069
-- [ ] T073 [US5] {FR-055} Assert one active generation per document, zero superseded rows at commit, and zero rows left after a promotion in src/model/tests/schema/test_generations.py after:T072
-- [ ] T074 [US5] {FR-072} Label every published figure with its run, generation set, kind, unit, and layer, naming the run record by identifier, in ingest/report.py after:T069
+- [X] T069 [US5] {FR-038} Write the run record with the composite principal-and-build agent identity and a finish only on completion in ingest/runs.py after:T009 → exports: write_run_record
+- [X] T070 [US5] {FR-039} Insert the three run-output associations in the document transaction and hold value-level rows' run and document equal in ingest/writer.py after:T011
+- [X] T071 [US5] {FR-039} [COMPLETES FR-039] Anti-join every chunk, value, and failure against its association corpus-wide in src/model/tests/schema/test_run_attribution.py after:T070
+- [X] T072 [US5] {FR-055} Mark the prior generation superseded and remove it leaf-up before inserting the successor as active in ingest/runs.py (HINT-003) after:T069
+- [X] T073 [US5] {FR-055} Assert one active generation per document, zero superseded rows at commit, and zero rows left after a promotion in src/model/tests/schema/test_generations.py after:T072
+- [X] T074 [US5] {FR-072} Label every published figure with its run, generation set, kind, unit, and layer, naming the run record by identifier, in ingest/report.py after:T069
 
 ---
 

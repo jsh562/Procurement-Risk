@@ -63,6 +63,7 @@ from model.ingest.chunker import BOUNDARY_CLASSES, DocumentChunking
 from model.ingest.documents import SHARED_LIBRARY_PROJECT
 from model.ingest.failures import FAILURE_OUTCOMES
 from model.ingest.runs import ConfidencePolicy
+from model.ingest.writer import MultiChunkCounts
 
 __all__ = [
     "ATTEMPT_UNIT",
@@ -91,7 +92,9 @@ __all__ = [
     "Figure",
     "FigureScope",
     "InvocationLedger",
+    "LabelCensus",
     "LayerChunking",
+    "MultiChunkCounts",
     "NearDuplicateCounts",
     "ReportError",
     "SampledClaim",
@@ -100,7 +103,9 @@ __all__ = [
     "attempt_ledger_section",
     "build_report",
     "chunk_identity_section",
+    "census_of_labels",
     "chunking_section",
+    "collect_figures",
     "collect_total_checks",
     "confidence_domain",
     "confidence_section",
@@ -111,11 +116,13 @@ __all__ = [
     "measure_near_duplicates",
     "near_duplicate_section",
     "observed_baseline_label",
+    "page_split_section",
     "profile_chunkings",
     "prj_000_section",
     "read_resident_chunks",
     "recognition_error_section",
     "reconciliation_section",
+    "scope_labels_section",
     "tally_confidence",
     "total_checks_section",
 ]
@@ -398,18 +405,37 @@ def build_report(sections: Sequence[Section], *, run_id: str) -> str:
         The whole report as Markdown, ready to replace the committed artifact.
 
     Raises:
-        ReportError: when an item is missing, when an item appears twice, or
-            when `run_id` is blank. A section whose item is not on the list, or
-            whose body is empty, is refused earlier by `Section` itself.
+        ReportError: when an item is missing, when an item appears twice, when
+            `run_id` is blank, or when a figure or total check names a different
+            run. A section whose item is not on the list, or whose body is
+            empty, is refused earlier by `Section` itself.
 
     **Regeneration replaces** (FR-071): the return value is the whole report,
     not a fragment to be merged into the previous one. There is no incremental
     path, deliberately — a report assembled from a previous run's sections plus
     this run's would carry figures under a run identifier that did not produce
-    them.
+    them. The run-identifier check below is what makes that structural rather
+    than a property of there being no incremental path: an assembled report is
+    refused even if someone builds one by hand (FR-072, item 20).
     """
     if not str(run_id).strip():
         raise ReportError("FR-072: the report names the run record it describes, by identifier")
+
+    foreign = sorted(
+        {
+            labelled.scope.run_id
+            for section in sections
+            for labelled in (*section.figures, *section.total_checks)
+            if labelled.scope.run_id != run_id
+        }
+    )
+    if foreign:
+        raise ReportError(
+            f"FR-072: this report describes run {run_id!r} and carries figures or total "
+            f"checks computed under {foreign}. The report names the run record it "
+            f"describes by identifier, and a figure from another run inside it reads as "
+            f"this run's work."
+        )
 
     seen: dict[int, Section] = {}
     for section in sections:
@@ -1051,6 +1077,128 @@ def chunking_section(*, run_id: str, profile: ChunkingProfile) -> Section:
                     unit="chunk",
                     layer="pooled",
                 ),
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 10 — FR-029, multi-chunk values and their contributing-chunk rows
+# ---------------------------------------------------------------------------
+
+
+def page_split_section(*, run_id: str, counts: MultiChunkCounts) -> Section:
+    """Item 10: how many values were assembled across a page break (FR-029).
+
+    Args:
+        run_id: the run the report describes.
+        counts: the multi-chunk tally, as `writer.multi_chunk_counts` produces
+            from the citations themselves. Passed in rather than queried here
+            for the reason the rest of this module is written that way — the
+            report publishes what it is given, and the counting belongs beside
+            the provenance it counts.
+
+    Returns:
+        Item 10, with both counts FR-071 names and the arithmetic that relates
+        them stated rather than left to a reader.
+
+    Raises:
+        ReportError: the run stored no value at all. `TotalCheck` refuses an
+            empty population at construction, and it is refused here with a
+            message that names the cause: "zero values were assembled across a
+            page break" is a measurement, but only if some value was measured.
+
+    **The two counts are published together because either alone is a different
+    claim.** `MultiChunkCounts` already refuses a row count below the value
+    count, so the pair cannot be published in a shape that hides a dropped
+    contributor; what is added here is the *relation*, printed rather than
+    implied: a value drawing on *n* pages carries `n - 1` rows, because the
+    anchor is contributor 1 and lives on `extracted_value`. So the row count is
+    exactly the multi-chunk value count when every split spans two pages, and
+    exceeds it only where a value spans three or more.
+
+    **Zero is published as a measurement, never as an absent row.** A corpus in
+    which nothing split across a page would report `0` here, beside the
+    population it was counted over — which is what distinguishes it from a run
+    whose contributing-chunk write never executed.
+    """
+    if counts.values <= 0:
+        raise ReportError(
+            "FR-029 / FR-068: the multi-chunk count is denominated on the values this run "
+            "stored, and it stored none. Zero multi-chunk values out of zero values is not "
+            "a measurement — an empty population fails rather than passes."
+        )
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="extracted value",
+        layer="SYNTHETIC",
+    )
+    row_labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="contributing-chunk row",
+        layer="SYNTHETIC",
+    )
+    excess = counts.contributing_rows - counts.multi_chunk_values
+    body = (
+        f"**A field whose label ends one page and whose value begins the next is a "
+        f"multi-source value, never a chunk spanning the break** (FR-029). Its citation "
+        f"anchors on the chunk carrying the **printed value** — so the cited page is the "
+        f"*later* page — and every further page it draws on is recorded as an additional "
+        f"contributing chunk.\n\n"
+        f"**The anchor is contributor 1 and never appears among the contributing rows.** "
+        f"`ck_evcc__ordinal_min` fixes the ordinal floor at 2 for exactly that reason, so "
+        f"a value assembled across one page break carries **one** contributing row and a "
+        f"`source_chunk_count` of 2. The row count below is therefore "
+        f"`sum(source_chunk_count - 1)` over the multi-chunk values, and the "
+        f"{excess} row(s) beyond the multi-chunk value count are the values spanning three "
+        f"or more pages.\n\n"
+        f"**Reassembly is in ascending page order, not contributor order** (SC-027). The "
+        f"anchor being the later page, ordering a comparison by contributor position would "
+        f"put the value before its own label; the contributor ordinal is identity within "
+        f"the set and carries no precedence meaning.\n\n"
+        f"| Term | Count |\n|---|---|\n"
+        f"| extracted values stored | {counts.values} |\n"
+        f"| read from a single chunk | {counts.single_chunk_values} |\n"
+        f"| assembled across a page break | {counts.multi_chunk_values} |\n"
+        f"| contributing-chunk rows recorded | {counts.contributing_rows} |\n"
+    )
+    return Section(
+        item=10,
+        body=body,
+        figures=(
+            Figure(
+                label="Extracted values assembled across a page break",
+                value=counts.multi_chunk_values,
+                scope=labels,
+                note=(
+                    "zero published rather than omitted"
+                    if counts.multi_chunk_values == 0
+                    else f"denominator: {counts.values} stored values"
+                ),
+            ),
+            Figure(
+                label="Extracted values read from a single chunk",
+                value=counts.single_chunk_values,
+                scope=labels,
+            ),
+            Figure(
+                label="Contributing-chunk rows recorded",
+                value=counts.contributing_rows,
+                scope=row_labels,
+                note="the anchor is contributor 1 and is not among them",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every multi-chunk value records one row per page beyond its anchor",
+                population="every extracted value this run stored",
+                count=counts.values,
+                scope=labels,
             ),
         ),
     )
@@ -2468,3 +2616,222 @@ def collect_total_checks(sections: Iterable[Section]) -> tuple[TotalCheck, ...]:
     for section in sections:
         collected.extend(section.total_checks)
     return tuple(collected)
+
+
+# ---------------------------------------------------------------------------
+# Item 20 — FR-072, the scope labels on every figure above
+# ---------------------------------------------------------------------------
+
+
+def collect_figures(sections: Iterable[Section]) -> tuple[Figure, ...]:
+    """Every figure the given sections publish, in order.
+
+    Built from the sections themselves rather than from a second list, for the
+    reason `collect_total_checks` is: a hand-maintained inventory is how a
+    figure ends up in the report without appearing in the census of figures,
+    which is the one place its labels would have been checked.
+    """
+    collected: list[Figure] = []
+    for section in sections:
+        collected.extend(section.figures)
+    return tuple(collected)
+
+
+@dataclass(frozen=True)
+class LabelCensus:
+    """FR-072's five labels, counted over every figure the report publishes.
+
+    A census of the labelling rather than of the figures: the interesting number
+    is not how many figures there are but that **all** of them carry each label,
+    and that the values fall inside the declared vocabularies. `FigureScope`
+    refuses a figure without all five at construction, so what this adds is the
+    published evidence that the refusal ranged over everything.
+    """
+
+    figures: int
+    by_kind: Mapping[str, int]
+    by_generation_set: Mapping[str, int]
+    by_layer: Mapping[str, int]
+    by_unit: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        if self.figures <= 0:
+            raise ReportError(
+                "FR-072 / FR-068: the report publishes no figure, so 'every figure carries "
+                "its labels' is true of nothing. An empty population fails rather than "
+                "passes."
+            )
+        for name, tally in (
+            ("kind", self.by_kind),
+            ("generation set", self.by_generation_set),
+            ("layer", self.by_layer),
+        ):
+            if sum(tally.values()) != self.figures:
+                raise ReportError(
+                    f"FR-072: {sum(tally.values())} figures carry a {name} and "
+                    f"{self.figures} were published. Every figure carries every label."
+                )
+
+
+def census_of_labels(figures: Sequence[Figure]) -> LabelCensus:
+    """Count the five labels over `figures`, publishing zeros (FR-072).
+
+    The three closed vocabularies — kind, generation set, layer — are tallied
+    over their **whole** declared set, so a kind nothing took appears as a zero
+    rather than as an absent row. An omitted row and a zero row read the same to
+    a reader and only one of them is a measurement; that rule is FR-034's and it
+    applies here for the same reason.
+
+    Counting units are **not** a closed set and are tallied as observed: FR-069
+    fixes three units for the ledger figures, but a chunk-length figure counts
+    leaves and a cluster count counts clusters, so a closed enumeration here
+    would either be wrong or would force every figure into a unit it does not
+    have.
+    """
+
+    def tally(vocabulary: Sequence[str], of: Sequence[str]) -> dict[str, int]:
+        counts = dict.fromkeys(vocabulary, 0)
+        for value in of:
+            counts[value] += 1
+        return counts
+
+    units: dict[str, int] = {}
+    for figure in figures:
+        units[figure.scope.unit] = units.get(figure.scope.unit, 0) + 1
+    return LabelCensus(
+        figures=len(figures),
+        by_kind=tally(FIGURE_KINDS, [figure.scope.kind for figure in figures]),
+        by_generation_set=tally(
+            GENERATION_SETS, [figure.scope.generation_set for figure in figures]
+        ),
+        by_layer=tally(LAYERS, [figure.scope.layer for figure in figures]),
+        by_unit=dict(sorted(units.items())),
+    )
+
+
+def scope_labels_section(*, run_id: str, sections: Sequence[Section]) -> Section:
+    """Item 20: every figure's run, generation set, kind, unit and layer (FR-072).
+
+    Args:
+        run_id: the run record this report describes, named by identifier.
+        sections: the report's other sections. Item 20 is built **from** them
+            rather than beside them, so a figure added anywhere is counted here
+            without anyone remembering to. Its own two figures are necessarily
+            outside the count — a census cannot enumerate figures it has not
+            produced yet — and are covered by `build_report`, which checks the
+            run identifier over every figure in the report including these.
+
+    Returns:
+        Item 20, with the census of labels and the total check over it.
+
+    Raises:
+        ReportError: a figure names a run other than the one the report
+            describes, or no figure is published at all. The first is the defect
+            this item exists to catch — a figure carried over from a previous
+            run reads as this run's, and every label on it would be correct
+            except the one that matters.
+
+    **The labels are a type, not a convention.** `FigureScope` takes all five or
+    raises, and there is no constructor that defaults any of them: the label most
+    often forgotten is the layer, and it is the one that decides whether a number
+    about the 25 transmittals may be read as a number about the corpus. What this
+    section adds is the published evidence — the count of figures the rule ranged
+    over, and the distribution of each closed vocabulary with its zeros.
+
+    **What a kind means, restated where a reader meets the counts.** A *census*
+    carries a population and a count and no interval; a *sampled estimate* is one
+    of FR-011's claims with its inspected and defect counts and its bound; a
+    *descriptive figure over a designed set* is what the per-field extraction
+    figures are — the 25 transmittals are a seeded set from which no population
+    was sampled, so their intervals are not confidence statements about
+    extraction outside this corpus.
+    """
+    if not str(run_id).strip():
+        raise ReportError("FR-072: the report names the run record it describes, by identifier")
+    figures = collect_figures(sections)
+    foreign = sorted({figure.scope.run_id for figure in figures if figure.scope.run_id != run_id})
+    if foreign:
+        raise ReportError(
+            f"FR-072: this report describes run {run_id!r} and publishes figures computed "
+            f"under {foreign}. A figure carried over from another run reads as this run's "
+            f"work, and every label on it would be correct except the one that decides "
+            f"whether the number describes what the report says it does."
+        )
+    census = census_of_labels(figures)
+
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="published figure",
+        layer="pooled",
+    )
+    kinds = "\n".join(f"| {kind} | {census.by_kind[kind]} |" for kind in FIGURE_KINDS)
+    sets = "\n".join(f"| {name} | {census.by_generation_set[name]} |" for name in GENERATION_SETS)
+    layers = "\n".join(f"| {layer} | {census.by_layer[layer]} |" for layer in LAYERS)
+    units = "\n".join(f"| {unit} | {count} |" for unit, count in census.by_unit.items())
+    body = (
+        f"**Every figure this report publishes carries five labels** (FR-072): the run it "
+        f"was computed under, the generation set it ranges over, its kind, its counting "
+        f"unit, and its layer. The run record this report describes is named by "
+        f"identifier — `{run_id}` — and **every one of the {census.figures} figures below "
+        f"names that same run**, which is checked rather than assumed: a figure carried "
+        f"over from a previous run would read as this run's work with every other label "
+        f"intact.\n\n"
+        f"The labels are a type rather than a convention. `FigureScope` takes all five or "
+        f"refuses, and defaults none of them; the one most often forgotten is the layer, "
+        f"and it is the one that decides whether a number about the 25 synthetic "
+        f"transmittals may be read as a number about the 51-document corpus.\n\n"
+        f"This census ranges over the report's **other** sections: it cannot enumerate the "
+        f"two figures it publishes itself. Those carry the same five labels from the same "
+        f"type, and the run-identifier check that closes the gap is `build_report`'s, which "
+        f"ranges over every figure and every total check the report contains.\n\n"
+        f"**Generation set.** A *corpus-resident* figure is computed by query over the "
+        f"generations resident when this report was written, naming the runs they belong "
+        f"to. A *run-scoped* figure ranges over the one named run's own work.\n\n"
+        f"| Generation set | Figures |\n|---|---|\n{sets}\n\n"
+        f"**Kind.** A *census* carries a population and a count and **no** interval "
+        f"(FR-068). A *sampled estimate* is one of FR-011's claims with its inspected "
+        f"count, defect count and bound. A *descriptive figure over a designed set* is "
+        f"what the per-field extraction figures are (FR-060): the 25 transmittals are a "
+        f"seeded set from which no population was sampled, so their intervals are "
+        f"descriptive and must not be read as confidence statements about extraction "
+        f"outside this corpus.\n\n"
+        f"| Kind | Figures |\n|---|---|\n{kinds}\n\n"
+        f"**Layer.** A figure whose population spans both layers is published per layer as "
+        f"well as pooled (FR-053, FR-061), so `pooled` is a member of the vocabulary "
+        f"rather than the absence of one.\n\n"
+        f"| Layer | Figures |\n|---|---|\n{layers}\n\n"
+        f"**Counting unit.** FR-069 fixes three units for the ledger figures — attempt, "
+        f"invocation, document — and they are what an attempt-level and an "
+        f"invocation-level number are kept apart by. The vocabulary is **not** closed: a "
+        f"leaf-length figure counts leaves and a cluster count counts clusters, and forcing "
+        f"those into one of the three would label them with a unit they do not have. The "
+        f"units observed:\n\n"
+        f"| Unit | Figures |\n|---|---|\n{units}\n"
+    )
+    return Section(
+        item=20,
+        body=body,
+        figures=(
+            Figure(
+                label="Published figures carrying all five scope labels",
+                value=census.figures,
+                scope=labels,
+                note=f"every one names run `{run_id}`",
+            ),
+            Figure(
+                label="Distinct counting units in use",
+                value=len(census.by_unit),
+                scope=labels,
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Every published figure carries its run, generation set, kind, unit and layer",
+                population="every figure the report's other sections publish",
+                count=census.figures,
+                scope=labels,
+            ),
+        ),
+    )

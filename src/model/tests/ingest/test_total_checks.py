@@ -15,10 +15,12 @@ generation set, the kind, the unit, or the layer — and FR-071's closed content
 list, where a missing item stops the report being emitted at all.
 
 **The placeholder sections in this module are placeholders and are labelled as
-such.** Items 5–8, 10, 12–16 and 18–21 of FR-071's list are owned by US2–US6
-tasks that have not run. They are stubbed here so the *builder* can be exercised
-over a complete list; the committed report is generated from real sections by
-T089 and nothing here produces it.
+such.** The remaining items of FR-071's list are owned by US2–US6 tasks that
+have not run. They are stubbed here so the *builder* can be exercised over a
+complete list; the committed report is generated from real sections by T089 and
+nothing here produces it. Items 10 (FR-029, T067) and 20 (FR-072, T074) have
+since landed and their real builders replace the stubs — which is what the stubs
+were for.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from model.ingest.chunker import BOUNDARY_CLASSES, Chunk, DocumentChunking
 from model.ingest.report import (
     DECLARED_SIMILARITY_GRID,
     FIGURE_KINDS,
+    GENERATION_SETS,
     LAYERS,
     NEAR_DUPLICATE_CAUSES,
     REPORT_CONTENTS,
@@ -43,24 +46,35 @@ from model.ingest.report import (
     Section,
     TotalCheck,
     build_report,
+    census_of_labels,
     chunk_identity_section,
     chunking_section,
+    collect_figures,
     collect_total_checks,
     human_inspection_section,
     measure_near_duplicates,
     near_duplicate_section,
+    page_split_section,
     prj_000_section,
     profile_chunkings,
     recognition_error_section,
+    scope_labels_section,
     total_checks_section,
 )
+from model.ingest.writer import MultiChunkCounts
 
 RUN_ID = "00000000-0000-4000-8000-00000000e006"
 
 #: The items US2-US6 own. Named rather than computed as "everything the US1
 #: builders do not produce", so a US1 section quietly disappearing shows up as a
 #: missing-item failure instead of being absorbed into this set.
-PLACEHOLDER_ITEMS = (5, 6, 7, 8, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21)
+PLACEHOLDER_ITEMS = (5, 6, 7, 8, 12, 13, 14, 15, 16, 18, 19, 21)
+
+#: Item 10's counts (FR-029). Four values assembled across a page break and five
+#: contributing rows between them, so the row count exceeds the value count and
+#: the "three or more pages" case is present rather than assumed away. The real
+#: counts come from the run's citations; these exercise the builder.
+MULTI_CHUNK_COUNTS = MultiChunkCounts(values=120, multi_chunk_values=4, contributing_rows=5)
 
 
 def _scope(**overrides: str) -> FigureScope:
@@ -269,11 +283,17 @@ def test_a_figure_scope_missing_or_misnaming_any_label_is_refused(field: str, va
 
 
 def test_every_figure_in_a_built_report_carries_all_five_labels(profile) -> None:
-    sections = _all_sections(profile)
-    figures = [figure for section in sections for figure in section.figures]
+    """FR-072, over the whole report rather than over one constructor call.
+
+    Enumerated through `collect_figures` — the same function item 20's census
+    uses — so the population this asserts over and the population the report
+    publishes a count of cannot drift apart.
+    """
+    figures = collect_figures(_all_sections(profile))
     assert figures, "the US1 sections publish figures"
     for figure in figures:
         assert figure.scope.run_id == RUN_ID
+        assert figure.scope.generation_set in GENERATION_SETS
         assert figure.scope.kind in FIGURE_KINDS
         assert figure.scope.layer in LAYERS
         assert figure.scope.unit.strip()
@@ -566,6 +586,9 @@ def _all_sections(profile) -> list[Section]:
             run_id=RUN_ID, counts=measure_near_duplicates(vectors), chunks_measured=len(vectors)
         ),
     ]
+    # Item 10 is US4's and is real (T067), so it joins the census of total
+    # checks below rather than being stubbed past it.
+    sections.append(page_split_section(run_id=RUN_ID, counts=MULTI_CHUNK_COUNTS))
     sections.append(total_checks_section(run_id=RUN_ID, checks=collect_total_checks(sections)))
     sections.extend(
         Section(
@@ -577,6 +600,9 @@ def _all_sections(profile) -> list[Section]:
         )
         for item in PLACEHOLDER_ITEMS
     )
+    # Item 20 is built last and from everything else: it is a census *of* the
+    # report's figures, so it cannot be assembled before they exist.
+    sections.append(scope_labels_section(run_id=RUN_ID, sections=sections))
     return sections
 
 
@@ -588,3 +614,79 @@ def test_the_us1_sections_render_into_a_complete_report(profile) -> None:
     assert "no recognition step is performed" in rendered
     assert "minted by the run that writes it" in rendered
     assert "nearest rank" in rendered
+
+
+# ---------------------------------------------------------------------------
+# FR-072 — item 20's census of the labels, and the run identifier it enforces
+# ---------------------------------------------------------------------------
+
+
+def test_item_twenty_counts_every_figure_the_other_sections_publish(profile) -> None:
+    """T074. The census is built **from** the sections rather than beside them.
+
+    A hand-kept inventory is how a figure ends up in the report without
+    appearing in the one place its labels would have been checked, which is the
+    same defect item 17 avoids for total checks.
+    """
+    sections = _all_sections(profile)
+    others = [section for section in sections if section.item != 20]
+    counted = sum(len(section.figures) for section in others)
+    census = scope_labels_section(run_id=RUN_ID, sections=others)
+    assert census.item == 20
+    assert census.total_checks[0].count == counted
+    assert counted > 0, "FR-068: a labelling census over no figure passes vacuously"
+
+
+def test_the_label_census_publishes_a_zero_rather_than_omitting_a_kind(profile) -> None:
+    """A kind nothing took is a zero row, not an absent one.
+
+    An omitted row and a zero row read the same to a reader and only one of them
+    is a measurement — FR-034's rule, applied to the closed vocabularies FR-072
+    fixes. The counting **unit** is deliberately not treated this way: it is not
+    a closed set, and enumerating one would force a leaf-length figure into a
+    unit it does not have.
+    """
+    sections = [section for section in _all_sections(profile) if section.item != 20]
+    census = census_of_labels(collect_figures(sections))
+    assert set(census.by_kind) == set(FIGURE_KINDS)
+    assert set(census.by_generation_set) == set(GENERATION_SETS)
+    assert set(census.by_layer) == set(LAYERS)
+    assert sum(census.by_kind.values()) == census.figures
+    assert sum(census.by_unit.values()) == census.figures
+
+    rendered = scope_labels_section(run_id=RUN_ID, sections=sections).render()
+    for kind in FIGURE_KINDS:
+        assert f"| {kind} | {census.by_kind[kind]} |" in rendered
+
+
+def test_a_figure_computed_under_another_run_is_refused(profile) -> None:
+    """The defect item 20 exists to catch, in both places that can catch it.
+
+    A figure carried over from a previous run reads as this run's work and every
+    label on it is correct except the one that decides whether the number
+    describes what the report says it does. `scope_labels_section` refuses it,
+    and so does `build_report` — so a report assembled by hand rather than
+    through the census is refused too.
+    """
+    sections = [section for section in _all_sections(profile) if section.item != 20]
+    stale = Section(
+        item=20,
+        body="a section carrying a figure from an earlier run",
+        figures=(
+            Figure(
+                label="Chunks minted",
+                value=6466,
+                scope=_scope(run_id="00000000-0000-4000-8000-00000000dead"),
+            ),
+        ),
+    )
+    with pytest.raises(ReportError, match="FR-072"):
+        scope_labels_section(run_id=RUN_ID, sections=[*sections, stale])
+    with pytest.raises(ReportError, match="FR-072"):
+        build_report([*sections, stale], run_id=RUN_ID)
+
+
+def test_a_labelling_census_over_no_figure_is_refused() -> None:
+    """FR-068 reaching the one figure that would otherwise be vacuously true."""
+    with pytest.raises(ReportError, match="FR-072"):
+        census_of_labels([])

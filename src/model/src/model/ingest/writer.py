@@ -1,8 +1,9 @@
 """The per-document transaction, the chunk write, and the containment guard.
 
-FR-010 / FR-020 / FR-021 / FR-042 / FR-054. This module is where a chunking
-stops being a value in memory and becomes rows, and the three things that have
-to be true at that moment are all here rather than distributed over the callers:
+FR-010 / FR-020 / FR-021 / FR-029 / FR-039 / FR-042 / FR-054. This module is
+where a chunking stops being a value in memory and becomes rows, and everything
+that has to be true at that moment is here rather than distributed over the
+callers:
 
 1. **One document, one transaction** (FR-042, FR-054). The connection is
    **autocommit** and each document is wrapped in `with conn.transaction():`.
@@ -23,7 +24,15 @@ to be true at that moment are all here rather than distributed over the callers:
    mis-attributed chunk aborts its document rather than being found later by the
    verification suite. The suite's half is
    `src/model/tests/ingest/test_page_attribution.py`.
-4. **Every stored value carries the signals its score was computed from**
+4. **A value assembled across a page break keeps both pages** (FR-029). Its
+   anchor is the chunk that printed the *value*, never the one that printed only
+   the label, so its cited page is the **later** page — a citation landing on
+   `Manufacturer:` with no manufacturer under it fails the job the citation
+   exists for. Every further page is one `extracted_value_contributing_chunk`
+   row, ordinals from 2, because ordinal 1 denotes the anchor and lives on
+   `extracted_value` itself (`ck_evcc__ordinal_min`). A two-page value therefore
+   has exactly one contributing row and a `source_chunk_count` of 2.
+5. **Every stored value carries the signals its score was computed from**
    (FR-063), and the two are checked to agree *before* either is written. The
    weights come from this run's own `ingestion_run` row rather than from a code
    constant, so a score is compared against the policy that produced it; the
@@ -45,7 +54,19 @@ document, so a second resident generation's ordinal 0 collides ({SAD:ADR-0020});
 the predecessor is removed by the promotion, which runs under the schema-owning
 role and is `data-model.md` §Operator Procedures 3. This module therefore
 **refuses** a document that already has an active generation instead of
-attempting a removal it holds no privilege for.
+attempting a removal it holds no privilege for. `runs.promote_generation` is the
+removal, and it runs inside the same transaction as the write that replaces it.
+
+**Every row this document writes resolves to exactly one run** (FR-039, SC-021).
+`chunk`, `extracted_value` and `extraction_failure` are E003's and gain no
+`run_id` column, so attribution is carried by three association tables whose
+primary key **is** the target row's identifier. They are written from the
+identifier sets this transaction minted rather than from a query over the target
+table: the two are equal only while the one-resident-generation invariant holds,
+and a statement that assumes the invariant it helps enforce cannot detect its
+breach. The value-level rows — the line-item membership and the parse signal —
+carry the run and document **directly**, checked here and held equal by their
+composite foreign keys.
 
 `model.ingest` never imports `gateway`; nothing here reaches a provider, and the
 only arithmetic is the containment comparison, which is a substring test.
@@ -57,6 +78,7 @@ import re
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Final
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -69,18 +91,25 @@ from model.corpus.derive import normalize_page_text
 from model.ingest.chunker import Chunk, DocumentChunking, chunk_pages
 from model.ingest.documents import DocumentRecord
 from model.ingest.embed import embed_chunks, embedding_identity
+from model.ingest.failures import FAILURE_COLUMNS, ExtractionFailure
+from model.ingest.lineitems import LineItemMembership
 from model.ingest.parse import ParsedPage, page_by_number, read_pages
 from model.ingest.runs import ConfidencePolicy, read_confidence_policy
 from model.schema.url import get_database_url
 
 __all__ = [
     "CHUNK_COLUMNS",
+    "CONTRIBUTING_CHUNK_COLUMNS",
     "EXTRACTED_VALUE_COLUMNS",
+    "FIRST_CONTRIBUTOR_ORDINAL",
     "PARSE_SIGNAL_COLUMNS",
+    "RUN_ASSOCIATIONS",
     "CitedChunk",
     "ContainmentMiss",
     "ContainmentResult",
+    "ContributingChunk",
     "DocumentOutcome",
+    "MultiChunkCounts",
     "PreparedDocument",
     "PreparedValue",
     "ValueCitation",
@@ -88,11 +117,17 @@ __all__ = [
     "check_confidence_agrees",
     "cite_value",
     "connect",
+    "contributing_rows",
+    "multi_chunk_counts",
     "prepare_document",
     "vector_dimension",
     "verify_page_containment",
+    "write_contributing_chunks",
     "write_document_generation",
+    "write_failures",
     "write_generations",
+    "write_line_items",
+    "write_run_associations",
 ]
 
 #: The columns this module writes to E003's `chunk`, in COPY order.
@@ -395,6 +430,8 @@ class DocumentOutcome:
     chunks_written: int
     containment: ContainmentResult | None
     values_written: int = 0
+    contributing_rows_written: int = 0
+    failures_written: int = 0
     error: str | None = None
 
     @property
@@ -539,6 +576,193 @@ def cite_value(value_chunk: CitedChunk, label_chunks: Sequence[CitedChunk] = ())
     become the cited one.
     """
     return ValueCitation(anchor=value_chunk, contributors=tuple(label_chunks))
+
+
+#: The columns E003's `extracted_value_contributing_chunk` takes, in insert
+#: order. Every one is `NOT NULL` and none carries a default, so the list is the
+#: whole row rather than a selection from it.
+#:
+#: `source_chunk_count` is denormalized from the parent and held equal to it by
+#: `fk_evcc__value_count` — it exists so `ck_evcc__ordinal_within_declared_count`
+#: can be a single-row `CHECK`. It is therefore written from the citation's own
+#: count and never from a second argument, because two independently supplied
+#: copies can disagree and only one of them is the value's provenance.
+CONTRIBUTING_CHUNK_COLUMNS: tuple[str, ...] = (
+    "extracted_value_id",
+    "contributor_ordinal",
+    "source_chunk_count",
+    "chunk_id",
+    "page_number",
+)
+
+#: `ck_evcc__ordinal_min CHECK (contributor_ordinal >= 2)`, E003's.
+#:
+#: **The anchor is contributor 1 and never appears in this table.** Ordinal 1
+#: denotes the pair of columns on `extracted_value` itself — `source_chunk_id`
+#: and `cited_page` — so writing it here a second time would double-count it
+#: against `source_chunk_count` and make `v_extracted_value_provenance` return
+#: it twice. A two-page value therefore has exactly **one** contributing row.
+FIRST_CONTRIBUTOR_ORDINAL: Final[int] = 2
+
+_CONTRIBUTING_CHUNK_INSERT = (
+    f"INSERT INTO extracted_value_contributing_chunk "  # noqa: S608
+    f"({', '.join(CONTRIBUTING_CHUNK_COLUMNS)}) "
+    f"VALUES ({', '.join('%s' for _ in CONTRIBUTING_CHUNK_COLUMNS)})"
+)
+
+
+@dataclass(frozen=True)
+class ContributingChunk:
+    """One `extracted_value_contributing_chunk` row, before the identifiers exist.
+
+    Names its chunk by **ordinal**, as `CitedChunk` does and for the same
+    reason: chunk identifiers are minted inside the document's transaction at
+    §Write Order step 1, so nothing upstream of the write can know one. The page
+    travels with the ordinal because `fk_evcc__chunk_page` is a composite
+    foreign key against `chunk (chunk_id, page_number)` — a contributor citing a
+    page its chunk does not have has no referent, exactly as an anchor does not.
+    """
+
+    contributor_ordinal: int
+    chunk: CitedChunk
+    source_chunk_count: int
+
+    def __post_init__(self) -> None:
+        if self.contributor_ordinal < FIRST_CONTRIBUTOR_ORDINAL:
+            raise WriterError(
+                f"FR-029: contributor ordinal {self.contributor_ordinal} is below "
+                f"{FIRST_CONTRIBUTOR_ORDINAL}, which `ck_evcc__ordinal_min` refuses. "
+                f"Ordinal 1 denotes the anchor, which lives on `extracted_value` and never "
+                f"appears among the contributing chunks."
+            )
+        if self.contributor_ordinal > self.source_chunk_count:
+            raise WriterError(
+                f"FR-029: contributor ordinal {self.contributor_ordinal} exceeds the "
+                f"declared source chunk count {self.source_chunk_count}, which "
+                f"`ck_evcc__ordinal_within_declared_count` refuses."
+            )
+
+    def row_values(self, value_id: UUID, chunk_id: UUID) -> tuple[object, ...]:
+        """The row, in `CONTRIBUTING_CHUNK_COLUMNS` order.
+
+        Args:
+            value_id: the identifier minted for the parent value at step 2.
+            chunk_id: the identifier minted for `chunk.ordinal` at step 1.
+
+        Returns:
+            One tuple per column, with the page taken from the chunk rather than
+            from a separate argument — so the pair `fk_evcc__chunk_page` checks
+            cannot be assembled out of two disagreeing halves.
+        """
+        return (
+            value_id,
+            self.contributor_ordinal,
+            self.source_chunk_count,
+            chunk_id,
+            self.chunk.page_number,
+        )
+
+
+def contributing_rows(citation: ValueCitation) -> tuple[ContributingChunk, ...]:
+    """One row per **additional** chunk, ordinals from 2, in ascending page order.
+
+    Args:
+        citation: the value's citation. Its `contributors` are already sorted by
+            page, and its anchor is the chunk that printed the value.
+
+    Returns:
+        Empty for a single-chunk value — which is most of them — and otherwise
+        `source_chunk_count - 1` rows. The anchor is contributor 1 and is not
+        among them, so a value assembled across one page break has exactly one
+        row here, not two.
+
+    **Ordinals are assigned in ascending page order, and that is a decision
+    rather than an accident of iteration.** `ck_evcc__ordinal_min` and
+    `pk_extracted_value_contributing_chunk` make the ordinal identity within the
+    contributor set, and E003's `0006` is explicit that it carries no precedence
+    meaning — no consumer may read ordinal 2 as "more primary" than ordinal 3.
+    What the order does buy is a deterministic assignment: FR-074 requires every
+    count to reproduce exactly, and an ordinal drawn from an unordered iteration
+    would reproduce a different row each run while every count stayed identical.
+
+    **Reassembly is by page and not by this ordinal** (SC-027). On a page-split
+    value the anchor is the *later* page, so the contributors are all earlier;
+    ordering a reassembly by contributor position would put the value before its
+    own label. `ValueCitation.pages_in_reading_order` is what a comparison uses.
+    """
+    return tuple(
+        ContributingChunk(
+            contributor_ordinal=FIRST_CONTRIBUTOR_ORDINAL + position,
+            chunk=chunk,
+            source_chunk_count=citation.source_chunk_count,
+        )
+        for position, chunk in enumerate(citation.contributors)
+    )
+
+
+@dataclass(frozen=True)
+class MultiChunkCounts:
+    """FR-029's published counts: multi-chunk values and their rows (item 10).
+
+    Carried together because either alone is unreadable. A contributing-row
+    count with no value count says nothing about how many values were assembled
+    across a break, and a multi-chunk value count with no row count cannot show
+    that the anchor was excluded — which is the whole content of the rule.
+    """
+
+    values: int
+    multi_chunk_values: int
+    contributing_rows: int
+
+    def __post_init__(self) -> None:
+        if min(self.values, self.multi_chunk_values, self.contributing_rows) < 0:
+            raise WriterError("FR-029: the multi-chunk counts are non-negative")
+        if self.multi_chunk_values > self.values:
+            raise WriterError(
+                f"FR-029: {self.multi_chunk_values} multi-chunk values among "
+                f"{self.values} stored values"
+            )
+        if self.contributing_rows < self.multi_chunk_values:
+            raise WriterError(
+                f"FR-029: {self.multi_chunk_values} multi-chunk values produced "
+                f"{self.contributing_rows} contributing-chunk rows. Each of them draws on "
+                f"at least one chunk beyond its anchor, so the rows cannot be fewer than "
+                f"the values — a shortfall means an anchor was written as a contributor "
+                f"or a contributor was dropped."
+            )
+        if self.multi_chunk_values == 0 and self.contributing_rows:
+            raise WriterError(
+                f"FR-029: {self.contributing_rows} contributing-chunk rows belong to no "
+                f"multi-chunk value. A row here is what makes a value multi-chunk."
+            )
+
+    @property
+    def single_chunk_values(self) -> int:
+        return self.values - self.multi_chunk_values
+
+    def merged(self, other: MultiChunkCounts) -> MultiChunkCounts:
+        """The two documents' counts as one, for the corpus-wide figure."""
+        return MultiChunkCounts(
+            values=self.values + other.values,
+            multi_chunk_values=self.multi_chunk_values + other.multi_chunk_values,
+            contributing_rows=self.contributing_rows + other.contributing_rows,
+        )
+
+
+def multi_chunk_counts(values: Sequence[PreparedValue]) -> MultiChunkCounts:
+    """Count the values assembled across a page break, and their rows (FR-029).
+
+    Counted from the citations rather than from a running tally kept by the
+    write, because a tally incremented by the loop that writes the rows is the
+    same number twice: a loop that skipped a contributor would decrement its own
+    expectation along with it.
+    """
+    multi = [value for value in values if value.citation.source_chunk_count > 1]
+    return MultiChunkCounts(
+        values=len(values),
+        multi_chunk_values=len(multi),
+        contributing_rows=sum(len(contributing_rows(value.citation)) for value in multi),
+    )
 
 
 @dataclass(frozen=True)
@@ -731,6 +955,53 @@ def _write_extracted_values(
     return tuple(minted)
 
 
+def write_contributing_chunks(
+    cursor: psycopg.Cursor,
+    document_id: str,
+    values: Sequence[PreparedValue],
+    value_ids: Sequence[UUID],
+    chunk_ids: Sequence[UUID],
+) -> int:
+    """§Write Order step 3 — `INSERT extracted_value_contributing_chunk`.
+
+    FR-029. One row per chunk a value draws on **beyond its anchor**, so a value
+    whose label ends page *k* and whose value begins page *k+1* records the
+    anchor on `extracted_value` (page *k+1*, the page that prints the number)
+    and exactly one row here (page *k*, the page that prints only the label).
+
+    Step 3 and not earlier: the row references the value's
+    `(extracted_value_id, source_chunk_count)` key from step 2 through
+    `fk_evcc__value_count`, and its own chunk through `fk_evcc__chunk_page`
+    against a chunk written at step 1.
+
+    Returns:
+        The number of contributing rows written — `source_chunk_count - 1`
+        summed over the values, which is what makes "one plus the recorded
+        contributor count" checkable against `extracted_value.source_chunk_count`
+        rather than asserted.
+
+    Raises:
+        WriterError: a contributor names an ordinal this document has no chunk
+            for. Caught here rather than by the foreign key so the message names
+            the value and the ordinal rather than an identifier nobody can trace.
+    """
+    written = 0
+    for value, value_id in zip(values, value_ids, strict=True):
+        for row in contributing_rows(value.citation):
+            ordinal = row.chunk.ordinal
+            if ordinal >= len(chunk_ids):
+                raise WriterError(
+                    f"FR-029: {document_id} value {value.field_name!r} names chunk ordinal "
+                    f"{ordinal} as a contributing chunk, but the document wrote "
+                    f"{len(chunk_ids)} chunks (ordinals 0 to {len(chunk_ids) - 1}). A "
+                    f"contributing chunk that names no chunk does not weaken the "
+                    f"provenance — it makes `source_chunk_count` unexplainable."
+                )
+            cursor.execute(_CONTRIBUTING_CHUNK_INSERT, row.row_values(value_id, chunk_ids[ordinal]))
+            written += 1
+    return written
+
+
 def _write_parse_signals(
     cursor: psycopg.Cursor,
     run_id: UUID | str,
@@ -772,6 +1043,152 @@ def _write_parse_signals(
     return len(value_ids)
 
 
+def write_failures(
+    cursor: psycopg.Cursor,
+    document_id: str,
+    failures: Sequence[ExtractionFailure],
+    chunk_ids: Sequence[UUID],
+) -> tuple[UUID, ...]:
+    """§Write Order step 4 — `INSERT extraction_failure`, citing step 1's chunks.
+
+    FR-034 / FR-035 / FR-036. The row carries no value and no confidence: the
+    column list is `failures.FAILURE_COLUMNS`, which that module checks against
+    `FORBIDDEN_COLUMNS` at import, so a failure that smuggled a value in is a
+    failing import rather than a row nothing downstream can tell from a real
+    extraction.
+
+    Step 4 and not earlier: `fk_extraction_failure__chunk_page` is a composite
+    foreign key against `chunk (chunk_id, page_number)`, so the attempted page
+    must resolve to a chunk this transaction has already written.
+
+    Returns:
+        The identifiers minted, in order, so step 5 can associate each with the
+        run that produced it.
+
+    Raises:
+        WriterError: a failure names an ordinal this document has no chunk for.
+            Caught here rather than by the foreign key so the message names the
+            field and the ordinal rather than an identifier nobody can trace.
+    """
+    minted: list[UUID] = []
+    for failure in failures:
+        ordinal = failure.source_chunk.ordinal
+        if ordinal >= len(chunk_ids):
+            raise WriterError(
+                f"FR-035: {document_id} records a failure for {failure.field_name!r} on "
+                f"chunk ordinal {ordinal}, but the document wrote {len(chunk_ids)} chunks "
+                f"(ordinals 0 to {len(chunk_ids) - 1}). A failure is as traceable as a "
+                f"success or it is not a record."
+            )
+        failure_id = uuid4()
+        minted.append(failure_id)
+        cursor.execute(_FAILURE_INSERT, (failure_id, *failure.row_values(chunk_ids[ordinal])))
+    return tuple(minted)
+
+
+def write_run_associations(
+    cursor: psycopg.Cursor,
+    run_id: UUID | str,
+    document_id: str,
+    *,
+    chunk_ids: Sequence[UUID],
+    value_ids: Sequence[UUID],
+    failure_ids: Sequence[UUID],
+) -> dict[str, int]:
+    """§Write Order step 5 — the three run-output associations (FR-039, SC-021).
+
+    Every row this document wrote gets exactly one association row naming the
+    run and the document, so "100% of chunks, extracted values and failure
+    records resolve to exactly one ingestion run" is a fact about keys rather
+    than a habit of this function: the target identifier is each association's
+    whole primary key, so a second row for one target collides.
+
+    **From the identifier sets this transaction minted, never from a query over
+    the target table.** An earlier form of the chunk association read
+    `SELECT chunk_id FROM chunk WHERE document_id = %s`, which is equal to the
+    minted set only while the one-resident-generation invariant holds — and a
+    statement that assumes the invariant it helps enforce cannot detect its
+    breach. It would also silently adopt a predecessor's rows if one were ever
+    resident, attributing another run's chunks to this one.
+
+    Returns:
+        The row count written per association table, so the caller can publish
+        them rather than infer them.
+    """
+    written: dict[str, int] = {}
+    identifiers = {
+        "ingestion_run_chunk": chunk_ids,
+        "ingestion_run_extracted_value": value_ids,
+        "ingestion_run_extraction_failure": failure_ids,
+    }
+    for table, _target in RUN_ASSOCIATIONS:
+        statement = _RUN_ASSOCIATION_INSERTS[table]
+        for identifier in identifiers[table]:
+            cursor.execute(statement, (identifier, str(run_id), document_id))
+        written[table] = len(identifiers[table])
+    return written
+
+
+def write_line_items(
+    cursor: psycopg.Cursor,
+    run_id: UUID | str,
+    document_id: str,
+    memberships: Sequence[LineItemMembership],
+    value_ids: Sequence[UUID],
+) -> int:
+    """§Write Order step 6 — `INSERT extracted_value_line_item` (FR-059, FR-039).
+
+    Written after step 5 because the row references
+    `ingestion_run_extracted_value (extracted_value_id, run_id, document_id)`,
+    not `extracted_value` directly.
+
+    **The membership's run and document are held equal to the value's own
+    attribution** (FR-039). They are re-derived here from this transaction's own
+    `run_id` and `document_id` rather than trusted from the membership, and the
+    membership's copies are *checked* against them: the composite foreign key
+    would reject a disagreeing pair, and this refuses it one statement earlier
+    with a message naming the value.
+
+    Raises:
+        WriterError: a membership names a value position this document did not
+            write, a position is claimed twice, or its run or document disagrees
+            with the transaction's.
+    """
+    seen: set[int] = set()
+    for membership in memberships:
+        if membership.position >= len(value_ids):
+            raise WriterError(
+                f"FR-059: {document_id} groups value position {membership.position}, but "
+                f"the document stored {len(value_ids)} values. A membership for a value "
+                f"that was never written has no row to belong to."
+            )
+        if membership.position in seen:
+            raise WriterError(
+                f"FR-059: value position {membership.position} of {document_id} is grouped "
+                f"twice. `pk_extracted_value_line_item` is the value alone, so a second "
+                f"membership is unrepresentable."
+            )
+        seen.add(membership.position)
+        if membership.run_id != str(run_id) or membership.document_id != document_id:
+            raise WriterError(
+                f"FR-039: the line-item membership for value position "
+                f"{membership.position} names run {membership.run_id} and document "
+                f"{membership.document_id}, and this transaction is writing run {run_id} "
+                f"and document {document_id}. A value-level row carries its value's own "
+                f"attribution and cannot carry another's."
+            )
+        cursor.execute(
+            _LINE_ITEM_INSERT,
+            (
+                value_ids[membership.position],
+                str(run_id),
+                document_id,
+                membership.item_ordinal,
+            ),
+        )
+    return len(memberships)
+
+
 # ---------------------------------------------------------------------------
 # The write itself — `data-model.md` §Write Order, first-ingest path
 # ---------------------------------------------------------------------------
@@ -800,22 +1217,55 @@ INSERT INTO ingestion_run_document (run_id, document_id, status, input_tuple_dig
 VALUES (%s, %s, 'active', %s)
 """
 
-_RUN_CHUNK_INSERT = """
-INSERT INTO ingestion_run_chunk (chunk_id, run_id, document_id)
-SELECT chunk_id, %s, %s FROM chunk WHERE document_id = %s
+#: FR-039's three run-output associations, in §Write Order step 5's order:
+#: table, and the target identifier that is its **whole** primary key.
+#:
+#: Three tables rather than a `run_id` column on each target, and that is the
+#: requirement rather than a preference — `chunk`, `extracted_value` and
+#: `extraction_failure` are E003's and this epic adds no column to any of them
+#: (FR-065). The primary key being the target row's own identifier is what makes
+#: SC-021's "exactly one ingestion run" a uniqueness *fact*: a second
+#: association row for one chunk is a key collision, not a convention someone
+#: has to keep. The other half — that an association row exists at all — is
+#: cross-table absence, is disclosed as G-1, and is asserted corpus-wide by
+#: `src/model/tests/schema/test_run_attribution.py` (T071).
+RUN_ASSOCIATIONS: tuple[tuple[str, str], ...] = (
+    ("ingestion_run_chunk", "chunk_id"),
+    ("ingestion_run_extracted_value", "extracted_value_id"),
+    ("ingestion_run_extraction_failure", "extraction_failure_id"),
+)
+
+#: One statement per association, all three the same shape. Built from the
+#: table above so a table added to the epic and not to the statement list is a
+#: change in one place; the identifier is never interpolated from input.
+_RUN_ASSOCIATION_INSERTS: dict[str, str] = {
+    table: (
+        f"INSERT INTO {table} ({target}, run_id, document_id) "  # noqa: S608
+        f"VALUES (%s, %s, %s)"
+    )
+    for table, target in RUN_ASSOCIATIONS
+}
+
+#: `extracted_value_line_item`, §Write Order step 6. The membership carries the
+#: run and the document **directly** and equal to the value's own attribution
+#: (FR-039), which `fk_extracted_value_line_item__run_output` holds against
+#: `uq_ingestion_run_extracted_value__value_generation` — all three columns in
+#: one referenced key, so the two cannot disagree.
+_LINE_ITEM_INSERT = """
+INSERT INTO extracted_value_line_item (extracted_value_id, run_id, document_id, item_ordinal)
+VALUES (%s, %s, %s, %s)
 """
 
-#: §Write Order step 5's second association. Written here rather than left to
-#: T070 because the parse-signal row of step 6 targets
-#: `uq_ingestion_run_extracted_value__value_generation` through
-#: `fk_extracted_value_parse_signal__run_output` — without this row the signal
-#: row has no referent and FR-063 is unstorable. T070 adds the third association
-#: (`ingestion_run_extraction_failure`) and the corpus-wide anti-join that makes
-#: SC-021 a fact rather than a habit.
-_RUN_VALUE_INSERT = """
-INSERT INTO ingestion_run_extracted_value (extracted_value_id, run_id, document_id)
-VALUES (%s, %s, %s)
-"""
+#: `extraction_failure` carries **no default** on its primary key — E003's `0006`
+#: declares `extraction_failure_id uuid NOT NULL` and nothing more — so the
+#: identifier is minted in the job process and named first, exactly as
+#: `EXTRACTED_VALUE_COLUMNS` does. `failures.FAILURE_COLUMNS` deliberately
+#: excludes it, because that list is what a *record* is written from and a record
+#: has no identifier until its transaction opens.
+_FAILURE_INSERT = (
+    f"INSERT INTO extraction_failure (extraction_failure_id, {', '.join(FAILURE_COLUMNS)}) "  # noqa: S608
+    f"VALUES ({', '.join('%s' for _ in ('id', *FAILURE_COLUMNS))})"
+)
 
 
 def _document_parameters(record: DocumentRecord) -> dict[str, object]:
@@ -895,6 +1345,8 @@ def write_document_generation(
     prepared: PreparedDocument,
     input_tuple_digest: str,
     values: Sequence[PreparedValue] = (),
+    failures: Sequence[ExtractionFailure] = (),
+    line_items: Sequence[LineItemMembership] = (),
     fresh_pages: Sequence[ParsedPage] | None = None,
     dimension: int | None = None,
 ) -> DocumentOutcome:
@@ -912,6 +1364,10 @@ def write_document_generation(
             ordinal (FR-029). Empty for a specification, which extraction does
             not reach (FR-022) — and empty is the *recorded* state there rather
             than an inferred one, which `ingest/cli.py` publishes.
+        failures: this document's extraction failures, each naming the chunk it
+            was attempted on by ordinal (FR-034, FR-035).
+        line_items: the memberships `lineitems.group_line_items` decided, one
+            per stored value, indexed by position into `values` (FR-059).
         fresh_pages: the containment guard's independent read. Read here when
             not supplied, which is the ordinary path — the caller supplying it
             is the test harness, which needs to hand over a *known* extraction.
@@ -921,30 +1377,33 @@ def write_document_generation(
 
     Returns:
         The outcome, with the containment population and count the guard
-        enumerated.
+        enumerated and the row counts each step wrote.
 
     Raises:
         WriterError: on a non-autocommit connection, a malformed digest, a
-            resident predecessor generation, a containment miss, a value citing
-            an ordinal the document has no chunk for, or a document row that
-            disagrees with the record. Every one of them leaves the document
-            with zero rows.
+            resident predecessor generation, a containment miss, a value or
+            failure citing an ordinal the document has no chunk for, a
+            membership whose run or document disagrees with this transaction's,
+            or a document row that disagrees with the record. Every one of them
+            leaves the document with zero rows.
 
     The statement order is `data-model.md` §Write Order, first-ingest path:
     steps 0a–0g are the promotion's removal and are skipped entirely when no
     predecessor is resident (and refused when one is — see the module
-    docstring), then 0h, step 1, step 2, then step 5's chunk association. The
-    containment guard runs after step 1 and before the block closes, which is
-    what makes "never committed" true rather than "detected afterwards".
+    docstring), then 0h and steps 1 through 6 in order. The containment guard
+    runs after step 1 and before the block closes, which is what makes "never
+    committed" true rather than "detected afterwards".
 
-    Step 2 sits after step 1 because a value's cited page has to resolve to a
-    chunk this transaction has already written — `fk_extracted_value__chunk_page`
-    is a composite foreign key against `chunk (chunk_id, page_number)`, so the
-    ordering is the constraint's rather than a preference. Step 6's parse-signal
-    rows sit after step 5's value association for the same kind of reason: they
+    **Every step's position is a constraint's rather than a preference.** Step 2
+    follows step 1 because a value's cited page has to resolve to a chunk this
+    transaction has already written — `fk_extracted_value__chunk_page` is a
+    composite foreign key against `chunk (chunk_id, page_number)`. Step 3
+    follows step 2 because `fk_evcc__value_count` references the value's
+    `(id, source_chunk_count)` key. Step 4 follows step 1 for the same reason
+    step 2 does, through `fk_extraction_failure__chunk_page`. Step 5's three
+    associations follow all of them because each targets a row those steps
+    minted. Step 6's line-item and parse-signal rows follow step 5 because they
     reference `ingestion_run_extracted_value`, not `extracted_value` directly.
-    Steps 3 and 4 — contributing chunks and failure rows — and step 6's
-    line-item rows attach at the same seams in T066, T061 and T047.
     """
     if not connection.autocommit:
         raise WriterError(
@@ -1025,14 +1484,31 @@ def write_document_generation(
         # 2 — the extracted values, citing chunks written at step 1.
         written_values = _write_extracted_values(cursor, record.document_id, values, minted)
 
-        # 5 — the run-output associations. Chunks first, then the values written
-        # at step 2; step 6's rows target the value association and not
-        # `extracted_value` directly, which is what fixes this order.
-        cursor.execute(_RUN_CHUNK_INSERT, (str(run_id), record.document_id, record.document_id))
-        for value_id in written_values:
-            cursor.execute(_RUN_VALUE_INSERT, (value_id, str(run_id), record.document_id))
+        # 3 — FR-029's contributing chunks, one per page beyond the anchor's.
+        contributing = write_contributing_chunks(
+            cursor, record.document_id, values, written_values, minted
+        )
 
-        # 6 — FR-063's parse-signal rows, one per stored value.
+        # 4 — the failure rows, citing chunks written at step 1.
+        written_failures = write_failures(cursor, record.document_id, failures, minted)
+
+        # 5 — FR-039's three run-output associations, from the identifier sets
+        # this transaction minted. Every target exists by now, which is what
+        # fixes step 5 after steps 1 through 4 rather than beside them.
+        write_run_associations(
+            cursor,
+            run_id,
+            record.document_id,
+            chunk_ids=minted,
+            value_ids=written_values,
+            failure_ids=written_failures,
+        )
+
+        # 6 — the two value-level rows. Both reference
+        # `ingestion_run_extracted_value` and not `extracted_value` directly, so
+        # both follow step 5; both carry the run and document of the value they
+        # belong to, held equal by their composite foreign keys (FR-039).
+        write_line_items(cursor, run_id, record.document_id, line_items, written_values)
         _write_parse_signals(cursor, run_id, record.document_id, values, written_values)
 
     return DocumentOutcome(
@@ -1040,6 +1516,8 @@ def write_document_generation(
         chunks_written=len(minted),
         containment=containment,
         values_written=len(written_values),
+        contributing_rows_written=contributing,
+        failures_written=len(written_failures),
     )
 
 
