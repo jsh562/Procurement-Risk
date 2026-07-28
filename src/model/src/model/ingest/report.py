@@ -45,11 +45,21 @@ from pathlib import Path
 
 import numpy as np
 
+from model.compute.metrics import (
+    F1_OMISSION_REASON,
+    INTERVAL_METHOD,
+    FieldFigures,
+    wilson_interval,
+)
 from model.corpus.derive import normalize_page_text
+from model.ingest.baseline import BASELINE_ID, BASELINE_INDEPENDENCE
 from model.ingest.chunker import BOUNDARY_CLASSES, DocumentChunking
 from model.ingest.documents import SHARED_LIBRARY_PROJECT
 
 __all__ = [
+    "BASELINE_LABELS",
+    "DECLARED_BASELINE_CRITERION",
+    "DECLARED_BASELINE_LABEL",
     "DECLARED_SIMILARITY_GRID",
     "FIGURE_KINDS",
     "GENERATION_SETS",
@@ -75,13 +85,17 @@ __all__ = [
     "chunk_identity_section",
     "chunking_section",
     "collect_total_checks",
+    "declared_baseline_label",
+    "extraction_quality_section",
     "human_inspection_section",
     "measure_near_duplicates",
     "near_duplicate_section",
+    "observed_baseline_label",
     "profile_chunkings",
     "prj_000_section",
     "read_resident_chunks",
     "recognition_error_section",
+    "reconciliation_section",
     "total_checks_section",
 ]
 
@@ -645,22 +659,18 @@ class SampledClaim:
 def _wilson_bound(defects: int, inspected: int) -> str:
     """FR-060's continuity-corrected Wilson interval, from `model.compute`.
 
-    Imported at the point of use rather than at module import: the interval is
-    FR-060's and lands with `compute/metrics.py`, whose test task precedes its
-    implementation task under `plan.md` §The test-first boundary. A module-level
-    import would make this whole module unimportable until that pair completes,
-    and a local reimplementation would be the second answer that boundary exists
-    to prevent.
+    One implementation, imported rather than restated. FR-060 requires the same
+    variant everywhere an interval on a proportion is published in this epic —
+    FR-011's defect bound included — so a local approximation here would be the
+    second answer that requirement exists to prevent.
+
+    The import was deferred to the point of use while `compute/metrics.py` was
+    still ahead of its red-green pair (T049 → T050); it is a module-level import
+    now that the pair has landed, because a `try/except ImportError` whose
+    handler is unreachable is a fallback nobody can test.
     """
-    try:
-        from model.compute.metrics import wilson_interval
-    except ImportError:
-        return (
-            f"continuity-corrected Wilson 95% interval on {defects}/{inspected}, "
-            f"pending model.compute.metrics"
-        )
     low, high = wilson_interval(defects, inspected)
-    return f"[{low:.4f}, {high:.4f}] defect rate (continuity-corrected Wilson 95%, n = {inspected})"
+    return f"[{low:.4f}, {high:.4f}] defect rate ({INTERVAL_METHOD}, n = {inspected})"
 
 
 @dataclass(frozen=True)
@@ -1439,6 +1449,358 @@ def near_duplicate_section(
                     unit="chunk",
                     layer="pooled",
                 ),
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item 12 — FR-050 and FR-060, the quality figures and the two baseline labels
+# ---------------------------------------------------------------------------
+
+#: FR-050's two labels, closed. Neither is a scale and neither is a score: they
+#: are the two answers each of the two stated criteria can give.
+BASELINE_LABELS: tuple[str, ...] = ("strong", "weak")
+
+#: The criterion for the **declared** label, in the requirement's own terms.
+#: Published beside the label, because a label without its criterion is an
+#: opinion.
+DECLARED_BASELINE_CRITERION = (
+    "**strong** where the baseline is authored under the independence contract *and* is "
+    "template-driven over a corpus generated from fixed per-vendor templates; **weak** "
+    "otherwise. Both conditions hold here: the independence contract is committed in "
+    "`src/model/pyproject.toml` and enforced by `lint-imports`, and E002's synthetic "
+    "layer is generated from a fixed set of per-vendor layout templates — which is "
+    "precisely what makes a template extractor able to win."
+)
+
+
+def declared_baseline_label(*, independent: bool, template_driven: bool) -> str:
+    """FR-050's declared criterion, as a function rather than as a sentence.
+
+    Executable so the criterion can be *checked* rather than read: the constant
+    below is derived from it at import, so a label and a criterion that disagree
+    fail at import instead of being published together.
+    """
+    return "strong" if independent and template_driven else "weak"
+
+
+#: **Fixed before any figure exists** (FR-050, SC-029), and fixed in the
+#: strongest sense available to a program: it is a committed constant rather
+#: than a value computed during a run. A declared label a run could compute is
+#: a label that could be computed *after* the figures — which is the one thing
+#: the requirement forbids, and the reason `extraction_quality_section` below
+#: takes no declared label from its caller.
+#:
+#: Both conditions in `DECLARED_BASELINE_CRITERION` hold at the time of writing:
+#: the independence contract is committed and enforced (T008, before the
+#: extractor was authored at T051), and the synthetic layer is generated from
+#: fixed per-vendor templates.
+DECLARED_BASELINE_LABEL: str = declared_baseline_label(independent=True, template_driven=True)
+
+
+def _figures_by_cell(figures: Sequence[FieldFigures]) -> dict[tuple[str, str], FieldFigures]:
+    return {(figure.layer, figure.field): figure for figure in figures}
+
+
+def observed_baseline_label(
+    model_figures: Sequence[FieldFigures], baseline_figures: Sequence[FieldFigures]
+) -> str:
+    """FR-050's observed label, **read off the published table**.
+
+    Strong where the baseline beats or ties the model on at least one per-field
+    figure; weak where the model dominates every field. "Every field" means
+    every field-and-layer cell the two have in common, on both figures — a
+    baseline that tied on one recall in one cell is a strong baseline, because
+    the claim being tested is "a deterministic opponent could not do this", and
+    one tie refutes it.
+
+    Point estimates, not intervals. The label is about what was observed, and
+    two overlapping intervals do not make the observation a tie.
+
+    Raises:
+        ReportError: the two tables share no cell. A label read off an empty
+            comparison would be read off nothing, and "weak" is the answer an
+            empty comparison would give — the flattering one.
+    """
+    model = _figures_by_cell(model_figures)
+    baseline = _figures_by_cell(baseline_figures)
+    shared = sorted(set(model) & set(baseline))
+    if not shared:
+        raise ReportError(
+            "FR-050: the model's figures and the baseline's share no field-and-layer "
+            "cell, so the observed label would be read off an empty comparison — which "
+            "would return 'weak' by default and flatter the model."
+        )
+    for cell in shared:
+        if baseline[cell].precision.point >= model[cell].precision.point:
+            return "strong"
+        if baseline[cell].recall.point >= model[cell].recall.point:
+            return "strong"
+    return "weak"
+
+
+def extraction_quality_section(
+    *,
+    run_id: str,
+    model_figures: Sequence[FieldFigures],
+    baseline_figures: Sequence[FieldFigures],
+    unmeasured_layers: Mapping[str, str],
+) -> Section:
+    """Item 12: per-field figures, the baseline's, both labels (FR-050, FR-060).
+
+    Args:
+        run_id: the run these figures were computed under.
+        model_figures: the model path's per-field precision and recall, from
+            `model.compute.metrics.per_field_figures`.
+        baseline_figures: the deterministic baseline's, over the same documents.
+        unmeasured_layers: layers published as *not measured*, each with its
+            reason — the real layer and `ingest/reference.py`'s statement of why
+            (FR-060, SC-047). A layer row that was blank or read `0/0` is what
+            this keeps out of the table.
+
+    Raises:
+        ReportError: either table is empty, or the declared label is outside the
+            closed pair. An empty table would publish a quality claim with no
+            figures under it.
+
+    **The declared label is not a parameter.** It is `DECLARED_BASELINE_LABEL`, a
+    committed constant, because FR-050 requires it fixed before any figure
+    exists and a parameter is something a caller could compute from the figures
+    it is about to publish.
+
+    **A disagreement is published as a finding and is not reconciled** (Principle
+    VIII). Neither label is revised to match the other, and nothing here chooses
+    between them: the two answer different questions — one about how the
+    opponent was built, one about how it did — and a disagreement is information
+    about the measurement rather than a defect in it.
+
+    **No F1** (FR-060, SC-047). The omission is published with its reason, which
+    `model.compute.metrics` owns so the report and the module cannot state it
+    differently.
+    """
+    if not model_figures or not baseline_figures:
+        raise ReportError(
+            "FR-050 / FR-060: item 12 publishes per-field precision and recall beside "
+            "the baseline's. A table with no figures on one side is not a smaller "
+            "table — it is a quality claim with no basis published for it."
+        )
+    if DECLARED_BASELINE_LABEL not in BASELINE_LABELS:
+        raise ReportError(
+            f"FR-050: the declared baseline label {DECLARED_BASELINE_LABEL!r} is outside "
+            f"{BASELINE_LABELS}"
+        )
+
+    observed = observed_baseline_label(model_figures, baseline_figures)
+    model = _figures_by_cell(model_figures)
+    baseline = _figures_by_cell(baseline_figures)
+
+    comparison = [
+        "| Field | Layer | Model precision | Baseline precision | Model recall | Baseline recall |",
+        "|---|---|---|---|---|---|",
+        *(
+            f"| {field} | {layer} | {model[(layer, field)].precision.rendered()} | "
+            f"{baseline[(layer, field)].precision.rendered()} | "
+            f"{model[(layer, field)].recall.rendered()} | "
+            f"{baseline[(layer, field)].recall.rendered()} |"
+            for layer, field in sorted(set(model) & set(baseline))
+        ),
+    ]
+
+    model_only = sorted(set(model) - set(baseline))
+    baseline_only = sorted(set(baseline) - set(model))
+
+    disagreement = (
+        f"**Finding — the two labels disagree.** The baseline is declared "
+        f"**{DECLARED_BASELINE_LABEL}** and observed **{observed}**. The disagreement is "
+        f"published as it stands: neither label is revised to match the other, and no "
+        f"figure is recomputed to resolve it (Principle VIII). A declared-strong, "
+        f"observed-weak baseline means an opponent built to be able to win did not, "
+        f"which is a fact about this corpus and this extractor; a declared-weak, "
+        f"observed-strong one means an opponent built without the advantages still tied "
+        f"or beat the model, which is a stronger result than the declaration claimed."
+        if observed != DECLARED_BASELINE_LABEL
+        else (
+            f"The two labels agree at **{observed}**. That agreement is reported rather "
+            f"than assumed: it is what a strong opponent built under the independence "
+            f"contract is *expected* to produce, and expecting it is exactly why a "
+            f"disagreement would have been worth publishing."
+        )
+    )
+
+    unmeasured = (
+        "\n\n".join(
+            f"**Layer `{layer}` is not measured.** {reason}"
+            for layer, reason in sorted(unmeasured_layers.items())
+        )
+        or "Every layer in scope carries figures."
+    )
+
+    body = (
+        f"Every figure below is a **descriptive figure over a designed set** (FR-072), "
+        f"published with the {INTERVAL_METHOD} interval and with its denominator printed. "
+        f"The two denominators are different populations and both are stated on every "
+        f"figure: precision is denominated on the values the run stored for that field "
+        f"and layer, recall on the fields the generator recorded as printed. Recall is "
+        f"never denominated on stored values — a recall that could not see a value which "
+        f"was never stored would measure nothing.\n\n"
+        f"**The expected side of every comparison is the reference set** (FR-067): the "
+        f"generator's pre-render document model, reproduced from the committed "
+        f"generation inputs and required equal to each manifest's digest before any "
+        f"figure here was computed. No figure is scored against the chunk text a value "
+        f"was read out of, or against this epic's own parse.\n\n"
+        f"**The opponent.** `{BASELINE_ID}`. {BASELINE_INDEPENDENCE}\n\n"
+        f"**Declared label: {DECLARED_BASELINE_LABEL}.** Criterion, fixed before any "
+        f"figure existed: {DECLARED_BASELINE_CRITERION}\n\n"
+        f"**Observed label: {observed}.** Criterion: strong where the baseline beats or "
+        f"ties the model on at least one per-field figure, weak where the model "
+        f"dominates every field. Read off the table below, on point estimates.\n\n"
+        f"{disagreement}\n\n" + "\n".join(comparison) + f"\n\n{unmeasured}\n\n"
+        f"**{F1_OMISSION_REASON}**"
+    )
+
+    if model_only or baseline_only:
+        body += (
+            f"\n\nCells published by one side only, and therefore outside the label "
+            f"comparison: model only {[f'{field} ({layer})' for layer, field in model_only]}, "
+            f"baseline only "
+            f"{[f'{field} ({layer})' for layer, field in baseline_only]}. They are listed "
+            f"rather than dropped: a cell quietly missing from one side is how a "
+            f"comparison narrows to the fields one extractor happened to be good at."
+        )
+
+    figures: list[Figure] = []
+    for layer, field in sorted(set(model) | set(baseline)):
+        for who, table in (("model", model), ("baseline", baseline)):
+            entry = table.get((layer, field))
+            if entry is None:
+                continue
+            scope = FigureScope(
+                run_id=run_id,
+                generation_set="run-scoped",
+                kind="descriptive",
+                unit="stored value",
+                layer=layer,
+            )
+            figures.append(
+                Figure(
+                    label=f"precision — {field} ({who})",
+                    value=entry.precision.rendered(),
+                    scope=scope,
+                )
+            )
+            figures.append(
+                Figure(
+                    label=f"recall — {field} ({who})",
+                    value=entry.recall.rendered(),
+                    scope=FigureScope(
+                        run_id=run_id,
+                        generation_set="run-scoped",
+                        kind="descriptive",
+                        unit="printed field",
+                        layer=layer,
+                    ),
+                )
+            )
+
+    return Section(item=12, body=body, figures=tuple(figures))
+
+
+# ---------------------------------------------------------------------------
+# Item 15 — FR-070, attempted versus recorded invocations
+# ---------------------------------------------------------------------------
+
+
+def reconciliation_section(*, run_id: str, trace_id: str, attempted: int, recorded: int) -> Section:
+    """Item 15: attempted against recorded invocations (FR-070, SC-011).
+
+    Args:
+        run_id: the run the report describes.
+        trace_id: the run's single trace identifier, as recorded on
+            `ingestion_run.run_trace_id`.
+        attempted: invocations the run issued, from `ingest/cli.py`'s ledger.
+        recorded: `llm_invocation` rows carrying `trace_id`.
+
+    Raises:
+        ReportError: `attempted` is zero, or either count is negative. A
+            zero-attempt reconciliation agrees with a zero-recorded one for no
+            reason at all, which is FR-068's empty population reaching the one
+            figure that would otherwise be vacuously true.
+
+    **Both counts are published whether or not they agree.** SC-011 measures
+    this as a reconciliation and not only as a contract: the placement check
+    says no module outside `model.llm` *can* reach the provider, and this says
+    no module outside it *did*. A section publishing only the verdict would be
+    the claim rather than its basis.
+
+    Scalars rather than a reconciliation object, so `report.py` does not import
+    `ingest/cli.py` — the orchestrator imports the report, and the reverse edge
+    would close a cycle.
+    """
+    if attempted < 0 or recorded < 0:
+        raise ReportError(
+            f"FR-070: invocation counts are non-negative; got attempted={attempted}, "
+            f"recorded={recorded}"
+        )
+    if attempted == 0:
+        raise ReportError(
+            "FR-070 / FR-068: the reconciliation compares zero attempted invocations, "
+            "which agrees with zero recorded ones for no reason at all. A run that "
+            "attempted none has no reconciliation to publish; one that attempted some "
+            "and counted none has a defect in its ledger."
+        )
+
+    agrees = attempted == recorded
+    verdict = (
+        "The two counts are equal, so every invocation the run attempted is recorded "
+        "under the run's trace identifier and no invocation recorded under it came from "
+        "anywhere else."
+        if agrees
+        else (
+            f"**The two counts disagree by {recorded - attempted:+d}.** More recorded "
+            f"than attempted means a model request was issued outside this run's ledger; "
+            f"fewer means an attempted invocation left no row. Either is a defect in the "
+            f"traced path, and neither is reconciled by adjusting a count."
+        )
+    )
+    labels = FigureScope(
+        run_id=run_id,
+        generation_set="run-scoped",
+        kind="census",
+        unit="invocation",
+        layer="SYNTHETIC",
+    )
+    body = (
+        f"Every extraction invocation of this run was issued under the single trace "
+        f"identifier `{trace_id}`, recorded on `ingestion_run.run_trace_id`. The "
+        f"identifier is passed explicitly on every call into the traced path — the "
+        f"gateway reads no ambient context — so a per-invocation identifier could not "
+        f"have been substituted without this reconciliation failing.\n\n"
+        f"{verdict}\n\n"
+        f"The counting unit is the **invocation**: one model request covering one "
+        f"chunk's declared field subset. It is not the *attempt*, which is one field on "
+        f"one chunk, and the two are published in separate tables for that reason "
+        f"(FR-069)."
+    )
+    return Section(
+        item=15,
+        body=body,
+        figures=(
+            Figure(label="Invocations attempted by the run", value=attempted, scope=labels),
+            Figure(
+                label="Invocations recorded under the run's trace identifier",
+                value=recorded,
+                scope=labels,
+                note="`llm_invocation` rows joined on `ingestion_run.run_trace_id`",
+            ),
+        ),
+        total_checks=(
+            TotalCheck(
+                name="Attempted invocations equal those recorded under the run trace id",
+                population=f"every extraction invocation issued under trace id {trace_id}",
+                count=attempted,
+                scope=labels,
+                outcome="held" if agrees else "FAILED",
             ),
         ),
     )

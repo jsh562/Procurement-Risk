@@ -99,22 +99,22 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 ## Phase 4: US2 - Every Extracted Value Points At Its Page (Priority: P1) 🎯 MVP
 
-- [ ] T040 [US2] {FR-023} Create the extraction module — the only module in the repository importing gateway — in src/model/src/model/llm/extraction.py → exports: extract_fields
-- [ ] T041 [P] [US2] {FR-024,FR-058} Bound field names to unretired vocabulary terms and declare the transmittal field subset in src/model/src/model/llm/schemas.py and prompts.py
-- [ ] T042 [US2] {FR-022} Restrict extraction to the 25 synthetic transmittals and record the 26-specification exclusion in src/model/src/model/ingest/cli.py after:T040
-- [ ] T043 [P] [US2] {FR-027,FR-028} Store manufacturer and part number as printed with no normalized twin; assert no identity claims in src/model/tests/ingest/test_no_identity_claims.py
-- [ ] T044 [US2] {FR-049} Write failing property tests for coercion round-trip and metamorphism in src/model/tests/compute/test_coerce.py — done only on an observed collection error
-- [ ] T045 [US2] {FR-049,FR-062} Implement deterministic numeric and date coercion, printed text kept as the evidence, in compute/coerce.py after:T044 → exports: coerce_value
-- [ ] T046 [US2] {FR-029} Inherit the cited page from the source chunk and anchor a page-split value on the chunk printing the value in ingest/writer.py after:T032
-- [ ] T047 [US2] {FR-059} Group values by run, document, and item ordinal, with ordinal 0 for document-scoped values, in ingest/lineitems.py after:T012 → exports: group_line_items
-- [ ] T048 [P] [US2] {FR-067} Reproduce the pre-render document model from committed generation inputs and check it against the manifest digest in ingest/reference.py
-- [ ] T049 [US2] {FR-060} Write failing property tests for the continuity-corrected Wilson interval in src/model/tests/compute/test_metrics.py — done only on an observed collection error
-- [ ] T050 [US2] {FR-060} Implement precision, recall, and continuity-corrected Wilson intervals — no F1 — in compute/metrics.py after:T049 → exports: wilson_interval
-- [ ] T051 [US2] {FR-050} Author the deterministic per-vendor template baseline from rendered text only in src/model/src/model/ingest/baseline.py after:T008
-- [ ] T052 [US2] {FR-050} [COMPLETES FR-050] Record the declared baseline label before any figure, read the observed label off the table, publish disagreement in ingest/report.py after:T051
-- [ ] T053 [US2] {FR-060} [COMPLETES FR-060] Publish per-field per-layer figures with denominators beside the baseline, the real layer not measured, in ingest/report.py ← T050:wilson_interval
-- [ ] T054 [US2] {FR-070} Issue every invocation under one run-scoped trace id and reconcile attempted against recorded counts in ingest/cli.py and report.py after:T042
-- [ ] T092 [US2] {FR-023} Cover llm/extraction.py's gateway invocation path and the schemas and prompts it imports in src/model/tests/llm/test_extraction.py after:T040
+- [X] T040 [US2] {FR-023} Create the extraction module — the only module in the repository importing gateway — in src/model/src/model/llm/extraction.py → exports: extract_fields
+- [X] T041 [P] [US2] {FR-024,FR-058} Bound field names to unretired vocabulary terms and declare the transmittal field subset in src/model/src/model/llm/schemas.py and prompts.py
+- [X] T042 [US2] {FR-022} Restrict extraction to the 25 synthetic transmittals and record the 26-specification exclusion in src/model/src/model/ingest/cli.py after:T040
+- [X] T043 [P] [US2] {FR-027,FR-028} Store manufacturer and part number as printed with no normalized twin; assert no identity claims in src/model/tests/ingest/test_no_identity_claims.py
+- [X] T044 [US2] {FR-049} Write failing property tests for coercion round-trip and metamorphism in src/model/tests/compute/test_coerce.py — done only on an observed collection error (observed 2026-07-27: `ModuleNotFoundError: No module named 'model.compute.coerce'`, 1 error during collection, 0 tests run)
+- [X] T045 [US2] {FR-049,FR-062} Implement deterministic numeric and date coercion, printed text kept as the evidence, in compute/coerce.py after:T044 → exports: coerce_value
+- [X] T046 [US2] {FR-029} Inherit the cited page from the source chunk and anchor a page-split value on the chunk printing the value in ingest/writer.py after:T032
+- [X] T047 [US2] {FR-059} Group values by run, document, and item ordinal, with ordinal 0 for document-scoped values, in ingest/lineitems.py after:T012 → exports: group_line_items
+- [X] T048 [P] [US2] {FR-067} Reproduce the pre-render document model from committed generation inputs and check it against the manifest digest in ingest/reference.py
+- [X] T049 [US2] {FR-060} Write failing property tests for the continuity-corrected Wilson interval in src/model/tests/compute/test_metrics.py — done only on an observed collection error (observed 2026-07-27: `ModuleNotFoundError: No module named 'model.compute.metrics'`, 1 error during collection, 0 tests run)
+- [X] T050 [US2] {FR-060} Implement precision, recall, and continuity-corrected Wilson intervals — no F1 — in compute/metrics.py after:T049 → exports: wilson_interval
+- [X] T051 [US2] {FR-050} Author the deterministic per-vendor template baseline from rendered text only in src/model/src/model/ingest/baseline.py after:T008
+- [X] T052 [US2] {FR-050} [COMPLETES FR-050] Record the declared baseline label before any figure, read the observed label off the table, publish disagreement in ingest/report.py after:T051
+- [X] T053 [US2] {FR-060} [COMPLETES FR-060] Publish per-field per-layer figures with denominators beside the baseline, the real layer not measured, in ingest/report.py ← T050:wilson_interval
+- [X] T054 [US2] {FR-070} Issue every invocation under one run-scoped trace id and reconcile attempted against recorded counts in ingest/cli.py and report.py after:T042
+- [X] T092 [US2] {FR-023} Cover llm/extraction.py's gateway invocation path and the schemas and prompts it imports in src/model/tests/llm/test_extraction.py after:T040
 
 ---
 

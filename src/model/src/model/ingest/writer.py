@@ -64,11 +64,16 @@ from model.schema.url import get_database_url
 
 __all__ = [
     "CHUNK_COLUMNS",
+    "EXTRACTED_VALUE_COLUMNS",
+    "CitedChunk",
     "ContainmentMiss",
     "ContainmentResult",
     "DocumentOutcome",
     "PreparedDocument",
+    "PreparedValue",
+    "ValueCitation",
     "WriterError",
+    "cite_value",
     "connect",
     "prepare_document",
     "vector_dimension",
@@ -376,11 +381,260 @@ class DocumentOutcome:
     document_id: str
     chunks_written: int
     containment: ContainmentResult | None
+    values_written: int = 0
     error: str | None = None
 
     @property
     def committed(self) -> bool:
         return self.error is None
+
+
+# ---------------------------------------------------------------------------
+# FR-029 — the citation, inherited from the chunk, anchored on the printed value
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CitedChunk:
+    """One chunk a value was read out of, named by its ordinal within the document.
+
+    **By ordinal, not by identifier.** Chunk identifiers are minted inside the
+    document's transaction at write-order step 1, so nothing upstream of the
+    write can know one. The ordinal is assigned by the chunker, is unique within
+    the document, and is what `uq_chunk__document_ordinal` already enforces — so
+    it is the only handle a value can carry from extraction to the write.
+
+    The page travels with it because that is what the citation *is*: FR-029 says
+    the cited page is inherited from the source chunk, and carrying the pair
+    means a caller cannot supply a page the chunk does not have.
+    """
+
+    ordinal: int
+    page_number: int
+
+    def __post_init__(self) -> None:
+        if self.ordinal < 0:
+            raise WriterError(f"chunk ordinals are zero-based; got {self.ordinal}")
+        if self.page_number < 1:
+            raise WriterError(f"page numbers are one-based; got {self.page_number}")
+
+
+@dataclass(frozen=True)
+class ValueCitation:
+    """Where one extracted value points, and what else it was assembled from.
+
+    **The anchor is the chunk carrying the printed value** (FR-029), never the
+    one carrying only the label. On a page-split field the label ends page *k*
+    and the value begins page *k+1*, so the anchor is the *later* page — which
+    is why every comparison that reassembles such a value orders its chunks by
+    page rather than by contributor position (SC-027), and why `contributors`
+    below is sorted by page.
+
+    **The citation is inherited, not supplied.** `cited_page` is the anchor
+    chunk's own page and there is no constructor that lets the two differ, which
+    is the application-side half of "a citation disagreeing with its chunk is
+    unstorable"; the storage-side half is `fk_extracted_value__chunk_page`, a
+    composite foreign key against `chunk (chunk_id, page_number)`.
+    """
+
+    anchor: CitedChunk
+    contributors: tuple[CitedChunk, ...] = ()
+
+    def __post_init__(self) -> None:
+        ordinals = [chunk.ordinal for chunk in self.contributors]
+        if self.anchor.ordinal in ordinals:
+            raise WriterError(
+                f"FR-029: chunk ordinal {self.anchor.ordinal} is the citation anchor and "
+                f"also appears among the contributing chunks. The anchor is contributor 1 "
+                f"by definition and never appears again — a second row for it would make "
+                f"`source_chunk_count` disagree with the rows that explain it."
+            )
+        if len(set(ordinals)) != len(ordinals):
+            raise WriterError(
+                f"FR-029: a contributing chunk is named twice for one value; ordinals "
+                f"were {ordinals}"
+            )
+        later = [
+            chunk for chunk in self.contributors if chunk.page_number > self.anchor.page_number
+        ]
+        if later:
+            raise WriterError(
+                f"FR-029: the anchor is the chunk carrying the printed value, so it is "
+                f"the *later* page — but ordinal(s) "
+                f"{[chunk.ordinal for chunk in later]} contribute from a page after the "
+                f"anchor's page {self.anchor.page_number}. Either the anchor is the "
+                f"label's chunk rather than the value's, or the value continues past the "
+                f"chunk cited for it."
+            )
+        object.__setattr__(
+            self,
+            "contributors",
+            tuple(sorted(self.contributors, key=lambda chunk: (chunk.page_number, chunk.ordinal))),
+        )
+
+    @property
+    def cited_page(self) -> int:
+        """FR-029: inherited from the source chunk, never stated separately."""
+        return self.anchor.page_number
+
+    @property
+    def source_chunk_count(self) -> int:
+        """The anchor plus its contributors. At least 1, never 0."""
+        return 1 + len(self.contributors)
+
+    @property
+    def provenance_kind(self) -> str:
+        """`ck_extracted_value__provenance_agrees_with_count`, as a derivation.
+
+        Derived rather than supplied, because the column pair is a biconditional
+        in the database: `multi_chunk` with a count of 1 is refused as firmly as
+        `single_chunk` with a count of 3, and two independently supplied values
+        can disagree while one derived from the other cannot.
+        """
+        return "multi_chunk" if self.source_chunk_count > 1 else "single_chunk"
+
+    def pages_in_reading_order(self) -> tuple[int, ...]:
+        """Every page this value draws on, ascending (SC-027).
+
+        Ascending **page** order, not contributor order. The anchor is the later
+        page on a page-split value, so reassembling by contributor position would
+        put the value before its own label.
+        """
+        return tuple(sorted({chunk.page_number for chunk in (self.anchor, *self.contributors)}))
+
+
+def cite_value(value_chunk: CitedChunk, label_chunks: Sequence[CitedChunk] = ()) -> ValueCitation:
+    """Build a citation anchored on the chunk that printed the value (FR-029).
+
+    Args:
+        value_chunk: the chunk carrying the **printed value**. This becomes the
+            anchor and its page becomes the cited page.
+        label_chunks: the chunks carrying only the field's label, where the
+            field split across a page break. Empty for the ordinary case, which
+            is most values.
+
+    Returns:
+        The citation, with contributors sorted by page.
+
+    Raises:
+        WriterError: the anchor appears among the contributors, a contributor is
+            named twice, or a contributor sits on a page after the anchor's.
+
+    Named `cite_value` rather than taking a `page` argument so the FR-029 rule is
+    in the signature: a caller passes the chunk that printed the value and gets
+    the citation, and there is no parameter through which the label's page could
+    become the cited one.
+    """
+    return ValueCitation(anchor=value_chunk, contributors=tuple(label_chunks))
+
+
+@dataclass(frozen=True)
+class PreparedValue:
+    """One `extracted_value` row, before the chunk identifiers exist.
+
+    Everything except the identifiers, which are minted inside the transaction.
+    `value_text` and `value_number` come from `model.compute.coerce`; the
+    `confidence` comes from `model.compute.confidence`. Both are computed by the
+    orchestrator and passed in, because `model.ingest` applies the computation
+    and never performs it inside the module that talks to the provider.
+    """
+
+    field_name: str
+    value_kind: str
+    value_text: str
+    value_number: object | None
+    confidence: float
+    citation: ValueCitation
+
+    def __post_init__(self) -> None:
+        if not self.value_text.strip():
+            raise WriterError(
+                f"{self.field_name}: `ck_extracted_value__value_text_present` refuses a "
+                f"blank value; a field that is not printed is FR-037's `no_value_found`"
+            )
+        if (self.value_kind == "number") != (self.value_number is not None):
+            raise WriterError(
+                f"{self.field_name}: `ck_extracted_value__numeric_iff_number_kind` is a "
+                f"biconditional — the typed numeric is populated exactly on number-kind "
+                f"values; got kind={self.value_kind!r}"
+            )
+        if not 0.0 <= self.confidence <= 1.0:
+            raise WriterError(
+                f"{self.field_name}: `ck_extracted_value__confidence_range` admits "
+                f"[0.0, 1.0] inclusive at both ends; got {self.confidence}"
+            )
+
+
+#: The columns this module writes to E003's `extracted_value`, in insert order.
+#: `extracted_at` carries a default and is deliberately absent.
+EXTRACTED_VALUE_COLUMNS: tuple[str, ...] = (
+    "extracted_value_id",
+    "source_chunk_id",
+    "cited_page",
+    "field_name",
+    "value_kind",
+    "value_text",
+    "value_number",
+    "confidence",
+    "provenance_kind",
+    "source_chunk_count",
+)
+
+_EXTRACTED_VALUE_INSERT = (
+    f"INSERT INTO extracted_value ({', '.join(EXTRACTED_VALUE_COLUMNS)}) "  # noqa: S608
+    f"VALUES ({', '.join('%s' for _ in EXTRACTED_VALUE_COLUMNS)})"
+)
+
+
+def _write_extracted_values(
+    cursor: psycopg.Cursor,
+    document_id: str,
+    values: Sequence[PreparedValue],
+    chunk_ids: Sequence[UUID],
+) -> tuple[UUID, ...]:
+    """§Write Order step 2 — `INSERT extracted_value`, citations resolved.
+
+    The cited page must resolve to a chunk written at step 1, which is what makes
+    step 2 sit where it does. Resolution is by **ordinal**: `chunk_ids[i]` is the
+    identifier minted for ordinal *i*, because `_copy_chunks` writes chunks in
+    ordinal order and `ingest/chunker.py` assigns contiguous zero-based ordinals.
+
+    Raises:
+        WriterError: a value cites an ordinal this document has no chunk for.
+            Caught here rather than by the foreign key so the message names the
+            value and the ordinal rather than an identifier nobody can trace.
+    """
+    minted: list[UUID] = []
+    for value in values:
+        anchor = value.citation.anchor
+        if anchor.ordinal >= len(chunk_ids):
+            raise WriterError(
+                f"FR-029: {document_id} value {value.field_name!r} cites chunk ordinal "
+                f"{anchor.ordinal}, but the document wrote {len(chunk_ids)} chunks "
+                f"(ordinals 0 to {len(chunk_ids) - 1}). A citation that names no chunk is "
+                f"not a weaker citation — it is not one."
+            )
+        value_id = uuid4()
+        minted.append(value_id)
+        cursor.execute(
+            _EXTRACTED_VALUE_INSERT,
+            (
+                value_id,
+                chunk_ids[anchor.ordinal],
+                # Inherited from the anchor chunk and not supplied: the composite
+                # foreign key would reject a disagreeing pair, and this makes the
+                # disagreement unconstructible rather than merely rejected.
+                value.citation.cited_page,
+                value.field_name,
+                value.value_kind,
+                value.value_text,
+                value.value_number,
+                value.confidence,
+                value.citation.provenance_kind,
+                value.citation.source_chunk_count,
+            ),
+        )
+    return tuple(minted)
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +747,7 @@ def write_document_generation(
     run_id: UUID | str,
     prepared: PreparedDocument,
     input_tuple_digest: str,
+    values: Sequence[PreparedValue] = (),
     fresh_pages: Sequence[ParsedPage] | None = None,
     dimension: int | None = None,
 ) -> DocumentOutcome:
@@ -506,6 +761,10 @@ def write_document_generation(
             written by `ingest/runs.py` before the first document.
         prepared: the document, chunked and embedded.
         input_tuple_digest: FR-043's per-document digest, `sha256:<64 hex>`.
+        values: the extracted values, each citing a chunk of this document by
+            ordinal (FR-029). Empty for a specification, which extraction does
+            not reach (FR-022) — and empty is the *recorded* state there rather
+            than an inferred one, which `ingest/cli.py` publishes.
         fresh_pages: the containment guard's independent read. Read here when
             not supplied, which is the ordinary path — the caller supplying it
             is the test harness, which needs to hand over a *known* extraction.
@@ -519,16 +778,24 @@ def write_document_generation(
 
     Raises:
         WriterError: on a non-autocommit connection, a malformed digest, a
-            resident predecessor generation, a containment miss, or a
-            document row that disagrees with the record. Every one of them
-            leaves the document with zero rows.
+            resident predecessor generation, a containment miss, a value citing
+            an ordinal the document has no chunk for, or a document row that
+            disagrees with the record. Every one of them leaves the document
+            with zero rows.
 
     The statement order is `data-model.md` §Write Order, first-ingest path:
     steps 0a–0g are the promotion's removal and are skipped entirely when no
     predecessor is resident (and refused when one is — see the module
-    docstring), then 0h, then step 1, then step 5's chunk association. The
+    docstring), then 0h, step 1, step 2, then step 5's chunk association. The
     containment guard runs after step 1 and before the block closes, which is
     what makes "never committed" true rather than "detected afterwards".
+
+    Step 2 sits after step 1 because a value's cited page has to resolve to a
+    chunk this transaction has already written — `fk_extracted_value__chunk_page`
+    is a composite foreign key against `chunk (chunk_id, page_number)`, so the
+    ordering is the constraint's rather than a preference. Steps 3, 4 and 6 —
+    contributing chunks, failures, and the line-item and parse-signal rows —
+    attach here in T066, T061 and T059; the seam is the same.
     """
     if not connection.autocommit:
         raise WriterError(
@@ -594,6 +861,9 @@ def write_document_generation(
                 f"{containment.misses[0]}"
             )
 
+        # 2 — the extracted values, citing chunks written at step 1.
+        written_values = _write_extracted_values(cursor, record.document_id, values, minted)
+
         # 5 — the run-output association for the chunks written at step 1.
         cursor.execute(_RUN_CHUNK_INSERT, (str(run_id), record.document_id, record.document_id))
 
@@ -601,6 +871,7 @@ def write_document_generation(
         document_id=record.document_id,
         chunks_written=len(minted),
         containment=containment,
+        values_written=len(written_values),
     )
 
 
