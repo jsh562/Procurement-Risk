@@ -243,7 +243,7 @@ Every claim outside those three classes carries an entry below. A claim outside 
 | Spec reference | System | Technical approach | Contract |
 |---|---|---|---|
 | FR-001, Assumption 1 | E003 delivered schema | Reads `purchase_order_line` and `lifecycle_event` over the connection; the input hash covers the rows read, so a re-derived copy cannot pass as the schema | [00003 data-model.md](../00003-core-data-schema/data-model.md) |
-| FR-014 | E005 committed fixture and datasheet | The fixture file's digest and the datasheet reference are recorded beside the row hash, preserving the provenance chain without making the file the hashed object | `data/procurement/` |
+| FR-042, FR-045 | E005 committed fixture and datasheet | The fixture file's digest and the datasheet reference are recorded beside the row hash, preserving the provenance chain without making the file the hashed object | `data/procurement/` |
 | FR-012, {SAD:ADR-0018} | E010 risk read | `line_posterior` stays as-of-anchored and open-line-only; E010's `1 − survival[d − as_of_date]` is unchanged. Disjointness is structural on the held-out side only — **G-5** | [ADR-0018](../adrs/0018-two-anchor-distinguished-posterior-populations-in-two-tables.md) |
 | FR-005, FR-006, FR-026 | E014 evaluation harness | E007 constructs the split and publishes the realized uncensored event count; E014 freezes and hashes the evaluation set and owns the calibration verdict. E007 asserts no coverage threshold | `specs/project-plan.md` § E014 |
 | G-1 | `/tests` cross-entry checks | `test_migration_ranges.py` is extended under AD-007's four-part remediation | `tests/checks/` |
@@ -278,7 +278,11 @@ Every claim outside those three classes carries an entry below. A claim outside 
 | FR-013 | write | `forecast/write.py` | Both arrays are NOT NULL columns of one row; transaction 1 (AD-010) |
 | FR-034 | write, `0301`–`0303` | `forecast/write.py`, `schema/versions/0301_*.py`–`0303_*.py` | Artifact rows inserted once and never updated; `SELECT, INSERT, DELETE` granted and `UPDATE` withheld on all three created tables. The grant is a **latent** fact under the deployed superuser connection (E003 G-11), so DV-032 asserts both halves — the grant over `information_schema`, and the absence of any `UPDATE` against an artifact store in `model.forecast`. `forecast_run.is_active` is the epic's only `UPDATE` and it is not an artifact row |
 | FR-036 | `0300` | `schema/versions/0300_forecast_run_provenance.py` | The guard reads `SELECT count(*) FROM forecast_run` and raises a named error before the first `ADD COLUMN`; HINT-001 gives the shape, G-2 the reversal route, and **NC-18** the demonstrated populated-table case. Recorded as a requirement because an error-handling row and a disclosed gap are read by no test |
-| FR-014 | manifest, serialize | `forecast/manifest.py`, `forecast/serialize.py` | Row-serialization hash **plus** the fixture digest beside it; layer label and datasheet reference |
+| FR-014 | manifest, serialize | `forecast/manifest.py`, `forecast/serialize.py` | The row-serialization hash and its convention label — the pair FR-023 refuses on |
+| FR-042 | manifest, serialize | `forecast/manifest.py`, `forecast/serialize.py` | The fixture-file digest recorded beside it; mismatch **warns**, which is why it is not FR-014 |
+| FR-043 | manifest | `forecast/manifest.py` | Provenance identity — revision, worktree state, seeds, library and model versions, roster hash. The set a reproduction compares for exact equality |
+| FR-044 | manifest, sample | `forecast/manifest.py`, `forecast/sample.py` | Run frame and sampling shape; DV-014 pins the draw count and horizon against `schema_constants` |
+| FR-045 | manifest, report | `forecast/manifest.py`, `forecast/report.py` | Layer label and datasheet reference in **both** the manifest row and the reader-facing artifact |
 | FR-015 | write | `forecast/write.py` | Transaction 2 sets `is_active` explicitly; never implied by recency |
 | FR-016 | diagnostics, config | `forecast/diagnostics.py`, `forecast/config.py` | Four-chain minimum as a precondition; the monitored set is enumerated (AD-006) and named on each row |
 | FR-017 | diagnostics, fit | `forecast/diagnostics.py`, `forecast/fit.py` | The gate runs before any statement is issued — refusal by ordering, not by rollback; NC-1. The standing refusal-path clause (stderr, one non-zero status class, the five stores and the pointer as found) governs FR-021, FR-023 and FR-035 as well |
@@ -456,7 +460,16 @@ The Analyze gate re-ran both audits against the artifacts as amended by three ch
 | **Testing & Quality Policy** | PASS | **FAIL → remediated** | **A-002.** `model.py`'s clause-3 exclusion was false for what remained in it — a mis-indexed vendor mapping is shape-preserving and yields a plausible posterior. `design.py` extracted as the **tenth** property module. Same defect class as C-1, surviving C-1's remediation |
 | **II. Uncertainty Is the Product** | PASS | **FAIL → remediated** | **A-012.** M-2 closed the bare-number defect for `vendor_shrinkage` only. AD-008's Kaplan–Meier floor and SC-027's survival floor were both published as point estimates, and FR-038's reportable unit standardised a shape with no interval slot |
 
+**Both deferred findings were closed on 2026-07-27** rather than carried into Implement. `A-018` split FR-014 into five singular requirements — the churn objection was wrong, since an append renames nothing. `A-020`'s proposed retype turned out to be **unavailable**: the registered project plan categorises E007 `[PRODUCT]` and Governance makes that canonical, so a retype would need a default-branch amendment first and then a CRITICAL-rated ID rename. Its actionable half — 43 forward-references to Plan-phase identifiers inside Specify-phase sections — was applied instead.
+
 **A systemic finding the revert does not fix**: `specify-feature` § 6.5.4 and `plan-feature` § 5.6.3 both *instruct* the managed-section rewrite that Governance reserves to the default branch. Project instructions supersede all other practices, so this branch complies by reverting — but the next epic to run either skill reproduces the violation. That belongs to whoever owns the skills, and is recorded here rather than fixed here.
+
+**Appended when FR-014 was split (A-018):**
+
+| Criterion | Discharged by | Failing direction |
+|---|---|---|
+| SC-041 | DV-018's exact-equality half over the provenance fields | **NC-17** |
+| SC-042 | DV-014 for the pinned pair, plus manifest presence for the rest | **NC-10** |
 
 **Appended at the Analyze gate (A-007, A-014):**
 

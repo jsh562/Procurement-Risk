@@ -38,7 +38,7 @@ The contract E007 writes against. Full detail is E003's; this is the subset that
 | `uq_forecast_run__shape UNIQUE (run_id, draw_count, horizon_days)` | The artifact-row FK target. `held_out_prediction` references it exactly as `line_posterior` does, so both arrays' lengths are proved against the run's own values with no cross-row read. |
 | `ix_forecast_run__single_active … WHERE is_active` | At most one active run, as a database fact. FR-015's explicit pointer is a flip of `is_active`, never a `created_at DESC LIMIT 1`. |
 | `forecast_run.is_active DEFAULT false` | A run publishes nothing on insert. This is what makes "a refused run leaves the pointer unmoved" structural rather than procedural. |
-| `forecast_run.input_data_hash text NOT NULL` — **one column** | The row-serialization hash occupies it. FR-014's second digest, over the committed fixture file, therefore needs its own column: `input_fixture_digest`. |
+| `forecast_run.input_data_hash text NOT NULL` — **one column** | The row-serialization hash occupies it. FR-042's second digest, over the committed fixture file, therefore needs its own column: `input_fixture_digest`. |
 | `forecast_run.as_of_date` + `ck_schema_constants__anchor_convention CHECK (= 'run_as_of_date')` | One anchor per run for `line_posterior`. A per-row anchor is unrepresentable there, which is why the held-out population gets its own table rather than a column. |
 | `line_posterior.survival NOT NULL`; `ck_line_posterior__draws_non_negative` | A line that delivered before the as-of date has no meaningful grid position under the run anchor and would carry a negative duration. `line_posterior` cannot hold it. |
 | `ck_line_posterior__residual_matches_grid_tail … <= 1e-9` | The tolerance form E007 mirrors, and the reason it mirrors rather than tightens. |
@@ -170,13 +170,15 @@ Fourteen columns, every one traceable to a requirement the delivered table has n
 
 | Column | Type | Null | Constraint | Requirement |
 |--------|------|------|-----------|-------------|
-| `covariate_names` | `text[]` | NOT NULL | `ck_forecast_run__covariates_non_empty CHECK (cardinality(covariate_names) >= 1 AND array_position(covariate_names, NULL) IS NULL AND btrim(array_to_string(covariate_names, ''), E' \t\n\r\f') <> '')` | FR-002, SC-006 |
+| `covariate_names` | `text[]` | NOT NULL | `ck_forecast_run__covariates_non_empty CHECK (cardinality(covariate_names) >= 1 AND array_position(covariate_names, NULL) IS NULL AND btrim(array_to_string(covariate_names, ''), E' \t\n\r\f
+') <> '')` | FR-002, SC-006 |
 | `open_line_draw_semantic` | `text` | NOT NULL | `ck_forecast_run__open_line_semantic CHECK (open_line_draw_semantic = 'conditional_remaining_duration_from_run_as_of_date')` | FR-029, SC-013 |
-| `input_fixture_digest` | `text` | NOT NULL | `ck_forecast_run__fixture_digest_format CHECK (input_fixture_digest ~ '^sha256:[0-9a-f]{64}$')` | FR-014, FR-023, SC-020 |
-| `input_layer` | `text` | NOT NULL | `ck_forecast_run__input_layer CHECK (input_layer IN ('REAL','SYNTHETIC'))` | FR-014, SC-020 |
-| `input_datasheet_ref` | `text` | NOT NULL | `ck_forecast_run__datasheet_ref_present CHECK (btrim(input_datasheet_ref, E' \t\n\r\f') <> '')` | FR-014, SC-020 |
+| `input_fixture_digest` | `text` | NOT NULL | `ck_forecast_run__fixture_digest_format CHECK (input_fixture_digest ~ '^sha256:[0-9a-f]{64}$')` | FR-042, FR-023, SC-020 |
+| `input_layer` | `text` | NOT NULL | `ck_forecast_run__input_layer CHECK (input_layer IN ('REAL','SYNTHETIC'))` | FR-045, SC-020 |
+| `input_datasheet_ref` | `text` | NOT NULL | `ck_forecast_run__datasheet_ref_present CHECK (btrim(input_datasheet_ref, E' \t\n\r\f
+') <> '')` | FR-045, SC-020 |
 | `canonical_serialization` | `text` | NOT NULL | `ck_forecast_run__canonical_serialization CHECK (canonical_serialization = 'canonical-json-sorted-keys-utf8')` | FR-014, FR-005, SC-020 |
-| `split_seed_entropy` | `text` | NOT NULL | `ck_forecast_run__split_seed_format CHECK (split_seed_entropy ~ '^[0-9]{1,39}$')` | FR-014, SC-009 |
+| `split_seed_entropy` | `text` | NOT NULL | `ck_forecast_run__split_seed_format CHECK (split_seed_entropy ~ '^[0-9]{1,39}$')` | FR-043, SC-009 |
 | `split_assignment_hash` | `text` | NOT NULL | `ck_forecast_run__split_hash_format CHECK (split_assignment_hash ~ '^sha256:[0-9a-f]{64}$')` | FR-005, FR-006, FR-023, SC-012 |
 | `held_out_fraction_declared` | `double precision` | NOT NULL | `ck_forecast_run__declared_fraction_range CHECK (held_out_fraction_declared > 0.0 AND held_out_fraction_declared < 1.0)` | FR-005, FR-028 |
 | `held_out_fraction_realized` | `double precision` | NOT NULL | `ck_forecast_run__realized_fraction_range CHECK (held_out_fraction_realized >= 0.0 AND held_out_fraction_realized <= 1.0)` | FR-006, SC-012 |
@@ -265,7 +267,8 @@ Both per-parameter and run-level diagnostics, each beside the threshold it was j
 | `diagnostic_id` | `uuid` | NOT NULL | `pk_forecast_diagnostic` PRIMARY KEY |
 | `run_id` | `uuid` | NOT NULL | `fk_forecast_diagnostic__run` |
 | `diagnostic_scope` | `text` | NOT NULL | `ck_forecast_diagnostic__scope CHECK (diagnostic_scope IN ('parameter','run'))` |
-| `parameter_name` | `text` | **NULL** | `ck_forecast_diagnostic__parameter_iff_parameter_scope CHECK ((diagnostic_scope = 'parameter') = (parameter_name IS NOT NULL))`; `ck_forecast_diagnostic__parameter_name_present CHECK (parameter_name IS NULL OR btrim(parameter_name, E' \t\n\r\f') <> '')` |
+| `parameter_name` | `text` | **NULL** | `ck_forecast_diagnostic__parameter_iff_parameter_scope CHECK ((diagnostic_scope = 'parameter') = (parameter_name IS NOT NULL))`; `ck_forecast_diagnostic__parameter_name_present CHECK (parameter_name IS NULL OR btrim(parameter_name, E' \t\n\r\f
+') <> '')` |
 | `metric` | `text` | NOT NULL | `ck_forecast_diagnostic__metric CHECK (metric IN ('r_hat','ess_bulk','ess_tail','divergent_transitions','ebfmi','max_treedepth_hits'))` |
 | `observed_value` | `double precision` | NOT NULL | `ck_forecast_diagnostic__observed_finite CHECK (observed_value = observed_value AND observed_value <> 'Infinity'::double precision AND observed_value <> '-Infinity'::double precision)` |
 | `threshold_value` | `double precision` | NOT NULL | — |
@@ -358,7 +361,7 @@ Four digests, four different things. Named separately for the reason E005 names 
 
 **`created_at` is excluded from the input row hash, and that is the whole point.** E005 defines the compared-content field set positively and excludes `purchase_order_line.created_at` because it is a `DEFAULT now()` load-time fact that differs on every load. Reusing that definition is what makes the input hash stable across a reload of identical content — had it been included, FR-023's refusal would fire on every reproduction attempt against a re-seeded database, and the gate would be noise rather than signal.
 
-**Why the fixture digest is E005's `dataset_content_hash` and not a raw-byte digest of the file.** FR-014 says "the fixture file's own digest", which is ambiguous between the two. E005 publishes `dataset_content_hash` over `canonical_bytes` of the *parsed* payload precisely so git end-of-line normalisation cannot move it, and E005's **G-3** records what happens when one file carries two digest conventions in one repository: a later reader can only read it as one of them being wrong. E007 records the value its owner publishes.
+**Why the fixture digest is E005's `dataset_content_hash` and not a raw-byte digest of the file.** FR-042 says "the fixture file's own digest", which is ambiguous between the two. E005 publishes `dataset_content_hash` over `canonical_bytes` of the *parsed* payload precisely so git end-of-line normalisation cannot move it, and E005's **G-3** records what happens when one file carries two digest conventions in one repository: a later reader can only read it as one of them being wrong. E007 records the value its owner publishes.
 
 **FR-023's two outcomes, and why the columns are separate.** A moved `input_data_hash` or `split_assignment_hash` is a **refusal** naming which one moved — the rows the fit read are not the rows present. A moved `input_fixture_digest` against an unchanged `input_data_hash` is a **provenance warning**, not a refusal: the reproduction is sound and only the chain back to the upstream artifact has broken. That distinction is expressible only because the two digests are two columns.
 
@@ -662,7 +665,11 @@ Every `FR-###` in `spec.md`, and where this data model satisfies it — or the h
 | FR-036 | §Migration Sequence, the `0300` gate, and **G-2** — the guard reads `SELECT count(*) FROM forecast_run` and raises a named error rather than letting PostgreSQL report a not-null violation on a column the operator has never heard of. **NC-18** is the demonstrated populated-table case, which is what turns the guard from prose into a covered obligation |
 | FR-030 | **Deliberately not a constraint** — §FR-030's pinning cannot be a schema constraint; DV-014; G-4 |
 | FR-031 | **No schema surface** — limitation L-2, with the missing maximum recorded as G-10; **DV-037** asserts L-2 is *present* in the emitted set, which DV-024's four-part check does not reach |
-| FR-014 | Delivered `forecast_run` columns plus `input_fixture_digest`, `input_layer`, `input_datasheet_ref`, `canonical_serialization`, `split_seed_entropy`, `split_assignment_hash`, `covariate_names`, `vendor_shrinkage`, `held_out_*`; §Hashes and What Each Covers |
+| FR-014 | `forecast_run.input_data_hash` + `.canonical_serialization`; §Hashes and What Each Covers — the row-serialization hash and its convention label, the pair FR-023 refuses on |
+| FR-042 | `forecast_run.input_fixture_digest` + `ck_forecast_run__fixture_digest_format`; §Hashes — a second, distinct digest whose mismatch warns rather than refuses |
+| FR-043 | Delivered `forecast_run` provenance columns (code revision, worktree state, library versions, model and artifact schema version, roster hash) plus `split_seed_entropy`; compared for exact equality by DV-018 |
+| FR-044 | Delivered `forecast_run.chain_count`, `.draw_count`, `.horizon_days`, `.tuning_count`, `.as_of_date`, `.artifact_hash`, `.artifact_serialization`, `.wall_clock_seconds`; the shape DV-014 pins |
+| FR-045 | `forecast_run.input_layer` + `.input_datasheet_ref` for the manifest half; **DV-043** for the reader-facing half, which no column can carry |
 | FR-015 | Delivered `is_active DEFAULT false` + `ix_forecast_run__single_active`; §Write Order, transaction 2 |
 | FR-016 | `forecast_diagnostic` rows and their `threshold_value` / `threshold_direction`; the monitored parameter set is the enumerated `parameter_name` values; DV-011. The four-chain minimum is a **precondition** in the job, not a column — carried as a requirement by FR-035, asserted over emitted runs by **DV-035**, and demonstrated failing by **NC-14**, so each of FR-016's three obligations resolves to its own pass or fail |
 | FR-017 | §The Refusal Guarantee — four mechanisms; `ck_forecast_diagnostic__blocking_rows_passed`, `ck_forecast_run__open_line_count_positive`; DV-013 |

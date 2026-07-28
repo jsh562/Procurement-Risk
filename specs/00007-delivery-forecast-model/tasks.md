@@ -109,7 +109,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [ ] T029 [US1] {FR-016} Seeded sampling at 4 chains × 1,000 draws with 1,000 tuning draws in PKG/sample.py, fitting the `train` side only
 - [ ] T030 [P] [US1] {FR-019} **RED** Failing shrinkage property tests in TST/test_shrinkage_properties.py — ρ monotone in nⱼ, triple ordered inside `[0,1]`, interval widens as nⱼ falls
 - [ ] T031 [US1] {FR-019} **GREEN** ρⱼ = τ²/(τ² + σ²/nⱼ) as a median with an HPDI per vendor in PKG/shrinkage.py → exports: vendor_shrinkage() after:T030
-- [ ] T032 [US1] {FR-002,FR-006,FR-009,FR-014} [COMPLETES FR-009] Assemble the manifest in PKG/manifest.py — every SC-020 field, both digests, both SC-022 labels → exports: build_manifest()
+- [ ] T032 [US1] {FR-002,FR-006,FR-009,FR-043,FR-044} [COMPLETES FR-009] Assemble the manifest in PKG/manifest.py — every SC-020 field, both digests, both SC-022 labels → exports: build_manifest()
 - [ ] T033 [US1] {FR-008,FR-013,FR-034} Transaction 1 in PKG/write.py — run row, split assignments, `line_posterior`; both arrays one row ← T032:build_manifest → exports: write_artifact_set()
 - [ ] T034 [US1] {FR-015} Transaction 2 in PKG/write.py — clear the active flag, then set it on this run; explicit, never implied by recency
 - [ ] T035 [US1] {FR-039} Wire `forecast-fit` in PKG/fit.py — read, censor, split, sample, condition, write, publish — and print **one** stdout line, the `run_id` ← T033:write_artifact_set
@@ -159,7 +159,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [ ] T065 [US3] {FR-007} [COMPLETES FR-007] DV-008 / SC-011 — no held-out `po_line_id` in the fit's design matrix, recorded as a proxy — TST/test_training_isolation.py after:T029
 - [ ] T066 [US3] {FR-006} DV-028 / SC-012 — all four run-row scalars agree with their child rows, each a single SQL comparison — TST/test_run_scalars.py
 - [ ] T067 [US3] {FR-008} [COMPLETES FR-008] DV-030 — the three populations exhaustive and disjoint; no line holds rows in both stores (G-5) — TST/test_population_disjointness.py
-- [ ] T068 [US3] {FR-014} DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
+- [ ] T068 [US3] {FR-044} DV-031 — `artifact_hash` recomputed in `(population_rank, canonical_ordinal)` order reproduces the value — TST/test_artifact_hash.py
 - [ ] T069 [US3] {FR-005} [COMPLETES FR-005] **NC-13** / AD-011 — a re-run gives the **same** `split_assignment_hash`, one mutated row a **different** one — TST/test_split_determinism.py
 - [ ] T070 [US3] {FR-028} DV-025 / SC-025 — the realized event count published **with** a statement of whether it supports the band's precision (L-3) — TST/test_report_event_count.py after:T036
 - [ ] T071 [US3] {FR-020,FR-027,FR-031} DV-024, DV-037 / SC-024, SC-029 — four parts on each limitation, the observation count stated, `L-1`–`L-4` present by identity — TST/test_limitations.py
@@ -240,10 +240,11 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [ ] T120 [COMPLETES FR-034] {FR-034} **NC-22** — a planted `UPDATE` in a `model.forecast` module must fail the absence check; an absence check with no planted positive is green when it greps nothing — TST/test_no_update_statements.py after:T046
 - [ ] T121 [COMPLETES FR-031] {FR-031} **NC-23** — a limitation set of four well-formed records that omits **L-2** must fail; NC-8 plants a three-part record and so exercises form, not presence-by-identity — TST/test_limitation_presence.py after:T072
 - [ ] T122 {FR-039} **DV-042 / SC-038 / NC-24** — stdout carries exactly the `run_id` and nothing on refusal; every diagnostic on stderr; exit zero exactly on completion — TST/test_streams_and_exit.py after:T035
-- [ ] T123 [COMPLETES FR-014] {FR-014} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068
+- [ ] T123 [COMPLETES FR-045] {FR-045} **DV-043 / SC-040** — the layer label and datasheet reference reach the reader-facing artifact, not only the manifest row — TST/test_report_provenance.py after:T068
 - [ ] T124 {FR-041} SC-036 and SC-037 assertions, plus the pre-registration duty for any estimated band, asserted as a committed-constant check (G-11 bounds it) — TST/test_band_preregistration.py after:T077
 - [ ] T125 {FR-010} [COMPLETES FR-010] Assert the day-grid identity `survival[k] = count(draws > k)/draw_count` over emitted rows in **both** stores — TST/test_grid_identity.py after:T117
 - [ ] T126 {FR-029} [COMPLETES FR-029] Assert both recorded duration semantics over emitted rows: conditional-remaining for open lines, total-from-order-date for held-out — TST/test_duration_semantics.py after:T117
+- [ ] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
 
 **A-015**: T055 and T051 add behaviour to property-tier modules outside any pair. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
 
