@@ -21,10 +21,10 @@ from decimal import Decimal
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from model.forecast.split import SplitAssignment, SplitResult, assign_split
 
 from model.forecast.config import HELD_OUT_FRACTION, SPLIT_SEED
 from model.forecast.read import LifecycleEventRow, LineRow
+from model.forecast.split import SplitAssignment, SplitResult, assign_split
 from model.procurement.censor import AS_OF_DATE
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "e007/tests/forecast/split-properties")

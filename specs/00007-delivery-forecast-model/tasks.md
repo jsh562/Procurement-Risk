@@ -87,14 +87,14 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T014 [P] {FR-005,FR-016,FR-028} Publish the constants in PKG/config.py — thresholds, four-chain minimum, `HELD_OUT_FRACTION`, `SPLIT_SEED`, day tolerance, monitored set (AD-006)
 - [X] T015 {FR-024,FR-025} Declare the forbidden `import-linter` contract from `model.forecast` to `model.llm` and `gateway`, indirect detection on, in src/model/pyproject.toml
 - [X] T016 {FR-001} Read `purchase_order_line` and `lifecycle_event` over the connection in PKG/read.py — never a re-derived copy → exports: read_lines_and_events()
-- [ ] T017 {FR-009} **RED** Failing serializer property tests in TST/test_serialize_properties.py — the digest is invariant to row order and `created_at`, and moves on any serialized value
-- [ ] T018 {FR-009,FR-014} **GREEN** Canonical row serialization and digests in PKG/serialize.py, reusing `roster.reader` → exports: input_data_hash(), split_assignment_hash() after:T017
-- [ ] T019 [P] {FR-003,FR-004} **RED** Failing censoring property tests in TST/test_censoring_properties.py — censored iff no terminal event at the as-of date; elapsed; monotone in as-of
-- [ ] T020 {FR-003,FR-004} **GREEN** Implement the indicator and elapsed time at the as-of date in PKG/censoring.py → exports: censoring_indicator(), elapsed_days() after:T019
-- [ ] T021 {FR-005,FR-007} **RED** Failing split property tests in TST/test_split_properties.py — one side per line, ordinal contiguous from 1, both strata within one line, order-invariance
-- [ ] T022 {FR-005,FR-007} **GREEN** Stratified split, canonical ordinal and assignment hash in PKG/split.py ← T020:censoring_indicator → exports: assign_split() after:T021
-- [ ] T023 {FR-003} **RED** Failing likelihood property tests in TST/test_likelihood_properties.py — `log S(t)` for a censored row and `log f(t)` for a completed one, never interchanged
-- [ ] T024 {FR-003} **GREEN** Implement the per-row log-contribution as a pure NumPy function in PKG/likelihood.py → exports: log_contribution() after:T023
+- [X] T017 {FR-009} **RED** Failing serializer property tests in TST/test_serialize_properties.py — the digest is invariant to row order and `created_at`, and moves on any serialized value
+- [X] T018 {FR-009,FR-014} **GREEN** Canonical row serialization and digests in PKG/serialize.py, reusing `roster.reader` → exports: input_data_hash(), split_assignment_hash() after:T017
+- [X] T019 [P] {FR-003,FR-004} **RED** Failing censoring property tests in TST/test_censoring_properties.py — censored iff no terminal event at the as-of date; elapsed; monotone in as-of
+- [X] T020 {FR-003,FR-004} **GREEN** Implement the indicator and elapsed time at the as-of date in PKG/censoring.py → exports: censoring_indicator(), elapsed_days() after:T019
+- [X] T021 {FR-005,FR-007} **RED** Failing split property tests in TST/test_split_properties.py — one side per line, ordinal contiguous from 1, both strata within one line, order-invariance
+- [X] T022 {FR-005,FR-007} **GREEN** Stratified split, canonical ordinal and assignment hash in PKG/split.py ← T020:censoring_indicator → exports: assign_split() after:T021
+- [X] T023 {FR-003} **RED** Failing likelihood property tests in TST/test_likelihood_properties.py — `log S(t)` for a censored row and `log f(t)` for a completed one, never interchanged
+- [X] T024 {FR-003} **GREEN** Implement the per-row log-contribution as a pure NumPy function in PKG/likelihood.py → exports: log_contribution() after:T023
 
 ---
 
@@ -231,8 +231,8 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 Task IDs are never reused or renumbered, so the tenth red-green pair appends here rather than being inserted into Phase 2. **It is Foundational work and must run before T027** — the dependency edge, not the position in this file, is what orders it.
 
-- [ ] T114 {FR-001,FR-002} **RED** Property tests for the vendor and material-category index mapping and the pooling structure in TST/test_design_properties.py — a swapped vendor index must be detected, and the mapping must be a pure function of the roster order — A-002
-- [ ] T115 [COMPLETES FR-002] {FR-001,FR-002} **GREEN** Extract the index mapping and design-matrix construction from PKG/model.py into PKG/design.py after:T114 → exports: vendor_index(), category_index(), design_matrix()
+- [X] T114 {FR-001,FR-002} **RED** Property tests for the vendor and material-category index mapping and the pooling structure in TST/test_design_properties.py — a swapped vendor index must be detected, and the mapping must be a pure function of the roster order — A-002
+- [X] T115 [COMPLETES FR-002] {FR-001,FR-002} **GREEN** Extract the index mapping and design-matrix construction from PKG/model.py into PKG/design.py after:T114 → exports: vendor_index(), category_index(), design_matrix()
 - [ ] T116 [COMPLETES FR-001] {FR-001} Rework T028 so the `logp` agreement oracle builds `likelihood.py`'s inputs from PKG/design.py rather than from the assembled graph — TST/test_model_logp.py after:T115
 - [ ] T117 [US1] {FR-010,FR-029} **RED** Property test for the held-out **total-duration** path in PKG/posterior.py, absent from T025's set — TST/test_posterior_properties.py — A-015
 - [ ] T118 [COMPLETES FR-033] [US2] {FR-033} **RED** Property test for the repeated-seed delta interval in PKG/ablation.py, absent from T049's set — TST/test_ablation_properties.py — A-015

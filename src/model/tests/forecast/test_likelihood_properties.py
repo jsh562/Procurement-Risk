@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
+
 from model.forecast.likelihood import log_contribution
 
 #: Φ⁻¹(0.99), to the precision the P99 boundary case needs.

@@ -53,13 +53,26 @@ putting an ambiguous module on `sys.path`, and neither is the other's parent
 directory. The variable names are deliberately identical, so one `REQUIRE_DB=1`
 configures every tier rather than each needing its own switch.
 
-**No `__init__.py` in this directory, deliberately.** Neither `tests/schema` nor
-`tests/procurement` carries one; pytest's default import mode puts each test
-directory on `sys.path` and distinguishes modules by basename, so a package
-marker here would change how three sibling suites are imported to solve a
-problem none of them has. Test module basenames in this tier must therefore stay
-unique across `src/model/tests`, which is the cost of that arrangement and is
-stated so the next author knows it.
+**There is an `__init__.py` in this directory, and an earlier revision of this
+paragraph said there deliberately was not.** The original arrangement followed
+`tests/schema` and `tests/procurement`, neither of which carries one: pytest's
+default import mode puts each test directory on `sys.path` and distinguishes
+modules by basename, so a package marker looked like a change to how three
+sibling suites are imported in order to solve a problem none of them had. The
+stated cost was that test module basenames in this tier stay unique across
+`src/model/tests`. **That cost was not paid** — this tier's
+`test_serialize_properties.py` collides with `tests/procurement`'s, and the
+collision is invisible for exactly as long as one of the two fails to import.
+It surfaced the moment `model.forecast.serialize` landed and the E007 module
+started importing cleanly, as `import file mismatch` aborting collection for the
+whole entry rather than as a failure in either tier.
+
+The marker is the remedy rather than a rename because every path this tier is
+referenced by — `tasks.md`'s red-green pairs among them — names the file as it
+is. Only this directory is marked, so the two sibling suites are imported
+exactly as they were; what changes is that modules here are imported as
+`forecast.<name>` from `src/model/tests` on `sys.path`, which is what makes the
+basename local to the tier instead of global to the entry.
 """
 
 from __future__ import annotations

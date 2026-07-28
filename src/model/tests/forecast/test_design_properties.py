@@ -20,8 +20,8 @@ import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from model.forecast.design import category_index, design_matrix, vendor_index
 
+from model.forecast.design import category_index, design_matrix, vendor_index
 from model.forecast.read import LineRow
 from model.procurement.durations import TIER_OFFSETS
 from model.roster.reader import read_roster

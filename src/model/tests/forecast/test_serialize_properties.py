@@ -21,7 +21,6 @@ from typing import Any
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from model.forecast.serialize import input_data_hash, split_assignment_hash
 
 from model.corpus.manifest import DIGEST_PATTERN
 from model.forecast.read import (
@@ -31,6 +30,7 @@ from model.forecast.read import (
     LineRow,
     ProcurementInput,
 )
+from model.forecast.serialize import input_data_hash, split_assignment_hash
 
 #: Namespace for the deterministic surrogate keys these fixtures carry. `uuid5`
 #: rather than `uuid4` so a rebuilt row keeps its identity, which is what makes

@@ -67,11 +67,14 @@ REPORT_DIR_PARTS = ("data", "forecast-reports")
 #: files were emitted" a question about directory creation.
 REPORT_ROOT = REPO_ROOT.joinpath(*REPORT_DIR_PARTS)
 
-#: JSON rather than Markdown. SC-026's absence check is a structural predicate
-#: over the run report's declared fields rather than a term search (FR-040), and
-#: DV-041 validates every field against a closed schema; both read a parsed
-#: document. Named once here so the two report writers cannot disagree.
-REPORT_SUFFIX = ".json"
+#: Markdown rather than JSON. FR-020, FR-027 and FR-045 each require a
+#: *reader-facing* artifact, and `plan.md` § Architecture records the run report
+#: as Markdown with a declared section-and-field schema. The structural checks
+#: lose nothing by it: SC-026's absence check and DV-041's field validation are
+#: predicates over that declared schema, and E005's datasheet is the precedent
+#: for a Markdown artifact whose records are checked structurally rather than by
+#: term search. Named once here so the two report writers cannot disagree.
+REPORT_SUFFIX = ".md"
 
 RUN_REPORT_PREFIX = "run-report"
 REFUSAL_REPORT_PREFIX = "refusal-report"
@@ -198,7 +201,7 @@ def refused_attempt_id(as_of_date: date, input_data_hash: str, attempted_at: dat
 
 
 def run_report_path(run_id: uuid.UUID | str, report_root: Path | str | None = None) -> Path:
-    """`<report root>/run-report-<run_id>.json` — the report of a run that ships.
+    """`<report root>/run-report-<run_id>.md` — the report of a run that ships.
 
     Named by `run_id` because a shipped run has one, and because that is the
     identifier its stored artifacts, its manifest and the job's single stdout
@@ -215,7 +218,7 @@ def refusal_report_path(
     attempted_at: datetime,
     report_root: Path | str | None = None,
 ) -> Path:
-    """`<report root>/refusal-report-<attempt id>.json` — one file per attempt.
+    """`<report root>/refusal-report-<attempt id>.md` — one file per attempt.
 
     Resolved into the same directory as the run reports, per FR-037: the
     refusal report and the job's stderr are the only surviving record of why a

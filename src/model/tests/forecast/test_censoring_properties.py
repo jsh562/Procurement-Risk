@@ -20,8 +20,8 @@ from typing import Any
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from model.forecast.censoring import censoring_indicator, elapsed_days
 
+from model.forecast.censoring import censoring_indicator, elapsed_days
 from model.forecast.read import LifecycleEventRow, LineRow
 from model.procurement.censor import AS_OF_DATE, ORDER_DATE_WINDOW
 
