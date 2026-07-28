@@ -19,8 +19,9 @@ import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from model.forecast.shrinkage import vendor_shrinkage
 from numpy.typing import NDArray
+
+from model.forecast.shrinkage import vendor_shrinkage
 
 # ---------------------------------------------------------------------------
 # The interface this file pins
@@ -248,9 +249,7 @@ def test_every_vendor_asked_about_comes_back_with_a_weight(roster: dict[str, int
     assert set(published) == set(roster)
 
 
-@pytest.mark.parametrize(
-    ("tau_median", "sigma_median"), [(0.30, 0.50), (0.11, 0.50), (0.45, 0.40)]
-)
+@pytest.mark.parametrize(("tau_median", "sigma_median"), [(0.30, 0.50), (0.11, 0.50), (0.45, 0.40)])
 def test_the_median_weight_is_monotone_increasing_in_the_training_count(
     tau_median: float, sigma_median: float
 ) -> None:
@@ -266,9 +265,9 @@ def test_the_median_weight_is_monotone_increasing_in_the_training_count(
     counts = (0, 1, 2, 3, 4, SPARSE_COUNT, 10, 20, DENSE_COUNT, 60)
     medians = [triple[0] for triple in sweep(counts, tau, sigma)]
 
-    assert all(
-        later >= earlier for earlier, later in zip(medians, medians[1:], strict=False)
-    ), f"the shrinkage weight fell as the vendor gained training lines: {medians}"
+    assert all(later >= earlier for earlier, later in zip(medians, medians[1:], strict=False)), (
+        f"the shrinkage weight fell as the vendor gained training lines: {medians}"
+    )
     assert medians[0] == 0.0
     assert medians[-1] > medians[0]
 
@@ -411,9 +410,7 @@ def test_the_interval_widens_as_the_training_count_falls(
     counts = (60, DENSE_COUNT, 20, 10, SPARSE_COUNT)
     widths = [width(triple) for triple in sweep(counts, tau, sigma)]
 
-    assert all(
-        later > earlier for earlier, later in zip(widths, widths[1:], strict=False)
-    ), (
+    assert all(later > earlier for earlier, later in zip(widths, widths[1:], strict=False)), (
         f"the interval did not widen as the training count fell: "
         f"{list(zip(counts, widths, strict=True))}"
     )

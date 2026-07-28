@@ -22,8 +22,9 @@ import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from model.forecast.posterior import conditional_remaining_draws, survival_grid
 from numpy.typing import NDArray
+
+from model.forecast.posterior import conditional_remaining_draws, survival_grid
 
 # ---------------------------------------------------------------------------
 # The interface this file pins
@@ -166,9 +167,7 @@ def grid_of(draws: Any, horizon_days: int) -> tuple[NDArray[np.float64], float]:
 
 def remaining_of(uniforms: Any, mu: Any, sigma: Any, elapsed: Any) -> NDArray[np.float64]:
     return np.asarray(
-        conditional_remaining_draws(
-            uniforms=uniforms, mu=mu, sigma=sigma, elapsed_days=elapsed
-        ),
+        conditional_remaining_draws(uniforms=uniforms, mu=mu, sigma=sigma, elapsed_days=elapsed),
         dtype=float,
     )
 
@@ -184,9 +183,7 @@ sigmas = st.floats(min_value=0.2, max_value=1.2, allow_nan=False, allow_infinity
 
 #: The open unit interval. `u = 0` and `u = 1` map to `∓∞` through `F⁻¹` and are
 #: refused rather than drawn; the refusal is asserted separately below.
-uniforms = st.floats(
-    min_value=1e-6, max_value=1.0 - 1e-6, allow_nan=False, allow_infinity=False
-)
+uniforms = st.floats(min_value=1e-6, max_value=1.0 - 1e-6, allow_nan=False, allow_infinity=False)
 
 #: Day counts drawn *including exact integers*, because the strict `>` boundary
 #: only exists at whole days and continuous floats land on one about never.
@@ -617,9 +614,9 @@ def test_increasing_elapsed_never_decreases_the_median_in_the_long_open_regime(
         for multiple in (1.0, 1.5, 2.0, 3.0)
     ]
 
-    assert all(
-        later >= earlier for earlier, later in zip(medians, medians[1:], strict=False)
-    ), f"the median remainder fell as the line stayed open longer: {medians}"
+    assert all(later >= earlier for earlier, later in zip(medians, medians[1:], strict=False)), (
+        f"the median remainder fell as the line stayed open longer: {medians}"
+    )
 
 
 @pytest.mark.parametrize("position", [-1.0, 0.0, 1.0, Z99])
@@ -701,9 +698,7 @@ def test_a_non_positive_scale_is_refused(sigma: float) -> None:
     place: before any arithmetic, so the message names the parameter.
     """
     with pytest.raises(ValueError):
-        conditional_remaining_draws(
-            uniforms=[0.5], mu=MU_FIT, sigma=sigma, elapsed_days=10.0
-        )
+        conditional_remaining_draws(uniforms=[0.5], mu=MU_FIT, sigma=sigma, elapsed_days=10.0)
 
 
 @pytest.mark.parametrize("u", [0.0, 1.0, -0.1, 1.5])
@@ -715,6 +710,4 @@ def test_a_uniform_outside_the_open_unit_interval_is_refused(u: float) -> None:
     the only place the caller is still identifiable.
     """
     with pytest.raises(ValueError):
-        conditional_remaining_draws(
-            uniforms=[u], mu=MU_FIT, sigma=SIGMA_FIT, elapsed_days=10.0
-        )
+        conditional_remaining_draws(uniforms=[u], mu=MU_FIT, sigma=SIGMA_FIT, elapsed_days=10.0)
