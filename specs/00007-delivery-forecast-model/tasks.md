@@ -164,7 +164,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T070 [US3] {FR-028} DV-025 / SC-025 — the realized event count published **with** a statement of whether it supports the band's precision (L-3) — TST/test_report_event_count.py after:T036
 - [X] T071 [US3] {FR-020,FR-027,FR-031} DV-024, DV-037 / SC-024, SC-029 — four parts on each limitation, the observation count stated, `L-1`–`L-4` present by identity — TST/test_limitations.py
 - [X] T072 [US3] {FR-027} [COMPLETES FR-027] **NC-8** — a deliberately three-part limitation record **fails** the checker — TST/test_limitation_controls.py after:T071
-- [ ] T073 [US3] {FR-040} DV-041 / SC-035 — the emitted set is an **equality** against FR-040's three files, every report field in its declared schema — TST/test_emitted_set.py after:T098
+- [X] T073 [US3] {FR-040} DV-041 / SC-035 — the emitted set is an **equality** against FR-040's three files, every report field in its declared schema — TST/test_emitted_set.py after:T098
 - [X] T074 [US3] {FR-040} **NC-21** — a planted fourth file fails the equality and a planted unlisted field fails schema validation — TST/test_emitted_set_controls.py
 - [X] T075 [US3] {FR-026} DV-021 / SC-026 — no emitted artifact carries a threshold or verdict, by the **closed-schema predicate**, never a term search — TST/test_no_verdict.py
 - [X] T076 [US3] {FR-026} **NC-7** — a planted artifact containing a coverage threshold **fails** the absence check — TST/test_no_verdict_controls.py after:T075
@@ -199,21 +199,21 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
 **Separable from P1: the manifest and both artifact stores ship in US1 and US3, and nothing in US1–US4 depends on this phase. T096–T100 share one file and are strictly sequential.**
 
-- [ ] T094 [P] [US5] {FR-022} **RED** Failing compare property tests in TST/test_compare_properties.py — nearest rank is `draws[ceil(p·n)]` 1-indexed; `p·n` integral; one outlier fails all
-- [ ] T095 [US5] {FR-022} **GREEN** Nearest-rank percentile lookup and the day-tolerance comparison in PKG/compare.py → exports: nearest_rank_percentile(), within_tolerance() after:T094
-- [ ] T096 [US5] {FR-022} Implement `forecast-reproduce` in PKG/reproduce.py — re-fit from a manifest and pair every stored line across **both** stores ← T095:nearest_rank_percentile
-- [ ] T097 [US5] {FR-022} Apply the 5.0-day tolerance to each median and P80 in PKG/reproduce.py, resolving **three** outcomes — the third a predictive ESS below half the draws (AD-004)
-- [ ] T098 [US5] {FR-022,FR-040} [COMPLETES FR-040] Emit the reproduction report in PKG/reproduce.py — FR-038's unit per line and **both** `run_id`s, so the verdict names its operands
-- [ ] T099 [US5] {FR-023} Refuse before sampling on a moved `input_data_hash` or `split_assignment_hash` in PKG/reproduce.py, naming which moved and both values (DV-015, DV-017 / SC-019)
-- [ ] T100 [US5] {FR-023} A moved `input_fixture_digest` against an unchanged row hash **warns and completes with a zero exit** in PKG/reproduce.py (DV-016), never refuses
-- [ ] T101 [US5] {FR-023} **NC-3** — two cases, a mutated row and a mutated split assignment, each naming *that* input — TST/test_reproduce_refusals.py after:T099
-- [ ] T102 [US5] {FR-023} [COMPLETES FR-023] **NC-4** — a mutated fixture against unchanged rows warns **and the run completes** — TST/test_provenance_warning.py after:T100
-- [ ] T103 [US5] {FR-022} DV-018 / SC-018 — per-line agreement in both stores within the tolerance and **exact** provenance equality — TST/test_reproduction.py after:T098
-- [ ] T104 [US5] {FR-022} [COMPLETES FR-022] **NC-17** — one line's P80 perturbed beyond the tolerance makes the harness exit non-zero naming it — TST/test_reproduction_controls.py
-- [ ] T105 [US5] {FR-032} DV-019 / SC-030 — a digest mismatch under a version outside the **whole** recorded pin is a scope limit, not a failure — TST/test_pin_scope.py after:T098
-- [ ] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit; the same mismatch inside the pin fails — TST/test_pin_scope_controls.py
-- [ ] T107 [US5] {FR-025} DV-022 / SC-021 — `/src/api` has no import path to `model.forecast`, over the transitive graph — CHK/test_dependency_isolation.py after:T015
-- [ ] T108 [US5] {FR-024} **NC-15** — two planted imports to `gateway`, one direct and one indirect, each fail the contract (G-17 bounds the rest) — TST/test_import_contract_controls.py
+- [X] T094 [P] [US5] {FR-022} **RED** Failing compare property tests in TST/test_compare_properties.py — nearest rank is `draws[ceil(p·n)]` 1-indexed; `p·n` integral; one outlier fails all
+- [X] T095 [US5] {FR-022} **GREEN** Nearest-rank percentile lookup and the day-tolerance comparison in PKG/compare.py → exports: nearest_rank_percentile(), within_tolerance() after:T094
+- [X] T096 [US5] {FR-022} Implement `forecast-reproduce` in PKG/reproduce.py — re-fit from a manifest and pair every stored line across **both** stores ← T095:nearest_rank_percentile
+- [X] T097 [US5] {FR-022} Apply the 5.0-day tolerance to each median and P80 in PKG/reproduce.py, resolving **three** outcomes — the third a predictive ESS below half the draws (AD-004)
+- [X] T098 [US5] {FR-022,FR-040} [COMPLETES FR-040] Emit the reproduction report in PKG/reproduce.py — FR-038's unit per line and **both** `run_id`s, so the verdict names its operands
+- [X] T099 [US5] {FR-023} Refuse before sampling on a moved `input_data_hash` or `split_assignment_hash` in PKG/reproduce.py, naming which moved and both values (DV-015, DV-017 / SC-019)
+- [X] T100 [US5] {FR-023} A moved `input_fixture_digest` against an unchanged row hash **warns and completes with a zero exit** in PKG/reproduce.py (DV-016), never refuses
+- [X] T101 [US5] {FR-023} **NC-3** — two cases, a mutated row and a mutated split assignment, each naming *that* input — TST/test_reproduce_refusals.py after:T099
+- [X] T102 [US5] {FR-023} [COMPLETES FR-023] **NC-4** — a mutated fixture against unchanged rows warns **and the run completes** — TST/test_provenance_warning.py after:T100
+- [X] T103 [US5] {FR-022} DV-018 / SC-018 — per-line agreement in both stores within the tolerance and **exact** provenance equality — TST/test_reproduction.py after:T098
+- [X] T104 [US5] {FR-022} [COMPLETES FR-022] **NC-17** — one line's P80 perturbed beyond the tolerance makes the harness exit non-zero naming it — TST/test_reproduction_controls.py
+- [X] T105 [US5] {FR-032} DV-019 / SC-030 — a digest mismatch under a version outside the **whole** recorded pin is a scope limit, not a failure — TST/test_pin_scope.py after:T098
+- [X] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit; the same mismatch inside the pin fails — TST/test_pin_scope_controls.py
+- [X] T107 [US5] {FR-025} DV-022 / SC-021 — `/src/api` has no import path to `model.forecast`, over the transitive graph — CHK/test_dependency_isolation.py after:T015
+- [X] T108 [US5] {FR-024} **NC-15** — two planted imports to `gateway`, one direct and one indirect, each fail the contract (G-17 bounds the rest) — TST/test_import_contract_controls.py
 
 ---
 
