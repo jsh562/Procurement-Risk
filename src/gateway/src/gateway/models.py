@@ -98,6 +98,24 @@ class InvocationRequest(BaseModel):
     prompt: str = Field(min_length=1)
     model: str | None = None
     trace_id: Annotated[str | None, Field(default=None)] = None
+    """The identifier this invocation is correlated under (TR-031, TR-047, TR-080).
+
+    **Serialized, and deliberately not hashed.** It is a declared field, so
+    TR-020's closure would put it in the fixture key; it is named in
+    `compute.hashing.UNHASHED_REQUEST_FIELDS` instead, because a correlation
+    identifier says which *run* observed the call and reaches neither the
+    provider request nor the provider's answer. Hashing it meant two requests
+    that would produce the identical provider call keyed differently once per
+    run — FR-070 obliges one run-scoped identifier per run — so no recorded
+    fixture was replayable by any caller that supplied one.
+
+    **Do not resolve that by adding `exclude=True` here.** The exclusion belongs
+    to the hash, not to the type: `exclude=True` would drop the identifier from
+    every serialization of a request, including any log line or spooled payload,
+    and the field a reader most needs to trace back is the last one that should
+    silently vanish from a dump (Principle I). `output_schema` below is excluded
+    on the model for the unrelated reason that a class is not JSON.
+    """
 
     output_schema: Annotated[type[BaseModel] | None, Field(default=None, exclude=True)] = None
     """The schema every output is validated against before it is returned (TR-006).
@@ -113,9 +131,14 @@ class InvocationRequest(BaseModel):
     reaches the key — through its *digest*, passed as `fixture_key`'s `schema`
     argument, which is what TR-038 requires ("a digest over the full schema
     definition including its post-decode validators, and MUST NOT accept either
-    as a caller-declared string"). So the hashed set still covers every declared
-    field; this one is covered by digest rather than by value, which is the
-    stronger of the two.
+    as a caller-declared string"). So this field is covered by digest rather
+    than by value, which is the stronger of the two.
+
+    Note that this exclusion is **not** the exception `UNHASHED_REQUEST_FIELDS`
+    records against `trace_id`. This field is excluded from serialization and
+    still reaches the key; that one is serialized and deliberately does not.
+    Reading them as one rule is how someone concludes the model is the place to
+    exclude a field from the hash.
 
     `arbitrary_types_allowed` is on for this field alone. A model *class* is not
     a pydantic-native annotation, and the alternative — accepting a raw JSON

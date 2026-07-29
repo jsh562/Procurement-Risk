@@ -32,12 +32,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from gateway.compute.hashing import (
     FIXTURE_KEY_PATTERN,
     HASH_ALGORITHM,
+    UNHASHED_REQUEST_FIELDS,
     canonical_json,
     fixture_key,
+    hashed_request_payload,
     prompt_template_version,
+    repair_fixture_key,
     schema_version,
 )
-from gateway.models import InvocationRequest
+from gateway.models import InvocationRequest, generate_trace_id
 
 #: JSON-representable values, nested. Deliberately includes the shapes where a
 #: naive serializer differs from a canonical one — dict ordering, float/int
@@ -213,6 +216,122 @@ def test_a_field_the_model_does_not_declare_is_refused() -> None:
     """
     with pytest.raises(Exception, match="extra"):
         Request(provider="p", model="m", prompt="x", presence_penalty=0.2)  # type: ignore[call-arg]
+
+
+# --- The correlation identifier is not a semantic input ----------------------
+#
+# TR-020's closure is stated over the request model's declared fields, and
+# `trace_id` is one of them. It is also the one declared field that describes
+# *this run* rather than *this call*: FR-070 obliges one run-scoped identifier
+# per run, so a caller that supplies one keys the same request differently on
+# every run and no recorded fixture can ever be replayed.
+#
+# E004's own tests never saw it. `resolve_trace_id` mints an identifier when the
+# caller supplies none, so every test in this epic keys with `trace_id` null and
+# is perfectly stable. The defect lives at the seam with the first caller
+# obliged to supply one, which is why these assertions are written against the
+# real `InvocationRequest` rather than the stand-in above — the stand-in has no
+# correlation identifier to be wrong about.
+
+#: 32 lowercase hex, inside TR-047's domain and not all zero. Spelled out rather
+#: than generated, so a failure names two fixed values instead of two that
+#: differ on every run — which is the very property under test.
+A_TRACE_ID = "a" * 32
+ANOTHER_TRACE_ID = "b" * 32
+
+
+def test_two_requests_differing_only_in_trace_id_share_one_key() -> None:
+    """The property FR-070 needs and TR-019 has to keep.
+
+    A correlation identifier says which run observed the call. It does not
+    change the prompt, the model, the schema or any sampling parameter, so two
+    requests differing only in it would produce the *same* provider call — and
+    TR-019's first direction requires the same call to hash the same, or replay
+    misses on a request it holds a fixture for.
+    """
+    untraced = InvocationRequest(prompt="hello", model="claude-opus-5")
+    one = InvocationRequest(prompt="hello", model="claude-opus-5", trace_id=A_TRACE_ID)
+    two = InvocationRequest(prompt="hello", model="claude-opus-5", trace_id=ANOTHER_TRACE_ID)
+
+    assert fixture_key(one) == fixture_key(two), (
+        "two requests differing only in trace_id key differently, so a run-scoped "
+        "identifier makes every recorded fixture unreplayable"
+    )
+    assert fixture_key(one) == fixture_key(untraced), (
+        "supplying a trace_id keys differently from omitting one, so a fixture "
+        "recorded by a caller that supplies none can never be replayed by one "
+        "that does"
+    )
+
+
+def test_the_key_is_stable_across_freshly_minted_trace_ids() -> None:
+    """The measurement that found this, as an assertion.
+
+    Six runs of one document produced six distinct keys. Generating the
+    identifiers here rather than reusing the two constants above is what makes
+    this a check on the *generator*'s output reaching the hash, rather than on
+    two literals that happen to differ.
+    """
+    keys = {
+        fixture_key(InvocationRequest(prompt="hello", model="m", trace_id=generate_trace_id()))
+        for _ in range(6)
+    }
+    assert len(keys) == 1, f"six runs of one request produced {len(keys)} distinct keys: {keys}"
+
+
+def test_the_hashed_set_is_the_declared_fields_less_the_stated_exception() -> None:
+    """TR-020's closure restated with its hole, against the model that ships.
+
+    The equality is written as a *derivation* on both sides — declared fields
+    minus serialization-excluded minus `UNHASHED_REQUEST_FIELDS` — so a field
+    added to `InvocationRequest` is in the hashed set by default and a second
+    exception has to be spelled into the named constant to escape it. A test
+    comparing against a hand-kept list would pass while the two drifted.
+    """
+    request = InvocationRequest(prompt="hello", model="m", trace_id=A_TRACE_ID)
+    serializable = {
+        name for name, field in InvocationRequest.model_fields.items() if not field.exclude
+    }
+
+    assert set(hashed_request_payload(request)) == serializable - UNHASHED_REQUEST_FIELDS
+    assert "trace_id" in serializable, (
+        "trace_id was excluded on the model, which drops it from every "
+        "serialization of a request rather than from the hash alone"
+    )
+
+
+def test_the_stated_exception_is_a_correlation_identifier_and_nothing_else() -> None:
+    """The hole is one field wide, and a widening should fail here first.
+
+    `UNHASHED_REQUEST_FIELDS` is the only place TR-020's closure can be opened,
+    so this is the check that a later change to it is deliberate. Excluding a
+    field that can change what the provider is asked would give two genuinely
+    different calls one key — the direction that serves a fixture recorded for
+    something else, which is the failure that looks like everything working.
+    """
+    assert set(UNHASHED_REQUEST_FIELDS) == {"trace_id"}
+    assert set(InvocationRequest.model_fields) >= UNHASHED_REQUEST_FIELDS, (
+        "an excluded name is not a declared field, so it excludes nothing and "
+        "the closure it appears to open is not the one it opens"
+    )
+
+
+def test_the_repair_key_is_trace_id_invariant_too() -> None:
+    """A repair is a second fixture, keyed on the original request.
+
+    It derives from `fixture_key`, so it inherits the fix rather than needing
+    its own — but it is asserted separately because that derivation is an
+    implementation detail a later change could drop, and a repair that replayed
+    as a miss would look exactly like a fixture recorded before the repair path
+    existed.
+    """
+    one = InvocationRequest(prompt="hello", model="m", trace_id=A_TRACE_ID)
+    two = InvocationRequest(prompt="hello", model="m", trace_id=ANOTHER_TRACE_ID)
+
+    assert repair_fixture_key(one, "fix field x") == repair_fixture_key(two, "fix field x")
+    assert repair_fixture_key(one, "fix field x") != repair_fixture_key(one, "fix field y"), (
+        "the repair instruction stopped reaching the key"
+    )
 
 
 # --- TR-038: the two derived versions ---------------------------------------
