@@ -26,6 +26,7 @@ Ctrl-C stops both servers and does not return while one still holds a port.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import signal
 import subprocess
@@ -34,6 +35,15 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# The resolver's `describe()` carries an em dash, and this process inherits the
+# console's encoding rather than the UTF-8 it hands its children. On a cp1252
+# console that prints as a replacement character at best and raises at worst, so
+# the stream is reconfigured before anything is written to it.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 # `tests/checks` is not an installed package; the resolver lives there because the
 # orchestration checks were its first consumer. Imported by path rather than
@@ -52,12 +62,61 @@ DB_BASE = "postgresql://procurement:local-development-only@localhost"
 PREFERRED = {"api": 8001, "web": 3000}
 
 
+#: Where the resolved ports are published for anything else on this machine.
+#: Gitignored, and inside the checkout, so two checkouts publish separately.
+PORTS_FILE = REPO_ROOT / ".tmp" / "dev-ports.json"
+
+#: The names the rest of the repository already reads a port through:
+#: `playwright.config.ts` takes the first pair, `docker-compose.yml` the second.
+#: A substitution that did not reach these is a substitution only this process
+#: knows about.
+PORT_ENV = {
+    "api": ("WORKLIST_API_PORT", "PRC_API_PORT"),
+    "web": ("WORKLIST_WEB_PORT", "PRC_WEB_PORT"),
+}
+
+
 def resolve(names: list[str]) -> dict[str, Resolution]:
     """Resolve every port up front, and say plainly which ones moved."""
     resolved = {name: resolve_host_port(PREFERRED[name], name=name) for name in names}
     for resolution in resolved.values():
         print(f"  {resolution.describe()}", flush=True)
     return resolved
+
+
+def publish(resolved: dict[str, Resolution], database: str) -> dict[str, str]:
+    """Write the chosen ports where other tooling can find them, and return the
+    environment overrides that carry them to anything this process spawns.
+
+    A resolved port that only this process knows is half a fix. The launcher
+    wires its own two children to each other correctly — the web tier gets the
+    api's real address, the api's CORS allowlist gets the web tier's real origin
+    — and then a second terminal, or a parallel test run, still assumes the
+    committed defaults and collides with exactly the thing the resolution moved
+    out of the way.
+
+    So the ports go two places. Into the child environment under the names the
+    rest of the repository already reads, and into a gitignored file a sibling
+    process can read without being a child of this one.
+    """
+    PORTS_FILE.parent.mkdir(exist_ok=True)
+    PORTS_FILE.write_text(
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "database": database,
+                **{name: resolution.port for name, resolution in resolved.items()},
+                "api_base_url": f"http://127.0.0.1:{resolved['api'].port}",
+                "worklist_url": f"http://127.0.0.1:{resolved['web'].port}/worklist",
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        var: str(resolution.port) for name, resolution in resolved.items() for var in PORT_ENV[name]
+    }
 
 
 def main() -> int:
@@ -92,6 +151,7 @@ def main() -> int:
         "TMPDIR": scratch,
         "TEMP": scratch,
         "TMP": scratch,
+        **publish(ports, args.database),
     }
 
     procs: list[tuple[str, subprocess.Popen]] = []
@@ -151,6 +211,7 @@ def main() -> int:
         print(f"\n  database   {database_url}")
         print(f"  api        {api_base}/api/v1/worklist")
         print(f"  worklist   http://127.0.0.1:{web_port}/worklist")
+        print(f"  published  {PORTS_FILE.relative_to(REPO_ROOT).as_posix()}")
         print("\nCtrl-C to stop both.\n", flush=True)
 
         while all(proc.poll() is None for _, proc in procs):
@@ -164,6 +225,10 @@ def main() -> int:
         return 0
     finally:
         _terminate(procs)
+        # Removed on the way out: a stale file advertising ports nothing is
+        # listening on sends the next reader somewhere empty, which is worse than
+        # sending it nowhere.
+        PORTS_FILE.unlink(missing_ok=True)
 
 
 def _terminate(procs: list[tuple[str, subprocess.Popen]]) -> None:
