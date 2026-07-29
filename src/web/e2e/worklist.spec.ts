@@ -39,9 +39,23 @@ test.describe("the presentation contract (FR-032)", () => {
     await worklist(page);
     const row = page.locator("ol li").first();
 
+    // Both halves are measured over *descendants*, not over the container.
+    // FR-032 asks for two properties — "a **smaller** type scale than the
+    // primary region's and never a heavier weight" — and an assertion on the
+    // container element says nothing about what is rendered inside it. The
+    // weight half was corrected first; this is the size half, which had the
+    // identical blind spot and was left standing.
     const primary = await fontSize(row.locator("[class*='identity']"));
-    const secondary = await fontSize(row.locator("[class*='secondary']"));
-    expect(secondary).toBeLessThan(primary);
+    const secondarySizes = await row
+      .locator("[class*='secondary']")
+      .evaluate((el) =>
+        [el, ...el.querySelectorAll("*")].map((node) =>
+          parseFloat(getComputedStyle(node as Element).fontSize),
+        ),
+      );
+
+    expect(secondarySizes.length).toBeGreaterThan(1);
+    expect(Math.max(...secondarySizes)).toBeLessThan(primary);
 
     // Measured over every descendant of the secondary region, not over the
     // container. The container's own weight says nothing about what is rendered

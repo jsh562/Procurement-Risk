@@ -281,6 +281,33 @@
   > The rule postdates E010's recorded audit (v1.2.4), which is why T074 and this task arrive together.
   > Fix hint: add `addopts = "--basetemp=..."` resolved to an absolute path under the checkout, and confirm pytest actually writes there.
 
+- [X] T076 [BUG:ERROR] {FR-040} [governance] The completion marker names a superseded project-instructions version — specs/00010-risk-ranked-coordinator-worklist/.completed:22
+  > `.completed:22` records "Audited against project-instructions.md **v1.2.7**" while `plan.md:30` records **v1.2.8**. The re-audit against v1.2.8 was performed when E006's merge brought the withdrawal of the `PYTENSOR_FLAGS` clause and of v1.2.6's absolute-path requirement; the marker was not updated with it.
+  > This is the rule T074 was raised under, one artifact over: "A feature whose recorded compliance audit names a superseded version of this document MUST re-run its compliance gate before passing its next phase gate." The gate was re-run. What is wrong is the record of it — and the marker is the artifact QC reads to decide whether the gate was met, so a marker naming v1.2.7 is a feature asserting it validated against a version it did not.
+  > Fix hint: restate the audited version and the count of superseding revisions. Do not re-run the audit — it was run; correct what it says.
+
+- [X] T077 [BUG:WARNING] {FR-040} [accuracy] The completion marker's root-check figure and contract count do not match measurement — specs/00010-risk-ranked-coordinator-worklist/.completed:13,18
+  > Line 13 reads "root checks 249 passed, 0 failed". Measured on this branch after E006's and E007's merges: **292 passed**. The figure was true when written and the marker states "Every figure below was measured in the run that wrote this file", which makes a stale number a false claim rather than an out-of-date one.
+  > Line 18 reads "import contracts 3 kept, 0 broken". Three is `src/api`'s count; the repository keeps **11** across three entries. The line names neither scope, so it reads as the whole repository and understates it by 8.
+  > Fix hint: re-measure every figure in the same run that rewrites the marker, and state the scope of the contract count.
+
+- [X] T078 [BUG:WARNING] {FR-040} [accuracy] T071 corrected the task entries and left five plan entries and one dependency line naming files that were never created — specs/00010-risk-ranked-coordinator-worklist/plan.md:237,239,381,458,462
+  > T071 was filed as "Three task entries named files that were never created" and fixed exactly those three. The same two names — `test_no_datastore_from_web.py` and `__tests__/worklist.test.tsx` — remain at five points in `plan.md` (the Check inventory twice, the FR-044 traceability row, and the source-layout tree twice) and once more in `tasks.md`'s own Dependencies section, which T071 edited the body of without reaching the bottom.
+  > The work exists and passes; it landed beside the code it asserts over rather than at the planned path. What is wrong is that a reader following the plan's own inventory to the check that proves FR-024 finds nothing there.
+  > Fix hint: point each entry at the file that carries the assertion, and record once that the paths moved rather than annotating five times.
+
+- [X] T079 [BUG:WARNING] {FR-032} [test-quality] The type-scale assertion still measures the secondary container rather than its descendants — src/web/e2e/worklist.spec.ts:42
+  > T073 was filed for exactly this and fixed the font-*weight* half, leaving the font-*size* half beside it untouched. FR-032 states two properties — the secondary region renders at "a smaller type scale than the primary region's and never a heavier weight" — and `getComputedStyle` on the container reports the container's own inherited size, which no rendered figure need share.
+  > Concretely: every child of the secondary region could render at 2rem and this assertion would still pass, because the container element itself is never given a size.
+  > Fix hint: measure the maximum over the region's descendants, as the weight half already does, and assert the region has descendants so an empty match cannot pass vacuously.
+
+
+- [X] T080 [BUG:WARNING] {FR-040} [accuracy] The completion marker lists mypy among the checks this feature passes; no mypy runs over this feature's code — specs/00010-risk-ranked-coordinator-worklist/.completed:17
+  > The marker reads "ruff / mypy / eslint / tsc clean" as one flat list. Three of those four cover E010: ruff runs over `src/api`, eslint and tsc over `src/web`. mypy runs over **`src/gateway` only** — which E010 does not touch — and `mypy` is not in `src/api`'s dependency groups at all, so `uv run --directory src/api mypy src` resolves an out-of-environment interpreter and reports `Cannot find implementation or library stub for module named "psycopg"` against a declared dependency.
+  > `verify.yml:287-290` already made this exact judgement and named the step `Type check (gateway)` rather than `Type check (Python)`, recording why: a step "that ran over one entry would read as covering all three". The marker then reproduced the reading that step name was written to prevent.
+  > Fix hint: name each tool's scope in the marker. Do not add mypy to `src/api` — `verify.yml` states the scope widens when `api` and `model` are annotated to a standard strict mypy accepts, which is not this feature's work.
+
+
 ---
 
 ## Dependencies
@@ -297,4 +324,4 @@ Setup → Foundational → US1 → US2 → US3 → US4 → Polish
 - **US3 depends on US1**: T035 extends the `rows.py` T020 and T021 create; T034 and T036 extend the `query.py` T010 and T019 create.
 - **US4 depends on US3's P1 half of FR-025**: T042 extends T037's scope handling.
 - **Polish depends on all four stories** being complete.
-- Tasks marked `[P]` touch disjoint files and carry no ordering dependency on each other. Tasks writing the same file are never `[P]` together: `query.py` (T010, T019, T034, T036), `states.py` (T011, T033), `rows.py` (T020, T021, T035), `routes/worklist.py` (T012, T022, T027, T028, T037, T042), `page.tsx` (T013, T024, T038, T043, T044), `Row.tsx` (T023, T029), `useWorklist.ts` (T030, T031), `test_worklist_endpoint.py` (T014, T025, T032, T041, T046, T049, T051), `worklist.test.tsx` (T040, T045), `worklist.spec.ts` (T047, T048, T051).
+- Tasks marked `[P]` touch disjoint files and carry no ordering dependency on each other. Tasks writing the same file are never `[P]` together: `query.py` (T010, T019, T034, T036), `states.py` (T011, T033), `rows.py` (T020, T021, T035), `routes/worklist.py` (T012, T022, T027, T028, T037, T042), `page.tsx` (T013, T024, T038, T043, T044), `Row.tsx` (T023, T029), `useWorklist.ts` (T030, T031), `test_worklist_endpoint.py` (T014, T025, T032, T041, T046, T049, T051), the web unit files (T040 in `stateCopy.test.ts`, T045 in `WorklistBoard.test.tsx` — both planned as one `worklist.test.tsx` and landed beside the code they assert over), `worklist.spec.ts` (T047, T048, T051).

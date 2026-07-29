@@ -226,7 +226,10 @@ aggregate to be computed over. The gate is two floors that fail independently.
 `/src/web` is deliberately **not** added to coverage.py's source list: coverage.py measures Python, and a
 TypeScript directory there contributes nothing to the denominator while reading as though it were covered.
 
-### Check inventory — what runs today, what this feature must add
+### Check inventory
+
+> **Paths corrected 2026-07-29 (QC iteration 3).** Five entries in this document named files that were planned and never created — `test_no_datastore_from_web.py` and `__tests__/worklist.test.tsx`. The work exists; it landed beside the code it asserts over rather than at the planned path. T071 corrected the three entries in `tasks.md` and left these five, which is the same half-finished shape the task was filed for.
+ — what runs today, what this feature must add
 
 | Obligation | Check | Workflow step | Status |
 |---|---|---|---|
@@ -234,9 +237,9 @@ TypeScript directory there contributes nothing to the denominator while reading 
 | Endpoint across all eight states (FR-015…FR-021, FR-029, FR-030, FR-042, FR-045) | `test_worklist_endpoint.py` | `Unit tests (api)` | **new step**; the `db` service it needs already exists |
 | Response contract: validator two-sided over every admitted input including the line set, problem shape and its correlation id, admissibility refusals and unapplied reports (FR-020a, FR-043, FR-052…FR-055, SC-027) | `test_worklist_endpoint.py` | `Unit tests (api)` | **new step** — same one; the validator check needs a line opened, made terminal and re-prioritised between two requests |
 | Presentation contract and accessibility (FR-032, FR-041, FR-046…FR-051, SC-014, SC-016, SC-022, SC-024, SC-025, SC-026) | `e2e/worklist.spec.ts` | `E2E (web)` | **new step and new script** — `vitest run` does not collect Playwright specs |
-| Row composition, region assignment, sort-key set, state copy distinctness (FR-026, FR-027, FR-044) | `__tests__/worklist.test.tsx` | `Unit tests (web)` | runs today |
+| Row composition, region assignment, sort-key set, state copy distinctness (FR-026, FR-027, FR-044) | `app/worklist/{Row,WorklistBoard,stateCopy}.test.tsx` | `Unit tests (web)` | runs today |
 | No provider reach on the read path (FR-035, SC-003) | `import-linter` contract | `Architecture contracts` | step runs today per entry, but the **contract must be extended**: `src/api/pyproject.toml` forbids only `api.llm -> api.compute`, so the new `api.risk_read` package sits outside every declared contract (HINT-005) |
-| Interface tier opens no datastore connection (FR-024) | `test_no_datastore_from_web.py` + the web manifest assertion | `Unit tests (api)`, `Unit tests (web)` | **new step** for the first half |
+| Interface tier opens no datastore connection (FR-024) | `src/api/tests/test_read_path_isolation.py` + `tests/checks/test_web_has_no_db_driver.py` | `Unit tests (api)`, `Cross-entry checks` | runs today |
 | Worklist and override p95 (SC-017, SC-018) | `test_worklist_benchmark.py` | `Performance benchmark (api)` | **new step**; `pytest-benchmark` is a new dev dependency |
 | Coverage ≥ 80% over this feature's code (FR-040) | `coverage report --fail-under=80`; Vitest v8 threshold | `Coverage gate`, `Unit tests (web)` | step runs today but measures neither `/src/api` nor `/src/web` |
 | Lint, format, type check, lock verification | unchanged | existing steps | runs today |
@@ -378,7 +381,7 @@ adopt rather than re-choose:
 | FR-040 | Merge-gate reachability and coverage scope | `.github/workflows/verify.yml`, `pyproject.toml` (root), `src/web/package.json` |
 | FR-041 | No derivable delivery date across the displayed set | `src/api/src/api/risk_read/rows.py`, `src/web/e2e/worklist.spec.ts` |
 | FR-042, FR-043 | Empty-filter state; unreadable-artifact failure state | `src/api/src/api/routes/worklist.py`, `src/web/app/worklist/page.tsx` |
-| FR-044 | Committed degraded-state copy table and its distinctness | `src/web/app/worklist/stateCopy.ts`, `src/web/__tests__/worklist.test.tsx` |
+| FR-044 | Committed degraded-state copy table and its distinctness | `src/web/app/worklist/stateCopy.ts`, `src/web/app/worklist/stateCopy.test.ts` |
 | FR-045 | Excluded-group order, scope and sort invariance | `src/api/src/api/risk_read/query.py` |
 | FR-046 | Acknowledgement of an ordering-changing adjustment | `src/web/app/worklist/useWorklist.ts` |
 | FR-047 | Tiebreak rule stated on screen | `src/web/app/worklist/page.tsx` |
@@ -455,11 +458,11 @@ src/api/tests/                  # entry-local, NOT root /tests
 +   test_probability.py         # rounding, complement, bounds — test-first
 +   test_states.py              # FR-018a precedence, FR-033 co-occurrence
 +   test_worklist_endpoint.py   # integration, all eight states
-+   test_no_datastore_from_web.py  # FR-024, runtime half
++   test_read_path_isolation.py    # FR-024 runtime half, FR-002, FR-023, FR-035
 +   test_worklist_benchmark.py  # SC-017 / SC-018 p95, both variants
 +   fixtures/frozen_run/        # FR-036 / FR-037: generator, seed, digest, inserted via the schema
 src/web/
-+   __tests__/worklist.test.tsx # row composition, region assignment
++   app/worklist/*.test.tsx    # row composition, region assignment, copy distinctness
 +   e2e/worklist.spec.ts        # Playwright: FR-032 presentation contract
 ~   package.json                # + test:e2e script, + --coverage on test
 tests/checks/                   # cross-entry only, per the Source Code Layout exception
