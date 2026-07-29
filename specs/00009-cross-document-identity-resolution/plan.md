@@ -236,6 +236,7 @@ N/A — no API surface. The feature is an offline console job writing to Postgre
 | FR-043 | Review queue | `identity/review.py`, `identity/pairs.py` | Run id + stable pair identity |
 | FR-044 | Thresholds, Run manifest | `identity/thresholds.py`, `identity/runs.py` | Refuse on divergence from the calibrated hash |
 | FR-045 | Schema | migration `0500` series | Extends E003's tables — disclosed exception, AD-003 |
+| FR-046 | Baseline, Metrics, Evidence | `identity/baseline.py`, `compute/metrics.py`, `identity/report.py` | Exact-match honest opponent {AD-012}; same stratum, same estimator, labeled. Import contract keeps it from reading `alias.py`, `normalize.py` or `compute.pair_score` |
 
 ## Project Structure
 
