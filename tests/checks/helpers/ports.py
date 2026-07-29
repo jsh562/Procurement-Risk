@@ -39,6 +39,7 @@ will accept, and they race against a sibling starting at the same moment.
 
 from __future__ import annotations
 
+import errno
 import re
 import socket
 import subprocess
@@ -108,12 +109,45 @@ def is_bindable(port: int, host: str = "127.0.0.1") -> bool:
     `SO_REUSEADDR` is deliberately *not* set. It would let the bind succeed over
     a socket in TIME_WAIT and report a port free that Docker will then refuse,
     which is the false negative this whole module exists to avoid.
+
+    Both address families are probed, because an IPv4 probe alone does not see a
+    **dual-stack IPv6 listener** — and that is what a Node server is. Measured on
+    this machine, against a socket holding `::` with `IPV6_V6ONLY` cleared:
+
+        AF_INET   127.0.0.1  bind succeeds
+        AF_INET   0.0.0.0    bind succeeds
+        AF_INET6  ::         bind fails, EADDRINUSE
+
+    So an orphaned `next` dev server on 3000 was reported free by this function
+    while `docker compose up` still failed to publish `0.0.0.0:3000`. That is the
+    exact class of false negative the module docstring above says it exists to
+    prevent, reached through the one family it was not asking.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         try:
             probe.bind((host, port))
         except OSError:
             return False
+    return _ipv6_bindable(port)
+
+
+def _ipv6_bindable(port: int) -> bool:
+    """Whether `port` is free of a dual-stack IPv6 listener.
+
+    Only `EADDRINUSE` counts as occupied. A machine with no usable IPv6 stack
+    answers this probe with something else entirely — an unsupported family, an
+    unavailable address — and treating that as "port taken" would report every
+    port unavailable and fail the search outright. An inconclusive probe
+    therefore defers to the IPv4 result rather than overriding it.
+    """
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as probe:
+            # Cleared, not set: a v6-only probe binds happily alongside a
+            # dual-stack holder, which is precisely the blind spot being closed.
+            probe.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            probe.bind(("::", port))
+    except OSError as exc:
+        return exc.errno != errno.EADDRINUSE
     return True
 
 
