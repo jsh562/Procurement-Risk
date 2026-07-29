@@ -140,7 +140,7 @@ def _row_state(line: OpenLine, inputs: WorklistInputs) -> RowState:
     if not line.has_posterior:
         return RowState.NOT_COVERED
 
-    offset = (line.need_by_date - run.as_of_date).days
+    offset = (line.effective_need_by_date - run.as_of_date).days
     if offset > run.horizon_days:
         # FR-017. The survival grid stops at the horizon; only the residual
         # tail mass is available, and only as a bound.
@@ -153,7 +153,7 @@ def _row_state(line: OpenLine, inputs: WorklistInputs) -> RowState:
         # the spec prose's "earlier than".
         return RowState.ALREADY_LATE
 
-    if line.need_by_date < inputs.today:
+    if line.effective_need_by_date < inputs.today:
         # FR-030's second half. The run still forecasts this date, but the
         # coordinator's calendar has passed it. Both facts are true and the
         # row states them separately.

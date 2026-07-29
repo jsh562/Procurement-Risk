@@ -10,6 +10,7 @@ export default defineConfig({
     // it. Colocation is what keeps a copy table and the assertions pinning its
     // wording in one directory, so neither can be moved without the other.
     include: ["__tests__/**/*.test.{ts,tsx}", "app/**/*.test.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",
       reportsDirectory: "coverage",

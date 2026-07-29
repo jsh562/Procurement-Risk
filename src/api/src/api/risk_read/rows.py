@@ -124,7 +124,7 @@ def miss_probability(inputs: RowInputs) -> dict[str, Any] | None:
     if inputs.resolved.suppresses_figures or state is RowState.ALREADY_LATE:
         return None
 
-    offset = (line.need_by_date - inputs.as_of_date).days
+    offset = (line.effective_need_by_date - inputs.as_of_date).days
 
     if state is RowState.BEYOND_HORIZON:
         # FR-017. The grid stops at the horizon, so only the residual tail mass
@@ -242,10 +242,10 @@ def need_by(line: OpenLine) -> dict[str, Any]:
     equal and the source is the record.
     """
     return {
-        "date": line.need_by_date.isoformat(),
+        "date": line.effective_need_by_date.isoformat(),
         "date_of_record": line.need_by_date.isoformat(),
-        "source": "record",
-        "unsaved": False,
+        "source": "session_override" if line.is_adjusted else "record",
+        "unsaved": line.is_adjusted,
     }
 
 
@@ -278,5 +278,7 @@ def build_secondary(inputs: RowInputs) -> dict[str, Any]:
     return {
         "as_of_date": inputs.as_of_date.isoformat(),
         "criticality": line.criticality,
-        "calendar_margin_days": calendar_margin_days(line.need_by_date, inputs.as_of_date),
+        "calendar_margin_days": calendar_margin_days(
+            line.effective_need_by_date, inputs.as_of_date
+        ),
     }

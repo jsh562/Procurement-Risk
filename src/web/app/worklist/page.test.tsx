@@ -60,6 +60,7 @@ const RESPONSE: WorklistResponse = {
     },
   ],
   counts: { ranked: 0, unranked: 1, total: 1 },
+  overrides: { applied: [], unapplied: [] },
   ordering_digest: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 };
 

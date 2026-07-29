@@ -165,17 +165,27 @@ describe("a ranked row", () => {
     expect(markup).toContain("Need-by date precedes the forecast anchor");
   });
 
-  it("marks an unsaved need-by change", () => {
+  it("marks an unsaved need-by change and names the recorded date it replaces", () => {
     // FR-031. A session what-if that looks like the record is the single
-    // confusion the mark exists to prevent.
+    // confusion the mark exists to prevent — and "unsaved" alone leaves the
+    // coordinator unable to say what the record actually holds. The mark sits
+    // inside the same element as the date, so it is read with the date rather
+    // than as a separate announcement.
     const markup = render({
       ...NOMINAL,
       primary: {
         ...NOMINAL.primary,
-        need_by: { ...NOMINAL.primary.need_by, unsaved: true, source: "session_override" },
+        need_by: {
+          date: "2026-08-01",
+          date_of_record: "2026-08-10",
+          unsaved: true,
+          source: "session_override",
+        },
       },
     });
-    expect(markup).toContain("unsaved change");
+    expect(markup).toContain("unsaved what-if");
+    expect(markup).toContain("recorded date 2026-08-10");
+    expect(markup).toContain("2026-08-01");
   });
 });
 

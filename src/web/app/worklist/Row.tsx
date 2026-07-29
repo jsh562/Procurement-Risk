@@ -26,7 +26,19 @@ import styles from "./page.module.css";
  * bare numbers is exactly the independent-quantile reading FR-004 removes, and
  * it reissues the invitation to treat one of them alone as the answer.
  */
-export function Row({ row }: { readonly row: RankedRow }) {
+export function Row({
+  row,
+  control,
+}: {
+  readonly row: RankedRow;
+  /**
+   * FR-031's what-if control, when the page is interactive. Passed in rather
+   * than built here so this component stays renderable on the server for the
+   * first paint — the ranking is what the coordinator needs immediately, and a
+   * row that could only render inside a client component would delay it.
+   */
+  readonly control?: React.ReactNode;
+}) {
   const state = row.state === "nominal" ? null : STATE_COPY[row.state];
   const pair = row.primary.duration_pair;
   const miss = row.primary.miss_probability;
@@ -48,10 +60,20 @@ export function Row({ row }: { readonly row: RankedRow }) {
 
         <span className={styles.needBy}>
           Need by <time dateTime={row.primary.need_by.date}>{row.primary.need_by.date}</time>
+          {/*
+           * FR-031, FR-051. The mark sits adjacent to the date it qualifies,
+           * inside the same element, so it is read with the date rather than
+           * as a separate announcement a coordinator might not reach.
+           */}
           {row.primary.need_by.unsaved ? (
-            <span className={styles.unsaved}> (unsaved change)</span>
+            <span className={styles.unsaved}>
+              {" "}
+              (unsaved what-if — recorded date {row.primary.need_by.date_of_record})
+            </span>
           ) : null}
         </span>
+
+        {control}
 
         <MissProbability figure={miss} />
         <DurationPair pair={pair} />

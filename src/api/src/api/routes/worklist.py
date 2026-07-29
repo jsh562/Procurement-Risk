@@ -40,7 +40,18 @@ from api.compute.ordering import (
 )
 from api.compute.ordering import ordering_digest as compute_ordering_digest
 from api.compute.ranking import RankableLine, order_lines
-from api.risk_read.query import STALENESS_BASIS, STALENESS_THRESHOLD_DAYS, load_worklist
+from api.risk_read.overrides import (
+    MAX_OVERRIDES,
+    OverrideRejection,
+    parse_overrides,
+    partition_overrides,
+)
+from api.risk_read.query import (
+    STALENESS_BASIS,
+    STALENESS_THRESHOLD_DAYS,
+    classify_lines,
+    load_worklist,
+)
 from api.risk_read.rows import RowInputs, build_primary, build_secondary, identity, need_by
 from api.risk_read.states import ResolvedLine, resolve_states
 from api.risk_read.validator import compute_validator
@@ -102,6 +113,7 @@ def read_worklist(
     connection: Annotated[Any, Depends(get_connection)],
     project_id: Annotated[str | None, Query(pattern=PROJECT_ID_PATTERN)] = None,
     sort: Annotated[str | None, Query(pattern=SORT_KEY_PATTERN)] = None,
+    need_by_override: Annotated[list[str] | None, Query()] = None,
     if_none_match: Annotated[str | None, Header(alias="If-None-Match")] = None,
 ) -> dict[str, Any]:
     """Return open lines with their figures, degraded states, and page status.
@@ -117,7 +129,26 @@ def read_worklist(
     sort_key = sort or DEFAULT_SORT_KEY
 
     try:
-        inputs = load_worklist(connection, today=today, project_id=project_id)
+        overrides = parse_overrides(need_by_override, today=today)
+    except OverrideRejection as exc:
+        # FR-055. A refusal reaches the coordinator with its cause, naming the
+        # parameter — a silently ignored adjustment leaves them reading an
+        # ordering computed without the change they asked for.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "type": "need-by-override-inadmissible",
+                "title": "An adjustment could not be applied",
+                "detail": str(exc),
+                "parameter": "need_by_override",
+                "reason": exc.reason,
+                "value": exc.value,
+                "max_overrides": MAX_OVERRIDES,
+            },
+        ) from exc
+
+    try:
+        inputs = load_worklist(connection, today=today, project_id=project_id, overrides=overrides)
     except psycopg.OperationalError as exc:  # pragma: no cover - needs a downed database
         raise HTTPException(
             status_code=503,
@@ -127,6 +158,14 @@ def read_worklist(
                 "detail": str(exc),
             },
         ) from exc
+
+    reported = {line.po_line_id for line in inputs.lines}
+    terminal, out_of_scope = classify_lines(
+        connection, set(overrides) - reported, project_id=project_id
+    )
+    applied, unapplied = partition_overrides(
+        overrides, reported=reported, terminal=terminal, out_of_scope=out_of_scope
+    )
 
     resolved, page_states = resolve_states(inputs, scoped=project_id is not None)
 
@@ -147,7 +186,7 @@ def read_worklist(
         today=today,
         project_id=project_id,
         sort_key=sort_key,
-        overrides=None,
+        overrides={str(key): value.isoformat() for key, value in applied.items()},
         lines=inputs.lines,
     )
     response.headers["ETag"] = validator
@@ -191,10 +230,17 @@ def read_worklist(
             "unranked": len(unranked),
             "total": len(resolved),
         },
-        # FR-055. Empty in both arms until US2 introduces the session override
-        # set; an override that named a line this response does not contain is
-        # reported with its cause rather than silently dropped.
-        "overrides": {"applied": [], "unapplied": []},
+        # FR-055. An override naming a line this response does not contain is
+        # reported with which of the three causes applied, never silently
+        # dropped — the coordinator would otherwise believe an adjustment took
+        # effect while reading an ordering computed without it.
+        "overrides": {
+            "applied": [
+                {"po_line_id": str(key), "need_by_date": value.isoformat()}
+                for key, value in sorted(applied.items(), key=lambda item: str(item[0]))
+            ],
+            "unapplied": sorted(unapplied, key=lambda item: item["po_line_id"]),
+        },
         "ordering_digest": compute_ordering_digest(item.line.po_line_id for item in ordered),
     }
 
@@ -209,7 +255,10 @@ def _order_excluded(unranked: list[ResolvedLine]) -> list[ResolvedLine]:
     ranking that reordered *with* the ranking would read as part of it, which is
     the whole distinction FR-016 draws.
     """
-    return sorted(unranked, key=lambda item: (item.line.need_by_date, str(item.line.po_line_id)))
+    return sorted(
+        unranked,
+        key=lambda item: (item.line.effective_need_by_date, str(item.line.po_line_id)),
+    )
 
 
 def _order(ranked: list[ResolvedLine], inputs: Any) -> list[ResolvedLine]:
@@ -222,7 +271,7 @@ def _order(ranked: list[ResolvedLine], inputs: Any) -> list[ResolvedLine]:
         RankableLine(
             po_line_id=item.line.po_line_id,
             draws=item.line.draws or (),
-            need_by_offset=(item.line.need_by_date - as_of).days,
+            need_by_offset=(item.line.effective_need_by_date - as_of).days,
             criticality=item.line.criticality,
         )
         for item in ranked

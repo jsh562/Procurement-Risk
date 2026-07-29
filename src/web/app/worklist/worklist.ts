@@ -182,6 +182,23 @@ export interface WorklistResponse {
     readonly unranked: number;
     readonly total: number;
   };
+  /**
+   * FR-055. What the session what-if actually did. An override naming a line
+   * this response does not contain is reported with its cause and never
+   * silently dropped — the coordinator would otherwise believe an adjustment
+   * took effect while reading an ordering computed without it.
+   */
+  readonly overrides: {
+    readonly applied: ReadonlyArray<{
+      readonly po_line_id: string;
+      readonly need_by_date: string;
+    }>;
+    readonly unapplied: ReadonlyArray<{
+      readonly po_line_id: string;
+      readonly need_by_date: string;
+      readonly reason: "line_not_found" | "line_terminal" | "line_out_of_scope";
+    }>;
+  };
   readonly ordering_digest: string;
 }
 
@@ -211,11 +228,19 @@ export class WorklistUnavailableError extends Error {
  * feature turns on an outage being distinguishable from an honest empty state.
  */
 export async function fetchWorklist(
-  params: { readonly projectId?: string; readonly sort?: string } = {},
+  params: {
+    readonly projectId?: string;
+    readonly sort?: string;
+    /** FR-031's session what-ifs, each `<po_line_id>:<YYYY-MM-DD>`. */
+    readonly overrides?: readonly string[];
+  } = {},
 ): Promise<WorklistResponse> {
   const query = new URLSearchParams();
   if (params.projectId) query.set("project_id", params.projectId);
   if (params.sort) query.set("sort", params.sort);
+  // Appended rather than set: the parameter repeats, because FR-031 admits a
+  // set and a coordinator comparing two lines needs both dates moved at once.
+  for (const override of params.overrides ?? []) query.append("need_by_override", override);
   const suffix = query.size > 0 ? `?${query}` : "";
 
   let response: Response;

@@ -104,12 +104,12 @@
 
 **Independent test**: change one line's need-by date and confirm the list reorders, the probability moves in the expected direction, and the invocation record gains no row.
 
-- [ ] T027 [US2] {FR-055} Repeatable `need_by_override`, admissibility (cap 25, duplicate, malformed, ten-year window) and the problem+json 422 handler in API/routes/worklist.py
-- [ ] T028 [US2] {FR-031,FR-055} Apply overrides to the effective need-by, `NeedBy.source`/`unsaved`, `overrides.applied`/`unapplied` in API/routes/worklist.py
-- [ ] T029 [P] [US2] {FR-031,FR-051} Keyboard-operable need-by control and the unsaved text mark adjacent to the date it qualifies, in WEB/Row.tsx
-- [ ] T030 [US2] {FR-011,FR-012} Session override set, server re-query, `ordering_digest` comparison and the persistent unchanged acknowledgement in WEB/useWorklist.ts
-- [ ] T031 [US2] {FR-012,FR-046} Order-changed acknowledgement naming the new position, in the same live region, focus retained on the adjusted control — WEB/useWorklist.ts
-- [ ] T032 [US2] {FR-055} [COMPLETES FR-055] Overrides applied, refused with cause, and reported unapplied with which of the three — TST/test_worklist_endpoint.py
+- [X] T027 [US2] {FR-055} Repeatable `need_by_override`, admissibility (cap 25, duplicate, malformed, ten-year window) and the problem+json 422 handler in API/routes/worklist.py
+- [X] T028 [US2] {FR-031,FR-055} Apply overrides to the effective need-by, `NeedBy.source`/`unsaved`, `overrides.applied`/`unapplied` in API/routes/worklist.py
+- [X] T029 [P] [US2] {FR-031,FR-051} Keyboard-operable need-by control and the unsaved text mark adjacent to the date it qualifies, in WEB/Row.tsx
+- [X] T030 [US2] {FR-011,FR-012} Session override set, server re-query, `ordering_digest` comparison and the persistent unchanged acknowledgement in WEB/useWorklist.ts
+- [X] T031 [US2] {FR-012,FR-046} Order-changed acknowledgement naming the new position, in the same live region, focus retained on the adjusted control — WEB/useWorklist.ts
+- [X] T032 [US2] {FR-055} [COMPLETES FR-055] Overrides applied, refused with cause, and reported unapplied with which of the three — TST/test_worklist_endpoint.py
 
 ---
 

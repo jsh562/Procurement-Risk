@@ -25,6 +25,7 @@ between an honest empty state and a silent one.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Final
@@ -58,6 +59,7 @@ __all__ = [
     "OpenLine",
     "ProjectSummary",
     "WorklistInputs",
+    "classify_lines",
     "load_worklist",
     "run_age_days",
 ]
@@ -107,6 +109,26 @@ class OpenLine:
     draws: tuple[float, ...] | None
     survival: tuple[float, ...] | None
     residual_tail_mass: float | None
+    #: FR-031's session what-if, when one names this line. Held beside the
+    #: recorded date rather than replacing it, because the row publishes both:
+    #: an adjustment the coordinator cannot distinguish from the record is the
+    #: single confusion the unsaved mark exists to prevent.
+    override_date: date | None = None
+
+    @property
+    def effective_need_by_date(self) -> date:
+        """The date every figure and every state is computed against.
+
+        The override where one is in force, the record otherwise. Everything
+        downstream reads *this* — a state resolved against the recorded date
+        while the figures used the adjusted one would put a label and a number
+        on the same row that disagree.
+        """
+        return self.override_date or self.need_by_date
+
+    @property
+    def is_adjusted(self) -> bool:
+        return self.override_date is not None
 
     @property
     def identifier(self) -> str:
@@ -214,11 +236,50 @@ _AVAILABLE_PROJECTS_SQL: Final[str] = f"""
 """
 
 
+_CLASSIFY_SQL: Final[str] = """
+    SELECT po_line_id, project_id, is_closed
+      FROM purchase_order_line
+     WHERE po_line_id = ANY(%(po_line_ids)s::uuid[])
+"""
+
+
+def classify_lines(
+    connection: Any, po_line_ids: Iterable[UUID], *, project_id: str | None
+) -> tuple[set[UUID], set[UUID]]:
+    """Sort named lines into terminal and out-of-scope.
+
+    FR-055 requires a non-applied override to reach the coordinator *with its
+    cause*, and the three causes call for different actions: a terminal line
+    needs no chasing, an out-of-scope one needs the filter cleared, and an
+    absent one is a stale reference. Distinguishing them means asking about
+    lines the worklist itself excluded, which is why this is a second query
+    rather than a filter over the first one's results.
+
+    Returns:
+        The terminal ids and the out-of-scope ids. A line in neither, and absent
+        from the worklist, was not found.
+    """
+    identifiers = list(po_line_ids)
+    if not identifiers:
+        return set(), set()
+
+    with connection.cursor() as cursor:
+        cursor.execute(_CLASSIFY_SQL, {"po_line_ids": [str(item) for item in identifiers]})
+        rows = cursor.fetchall()
+
+    terminal = {row[0] for row in rows if row[2]}
+    out_of_scope = {
+        row[0] for row in rows if not row[2] and project_id is not None and row[1] != project_id
+    }
+    return terminal, out_of_scope
+
+
 def load_worklist(
     connection: Any,
     *,
     today: date,
     project_id: str | None = None,
+    overrides: dict[UUID, date] | None = None,
 ) -> WorklistInputs:
     """Fetch the active run and every open line, with posteriors where they exist.
 
@@ -301,6 +362,7 @@ def load_worklist(
             draws=tuple(row[12]) if row[12] is not None else None,
             survival=tuple(row[13]) if row[13] is not None else None,
             residual_tail_mass=row[14],
+            override_date=(overrides or {}).get(row[0]),
         )
         for row in rows
     )

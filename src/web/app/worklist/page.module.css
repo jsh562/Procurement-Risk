@@ -206,6 +206,63 @@
 }
 
 /*
+ * FR-012, FR-046. The acknowledgement's live region.
+ *
+ * The element is always present and only its content changes — a region added
+ * to the document at the moment it gains text is one many screen readers do not
+ * announce, because they registered the page without it. It is also never
+ * hidden while empty for the same reason.
+ */
+.acknowledgement {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-height: 1.75rem;
+  margin-bottom: 1rem;
+  font-size: var(--scale-primary);
+  font-weight: 400;
+}
+
+.acknowledgement:not(:empty) {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+}
+
+.dismiss {
+  font: inherit;
+  font-size: var(--scale-secondary);
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+
+/*
+ * FR-051. The what-if control. Sits in the primary region beside the date it
+ * adjusts, because a control placed away from the value it changes is one a
+ * coordinator has to associate by memory.
+ */
+.needByControl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.needByControl input {
+  font: inherit;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  max-width: 12rem;
+}
+
+/*
  * Present to assistive technology, absent from the visual layout. Not
  * `display: none`, which removes it from the accessibility tree as well and
  * would defeat the point.
