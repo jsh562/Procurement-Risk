@@ -10,9 +10,16 @@ the passing direction only. This file plants the failure.
 database**, inside this tier's rolled-back transaction, and the recorded run is
 then re-read through the job's own reader. The re-fit it is compared against is
 the tier's shared one: sampling a third time would measure nothing this file is
-about, and the perturbation is deterministic while a re-fit is not — the delta on
-the named line is the perturbation itself, so the failure is attributable rather
-than merely present.
+about, and the perturbation is deterministic while a re-fit is not.
+
+**That asymmetry is why every bound here is stated against the same pair's own
+unperturbed outcome rather than against zero or against an epsilon.** The delta
+this file recovers is the perturbation *plus* the named line's own reproduction
+delta, and the second term is a property of the platform: on Linux the tier's
+re-fit drifts by tenths of a day against a 5.0-day tolerance, which is a passing
+reproduction and not an error. Comparing the two outcomes row for row cancels it
+exactly, so the planting stays attributable without any claim that a fit is
+bitwise reproducible — the claim FR-022 says reproduction is never expressed as.
 
 P80 rather than the median, deliberately. The top of the array is where AD-004's
 arithmetic is binding, and a harness comparing only the median — which the
@@ -38,6 +45,7 @@ from model.forecast.reproduce import (
     LINE_POSTERIOR_STORE,
     OUTCOME_AGREES,
     OUTCOME_DISAGREES,
+    LineComparison,
     RecordedRun,
     Reproduction,
     ReproductionOutcome,
@@ -80,6 +88,34 @@ def perturbed_line(recorded: RecordedRun) -> tuple[object, np.ndarray]:
     moved = draws.copy()
     moved[rank - 1 :] += PERTURBATION_DAYS
     return po_line_id, moved
+
+
+def matching_row(outcome: ReproductionOutcome, row: LineComparison) -> LineComparison:
+    """The same store, line and quantity in another outcome of the same pair.
+
+    What lets the planting be measured against the run's **own** reproduction
+    noise rather than against zero. Both outcomes compare the same recorded run
+    to the same re-fit; only the perturbation separates them, so the difference
+    between two matching rows is the perturbation and nothing else.
+    """
+    return next(
+        other
+        for other in outcome.comparisons
+        if (other.store, other.po_line_id, other.probability)
+        == (row.store, row.po_line_id, row.probability)
+    )
+
+
+def realized_noise(outcome: ReproductionOutcome) -> float:
+    """The largest absolute per-line delta this reproduction actually realized.
+
+    The run's own noise floor, measured rather than assumed. On a platform whose
+    sampler reproduces bit for bit this is ~0 and every bound below is tight; on
+    one whose BLAS varies its reduction order it is the realized drift, and the
+    bounds widen to exactly what that run did — never to a constant chosen to
+    make a test pass.
+    """
+    return max(abs(row.delta_days) for row in outcome.comparisons)
 
 
 @pytest.fixture
@@ -142,6 +178,7 @@ def test_a_perturbed_p80_makes_the_harness_disagree_and_exit_non_zero(
 
 def test_the_failure_names_the_line_and_its_realized_delta(
     perturbed: tuple[ReproductionOutcome, object],
+    reproduced_run: ReproducedRun,
 ) -> None:
     """ "Naming that line and its realized delta" — as data, not as prose.
 
@@ -149,35 +186,83 @@ def test_the_failure_names_the_line_and_its_realized_delta(
     which is what makes the failure attributable: a harness that reported every
     line as breached would satisfy "names that line" while telling a reader
     nothing about which artifact moved.
+
+    **The planted −50 days is recovered within the run's own reproduction noise,
+    not at an absolute epsilon.** An earlier revision asserted
+    `approx(-PERTURBATION_DAYS)` at pytest's default relative tolerance, which is
+    ±5e-05 at this magnitude — a bitwise claim in all but name. It failed on
+    Linux at −49.4476, where the residual is not error but the re-fit's own drift
+    on this very line, and the day tolerance it is judged by is 5.0 days.
+
+    Two bounds replace it and the second is the sharp one. The realized delta
+    sits within the run's own worst realized delta of the planted −50; and it
+    equals, to floating precision, the delta this same comparison realized
+    *before* the perturbation, less the perturbation. That identity holds by
+    construction — the tail move leaves the P80's own order statistic shifted by
+    exactly `PERTURBATION_DAYS` and the re-fit side is untouched — so it is
+    exact on every platform while asserting nothing about bitwise sampling.
+    It still discriminates: a harness reporting a different line's delta, or the
+    raw recorded value, or a delta scaled by the wrong convention, fails it.
     """
     outcome, po_line_id = perturbed
+    unperturbed = reproduced_run.reproduction.outcome
     breaches = outcome.breaches
 
     assert len(breaches) == 1
     assert breaches[0].po_line_id == po_line_id
     assert breaches[0].store == LINE_POSTERIOR_STORE
     assert breaches[0].probability == P80_PROBABILITY
-    assert breaches[0].delta_days == pytest.approx(-PERTURBATION_DAYS)
+    assert abs(breaches[0].delta_days + PERTURBATION_DAYS) <= realized_noise(unperturbed), (
+        f"the realized delta {breaches[0].delta_days:+.4f} misses the planted "
+        f"{-PERTURBATION_DAYS:+.1f} by more than this run's own worst reproduction delta "
+        f"of {realized_noise(unperturbed):.4f} days"
+    )
+    assert breaches[0].delta_days == pytest.approx(
+        matching_row(unperturbed, breaches[0]).delta_days - PERTURBATION_DAYS
+    )
     assert abs(breaches[0].delta_days) > REPRODUCTION_TOLERANCE_DAYS
 
 
 def test_the_same_lines_median_is_untouched_so_a_median_only_harness_would_pass(
     perturbed: tuple[ReproductionOutcome, object],
+    reproduced_run: ReproducedRun,
 ) -> None:
     """Why the perturbation is placed in the tail rather than across the array.
 
-    The median of the perturbed line is unchanged, so a harness that compared
-    only the median — the plausible half-implementation — reports agreement on
-    exactly this database. Asserted rather than argued, because it is the reason
-    FR-022 names two quantities instead of one.
+    The claim is that a **tail** perturbation leaves the median comparatively
+    untouched, so a harness comparing only the median — the plausible
+    half-implementation — reports agreement on exactly this database. The
+    discriminating property is therefore the *pair*: the median delta is inside
+    the published tolerance while the P80 delta is outside it. An earlier
+    revision asserted `approx(0.0)` at `1e-12` instead, which is a bitwise claim
+    about the re-fit rather than a claim about where the perturbation landed, and
+    which failed on Linux at −0.1237 days — a hundredth of the day tolerance the
+    same test is written against.
+
+    The stronger half is the equality beneath it: the median delta is the delta
+    this same comparison realized before the perturbation, unchanged. That is
+    what "untouched" means and it is exact on every platform, because the moved
+    suffix begins at the P80's own order statistic and the median's rank sits
+    below it. A perturbation that reached the median — the off-by-one this
+    file's `perturbed_line` exists to get right — fails it whatever the sampler
+    does.
     """
     outcome, po_line_id = perturbed
+    unperturbed = reproduced_run.reproduction.outcome
     same_line = [row for row in outcome.comparisons if row.po_line_id == po_line_id]
     median = next(row for row in same_line if row.probability == MEDIAN_PROBABILITY)
+    p80 = next(row for row in same_line if row.probability == P80_PROBABILITY)
 
-    assert median.delta_days == pytest.approx(0.0)
-    assert median.agrees
     assert len(same_line) == 2
+    assert median.delta_days == matching_row(unperturbed, median).delta_days
+    assert abs(median.delta_days) <= REPRODUCTION_TOLERANCE_DAYS
+    assert median.agrees
+    assert not p80.agrees, (
+        f"the perturbed line's P80 delta is {p80.delta_days:+.4f} days, inside the "
+        f"{REPRODUCTION_TOLERANCE_DAYS:.1f}-day tolerance the median also sits inside; the "
+        f"two quantities have to be separated for a median-only harness to be the thing "
+        f"this file excludes"
+    )
 
 
 def test_the_console_entry_point_returns_the_outcomes_own_status(

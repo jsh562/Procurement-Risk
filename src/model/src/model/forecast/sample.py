@@ -92,10 +92,18 @@ def sample_posterior(
     the role there, which is why the annotation names xarray's type.
 
     `random_seed` is passed through unchanged: PyMC derives one stream per chain
-    from it, so the same seed at the same shape and library versions reproduces
-    the same draws. ADR-0009 already rules out bitwise equality as the *gate*,
-    which is why FR-022 compares through a published tolerance instead — the
-    seed is recorded so a re-run is a re-run, not so a float is a float.
+    from it, so the same seed at the same shape drives the same *sequence of
+    decisions*. It does **not** follow that it produces the same bits: the seed
+    fixes the stream, and the arithmetic under it is a floating reduction whose
+    order a multi-threaded BLAS is free to vary run to run. The recorded library
+    pin does not close that — it names package versions, not thread counts,
+    reduction orders or instruction sets — which is measured rather than
+    asserted: on Linux a re-fit of one recorded run at its own seed and shape
+    moved every one of 68 lines' digests while the realized median drift was
+    0.12 days against a 5.0-day tolerance. ADR-0009 rules out bitwise equality
+    as the *gate* for exactly this reason, which is why FR-022 compares through
+    a published tolerance — the seed is recorded so a re-run is a re-run, not so
+    a float is a float.
 
     Two defaults are load-bearing rather than cosmetic. `progressbar` is off
     because PyMC's rich backend imports `matplotlib`, which this entry does not
