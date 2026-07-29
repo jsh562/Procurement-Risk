@@ -358,6 +358,21 @@ adopt rather than re-choose:
 | FR-057 | Response contract read-only for later epics | `contracts/openapi.yaml` (`info` § Compatibility) — a review obligation, not a runtime one |
 | SC-027 | Validator covers the reported line set | `src/api/tests/test_worklist_endpoint.py` |
 
+## Story Phasing Note
+
+`SC-009` and US3's Independent Test are P1 and require all eight degraded states, but `empty_filter`
+only arises when a scope filter matches nothing — and scoping is FR-025 under US4 at P2. Resolved by
+splitting FR-025 across the two stories rather than moving either:
+
+- **P1** — the `project_id` **query parameter** on the endpoint, with its validator and the `WHERE`
+  clause. This makes `empty_filter` reachable, so US3's eighth state is demonstrable at P1 and SC-009
+  is not weakened.
+- **P2** — the on-screen scoping control, `available_projects` in the interface, and SC-011.
+
+FR-025's text is unchanged; only the delivery of its two halves is sequenced. The alternative — scoping
+US3's test to seven states — would have let a degraded state ship unevidenced on the surface whose
+entire purpose is refusing to show figures it cannot stand behind.
+
 ## Implementation Hints
 
 - **[HINT-001]** Order: build the `no_active_run` path first, even though E007 has now landed and every other state is demonstrable against real artifacts. It is a P1 acceptance scenario in its own right, it is the only state reachable with an empty `forecast_run` table, and building it first forces the absent-figure path to exist before any code can assume figures are present — which is the failure Principle III names.
