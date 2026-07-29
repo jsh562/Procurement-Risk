@@ -182,6 +182,24 @@ const SPOKEN_BOUND: Readonly<Record<string, string>> = {
  *
  * The anchor is rendered, not implied: an unanchored median of thirty days on a
  * ten-day-old run reads ten days more optimistic than it is.
+ *
+ * FR-005 requires the reference class on *each* quantile, and the class is named
+ * at every point a frequency appears rather than once per pair. Two reasons, and
+ * the second was observed rather than anticipated:
+ *
+ * The eightieth previously carried no reference class at all — its label read
+ * "Four in five land by" and its figure "20 in 100 land later", so it borrowed a
+ * population from the *median's* label two lines up, across the very gap the
+ * stylesheet inserts to separate the two statements.
+ *
+ * And a denominator standing without its population takes one from the nearest
+ * noun on the row. An open purchase-order line carries a quantity and a unit of
+ * measure, so "50 in 100" set beside a part number was read in the field as
+ * fifty of the hundred parts on that line rather than as fifty of every hundred
+ * comparable orders. That is a third lay misreading beside the two Research
+ * records, and it is the one this requirement's own mitigation produces: the
+ * frequency framing supplies a denominator, and an absent noun leaves it free to
+ * be filled from context.
  */
 function DurationPair({ pair }: { readonly pair: RankedRow["primary"]["duration_pair"] }) {
   const labelId = `pair-${pair.as_of_date}-${pair.median.days}-${pair.eightieth.days}`;
@@ -195,12 +213,12 @@ function DurationPair({ pair }: { readonly pair: RankedRow["primary"]["duration_
         <dt>Half of comparable orders land by</dt>
         <dd>
           <strong className={styles.figure}>{pair.median.days} days</strong> —{" "}
-          {pair.median.later_percent} in 100 land later
+          {pair.median.later_percent} in 100 comparable orders land later
         </dd>
-        <dt>Four in five land by</dt>
+        <dt>Four in five comparable orders land by</dt>
         <dd>
           <strong className={styles.figure}>{pair.eightieth.days} days</strong> —{" "}
-          {pair.eightieth.later_percent} in 100 land later
+          {pair.eightieth.later_percent} in 100 comparable orders land later
         </dd>
       </dl>
     </section>
