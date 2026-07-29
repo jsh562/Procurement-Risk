@@ -75,7 +75,16 @@ def line(
     )
 
 
-def state_of(item: OpenLine, *, today: date, active: ForecastRunRef | None = run()) -> RowState:
+#: The default run these tests resolve against. A module-level singleton rather
+#: than a call in a default argument: the value is frozen and deterministic, so
+#: either would behave identically here, but a mutable default evaluated once at
+#: import is a defect this codebase should not model even in a test.
+ACTIVE_RUN = run()
+
+
+def state_of(
+    item: OpenLine, *, today: date, active: ForecastRunRef | None = ACTIVE_RUN
+) -> RowState:
     inputs = WorklistInputs(
         run=active,
         lines=(item,),
