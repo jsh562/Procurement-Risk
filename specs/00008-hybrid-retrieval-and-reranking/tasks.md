@@ -105,10 +105,10 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [ ] T041 [US1] {FR-030,FR-042} Write failing property tests for recall at five and its Wilson interval in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T001
 - [ ] T042 [US1] {FR-030,FR-042} Implement the recall proportion and the Wilson interval in src/api/src/api/retrieval/metrics.py after:T041 → exports: wilson_interval
 - [ ] T043 [US1] {FR-031,FR-042} Write failing property tests for the percentile bootstrap over the query set in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T042
-- [ ] T044 [US1] {FR-031,FR-042} Implement MRR with a percentile bootstrap interval recording its resample count and seed, in retrieval/metrics.py after:T043 → exports: percentile_bootstrap
+- [ ] T044 [US1] {FR-031,FR-042} Implement MRR with a percentile bootstrap at the B and bit generator specs/sad.md fixes, recording resample count, seed and bit generator, in retrieval/metrics.py after:T043 → exports: percentile_bootstrap
 - [ ] T045 [US1] {FR-032,FR-042} Write failing property tests for the overlap verdict — symmetry, reflexivity, touching endpoints — in src/api/tests/retrieval/test_metrics.py, done only on an observed failure after:T044
 - [ ] T046 [US1] {FR-032,FR-042} Implement the unresolvable verdict by FR-032's closed-interval rule in src/api/src/api/retrieval/metrics.py after:T045 → exports: overlap_verdict
-- [ ] T047 [US1] {FR-031} [COMPLETES FR-031] Record the method on every emitted interval and assert no non-proportion statistic carries wilson, in retrieval/report.py and src/api/tests/retrieval/test_metrics.py after:T046
+- [ ] T047 [US1] {FR-031} [COMPLETES FR-031] Record method, resample count, seed and bit generator on every emitted interval and assert no non-proportion statistic carries wilson, in retrieval/report.py and src/api/tests/retrieval/test_metrics.py after:T046
 - [ ] T048 [US1] {FR-042} [COMPLETES FR-042] Assert the generated domains reach set size one upward, all-hit, all-miss, ties and endpoints, and refuse an empty set, in src/api/tests/retrieval/test_metrics.py after:T047
 - [ ] T049 [US1] {FR-043} Freeze, hash and commit E008's own query set with generator-derived judgements and the published ceiling in src/api/tests/retrieval/evaluation_set/ (AD-010) after:T044
 - [ ] T050 [US1] {FR-043} Abort on digest mismatch before emitting any measurement in src/api/tests/retrieval/evaluation_set/harness.py (Principle VI) after:T049 → exports: load_frozen_set

@@ -612,11 +612,17 @@ well-defined to consume.
 - **FR-031** *(amended 2026-07-29)*: System MUST NOT emit a Wilson interval on mean reciprocal
   rank. Mean reciprocal rank is a mean of reciprocal ranks, not a binomial proportion, so no Wilson
   interval exists for it; the interval MUST be a percentile bootstrap over the query set.
-  **`specs/prd.md` currently specifies a Wilson interval for this statistic** — see FR-034 and
-  SC-015. **The prohibition carries an observation that would detect its reintroduction**, because a
-  prohibition is otherwise satisfied by every implementation that simply never calls the function
-  and no test can fail: every emitted interval MUST record the **method that produced it** —
-  `wilson`, or `percentile_bootstrap` with its resample count and seed — and the assertion is made
+  ~~**`specs/prd.md` currently specifies a Wilson interval for this statistic**~~ — **corrected on
+  the default branch at `c422e24`, 2026-07-29, in `specs/prd.md` and `specs/sad.md` together**
+  (FR-034, FR-048, SC-015). Two parameters this requirement had left to the implementer are now
+  **fixed by a registered document** and are read from it rather than chosen: **B = 10,000
+  resamples**, and the **bit generator pinned to PCG64 alongside the seed** — a seed alone does not
+  fix a bit stream across library versions, so an interval could move on a dependency bump and read
+  as reproducibility drift. **The prohibition carries an observation that would detect its
+  reintroduction**, because a prohibition is otherwise satisfied by every implementation that simply
+  never calls the function and no test can fail: every emitted interval MUST record the **method that
+  produced it** — `wilson`, or `percentile_bootstrap` with its resample count, seed **and bit
+  generator** — and the assertion is made
   over the **emitted artifact rather than over intent**, the same shape FR-006 uses. No figure
   emitted for mean reciprocal rank, or for any statistic that is not a proportion, may carry an
   interval whose recorded method is `wilson`; that is the observation, and it fails when the

@@ -46,7 +46,7 @@ while this epic was in flight, and a compliance record that names no version can
 | Source Code Layout | **CONDITIONAL — amendment required** | New code under `/src/gateway` and `/src/api`; artifacts under `data/`. **But the clause reads "The gateway package carries neither a web framework nor the modeling stack", and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.** `onnxruntime` pulls NumPy transitively, so ADR-0023's decision contradicts this clause directly. Recorded as **amendment 3** and cited from ADR-0023; the design does not proceed on the strength of an ADR overriding a governing clause. **Amendment 3 covers both breached clauses, not only this one** — §Testing & Quality Policy separately asserts that the request-serving image contains no modeling-stack packages, and admitting NumPy to `SHARED_INFRASTRUCTURE` breaches that sentence too. An amendment naming §Source Code Layout alone would let T003 pass green with the image assertion still contradicted |
 | Development Workflow | PASS with a scheduled check | Branch matches workspace matches epic. **§Temporary Files gains a verifier**: this is the one epic that downloads a model and runs a native toolchain, and `test_scratch_location.py` exists only under `src/api/tests/` — the tier that does neither. T017 carries the obligation and T098 extends the check to the gateway tier |
 | Data Provenance | PASS | FR-016 requires identity, revision, licence basis, source and digest for the vendored model, and — extended at Analyze — the quantization record for the *generated* INT8 graph plus a separate licence basis per graph, since a derived artifact does not inherit its source's licence by default |
-| Governance | **CONDITIONAL** | **Ten** amendments recorded and not performed, of which **six block implementation**: the `specs/prd.md` MRR interval (item 1, FR-034), the `specs/project-plan.md` `part_numbers` owner (item 2, FR-035), `project-instructions.md` §Source Code Layout and §Testing & Quality Policy (item 3, FR-044 — the one this design cannot proceed without), ADR-0023's `specs/sad.md` catalog row (item 4, FR-045), the `specs/sad.md` Wilson-on-MRR twin of item 1 (item 9, FR-048), and §Technology Stack's INT8 qualifier (item 10, FR-047). Four more are non-blocking. All land on the default branch; §Pending Amendments carries the queue and its order |
+| Governance | **CONDITIONAL — 2 of 6 blocking items landed** | Ten amendments recorded, six blocking. **Items 1 (FR-034) and 9 (FR-048) landed together at `c422e24`**, correcting the Wilson-on-MRR defect in `specs/prd.md` and `specs/sad.md` in one decision. **Four remain**: the `specs/project-plan.md` `part_numbers` owner (item 2, FR-035), `project-instructions.md` §Source Code Layout **and** §Testing & Quality Policy (item 3, FR-044 — the one this design cannot proceed without), ADR-0023's `specs/sad.md` catalog row (item 4, FR-045), and §Technology Stack's INT8 qualifier (item 10, FR-047). Four further items are non-blocking. **Record-number note**: round 1 created ADR-0022 for its own decision, so this epic's record renumbered to **ADR-0023** — see §Pending Amendments |
 
 **Re-check after design**: PASS. The two boundary crossings design introduced — inference in the gateway, and the serving image admitting its runtime — are recorded in ADR-0023 rather than waved through.
 
@@ -616,11 +616,17 @@ because an ungated amendment is a need nobody is obliged to meet. **Item numbers
 order and are cited from `spec.md` and `tasks.md`, so they are stable**: items 9 and 10 were added
 at Analyze and are blocking despite following the non-blocking ones.
 
+**Status, 2026-07-29**: round 1 landed at `c422e24` (PR #22) and closed **items 1 and 9** together.
+**Four blocking items remain: 2, 3, 4 and 10.** Implementation stays gated.
+
 **Blocking — implementation does not begin until these land** (spec SC-015 gates 1 and 2; this plan
 extends the gate to 3, 4, 9 and 10):
 
-1. **`specs/prd.md`** — the retrieval MRR row specifies a Wilson 95% interval for a statistic that is
-   not a proportion (spec FR-034).
+1. ~~**`specs/prd.md`** — the retrieval MRR row specifies a Wilson 95% interval for a statistic that
+   is not a proportion (spec FR-034).~~ **LANDED** at `c422e24` (PR #22), 2026-07-29. The row now
+   reads "percentile bootstrap 95% interval resampled over the 50 queries, reported with its
+   resample count and its seed". Recall@5 correctly keeps Wilson and was sharpened to name the
+   proportion it is computed over. **T001 closes citing `c422e24`.**
 2. **`specs/project-plan.md`** — no epic owns the population of `chunk.part_numbers`, so the lexical
    arm's field weighting is inert (spec FR-035).
 3. **`project-instructions.md` §Source Code Layout** — **new at Plan, and the one this design cannot
@@ -635,9 +641,10 @@ extends the gate to 3, 4, 9 and 10):
    sentence by the same reasoning that breaches §Source Code Layout. An amendment naming only the
    layout clause would let T003 close green while the image assertion stayed contradicted — the
    failure mode this queue exists to prevent. FR-044 and T003 verify both clauses.
-4. **`specs/sad.md`** — the ADR catalog needs ADR-0023's row, appended after ADR-0021. Gated because
-   merging with the catalog missing an `accepted` record is the registered index disagreeing with
-   the record set it indexes:
+4. **`specs/sad.md`** — the ADR catalog needs ADR-0023's row, appended after **ADR-0022**, which
+   round 1 added *(restated 2026-07-29: this read "after ADR-0021" and was written when 0022 was
+   free)*. Gated because merging with the catalog missing an `accepted` record is the registered
+   index disagreeing with the record set it indexes:
 
    ```
    | ADR-0023 | Local Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime | accepted | 2026-07-29 | — | [0023-local-inference-in-the-shared-gateway-package.md](adrs/0023-local-inference-in-the-shared-gateway-package.md) |
@@ -677,12 +684,24 @@ extends the gate to 3, 4, 9 and 10):
 
 **Blocking — added at Analyze, 2026-07-29:**
 
-9. **`specs/sad.md:262`** — carries the **same defect as item 1**: a Wilson 95% interval specified
-   for mean reciprocal rank, which is not a proportion. Item 1 queues the `specs/prd.md` occurrence
-   and this one went unrecorded, so on the current queue `specs/prd.md` would be corrected while a
-   second registered document went on specifying the invalid interval. Governance holds the
-   registered document wins where a downstream artifact conflicts, so FR-031 loses to `specs/sad.md`
-   until this lands — the identical exposure item 1 exists to close (spec FR-048, task T097).
+9. ~~**`specs/sad.md:262`** — carries the **same defect as item 1**: a Wilson 95% interval specified
+   for mean reciprocal rank, which is not a proportion.~~ **LANDED** at `c422e24` (PR #22),
+   2026-07-29, in the same round as item 1 — the amendment treated both occurrences as one decision,
+   which is what they were. **T097 closes citing `c422e24`.** It landed **wider than this queue
+   asked**, and the additions are load-bearing for E008:
+   - The single retrieval-quality row was **split into two rows** (`sad.md:262` recall@5,
+     `sad.md:263` MRR), on the reasoning that one row is what let a single "Wilson 95% CIs" phrase
+     cover two estimators of which only one qualified. FR-031's assertion — that no non-proportion
+     statistic carries an interval recorded as `wilson` — now has a registered document agreeing
+     with it rather than contradicting it.
+   - **B = 10,000 resamples is now fixed by a registered document**, where FR-031 and T044 left the
+     count to the implementer. T044 records the count and seed it used; it does not choose them.
+   - **The bit generator is pinned alongside the seed** (PCG64), because a seed alone does not fix a
+     bit stream across library versions — an interval could move on a dependency bump and read as
+     drift to the `reproduce` job. **This reaches T044 and T047**: the recorded provenance of a
+     bootstrap interval is now three values, not two.
+   - ADR-0022 was created for the decision, which is what forced this epic's own record to renumber
+     to **ADR-0023**.
 10. **`project-instructions.md` §Technology Stack** — names "ONNX Runtime **for INT8 CPU
     inference**". This epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the
     INT8 one, so the qualifier excludes two things the design ships. E006 raised the same conflict
@@ -695,17 +714,32 @@ is in flight at a time, it is performed on the default branch, and it lands befo
 An amendment is **one version bump**, so items amending the same document land together in one round.
 Four rounds, each landing before the next begins:
 
-| Round | Document | Items | What lands |
-|---|---|---|---|
-| 1 | `specs/prd.md` | 1 | The MRR row's Wilson interval replaced by a percentile bootstrap |
-| 2 | `specs/project-plan.md` | 2 | An owner for populating `chunk.part_numbers` |
-| 3 | `project-instructions.md` | 3, 10 | §Source Code Layout **and** §Testing & Quality Policy except a shared inference runtime; §Technology Stack drops the INT8-only qualifier |
-| 4 | `specs/sad.md` | 4, 9 | ADR-0023's catalog row; the retrieval-quality row's Wilson-on-MRR |
+| Round | Document | Items | What lands | Status |
+|---|---|---|---|---|
+| 1 | `specs/prd.md` + `specs/sad.md` | 1, **9** | The MRR interval, in **both** registered documents — one defect, one decision, one round | ✅ **landed `c422e24`** |
+| 2 | `specs/project-plan.md` | 2 | An owner for populating `chunk.part_numbers` | outstanding |
+| 3 | `project-instructions.md` | 3, 10 | §Source Code Layout **and** §Testing & Quality Policy except a shared inference runtime; §Technology Stack drops the INT8-only qualifier | outstanding |
+| 4 | `specs/sad.md` | 4 | ADR-0023's catalog row | outstanding |
+
+*(Restated 2026-07-29 after round 1 landed. Round 1 was planned as `prd.md` alone with item 9 held
+for round 4; the amendment correctly treated two occurrences of one defect as one decision and
+closed both. Round 4 now carries item 4 only.)*
 
 Then 7 and 8, then 5 and 6 whenever. **E006 holds nothing ahead of this queue**: its outstanding
 amendment was the INT8 qualifier, recorded in a PR body and never performed — verified against the
 default branch at Analyze, where `project-instructions.md` still reads "ONNX Runtime for INT8 CPU
 inference". It is now item 10 and lands in round 3.
+
+**A record number was lost to round 1.** It created ADR-0022 for the interval decision, allocating
+by scanning the default branch — where this epic's ADR-0022 is invisible, because it is on this
+branch. This epic's record renumbered to **ADR-0023** and every citation moved. Governance claims
+record numbers at epic start precisely to stop this, and the clause is written for *two epics
+branching from one baseline*; it does not reach an **amendment performed on the default branch while
+an epic is in flight**, which allocates against a tree the epic's claim cannot be seen in. Third
+instance of the shape after E006/E007's ADR-0018 and the `0300` migration block, and the first where
+the colliding allocation came from the amendment procedure rather than a sibling epic. Rounds 2, 3
+and 4 create no records, so the queue itself is not exposed again — but the next epic to run
+concurrently with an amendment is.
 
 This plan does not assert they will land; it asserts implementation does not begin until rounds 1–4
 have, that SC-016's latency half is measured against the never-exceed settled at spec §Decisions
