@@ -53,12 +53,82 @@ export interface UnrankedRow {
   readonly primary: UnrankedPrimary;
 }
 
+/**
+ * One direction of a probability, already rounded (FR-053).
+ *
+ * `percent` is `null` exactly in the bounded form, so no numeral survives
+ * beside `<1%` or `>99%`. The integer is retained alongside the string for
+ * assistive technology and for tests; the string is what renders, because the
+ * arithmetic already happened once on the deterministic side of the boundary.
+ */
+export interface PercentFigure {
+  readonly percent: number | null;
+  readonly display: string;
+}
+
+/**
+ * FR-006's dual framing. `measure` travels with the figure rather than being
+ * inferred from the row's state — the two are rendered in different words, and
+ * inferring it would put two rules that must agree in different tiers (FR-017).
+ */
+export interface MissProbability {
+  readonly measure: "point" | "upper_bound";
+  readonly bounded: boolean;
+  readonly miss: PercentFigure;
+  readonly on_time: PercentFigure;
+}
+
+export interface QuantileFigure {
+  readonly quantile_percent: number;
+  readonly days: number;
+  readonly later_percent: number;
+}
+
+/**
+ * FR-003, FR-004. One labelled pair, nested under a single object rather than
+ * carried as two sibling scalars — which is what makes "not independently
+ * sortable" structural rather than a rule the interface has to remember.
+ */
+export interface DurationPair {
+  readonly unit: string;
+  readonly counted_from: string;
+  readonly as_of_date: string;
+  readonly median: QuantileFigure;
+  readonly eightieth: QuantileFigure;
+  readonly reference_class: {
+    readonly basis: string;
+    readonly draw_count: number;
+    readonly percentile_convention: string;
+  };
+}
+
+/** FR-027's four comparison quantities, in FR-032's reading order. */
+export interface PrimaryFigures {
+  readonly identity: LineIdentity;
+  readonly need_by: NeedBy;
+  readonly miss_probability: MissProbability | null;
+  readonly duration_pair: DurationPair;
+}
+
+/**
+ * FR-009's explanatory context — exactly three members. Closed at three so a
+ * fifth scannable figure cannot be parked here instead of in `primary`, which
+ * is what makes FR-027's cap decidable at all. Expected harm is absent by
+ * design: with criticality beside it, the score would surrender the mean
+ * overrun to one division (FR-041).
+ */
+export interface SecondaryContext {
+  readonly as_of_date: string;
+  readonly criticality: number;
+  readonly calendar_margin_days: number;
+}
+
 export interface RankedRow {
   readonly po_line_id: string;
   readonly rank: number;
   readonly state: RankedRowState;
-  readonly primary: UnrankedPrimary & Record<string, unknown>;
-  readonly secondary: Record<string, unknown>;
+  readonly primary: PrimaryFigures;
+  readonly secondary: SecondaryContext;
 }
 
 export interface ForecastRunMeta {

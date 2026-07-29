@@ -85,18 +85,18 @@
 
 **Independent test**: load the worklist against the frozen fixture and confirm the rendered order, figures and per-row decomposition match expected values exactly, with no row added to the model-invocation record.
 
-- [ ] T015 [P] [US1] {FR-039,FR-013a} **RED** Failing property test in TST/test_ranking.py — criticality monotonicity under the default key, tiebreak totality, inputs from E003's domain
-- [ ] T016 [P] [US1] {FR-039,FR-013} **RED** Failing property test in TST/test_probability.py — half-up at stored `0.125`/`0.875`; pair sums to 100 over `bounded:false`, `measure:point` only
-- [ ] T017 [US1] {FR-001,FR-010,FR-013a} **GREEN** Harm score and FR-010's tiebreak in API/compute/ranking.py after:T015 → exports: expected_harm(), order_lines()
-- [ ] T018 [US1] {FR-007,FR-008,FR-013,FR-017,FR-030,FR-053} **GREEN** Rounding, bounds, complement, both measures in API/compute/probability.py after:T016 → exports: percent_figure()
-- [ ] T019 [US1] {FR-020,FR-020a,FR-052} As-of frame, run identification and the ETag validator over exactly FR-020a's admitted inputs (SC-027) in API/risk_read/query.py
-- [ ] T020 [US1] {FR-003,FR-004,FR-005,FR-006,FR-027} `PrimaryFigures` in API/risk_read/rows.py — pair as one labelled unit ← T018:percent_figure → exports: build_row()
-- [ ] T021 [US1] {FR-009,FR-041,FR-053,FR-054} `SecondaryContext` in API/risk_read/rows.py — as-of date, criticality, calendar margin; no harm score; explicit empty for a withheld figure
-- [ ] T022 [US1] {FR-002,FR-026} Compose query, states, rows and ranking in that order, and emit `SortState` in API/routes/worklist.py ← T017:order_lines
-- [ ] T023 [P] [US1] {FR-032,FR-048,FR-049,FR-050} WEB/Row.tsx — primary/secondary regions, reading order, rank as text, pair under one accessible name, state as text
-- [ ] T024 [US1] {FR-047} Ranked list, active key and direction, and the server-sent tiebreak rule in WEB/page.tsx after:T023
-- [ ] T025 [US1] {FR-002,FR-023,FR-035} [COMPLETES FR-002] Provider unreachable renders fully and the invocation record gains no row — TST/test_worklist_endpoint.py
-- [ ] T026 [P] [US1] {FR-024} Both observation sites — CHK/test_web_has_no_db_driver.py for the manifest and lockfile, TST/test_no_datastore_from_web.py for the request set
+- [X] T015 [P] [US1] {FR-039,FR-013a} **RED** Failing property test in TST/test_ranking.py — criticality monotonicity under the default key, tiebreak totality, inputs from E003's domain
+- [X] T016 [P] [US1] {FR-039,FR-013} **RED** Failing property test in TST/test_probability.py — half-up at stored `0.125`/`0.875`; pair sums to 100 over `bounded:false`, `measure:point` only
+- [X] T017 [US1] {FR-001,FR-010,FR-013a} **GREEN** Harm score and FR-010's tiebreak in API/compute/ranking.py after:T015 → exports: expected_harm(), order_lines()
+- [X] T018 [US1] {FR-007,FR-008,FR-013,FR-017,FR-030,FR-053} **GREEN** Rounding, bounds, complement, both measures in API/compute/probability.py after:T016 → exports: percent_figure()
+- [X] T019 [US1] {FR-020,FR-020a,FR-052} As-of frame, run identification and the ETag validator over exactly FR-020a's admitted inputs (SC-027) in API/risk_read/query.py
+- [X] T020 [US1] {FR-003,FR-004,FR-005,FR-006,FR-027} `PrimaryFigures` in API/risk_read/rows.py — pair as one labelled unit ← T018:percent_figure → exports: build_row()
+- [X] T021 [US1] {FR-009,FR-041,FR-053,FR-054} `SecondaryContext` in API/risk_read/rows.py — as-of date, criticality, calendar margin; no harm score; explicit empty for a withheld figure
+- [X] T022 [US1] {FR-002,FR-026} Compose query, states, rows and ranking in that order, and emit `SortState` in API/routes/worklist.py ← T017:order_lines
+- [X] T023 [P] [US1] {FR-032,FR-048,FR-049,FR-050} WEB/Row.tsx — primary/secondary regions, reading order, rank as text, pair under one accessible name, state as text
+- [X] T024 [US1] {FR-047} Ranked list, active key and direction, and the server-sent tiebreak rule in WEB/page.tsx after:T023
+- [X] T025 [US1] {FR-002,FR-023,FR-035} [COMPLETES FR-002] Provider unreachable renders fully and the invocation record gains no row — TST/test_worklist_endpoint.py
+- [X] T026 [P] [US1] {FR-024} Both observation sites — CHK/test_web_has_no_db_driver.py for the manifest and lockfile, TST/test_no_datastore_from_web.py for the request set
 
 ---
 

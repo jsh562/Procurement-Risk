@@ -63,6 +63,69 @@ const RESPONSE: WorklistResponse = {
   ordering_digest: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 };
 
+/** The same page with an active run and one ranked row. */
+const RANKED: WorklistResponse = {
+  ...RESPONSE,
+  meta: {
+    ...RESPONSE.meta,
+    forecast_run: {
+      run_id: "3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201",
+      as_of_date: "2026-06-01",
+      horizon_days: 365,
+      roster_hash: `sha256:${"a".repeat(64)}`,
+      model_version: "lognormal-hierarchical-v3",
+      artifact_schema_version: 1,
+      age_days: 2,
+      stale: false,
+      staleness_threshold_days: 7,
+      staleness_basis: "One refit cadence.",
+    },
+  },
+  page_states: [],
+  ranked: [
+    {
+      po_line_id: "1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55",
+      rank: 1,
+      state: "nominal",
+      primary: {
+        identity: {
+          project_id: "PRJ-001",
+          po_number: "PO-4471",
+          line_number: 3,
+          description: "Air handling unit AHU-3",
+        },
+        need_by: {
+          date: "2026-08-10",
+          date_of_record: "2026-08-10",
+          source: "record",
+          unsaved: false,
+        },
+        miss_probability: {
+          measure: "point",
+          bounded: false,
+          miss: { percent: 87, display: "87%" },
+          on_time: { percent: 13, display: "13%" },
+        },
+        duration_pair: {
+          unit: "days",
+          counted_from: "run_as_of_date",
+          as_of_date: "2026-06-01",
+          median: { quantile_percent: 50, days: 34, later_percent: 50 },
+          eightieth: { quantile_percent: 80, days: 51, later_percent: 20 },
+          reference_class: {
+            basis: "posterior_predictive_draws",
+            draw_count: 4000,
+            percentile_convention: "nearest_rank_one_based_no_interpolation",
+          },
+        },
+      },
+      secondary: { as_of_date: "2026-06-01", criticality: 5, calendar_margin_days: 70 },
+    },
+  ],
+  unranked: [],
+  counts: { ranked: 1, unranked: 0, total: 1 },
+};
+
 const renderWith = async (body: unknown, ok = true): Promise<string> => {
   vi.stubGlobal(
     "fetch",
@@ -180,6 +243,60 @@ describe("worklist page, no active run", () => {
     expect(markup).toContain("lognormal-hierarchical-v3");
     expect(markup).toContain("2026-06-01");
     expect(markup).not.toContain("No forecast run is active.");
+  });
+
+  it("states the active sort key, its direction, and the tiebreak rule", async () => {
+    // FR-047. Under the default key the tiebreak is not a footnote: expected
+    // harm is exactly zero for every line whose draws all land on or before its
+    // need-by date, so at a full horizon it alone orders that entire block.
+    const markup = await renderWith(RANKED);
+    expect(markup).toContain("expected schedule harm");
+    expect(markup).toContain("highest first");
+    expect(markup).toContain("need_by_date asc, then criticality desc, then po_line_id asc");
+  });
+
+  it("takes the tiebreak wording from the response, not from this component", async () => {
+    // FR-047. What is stated on screen must be the rule the server actually
+    // applied; a hard-coded copy is a second source of truth that drifts
+    // silently the moment the server's changes.
+    const markup = await renderWith({
+      ...RANKED,
+      sort: { ...RANKED.sort, tiebreak: ["a rule the server invented"] },
+    });
+    expect(markup).toContain("a rule the server invented");
+  });
+
+  it("falls back to the server's own key name for a sort it has no wording for", async () => {
+    // The server owns which keys exist (FR-032). A key this map has no English
+    // for must still render its name — showing nothing would leave the list
+    // ordered by something the coordinator cannot see stated at all, which is
+    // the failure FR-047 exists to prevent.
+    const markup = await renderWith({
+      ...RANKED,
+      sort: { ...RANKED.sort, key: "vendor_reliability", direction: "asc" },
+    });
+    expect(markup).toContain("vendor_reliability");
+    expect(markup).toContain("lowest first");
+  });
+
+  it("exposes the ranked group as ordered, with its count", async () => {
+    // FR-048. Position is never carried by vertical placement alone, so the
+    // group has to say both that it is ordered and how many entries it holds.
+    const markup = await renderWith(RANKED);
+    expect(markup).toContain("<ol");
+    expect(markup).toContain("1 lines");
+  });
+
+  it("keeps the excluded group separate in the document, not only in the payload", async () => {
+    // FR-016. A group that exists only in the rendering is one the next
+    // consumer of this surface re-decides, and the project plan records three.
+    const markup = await renderWith({
+      ...RANKED,
+      unranked: RESPONSE.unranked,
+      counts: { ranked: 1, unranked: 1, total: 2 },
+    });
+    expect(markup).toContain("Not ranked");
+    expect(markup.indexOf("Ranked by")).toBeLessThan(markup.indexOf("Not ranked"));
   });
 
   it("renders one banner per page state in force", async () => {

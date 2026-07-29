@@ -29,7 +29,7 @@ from typing import Annotated, Any, Final
 from zoneinfo import ZoneInfo
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 
 from api.compute.ordering import (
     DEFAULT_SORT_KEY,
@@ -39,8 +39,11 @@ from api.compute.ordering import (
     sort_options,
 )
 from api.compute.ordering import ordering_digest as compute_ordering_digest
+from api.compute.ranking import RankableLine, order_lines
 from api.risk_read.query import STALENESS_BASIS, STALENESS_THRESHOLD_DAYS, load_worklist
+from api.risk_read.rows import RowInputs, build_primary, build_secondary, identity, need_by
 from api.risk_read.states import ResolvedLine, resolve_states
+from api.risk_read.validator import compute_validator
 
 router = APIRouter()
 
@@ -99,6 +102,7 @@ def read_worklist(
     connection: Annotated[Any, Depends(get_connection)],
     project_id: Annotated[str | None, Query(pattern=PROJECT_ID_PATTERN)] = None,
     sort: Annotated[str | None, Query(pattern=SORT_KEY_PATTERN)] = None,
+    if_none_match: Annotated[str | None, Header(alias="If-None-Match")] = None,
 ) -> dict[str, Any]:
     """Return open lines with their figures, degraded states, and page status.
 
@@ -126,13 +130,36 @@ def read_worklist(
 
     resolved, page_states = resolve_states(inputs, scoped=project_id is not None)
 
+    # Query, then states, then rows, then ranking — in that order, and the order
+    # is load-bearing. Ranking before resolving states would rank a line whose
+    # state excludes it from the ranking; building rows before resolving states
+    # would compute a figure the state withholds, and then have to remember to
+    # drop it. Each step here can only see what the one before it admitted.
     ranked = [item for item in resolved if item.is_ranked]
-    unranked = [item for item in resolved if not item.is_ranked]
+    ordered = _order(ranked, inputs)
+    unranked = _order_excluded([item for item in resolved if not item.is_ranked])
 
-    # Phase 2 ships the absent-figure path only: with no active run every line
-    # is unranked and carries no figures, which is FR-015 exactly. Ranking and
-    # row figures arrive with US1, and the shape below is what they extend.
-    response.headers["Cache-Control"] = "no-store"
+    # FR-020a. Computed over exactly the admitted inputs, so an unchanged value
+    # is a positive statement that the whole response is unchanged rather than
+    # merely that no figure moved.
+    validator = compute_validator(
+        run_id=str(inputs.run.run_id) if inputs.run else None,
+        today=today,
+        project_id=project_id,
+        sort_key=sort_key,
+        overrides=None,
+        lines=inputs.lines,
+    )
+    response.headers["ETag"] = validator
+    # FR-031. Revalidate every request and never serve from a shared cache: a
+    # response computed under one adjustment set must not reach a request
+    # carrying a different one, and the payload is time-dependent through
+    # `today`, so a stored copy could show a run as current after the day
+    # boundary made it stale.
+    response.headers["Cache-Control"] = "private, no-cache"
+
+    if if_none_match is not None and if_none_match.strip() == validator:
+        raise HTTPException(status_code=304, headers=dict(response.headers))
     return {
         "meta": _meta(inputs, generated_at=generated_at, today=today),
         "scope": {
@@ -157,10 +184,10 @@ def read_worklist(
             ],
         },
         "page_states": [state.value for state in page_states],
-        "ranked": [_ranked_row(item, rank) for rank, item in enumerate(ranked, start=1)],
+        "ranked": [_ranked_row(item, rank, inputs) for rank, item in enumerate(ordered, start=1)],
         "unranked": [_unranked_row(item) for item in unranked],
         "counts": {
-            "ranked": len(ranked),
+            "ranked": len(ordered),
             "unranked": len(unranked),
             "total": len(resolved),
         },
@@ -168,8 +195,40 @@ def read_worklist(
         # set; an override that named a line this response does not contain is
         # reported with its cause rather than silently dropped.
         "overrides": {"applied": [], "unapplied": []},
-        "ordering_digest": compute_ordering_digest(item.line.po_line_id for item in ranked),
+        "ordering_digest": compute_ordering_digest(item.line.po_line_id for item in ordered),
     }
+
+
+def _order_excluded(unranked: list[ResolvedLine]) -> list[ResolvedLine]:
+    """FR-045. Need-by ascending, then line identifier ascending.
+
+    Fixed rather than following the active sort key, for two reasons. At least
+    one of FR-026's four keys reads a figure an excluded line does not have —
+    expected harm needs draws it has none of, and with no active run the
+    calendar margin has no as-of date to count from. And a group outside the
+    ranking that reordered *with* the ranking would read as part of it, which is
+    the whole distinction FR-016 draws.
+    """
+    return sorted(unranked, key=lambda item: (item.line.need_by_date, str(item.line.po_line_id)))
+
+
+def _order(ranked: list[ResolvedLine], inputs: Any) -> list[ResolvedLine]:
+    """Order the ranked group worst-first."""
+    if inputs.run is None:
+        return ranked
+
+    as_of = inputs.run.as_of_date
+    rankable = [
+        RankableLine(
+            po_line_id=item.line.po_line_id,
+            draws=item.line.draws or (),
+            need_by_offset=(item.line.need_by_date - as_of).days,
+            criticality=item.line.criticality,
+        )
+        for item in ranked
+    ]
+    position = {po_line_id: index for index, po_line_id in enumerate(order_lines(rankable))}
+    return sorted(ranked, key=lambda item: position[item.line.po_line_id])
 
 
 def _meta(inputs: Any, *, generated_at: datetime, today: date) -> dict[str, Any]:
@@ -201,37 +260,6 @@ def _meta(inputs: Any, *, generated_at: datetime, today: date) -> dict[str, Any]
     }
 
 
-def _identity(item: ResolvedLine) -> dict[str, Any]:
-    """FR-027's identity quantity, carried as one unit.
-
-    Vendor, manufacturer, part number and material category are deliberately
-    absent: no requirement needs them, and a field present in the payload is a
-    column waiting to be added against FR-027's cap.
-    """
-    return {
-        "project_id": item.line.project_id,
-        "po_number": item.line.po_number,
-        "line_number": item.line.line_number,
-        "description": item.line.description,
-    }
-
-
-def _need_by(item: ResolvedLine) -> dict[str, Any]:
-    """The effective need-by date and the recorded value it would replace.
-
-    Both travel even with no override in force, so the adjustment is auditable
-    in the payload rather than only on screen, and `unsaved` gives FR-031's
-    "visibly marked as unsaved" a field to bind to. Until US2 the two dates are
-    equal and the source is the record.
-    """
-    return {
-        "date": item.line.need_by_date.isoformat(),
-        "date_of_record": item.line.need_by_date.isoformat(),
-        "source": "record",
-        "unsaved": False,
-    }
-
-
 def _unranked_row(item: ResolvedLine) -> dict[str, Any]:
     """A line carrying no risk figures.
 
@@ -243,22 +271,32 @@ def _unranked_row(item: ResolvedLine) -> dict[str, Any]:
     return {
         "po_line_id": str(item.line.po_line_id),
         "state": item.state.value,
-        "primary": {"identity": _identity(item), "need_by": _need_by(item)},
+        "primary": {"identity": identity(item.line), "need_by": need_by(item.line)},
     }
 
 
-def _ranked_row(item: ResolvedLine, rank: int) -> dict[str, Any]:
+def _ranked_row(item: ResolvedLine, rank: int, inputs: Any) -> dict[str, Any]:
     """A line that takes a place in the ranking.
 
-    The figures and the secondary region arrive with US1 (T017–T024). Until
-    then no line reaches this function, because the only state Phase 2 can
-    produce suppresses every figure — which is why the row is not filled in
-    with placeholders that would have to be removed later.
+    `rank` is carried as a field and rendered as text (FR-048), because the
+    ranking quantity itself is deliberately absent from the row under FR-041 —
+    which would otherwise leave position read off the screen's geometry as the
+    only carrier of the product's entire output, and geometry conveys nothing to
+    a screen reader. It is the position under the *active* key, never a harm
+    rank retained from a different ordering, so a row never asserts two
+    orderings at once.
     """
+    row_inputs = RowInputs(
+        resolved=item,
+        as_of_date=inputs.run.as_of_date,
+        horizon_days=inputs.run.horizon_days,
+        conventions=inputs.conventions,
+        today=inputs.today,
+    )
     return {
         "po_line_id": str(item.line.po_line_id),
         "rank": rank,
         "state": item.state.value,
-        "primary": {"identity": _identity(item), "need_by": _need_by(item)},
-        "secondary": {},
+        "primary": build_primary(row_inputs),
+        "secondary": build_secondary(row_inputs),
     }
