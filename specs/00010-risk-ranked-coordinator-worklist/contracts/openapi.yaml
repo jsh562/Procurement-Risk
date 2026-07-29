@@ -189,8 +189,10 @@ paths:
         convenience: the registered target is a worklist p95 of 1.5 s on one shared vCPU, and 200
         follow-up requests cannot meet it.
 
-        **No pagination.** The working scale is roughly two hundred open lines and the specification
-        records that no pagination strategy is needed. Offering `limit`/`offset` would also let a client
+        **No pagination.** The working scale is roughly two hundred lines and the specification
+        records that no pagination strategy is needed. The assumption is about the domain rather
+        than about any seeded dataset: E005's set holds 199 lines of which 24 are open, so a
+        response today carries far fewer rows than the ceiling this reasoning is sized for. Offering `limit`/`offset` would also let a client
         render a partial ordering while FR-001 and SC-001 require a single ordering in which the
         highest-harm line is identifiable without opening anything else. `counts` is returned so that
         growth past this assumption is observable rather than silent.

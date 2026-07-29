@@ -403,3 +403,37 @@ before any figure.
 **FAIL**, on T081 alone once T096 and T097 are closed. T081 does not close on this
 branch: `specs/sad.md`'s primary flow must be amended on the default branch to name
 the address the contract defines, after which E010's QC is re-run.
+
+
+---
+
+# QC Report — iteration 6
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T098-T099
+
+Audited at `b19de6a`, the commit that closed T081 after the SAD amendment landed
+on the default branch. Both findings were introduced by that commit.
+
+## The gate itself
+
+Verified holding. `24456b9` is an ancestor of `origin/main`; `git diff
+origin/main -- specs/sad.md` is empty, so this branch carries no SAD edit of its
+own; all three artifacts resolve to `GET /api/v1/worklist`; `.qc-passed` absent.
+Every one of the figures `.completed` publishes re-measured correct.
+
+## Findings
+
+| ID | Severity | Finding |
+|---|---|---|
+| T098 | ERROR | The commit changed three sites in `plan.md` — the Governance row, the summary table and HINT-003 — and left the fourth: § `Recorded Amendment Request`, whose only job is to state the amendment's status. It still read "**Status**: recorded, not performed", still named `/lines?project=` as what the SAD says "today", and still carried a "Consequence if unresolved". The plan contradicted itself about the release gate inside the commit that closed it. |
+| T099 | WARNING | The `13 PO-447x rows` figure published for T096's verification was the ranked count restated. All 15 response rows are PO-447x; the database holds 16. |
+
+Iteration 6 also considered and did not file `plan.md:62`'s C4 label and
+`checklists/api-quality.md:53`'s CHK036 note; both were fixed anyway, on the
+argument that a class sweep should not stop at what was filed.
+
+## Disposition
+
+Closed by `07fa810`. Iteration 7 then found the T098 fix had swept `plan.md` and
+left the same claim in `tasks.md:52` — the seventh consecutive instance of the
+same shape.

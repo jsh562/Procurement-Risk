@@ -49,7 +49,7 @@
 - **Round once, in `probability.py`, and derive the complement as `100 − displayed`** (FR-008, HINT-004). Two independent roundings of `0.4951` and `0.5049` produce an FR-006 pair summing to 101%. Python's built-in `round` is half-to-**even** and is forbidden here: `round(12.5)` is 12.
 - **The rounding boundary is constructible at exactly four stored doubles** — `0.125`, `0.375`, `0.625`, `0.875`. The fixture carries `0.125` and `0.875`; asserting half-up anywhere else asserts the direction of a representation error.
 - **Build the `no_active_run` path before any code can assume a figure exists** (HINT-001). Phase 2 is that slice, end to end.
-- **The endpoint address is not settled by implementation** (HINT-003). `specs/sad.md:124` and the contract name different addresses; the branch records the amendment and does not perform it.
+- **The endpoint address was not settled by implementation** (HINT-003). **Closed 2026-07-29.** `specs/sad.md` and the contract named different addresses, and the branch recorded the amendment without performing it, per the governance rule that places amendments on the default branch. The amendment was performed on `main` as `24456b9` and merged here; `specs/sad.md`, this plan's summary table and `contracts/openapi.yaml` now all name `GET /api/v1/worklist`.
 
 ---
 
@@ -310,7 +310,7 @@
 
 - [X] T081 [BUG:CRITICAL] {FR-040} [governance] **CLOSED by amendment on the default branch.** The release gate this plan declares for itself was unmet: three artifacts named three addresses — specs/sad.md:124
   > `specs/sad.md:124` reads `W->>A: GET /lines?project=…` on this branch and on `main`. `contracts/openapi.yaml` declares `servers: /api/v1` with path `/worklist`. `plan.md:90` names a third form.
-  > plan.md:46 and HINT-003 (plan.md:437) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
+  > plan.md:46 and HINT-003 (plan.md:442) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
   > project-instructions.md:94 is why it lands elsewhere: "Amendments to the documents named in this section are serialized. At most one amendment is in flight at a time, **it is performed on the default branch**, and it lands before the next begins. **A feature branch records the need for an amendment and does not perform it.**"
   > So this task is recorded and left open by design. Closing it here would violate the rule that makes it a CRITICAL in the first place. QC iterations 1-3 never checked the condition; iteration 4 did.
   > **Closed 2026-07-29.** The amendment was performed on `main` as `24456b9` and merged here. Impact was assessed across the registered set per the amendment procedure: project-instructions.md NONE, prd.md NONE, sad.md UPDATE, dod.md SKIPPED (none exists), project-plan.md UPDATE assessed and found to need no edit. Applied in REFINE mode — the one contradicting line corrected, surrounding narrative and diagram preserved, and the decision recorded in the SAD's managed `Project Context Baseline Updates` section. `specs/sad.md` was the only registered document naming the endpoint; `prd.md` and `project-plan.md` name none.
@@ -390,7 +390,7 @@
   > Scenarios A1-A7 name `PO-4473-1`, `PO-4474-1/2`, `PO-4475-1`, `PO-4476-1/2`. The shared database holds **0** rows matching `PO-447%`; `procurement_e2e` holds 16. So every scenario in the file was unobservable, and `manual-test.md` is the sole record of WCAG coverage (qc-report.md:45).
   > The note three lines above the block already said the seed "writes only to `procurement_e2e` … and prints that URL when it finishes", and `playwright.config.ts:44-48` warns against this exact substitution. The document contradicted itself across four lines.
   > Note the two URLs are *not* both wrong: the seed at line 27 is handed the shared URL and derives the dedicated name from it (`seed.py:60-66`), so that line is correct and must not be "fixed" to match.
-  > Fix hint: point the boundary at `procurement_e2e`, and say why the two URLs differ so the next reader does not reconcile them the wrong way. Verified after the fix: `counts.total == 15`, ranked 13, unranked 2, and all 15 rows in the response are PO-447x. The database holds 16: `PO-4479-1` is closed and is excluded from the worklist, which is what SC-008 asserts. The first published figure said 13 — the ranked count restated, not the row count — and a first correction attributed the 16-to-15 difference to a missing posterior, which is a different line (`PO-4473-1`, open, no posterior, shown as not_covered). Measured both times rather than reasoned about the second.
+  > Fix hint: point the boundary at `procurement_e2e`, and say why the two URLs differ so the next reader does not reconcile them the wrong way. Verified after the fix: `counts.total == 15`, ranked 13, unranked 2, and all 15 rows in the response are PO-447x. The database holds 16: `PO-4479-1` is closed and is excluded from the worklist under **FR-022** ("Lines whose lifecycle state is terminal MUST be excluded"), which `test_worklist_ranked.py:330` measures. SC-008 is a different rule about a different line — it governs a line the active run does not *cover*, which is `PO-4473-1`. The first published figure said 13 — the ranked count restated, not the row count — and a first correction attributed the 16-to-15 difference to a missing posterior, which is a different line (`PO-4473-1`, open, no posterior, shown as not_covered). Measured both times rather than reasoned about the second.
 
 - [X] T097 [BUG:WARNING] {FR-040} [accuracy] T081's record cites the wrong line for the gate it quotes — specs/00010-risk-ranked-coordinator-worklist/tasks.md:313
   > The record reads "plan.md:46 and HINT-003 (plan.md:438)". `plan.md:437` is HINT-003; `plan.md:438` is HINT-005. Off by one, in the only open task, in the sentence that quotes the release gate it exists to hold.
@@ -405,8 +405,47 @@
 
 - [X] T099 [BUG:WARNING] {FR-040} [accuracy] The PO-447x figure published for T096's verification was the ranked count restated — specs/00010-risk-ranked-coordinator-worklist/tasks.md:393
   > T096's record and `qc-report.md` both published "13 PO-447x rows" alongside "ranked 13, unranked 2". Measured: all **15** rows in the response are PO-447x, and the database holds **16**. 13 was the ranked count written twice.
-  > The first correction then attributed the 16-to-15 difference to a line with no posterior. Measured: `PO-4479-1` is **closed** and excluded, which is what SC-008 asserts; the posterior-less line is `PO-4473-1`, which is open and shows as not_covered. Two different lines and two different reasons.
+  > The first correction then attributed the 16-to-15 difference to a line with no posterior. Measured: `PO-4479-1` is **closed** and excluded under FR-022; the posterior-less line is `PO-4473-1`, which is open and shows as not_covered under FR-016/SC-008. Two different lines, two different rules — and the correction's own first citation named SC-008 for the terminal line, which is the rule for the other one.
   > Fix hint: state the response count, the database count, and the measured reason they differ.
+
+
+- [X] T100 [BUG:ERROR] {FR-040} [accuracy] T098's fix swept plan.md and left the same claim in tasks.md — specs/00010-risk-ranked-coordinator-worklist/tasks.md:52
+  > Under the live heading `## Gotchas carried into these tasks`, present tense, no closure marker: "**The endpoint address is not settled by implementation** (HINT-003). `specs/sad.md:124` and the contract name different addresses; the branch records the amendment and does not perform it."
+  > All three clauses are false at this commit. `specs/sad.md:126` reads `GET /api/v1/worklist?project_id=…`, identical to the contract; `specs/sad.md:124` is now a `participant` line; and `24456b9` is an ancestor of both `origin/main` and `HEAD`.
+  > T098 was filed because the T081 fix changed three sites in plan.md and missed a fourth. Its own fix then changed five sites in plan.md and one checklist and missed this one, in a different file. Every sibling bullet in the same list carries a closure marker where one applies.
+  > Fix hint: close in place, matching the convention two lines above.
+
+- [X] T101 [BUG:ERROR] {FR-040} [accuracy] The marker's section heading miscounts the sections it introduces — specs/00010-risk-ranked-coordinator-worklist/.completed:84
+  > The heading read "## What four iterations of QC actually found" above six enumerated iteration blocks, in a file whose second line says "47 bug tasks from six QC iterations". The commit that added iterations 5 and 6 updated the counts on lines 2 and 86 and left the heading two lines above one of them.
+  > A related site at :96 read "Five iterations, same shape" while enumerating five instances of a pattern that had by then recurred seven times.
+  > Fix hint: state six, and add the missing instances to the enumeration.
+
+- [X] T102 [BUG:ERROR] {FR-040} [accuracy] The marker's characterisation of its own defect history is falsified by its own QC report — specs/00010-risk-ranked-coordinator-worklist/.completed:86
+  > The marker claimed "**Every** finding after iteration 1 was an artifact claiming more than the repository does, rather than a fault in what it does — with two exceptions". `qc-report.md`'s iteration-2 Failure Index disproves it twice more: F-15 locates T066 at `rows.py:305` (a field on the wire that FR-029 forbids and FR-027 excludes) and F-17 locates T075 in `src/api/pyproject.toml` (pytest writing into the machine's shared temp directory). Neither is an artifact overclaim.
+  > The line was a flattering summary that the feature's own records contradict, which is the exact defect class it was written to describe.
+  > Fix hint: publish the measured split instead of a universal — 4 code/configuration faults, 4 tests that did not measure what they claimed, 26 accuracy defects.
+
+- [X] T103 [BUG:WARNING] {FR-040} [accuracy] The correction filed by T099 cited SC-008 for a rule SC-008 does not state — specs/00010-risk-ranked-coordinator-worklist/tasks.md:393
+  > Four sites claimed `PO-4479-1` "is closed and excluded per SC-008". SC-008 (spec.md:330) reads "A line the active run does not cover is visible to the coordinator and absent from the ranking" — it requires the line be **visible**, and `PO-4479-1` appears in neither group. It also *is* covered: it has a `line_posterior` row.
+  > The rule that excludes it is **FR-022** (spec.md:233): "Lines whose lifecycle state is terminal MUST be excluded from the worklist." The repository's own test names it — `test_worklist_ranked.py:330`, `test_the_terminal_line_appears_in_neither_group`, docstring "FR-022".
+  > SC-008's antecedent is satisfied by the line the same sentence says is *not* the reason: `PO-4473-1`, open, no posterior, `not_covered`.
+  > Same class as T097 — a citation that does not support the text quoting it — inside a correction filed for a mis-stated figure.
+  > Fix hint: cite FR-022 for the terminal line, SC-008 for the uncovered one.
+
+- [X] T104 [BUG:WARNING] {FR-040} [accuracy] T097's citation broke a second time when T098's fix moved the line it names — specs/00010-risk-ranked-coordinator-worklist/tasks.md:313
+  > T097 corrected this citation from `plan.md:438` to `:437`, which was right at `5e13ef4`. `07fa810` grew § `Recorded Amendment Request` by five lines above the hints, and HINT-003 moved to `:442`. The citation now names a blank line.
+  > A line-number citation into the same file is a reference that breaks whenever anything above it changes. Recorded rather than re-engineered, since the artifact conventions use them throughout.
+  > Fix hint: `plan.md:442` at both sites, and note in the marker that the number moved.
+
+- [X] T105 [BUG:WARNING] {FR-040} [process] qc-report.md holds no record of iteration 6 — specs/00010-risk-ranked-coordinator-worklist/qc-report.md:346
+  > AGENTS.md: "`qc-report.md` records QC results." Iterations 2, 3, 4 and 5 are recorded; iteration 6 is not, so the file's last statement about the release gate is iteration 5's "**FAIL**, on T081 alone… T081 does not close on this branch." A reader of the canonical QC artifact alone concludes the gate is still open.
+  > Identical to T095, which was filed for the same omission at iteration 3 and closed retrospectively.
+  > Fix hint: append iteration 6, and iteration 7 when it completes.
+
+- [X] T106 [BUG:WARNING] {FR-040} [governance] Principle VII: the named production-scale alternative does not reach production scale — specs/00010-risk-ranked-coordinator-worklist/plan.md:186
+  > T093 gave the benchmark-population limitation its four parts, and named as the production-scale alternative "run the benchmark against the E005 seeded set". Measured against the shared database: E005 holds **199 lines across 5 projects, of which 24 are open**; 175 are terminal and FR-022 excludes them from the worklist. So the named alternative moves the benchmark from 16 rows to 24, not to the ~200 the record calls the working scale.
+  > Two further sites asserted the stronger figure directly: `plan.md:22` "~200 **open** lines across 5 projects" and `contracts/openapi.yaml:192` "The working scale is roughly two hundred **open** lines". Both add "open" to `spec.md:296`'s "Roughly two hundred lines", which is a domain assumption the dataset does support and these two restatements do not.
+  > Fix hint: name a route that reaches the scale — E005's generator parameterised for ~200 *open* lines — and correct the two restatements to distinguish the domain assumption from the seeded set.
 
 
 ---

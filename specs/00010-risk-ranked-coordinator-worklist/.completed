@@ -1,6 +1,6 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 47 bug tasks from six QC iterations.
-All 47 are closed.
+Implementation complete: 52 tasks, plus 54 bug tasks from seven QC iterations.
+All 54 are closed.
 
 ## The release gate, and how it closed
 
@@ -81,19 +81,28 @@ at v1.2.8 (recorded in plan.md:30-31) when E006's merge brought the withdrawal.
 T076 corrected this marker, and T085 added the supersession note to spec.md's own
 Compliance Check, which had been reached by neither re-run.
 
-## What four iterations of QC actually found
+## What seven iterations of QC actually found
 
-47 defects. **Every finding after iteration 1 was an artifact claiming more than
-the repository does, rather than a fault in what it does** — with two exceptions:
-T083, a formatting gate that genuinely failed CI, and T096, a manual procedure
-that could not be executed as written. The recurring shape is narrower
+54 defects. Of the 41 after iteration 1, **most were artifacts claiming more than
+the repository does rather than faults in what it does — but not all, and an
+earlier version of this line said "every" and was wrong.** The measured split:
+four were faults in code or configuration — T066 put a field on the wire that
+FR-029 forbids, T075 left pytest writing to the machine's shared temp directory,
+T083 failed the CI format gate, T096 made the manual procedure unrunnable. Four
+more were tests that did not measure what they claimed — T067, T069, T073, T079.
+The remaining 33 were accuracy defects in what the feature published about
+itself. QC iteration 7 disproved the "every" by pointing at this feature's own
+qc-report.md, which locates T066 at `rows.py:305` and T075 in a pyproject. The recurring shape is narrower
 than that and worth naming: a bug task filed against N sites is fixed at the one
 site its title names. T071 named three task entries and left five in plan.md
 (T078); T078's own fix got two of the five replacements wrong (T089) and split a
 heading (T088); T072 named two sites and closed one (T084); T073 fixed the weight
 half of an assertion and left the size half (T079); T091 fixed the four items its
 title listed and left the one line that determined whether any of the file could
-be run at all (T096). Five iterations, same shape — and the lesson each time was
+be run at all (T096); and the commit closing T081 changed three sites in plan.md
+and left the fourth, the one whose only job is to state the amendment's status
+(T098) — then that fix swept plan.md and left the same claim in tasks.md (T099's
+sibling finding). Seven iterations, same shape — and the lesson each time was
 that the class is wider than the title.
 
   Iteration 1 (T053-T065) — 13 findings, mostly in code
@@ -183,7 +192,9 @@ that the class is wider than the title.
           name existed. Every scenario in the file was unobservable, and this
           file is the sole record of WCAG coverage. Now points at
           `procurement_e2e`; verified by running it: total 15, ranked 13.
-    T097  T081's record cited plan.md:438 for HINT-003, which is at 437.
+    T097  T081's record cited plan.md:438 for HINT-003, which was at 437. The
+          number moved to 442 when T098's fix grew the section above it, and the
+          citation broke a second time — corrected again at iteration 7.
 
   Iteration 6 (T098-T099) — 2 findings, both in the commit that closed T081
     T098  That commit changed three sites in plan.md and left the fourth — the
@@ -193,10 +204,30 @@ that the class is wider than the title.
           contradicted itself about the gate in the same commit that closed
           it. Also corrected the C4 label at plan.md:62, a fourth address
           site, on the same argument the commit itself had made.
+  Iteration 7 (T100-T106) — 7 findings, six of them in artifacts about the work
+    T100  T098's fix swept plan.md and left the same claim in tasks.md:52.
+    T101  The marker's own section heading said "four iterations" above six.
+    T102  The marker claimed *every* post-iteration-1 finding was an artifact
+          overclaim. Its own qc-report.md disproves it: T066 was a field on the
+          wire FR-029 forbids, T075 was pytest writing to the shared system temp
+          directory. Replaced with the measured split.
+    T103  The T099 correction cited SC-008 for the terminal-line exclusion;
+          SC-008 governs the uncovered line, and FR-022 governs the terminal one.
+    T104  T097's citation broke again when T098's fix moved the line it names.
+    T105  qc-report.md held no record of iteration 6 — the same omission T095 was
+          filed for at iteration 3.
+    T106  Principle VII: the production-scale alternative named the E005 seeded
+          set, which holds 199 lines but only **24 open** — FR-022 excludes the
+          other 175. It moved the benchmark from 16 rows to 24, not to the ~200
+          the record calls the working scale. Two further sites asserted "~200
+          open lines" directly and are corrected.
+
     T099  The PO-447x figure published for T096 was the ranked count written
           twice. All 15 response rows are PO-447x; the database holds 16, and
-          the difference is `PO-4479-1`, which is closed and excluded per
-          SC-008 — not the posterior-less line, which is a different one.
+          the difference is `PO-4479-1`, which is closed and excluded under
+          FR-022 — not the posterior-less line, which is a different one under a
+          different rule. The first correction cited SC-008 for the terminal
+          line; SC-008 governs the uncovered one.
 
 ## Reported, outside E010's scope
 
