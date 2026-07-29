@@ -365,3 +365,86 @@ def test_the_ordering_digest_changes_with_the_order_and_not_otherwise(
     assert first["ordering_digest"] != (
         "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     ), "a ranking with rows in it must not carry the empty sequence's digest"
+
+
+def test_the_excluded_group_holds_its_order_under_every_sort_key(
+    frozen_run: dict[str, Any], client: Any, monkeypatch: Any
+) -> None:
+    """FR-045. The excluded group's order is fixed rather than following the
+    active key, for two reasons.
+
+    At least one of FR-026's four keys reads a figure an excluded line does not
+    have — expected harm needs draws it has none of. And a group outside the
+    ranking that reordered *with* the ranking would read as part of it, which is
+    the whole distinction FR-016 draws.
+    """
+    from api.routes import worklist as route
+
+    monkeypatch.setattr(route, "now_in_zone", lambda: _at(TODAY))
+
+    orders = set()
+    for key in ("expected_harm", "need_by_date", "criticality", "calendar_margin"):
+        body = client.get("/api/v1/worklist", params={"sort": key}).json()
+        orders.add(tuple(row["po_line_id"] for row in body["unranked"]))
+        dates = [row["primary"]["need_by"]["date"] for row in body["unranked"]]
+        assert dates == sorted(dates), f"under {key}, the excluded group left need-by order"
+
+    assert len(orders) == 1, "the excluded group moved with the ranking"
+
+
+def test_scoping_reranks_within_the_scope(
+    frozen_run: dict[str, Any], client: Any, monkeypatch: Any
+) -> None:
+    """FR-025. Rank is recomputed within the active scope, so the top line of a
+    filtered list is rank 1 — a rank retained from the unscoped ordering would
+    show a list starting at 4 and mean nothing a coordinator could act on."""
+    from api.routes import worklist as route
+
+    monkeypatch.setattr(route, "now_in_zone", lambda: _at(TODAY))
+
+    scoped = client.get("/api/v1/worklist", params={"project_id": "PRJ-002"}).json()
+    assert scoped["ranked"], "PRJ-002 has ranked lines in the fixture"
+    assert [row["rank"] for row in scoped["ranked"]] == list(range(1, len(scoped["ranked"]) + 1))
+    assert all(
+        row["primary"]["identity"]["project_id"] == "PRJ-002"
+        for row in scoped["ranked"] + scoped["unranked"]
+    )
+
+
+def test_the_counts_reconcile_under_a_scope(
+    frozen_run: dict[str, Any], client: Any, monkeypatch: Any
+) -> None:
+    """SC-023, FR-045. A line outside the scope appears in neither group, and
+    the counts still add up — which is what separates correct exclusion from a
+    query that dropped rows."""
+    from api.routes import worklist as route
+
+    monkeypatch.setattr(route, "now_in_zone", lambda: _at(TODAY))
+
+    total = 0
+    for project in ("PRJ-001", "PRJ-002", "PRJ-003"):
+        counts = client.get("/api/v1/worklist", params={"project_id": project}).json()["counts"]
+        assert counts["ranked"] + counts["unranked"] == counts["total"]
+        total += counts["total"]
+
+    assert total == client.get("/api/v1/worklist").json()["counts"]["total"]
+
+
+def test_changing_the_sort_key_changes_the_ranked_order(
+    frozen_run: dict[str, Any], client: Any, monkeypatch: Any
+) -> None:
+    """FR-026. The key has to actually order the list, or the control is
+    decoration — and a sort control that appears to work and does not is worse
+    than none, because a coordinator will trust the order it shows."""
+    from api.routes import worklist as route
+
+    monkeypatch.setattr(route, "now_in_zone", lambda: _at(TODAY))
+
+    by_harm = [row["po_line_id"] for row in client.get("/api/v1/worklist").json()["ranked"]]
+    by_need_by = [
+        row["po_line_id"]
+        for row in client.get("/api/v1/worklist", params={"sort": "need_by_date"}).json()["ranked"]
+    ]
+
+    assert sorted(by_harm) == sorted(by_need_by), "no line may appear or vanish with the key"
+    assert by_harm != by_need_by

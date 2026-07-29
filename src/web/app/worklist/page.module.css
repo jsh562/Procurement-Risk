@@ -89,6 +89,36 @@
   margin-bottom: 0.75rem;
 }
 
+/*
+ * FR-025, FR-026, FR-051. The scope and sort controls. Above the list and
+ * before it in the document, because they govern what the list contains — a
+ * control a coordinator meets after the rows is one they reach having already
+ * read a list they might have wanted narrowed.
+ */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.control {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.control select {
+  font: inherit;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+}
+
 .groupNote,
 .tiebreak {
   font-size: var(--scale-secondary);

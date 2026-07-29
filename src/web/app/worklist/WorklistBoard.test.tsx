@@ -299,6 +299,34 @@ describe("adjusting a need-by date", () => {
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
+  it("keeps the active scope and sort when re-querying after an adjustment", async () => {
+    // A coordinator who filtered to one project has not withdrawn the filter by
+    // asking a what-if question inside it — and a request that dropped the
+    // scope would answer with a list they did not ask for.
+    const scoped: WorklistResponse = {
+      ...INITIAL,
+      scope: { project_id: "PRJ-002", available_projects: [] },
+      sort: { ...INITIAL.sort, key: "criticality" },
+    };
+    const spy = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => scoped,
+      requested: url,
+    }));
+    vi.stubGlobal("fetch", spy);
+    render(<WorklistBoard initial={scoped} />);
+
+    await adjust(A, "2026-08-05");
+
+    await waitFor(() => {
+      const url = String(spy.mock.calls.at(-1)?.[0]);
+      expect(url).toContain("project_id=PRJ-002");
+      expect(url).toContain("sort=criticality");
+    });
+  });
+
   it("offers a keyboard-operable native date control", () => {
     // FR-051. A native input is keyboard-operable, announces itself and accepts
     // typed input without any of that being reimplemented — which is where
@@ -309,5 +337,165 @@ describe("adjusting a need-by date", () => {
     });
     expect(input).toHaveAttribute("type", "date");
     expect(input.tagName).toBe("INPUT");
+  });
+});
+
+describe("scoping and sorting", () => {
+  const WITH_PROJECTS: WorklistResponse = {
+    ...INITIAL,
+    scope: {
+      project_id: null,
+      available_projects: [
+        { project_id: "PRJ-001", open_line_count: 12 },
+        { project_id: "PRJ-002", open_line_count: 0 },
+      ],
+    },
+    sort: {
+      ...INITIAL.sort,
+      options: [
+        { key: "expected_harm", direction: "desc", is_default: true, is_active: true },
+        { key: "need_by_date", direction: "asc", is_default: false, is_active: false },
+        { key: "criticality", direction: "desc", is_default: false, is_active: false },
+        { key: "calendar_margin", direction: "asc", is_default: false, is_active: false },
+      ],
+    },
+  };
+
+  it("offers exactly FR-026's four keys and no delivery-date or single-quantile key", () => {
+    // FR-026, FR-032. The absence is the requirement: a key ordering lines by a
+    // single delivery date, or by one quantile alone, is the point estimate
+    // re-entering through the sort control.
+    render(<WorklistBoard initial={WITH_PROJECTS} />);
+    const options = [...screen.getByLabelText("Order by").querySelectorAll("option")].map(
+      (option) => option.getAttribute("value"),
+    );
+
+    expect(options).toEqual(["expected_harm", "need_by_date", "criticality", "calendar_margin"]);
+    for (const forbidden of ["p50", "p80", "delivery_date", "median", "eightieth"]) {
+      expect(options).not.toContain(forbidden);
+    }
+  });
+
+  it("takes the offered keys from the response rather than a list of its own", () => {
+    // FR-032 makes the claim testable against the response; a hard-coded list
+    // here would be a second source of truth that agrees until it does not.
+    render(
+      <WorklistBoard
+        initial={{
+          ...WITH_PROJECTS,
+          sort: {
+            ...WITH_PROJECTS.sort,
+            options: [
+              { key: "vendor_reliability", direction: "asc", is_default: false, is_active: true },
+            ],
+          },
+        }}
+      />,
+    );
+    const options = [...screen.getByLabelText("Order by").querySelectorAll("option")].map(
+      (option) => option.getAttribute("value"),
+    );
+    expect(options).toEqual(["vendor_reliability"]);
+  });
+
+  it("offers every project with its open-line count, plus a way out of the filter", () => {
+    // FR-025. The full set even while a filter is active, so the scope can be
+    // left without a second request — and the count because a project holding
+    // nothing and one simply not selected are otherwise indistinguishable from
+    // inside a filtered list.
+    render(
+      <WorklistBoard
+        initial={{ ...WITH_PROJECTS, scope: { ...WITH_PROJECTS.scope, project_id: "PRJ-001" } }}
+      />,
+    );
+    const select = screen.getByLabelText("Project") as HTMLSelectElement;
+
+    expect([...select.querySelectorAll("option")].map((o) => o.textContent)).toEqual([
+      "All projects",
+      "PRJ-001 (12 open)",
+      "PRJ-002 (0 open)",
+    ]);
+    expect(select.value).toBe("PRJ-001");
+  });
+
+  it("re-queries under a chosen scope", async () => {
+    const spy = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => WITH_PROJECTS,
+      requested: url,
+    }));
+    vi.stubGlobal("fetch", spy);
+    render(<WorklistBoard initial={WITH_PROJECTS} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Project"), { target: { value: "PRJ-002" } });
+    });
+
+    await waitFor(() => {
+      expect(String(spy.mock.calls.at(-1)?.[0])).toContain("project_id=PRJ-002");
+    });
+  });
+
+  it("re-queries under a chosen sort key", async () => {
+    const spy = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => WITH_PROJECTS,
+      requested: url,
+    }));
+    vi.stubGlobal("fetch", spy);
+    render(<WorklistBoard initial={WITH_PROJECTS} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Order by"), { target: { value: "need_by_date" } });
+    });
+
+    await waitFor(() => {
+      expect(String(spy.mock.calls.at(-1)?.[0])).toContain("sort=need_by_date");
+    });
+  });
+
+  it("says so rather than leaving a stale list when a re-query fails", async () => {
+    // The list on screen would otherwise answer a question the coordinator did
+    // not ask — the filter they chose, applied to rows from the one they left.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("ECONNREFUSED");
+      }),
+    );
+    render(<WorklistBoard initial={WITH_PROJECTS} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Project"), { target: { value: "PRJ-002" } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(/could not be reloaded/i);
+    });
+  });
+
+  it("does not raise an adjustment acknowledgement for a sort the coordinator chose", async () => {
+    // FR-012's message is about an adjustment. A reorder the coordinator asked
+    // for by changing the key needs no announcement that the order changed —
+    // they changed it, and saying so would train them to ignore the region.
+    const spy = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => response([row(B, 1, "2026-09-10")], "sha256:different"),
+    }));
+    vi.stubGlobal("fetch", spy);
+    render(<WorklistBoard initial={WITH_PROJECTS} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Order by"), { target: { value: "criticality" } });
+    });
+
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 });

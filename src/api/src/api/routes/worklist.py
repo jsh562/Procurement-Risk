@@ -207,7 +207,7 @@ def read_worklist(
     # would compute a figure the state withholds, and then have to remember to
     # drop it. Each step here can only see what the one before it admitted.
     ranked = [item for item in resolved if item.is_ranked]
-    ordered = _order(ranked, inputs)
+    ordered = _order(ranked, inputs, sort_key)
     unranked = _order_excluded([item for item in resolved if not item.is_ranked])
 
     # FR-020a. Computed over exactly the admitted inputs, so an unchanged value
@@ -293,8 +293,8 @@ def _order_excluded(unranked: list[ResolvedLine]) -> list[ResolvedLine]:
     )
 
 
-def _order(ranked: list[ResolvedLine], inputs: Any) -> list[ResolvedLine]:
-    """Order the ranked group worst-first."""
+def _order(ranked: list[ResolvedLine], inputs: Any, sort_key: str) -> list[ResolvedLine]:
+    """Order the ranked group under the active key."""
     if inputs.run is None:
         return ranked
 
@@ -308,7 +308,8 @@ def _order(ranked: list[ResolvedLine], inputs: Any) -> list[ResolvedLine]:
         )
         for item in ranked
     ]
-    position = {po_line_id: index for index, po_line_id in enumerate(order_lines(rankable))}
+    ordering = order_lines(rankable, sort_key=sort_key)
+    position = {po_line_id: index for index, po_line_id in enumerate(ordering)}
     return sorted(ranked, key=lambda item: position[item.line.po_line_id])
 
 

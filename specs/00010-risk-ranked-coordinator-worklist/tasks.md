@@ -133,11 +133,11 @@
 
 **Independent test**: filter to one project and confirm only its lines appear and the ranking reruns within that scope; change the sort key and confirm the order changes and the active key is displayed.
 
-- [ ] T042 [US4] {FR-025} `scope.available_projects` with `open_line_count`, the full set in every state including while a scope is active — API/routes/worklist.py
-- [ ] T043 [US4] {FR-025,FR-051} [COMPLETES FR-025] Scoping control in WEB/page.tsx — full selectable set, keyboard-operable, active scope exposed to assistive technology
-- [ ] T044 [US4] {FR-026} On-screen enumeration of FR-026's four keys with the active key and direction, in WEB/page.tsx after:T043
-- [ ] T045 [P] [US4] {FR-026,FR-032} [COMPLETES FR-026] Offered key set holds no delivery-date or single-quantile key; scope reranks — WTS/worklist.test.tsx
-- [ ] T046 [P] [US4] {FR-045} Excluded-group order and scope invariance under all four keys, in TST/test_worklist_endpoint.py
+- [X] T042 [US4] {FR-025} `scope.available_projects` with `open_line_count`, the full set in every state including while a scope is active — API/routes/worklist.py
+- [X] T043 [US4] {FR-025,FR-051} [COMPLETES FR-025] Scoping control in WEB/page.tsx — full selectable set, keyboard-operable, active scope exposed to assistive technology
+- [X] T044 [US4] {FR-026} On-screen enumeration of FR-026's four keys with the active key and direction, in WEB/page.tsx after:T043
+- [X] T045 [P] [US4] {FR-026,FR-032} [COMPLETES FR-026] Offered key set holds no delivery-date or single-quantile key; scope reranks — WTS/worklist.test.tsx
+- [X] T046 [P] [US4] {FR-045} Excluded-group order and scope invariance under all four keys, in TST/test_worklist_endpoint.py
 
 ---
 

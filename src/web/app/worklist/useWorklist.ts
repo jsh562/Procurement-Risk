@@ -46,6 +46,9 @@ export interface UseWorklist {
   readonly acknowledgement: Acknowledgement | null;
   readonly pending: boolean;
   readonly adjust: (poLineId: string, needByDate: string) => Promise<void>;
+  /** FR-025, FR-026. A scope or sort change re-queries under the same overrides. */
+  readonly rescope: (projectId: string | null) => Promise<void>;
+  readonly resort: (sortKey: string) => Promise<void>;
   readonly clearAcknowledgement: () => void;
 }
 
@@ -58,6 +61,11 @@ export function useWorklist(initial: WorklistResponse): UseWorklist {
   const [overrides, setOverrides] = useState<ReadonlyMap<string, string>>(new Map());
   const [acknowledgement, setAcknowledgement] = useState<Acknowledgement | null>(null);
   const [pending, setPending] = useState(false);
+  // The active scope and sort. Held here rather than read from `worklist` on
+  // each call so a request in flight cannot be built from a response that has
+  // not arrived yet.
+  const [projectId, setProjectId] = useState<string | null>(initial.scope.project_id);
+  const [sortKey, setSortKey] = useState(initial.sort.key);
 
   // The digest of the ordering the coordinator is currently looking at. Held in
   // a ref rather than derived from `worklist` at compare time so a re-render
@@ -73,6 +81,8 @@ export function useWorklist(initial: WorklistResponse): UseWorklist {
       let response: WorklistResponse;
       try {
         response = await fetchWorklist({
+          projectId: projectId ?? undefined,
+          sort: sortKey,
           overrides: [...next].map(([id, date]) => `${id}:${date}`),
         });
       } catch {
@@ -132,7 +142,7 @@ export function useWorklist(initial: WorklistResponse): UseWorklist {
             },
       );
     },
-    [overrides],
+    [overrides, projectId, sortKey],
   );
 
   /**
@@ -143,7 +153,62 @@ export function useWorklist(initial: WorklistResponse): UseWorklist {
    */
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
 
-  return { worklist, overrides, acknowledgement, pending, adjust, clearAcknowledgement };
+  /**
+   * FR-025, FR-026. Re-query under a new scope or sort key.
+   *
+   * The adjustment set travels along, because a coordinator who filtered to one
+   * project has not withdrawn the question they were asking about a date in it.
+   * An override naming a line the new scope excludes comes back in `unapplied`
+   * with `line_out_of_scope`, which is the honest answer rather than a silent
+   * drop.
+   *
+   * No acknowledgement is raised: FR-012's message is about an *adjustment*, and
+   * a reorder the coordinator asked for by changing the sort key needs no
+   * announcement that the order changed — they changed it.
+   */
+  const requery = useCallback(
+    async (next: { projectId?: string | null; sort?: string }) => {
+      const scope = next.projectId === undefined ? projectId : next.projectId;
+      const key = next.sort ?? sortKey;
+      setPending(true);
+      try {
+        const response = await fetchWorklist({
+          projectId: scope ?? undefined,
+          sort: key,
+          overrides: [...overrides].map(([id, date]) => `${id}:${date}`),
+        });
+        previousDigest.current = response.ordering_digest;
+        setWorklist(response);
+        setProjectId(scope);
+        setSortKey(key);
+      } catch {
+        setAcknowledgement({
+          kind: "refused",
+          message:
+            "The worklist could not be reloaded, so the list below still reflects the previous " +
+            "scope and sort. Retry in a moment.",
+          poLineId: null,
+        });
+      } finally {
+        setPending(false);
+      }
+    },
+    [overrides, projectId, sortKey],
+  );
+
+  const rescope = useCallback((next: string | null) => requery({ projectId: next }), [requery]);
+  const resort = useCallback((next: string) => requery({ sort: next }), [requery]);
+
+  return {
+    worklist,
+    overrides,
+    acknowledgement,
+    pending,
+    adjust,
+    rescope,
+    resort,
+    clearAcknowledgement,
+  };
 }
 
 const REASON_TEXT: Readonly<Record<string, string>> = {

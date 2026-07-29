@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -178,3 +179,45 @@ def test_pulling_a_need_by_date_in_never_lowers_the_harm(
         po_line_id=UUID(int=2), draws=draws, need_by_offset=offset - 1, criticality=3
     )
     assert expected_harm(sooner) >= expected_harm(later) - 1e-9
+
+
+@given(lines=st.lists(rankable_lines(), min_size=2, max_size=6, unique_by=lambda x: x.po_line_id))
+def test_every_offered_key_produces_a_total_order(lines: list[RankableLine]) -> None:
+    """FR-010, FR-026. The tiebreak follows every key, not only the default.
+
+    Under `need_by_date`, a whole day's lines tie on the key alone. Without the
+    tiebreak their order would be whatever the query returned — the same defect
+    FR-010 names for the zero-harm block, appearing somewhere else.
+    """
+    for key in ("expected_harm", "need_by_date", "criticality", "calendar_margin"):
+        forward = order_lines(lines, sort_key=key)
+        backward = order_lines(list(reversed(lines)), sort_key=key)
+        assert forward == backward, f"{key} depends on the input sequence"
+        assert sorted(forward) == sorted(line.po_line_id for line in lines)
+
+
+@given(lines=st.lists(rankable_lines(), min_size=2, max_size=6, unique_by=lambda x: x.po_line_id))
+def test_need_by_date_orders_soonest_first(lines: list[RankableLine]) -> None:
+    """FR-026's fixed direction for this key. Ascending: the date due soonest
+    leads, because a worklist ordered latest-first is a list of what to ignore."""
+    by_id = {line.po_line_id: line for line in lines}
+    offsets = [by_id[item].need_by_offset for item in order_lines(lines, sort_key="need_by_date")]
+    assert offsets == sorted(offsets)
+
+
+@given(lines=st.lists(rankable_lines(), min_size=2, max_size=6, unique_by=lambda x: x.po_line_id))
+def test_criticality_orders_most_critical_first(lines: list[RankableLine]) -> None:
+    """FR-026's fixed direction. Descending, 5 first — the direction is fixed
+    per key rather than chosen by the caller, so "most critical first" cannot be
+    inverted into "least critical first" by a query parameter."""
+    by_id = {line.po_line_id: line for line in lines}
+    values = [by_id[item].criticality for item in order_lines(lines, sort_key="criticality")]
+    assert values == sorted(values, reverse=True)
+
+
+def test_an_unoffered_key_is_refused_rather_than_defaulted() -> None:
+    """FR-026. Falling back to the default would order the list by something
+    other than what the screen says it is ordered by — and the screen is what a
+    coordinator would believe."""
+    with pytest.raises(ValueError, match="four keys"):
+        order_lines([], sort_key="p50")

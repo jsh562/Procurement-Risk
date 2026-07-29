@@ -26,8 +26,16 @@ import styles from "./page.module.css";
  * away and leave half the outcomes silent.
  */
 export function WorklistBoard({ initial }: { readonly initial: WorklistResponse }) {
-  const { worklist, overrides, acknowledgement, pending, adjust, clearAcknowledgement } =
-    useWorklist(initial);
+  const {
+    worklist,
+    overrides,
+    acknowledgement,
+    pending,
+    adjust,
+    rescope,
+    resort,
+    clearAcknowledgement,
+  } = useWorklist(initial);
   const controls = useRef(new Map<string, HTMLInputElement>());
 
   useEffect(() => {
@@ -40,6 +48,8 @@ export function WorklistBoard({ initial }: { readonly initial: WorklistResponse 
 
   return (
     <>
+      <Controls worklist={worklist} onRescope={rescope} onResort={resort} />
+
       {/*
        * FR-012, FR-046. One region, persistent, never on a timer — a message
        * that disappears is the documented way an acknowledgement is missed.
@@ -106,6 +116,73 @@ export function WorklistBoard({ initial }: { readonly initial: WorklistResponse 
         </section>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The scope and sort controls.
+ *
+ * FR-025, FR-026, FR-051. Both are native `<select>` elements: keyboard-
+ * operable, announced with their label and current value, and navigable by
+ * typing — none of which a custom listbox gets for free, and all three of which
+ * a coordinator working through assistive technology needs.
+ *
+ * **The offered keys come from the response**, not from a list here. FR-032
+ * makes "the offered keys are exactly FR-026's four" testable against the
+ * response rather than against this component's source — and the absence is the
+ * point: no key orders lines by a single delivery date or by one quantile
+ * alone, which is how the point estimate would re-enter through the sort
+ * control.
+ *
+ * **The full project set is always offered**, including while a filter is
+ * active, so a coordinator can leave a scope without a second request. The
+ * open-line count travels with each because a project holding nothing and a
+ * project simply not selected are otherwise identical from inside a filtered
+ * list.
+ */
+function Controls({
+  worklist,
+  onRescope,
+  onResort,
+}: {
+  readonly worklist: WorklistResponse;
+  readonly onRescope: (projectId: string | null) => Promise<void>;
+  readonly onResort: (sortKey: string) => Promise<void>;
+}) {
+  return (
+    <div className={styles.controls}>
+      <span className={styles.control}>
+        <label htmlFor="worklist-scope">Project</label>
+        <select
+          id="worklist-scope"
+          value={worklist.scope.project_id ?? ""}
+          onChange={(event) => void onRescope(event.target.value || null)}
+        >
+          <option value="">All projects</option>
+          {worklist.scope.available_projects.map((project) => (
+            <option key={project.project_id} value={project.project_id}>
+              {project.project_id} ({project.open_line_count} open)
+            </option>
+          ))}
+        </select>
+      </span>
+
+      <span className={styles.control}>
+        <label htmlFor="worklist-sort">Order by</label>
+        <select
+          id="worklist-sort"
+          value={worklist.sort.key}
+          onChange={(event) => void onResort(event.target.value)}
+        >
+          {worklist.sort.options.map((option) => (
+            <option key={option.key} value={option.key}>
+              {SORT_LABELS[option.key] ?? option.key}
+              {option.direction === "desc" ? " (highest first)" : " (lowest first)"}
+            </option>
+          ))}
+        </select>
+      </span>
+    </div>
   );
 }
 
