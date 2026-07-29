@@ -219,7 +219,7 @@ The ground-truth record exists so a later forecast model can be scored on whethe
 
 - `NEW-CONFIG` — console entry points for generation, loading, and validation, following the pattern the corpus epic already established in the modeling entry.
 - `NEW-ENTITY` — no new tables; rows populate the delivered `purchase_order_line` and `lifecycle_event`. Three new committed file artifacts: dataset fixture, datasheet, ground-truth record.
-- `MIGRATION` — none expected. E005's reserved filename-prefix block `0200`–`0299` was claimed at epic start per governance and is anticipated to go unused; the claim stands regardless so a later need cannot collide. Decision-record numbers from `0018` were claimed in the same pass and are likewise expected to go unused.
+- `MIGRATION` — none expected. E005's reserved filename-prefix block `0200`–`0299` was claimed at epic start per governance and is anticipated to go unused; the claim stands regardless so a later need cannot collide. Decision-record numbers from `0018` were claimed in the same pass and are likewise expected to go unused. **Corrected 2026-07-28 — the second half did not hold.** `0018` was taken by E007 for ADR-0018, and `0019`–`0021` by E006 after it ceded `0018` to E007 at `c177d99`. Four of the numbers this epic expected to leave unused are now allocated records. The migration block `0200`–`0299` is still unused, so the two halves of the claim have different fates and the reason is worth naming: a claim protects a range against collision, it does not predict demand for it.
 
 ## Success Criteria *(mandatory)*
 
