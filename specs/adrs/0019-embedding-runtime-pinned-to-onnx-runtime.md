@@ -1,5 +1,5 @@
 ---
-adr_id: ADR-0018
+adr_id: ADR-0019
 status: accepted
 date: 2026-07-27
 tags: [retrieval, embeddings, runtime, compute-envelope, reproducibility]
@@ -9,7 +9,7 @@ related_artifacts: ["specs/prd.md", "CAP-003", "ADR-0003", "ADR-0006", "ADR-0009
 deciders: ["Project owner", "Solution architect"]
 ---
 
-# ADR-0018: Embedding Runtime Pinned to ONNX Runtime for Corpus and Query Embedding
+# ADR-0019: Embedding Runtime Pinned to ONNX Runtime for Corpus and Query Embedding
 
 ## Status
 
