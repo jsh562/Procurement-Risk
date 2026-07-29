@@ -82,6 +82,14 @@ VERDICT_MARKERS: tuple[str, ...] = (
     "equal",
     "passes",
     "conforms",
+    # Added when the draw-digest claim lost its failing disposition. The claim now
+    # resolves to `equal` or to a scope limit and never to a failure, so "scope
+    # limit" is a verdict in the corrected vocabulary rather than an absence of one
+    # — and the word-boundary match above means "equality" inside the surrounding
+    # prose does not stand in for it. Found by running this suite on Linux, where
+    # the claim degrades; on Windows it resolves to `equal` and this row was never
+    # exercised.
+    "scope limit",
 )
 
 
