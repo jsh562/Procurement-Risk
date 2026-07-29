@@ -167,6 +167,9 @@
  * class needs now that each frequency names its population.
  */
 .row {
+  /* The containing block for this row's provenance panels, which float below it
+   * rather than expanding it. See `.explainBody`. */
+  position: relative;
   display: grid;
   grid-template-columns: 3rem minmax(0, 1fr);
   column-gap: 0.75rem;
@@ -426,8 +429,14 @@
  * answer — an explanation that competed with the figure it explains would be a
  * fifth thing to read on a row capped at four.
  */
+/*
+ * Deliberately *not* positioned. The panel is absolute against the row, not
+ * against this toggle, so the row must be its nearest positioned ancestor — see
+ * `.explainBody` for why anchoring to the toggle does not survive contact with a
+ * real layout.
+ */
 .explain {
-  display: inline;
+  display: inline-block;
   font-size: var(--scale-explain);
   font-weight: 400;
 }
@@ -457,17 +466,58 @@
 }
 
 /*
- * Opened, the panel becomes a block in the row's flow rather than a floating
- * layer. Nothing has to be positioned, nothing can be clipped by an ancestor,
- * and the row simply grows — which is the behaviour a keyboard or screen-reader
- * reader gets anyway, so sighted readers get the same one.
+ * A floating panel, not a block in the row's flow. Opening one must not move
+ * anything: a figure that shifts down the page when a neighbouring explanation
+ * opens is a figure a reader loses their place in, and on a 24-row list every
+ * open panel would displace every row below it.
+ *
+ * `position: absolute` against the toggle rather than the Popover API. Popover
+ * would give light dismiss and Escape for nothing, but it renders in the top
+ * layer, which detaches the panel from its anchor's positioning context — and
+ * anchor positioning is not yet portable enough to put it back. A panel that
+ * floats but appears somewhere unrelated to the figure it explains is not a
+ * tooltip.
+ *
+ * An opaque background is load-bearing rather than decoration: the panel overlaps
+ * live text, and `--background` follows the light/dark scheme `globals.css` sets
+ * so it stays opaque in both.
  */
 .explainBody {
-  display: block;
-  margin: 0.35rem 0 0.5rem;
-  padding: 0.5rem 0.7rem;
-  border-left: 2px solid currentColor;
-  max-width: 46rem;
+  /*
+   * Anchored to the row, spanning its width, floating just below it.
+   *
+   * The obvious design — absolute against the toggle, growing right and down —
+   * was built first and measured off-screen at five of six viewport widths, on
+   * both sides. A toggle in the row's right half throws its panel past the
+   * viewport; right-aligning that one throws the left-hand toggles' panels past
+   * zero. There is no static alignment that works, because CSS cannot see where
+   * the anchor sits, and the anchor moves with the text beside it. Clamping via
+   * `max-width` does not help either: the overflow is a function of position, not
+   * of width.
+   *
+   * Anchoring to the row removes the variable. `left: 0; right: 0` against a box
+   * that is already inside the page cannot leave the viewport at any width, and
+   * the full row width suits the content — a paragraph, a formula and a source
+   * note were never tooltip-sized.
+   */
+  position: absolute;
+  z-index: 20;
+  top: calc(100% - 0.25rem);
+  left: 0;
+  right: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  /* Opaque, and load-bearing rather than decoration: the panel overlays the row
+   * beneath it. `--background` follows the scheme `globals.css` sets, so it stays
+   * opaque in dark mode too. */
+  background: var(--background);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.28);
+  text-align: left;
+  /* Reset for panels opened from a heading or from the italic stale mark, both of
+   * which would otherwise inherit into the panel. */
+  font-weight: 400;
+  font-style: normal;
 }
 
 .explainWhat {

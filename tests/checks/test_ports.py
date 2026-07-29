@@ -92,6 +92,63 @@ def test_the_substitute_is_actually_bindable() -> None:
         assert is_bindable(resolution.port)
 
 
+@contextmanager
+def occupied_dual_stack(port: int) -> Iterator[None]:
+    """Hold `port` the way a Node server does: `::` with `IPV6_V6ONLY` cleared.
+
+    This is the shape that defeated the IPv4-only probe. Skips rather than fails
+    where the machine has no usable IPv6 stack, because a bind that never
+    succeeded proves nothing about a resolver.
+    """
+    holder = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    try:
+        try:
+            holder.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            holder.bind(("::", port))
+        except OSError as exc:
+            pytest.skip(f"no usable dual-stack IPv6 on this machine: {exc}")
+        holder.listen(1)
+        yield
+    finally:
+        holder.close()
+
+
+def test_a_dual_stack_ipv6_listener_is_seen_as_occupied() -> None:
+    """The false negative that cost a misdiagnosis.
+
+    An orphaned `next` dev server binds `::` dual-stack. Probing only
+    `127.0.0.1` — or even `0.0.0.0` — succeeds against that holder on Windows, so
+    `is_bindable` reported the port free while `docker compose up` still failed
+    to publish it. Four orchestration checks failed and the dev server was twice
+    ruled out as the cause.
+
+    Asserted at both the probe and the resolver, because a resolver that walked
+    on a correct probe would still be wrong if it walked to another held port.
+    """
+    port = a_free_port()
+    with occupied_dual_stack(port):
+        assert not is_bindable(port), (
+            f"{port} is held by a dual-stack IPv6 listener and was reported bindable"
+        )
+        resolution = resolve_host_port(port, name="web")
+        assert resolution.substituted
+        assert resolution.port != port
+        assert is_bindable(resolution.port)
+
+
+def test_an_unusable_ipv6_stack_does_not_condemn_every_port() -> None:
+    """The failure mode the fix must not introduce.
+
+    Only `EADDRINUSE` may count as occupied. If any IPv6 error meant "taken",
+    a machine without IPv6 would report every port unavailable and the search
+    would raise instead of resolving — turning a portability gap into a hard
+    stop. A port the OS just handed out must still read as free.
+    """
+    port = a_free_port()
+    assert is_bindable(port)
+    assert resolve_host_port(port, name="db").port == port
+
+
 def test_a_substitute_is_never_a_conventional_default() -> None:
     """SC-010's guarantee survives substitution.
 
