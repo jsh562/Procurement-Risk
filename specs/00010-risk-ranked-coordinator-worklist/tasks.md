@@ -308,12 +308,13 @@
   > Fix hint: name each tool's scope in the marker. Do not add mypy to `src/api` — `verify.yml` states the scope widens when `api` and `model` are annotated to a standard strict mypy accepts, which is not this feature's work.
 
 
-- [ ] T081 [BUG:CRITICAL] {FR-040} [governance] **BLOCKED — cannot be closed on this branch.** The release gate this plan declares for itself is unmet: three artifacts name three addresses — specs/sad.md:124
+- [X] T081 [BUG:CRITICAL] {FR-040} [governance] **CLOSED by amendment on the default branch.** The release gate this plan declares for itself was unmet: three artifacts named three addresses — specs/sad.md:124
   > `specs/sad.md:124` reads `W->>A: GET /lines?project=…` on this branch and on `main`. `contracts/openapi.yaml` declares `servers: /api/v1` with path `/worklist`. `plan.md:90` names a third form.
   > plan.md:46 and HINT-003 (plan.md:437) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
   > project-instructions.md:94 is why it lands elsewhere: "Amendments to the documents named in this section are serialized. At most one amendment is in flight at a time, **it is performed on the default branch**, and it lands before the next begins. **A feature branch records the need for an amendment and does not perform it.**"
   > So this task is recorded and left open by design. Closing it here would violate the rule that makes it a CRITICAL in the first place. QC iterations 1-3 never checked the condition; iteration 4 did.
-  > Fix hint: amend `specs/sad.md`'s primary flow to `GET /api/v1/worklist` on `main` via the project amendment procedure, then re-run E010's QC. Until then `.qc-passed` must not be written, and `.completed` must carry the open gate rather than presenting the feature as done.
+  > **Closed 2026-07-29.** The amendment was performed on `main` as `24456b9` and merged here. Impact was assessed across the registered set per the amendment procedure: project-instructions.md NONE, prd.md NONE, sad.md UPDATE, dod.md SKIPPED (none exists), project-plan.md UPDATE assessed and found to need no edit. Applied in REFINE mode — the one contradicting line corrected, surrounding narrative and diagram preserved, and the decision recorded in the SAD's managed `Project Context Baseline Updates` section. `specs/sad.md` was the only registered document naming the endpoint; `prd.md` and `project-plan.md` name none.
+  > The plan's summary table was also changed from `/worklist` to `/api/v1/worklist` — it was the "third form" HINT-003 named, and composing it from the contract's `servers` was left to the reader. All three now read the same address without composition.
 
 - [X] T082 [BUG:ERROR] {FR-040} [accuracy] The completion marker reports three entries as unpinned that were pinned one commit earlier — specs/00010-risk-ranked-coordinator-worklist/.completed:105
   > "Reported, outside E010's scope: The root, `src/model` and `src/gateway` pytest configurations do not pin `--basetemp`."

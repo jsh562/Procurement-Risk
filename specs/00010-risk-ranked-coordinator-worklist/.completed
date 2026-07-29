@@ -1,24 +1,30 @@
 E010 — Risk-Ranked Coordinator Worklist
 Implementation complete: 52 tasks, plus 45 bug tasks from five QC iterations.
-44 of the 45 are closed. **T081 is open and cannot be closed on this branch.**
+All 45 are closed.
 
-## Not release-ready — one gate is open by design
+## The release gate, and how it closed
 
-This feature's own plan declares a release gate it does not meet. `specs/sad.md:124`
-sketches the primary flow as `GET /lines?project=…`; `contracts/openapi.yaml`
-declares `/worklist` under `/api/v1`. plan.md:46 and HINT-003 both state the
-consequence in E010's words: "this feature does not pass QC while the registered
-primary flow and this contract name different addresses."
+This feature's own plan declared a release gate it did not meet. `specs/sad.md:124`
+sketched the primary flow as `GET /lines?project=…`; `contracts/openapi.yaml`
+declares `/worklist` under `/api/v1`; and this plan's summary table named a third
+form. plan.md:46 and HINT-003 both stated the consequence in E010's words: "this
+feature does not pass QC while the registered primary flow and this contract name
+different addresses."
 
-The amendment is not E010's to perform. project-instructions.md:94 — "Amendments
+The amendment was not E010's to perform. project-instructions.md:94 — "Amendments
 to the documents named in this section are serialized... it is performed on the
 default branch... A feature branch records the need for an amendment and does not
-perform it." So the gate closes when `specs/sad.md`'s primary flow is amended on
-`main`, and E010's QC is re-run after it lands.
+perform it." QC iteration 4 found the gate unmet and unrecorded after three
+iterations had not checked it, and logged it as T081.
 
-`.completed` records that implementation is finished, which it is. `.qc-passed`
-must not be written until T081 closes. Iterations 1-3 did not check this
-condition; iteration 4 did.
+**Closed 2026-07-29.** The amendment landed on `main` as `24456b9` and is merged
+here. All three artifacts now resolve to `GET /api/v1/worklist` without the reader
+composing anything: the SAD's primary flow, this plan's summary table, and the
+contract's `servers` plus path. Impact was assessed across the registered set —
+project-instructions.md NONE, prd.md NONE, sad.md UPDATE, dod.md SKIPPED (none
+exists), project-plan.md UPDATE assessed and found to need no edit — and applied
+in REFINE mode, preserving the surrounding narrative and recording the decision in
+the SAD's managed `Project Context Baseline Updates` section.
 
 ## Local verification
 
@@ -137,7 +143,9 @@ that the class is wider than the title.
           over E010's code.
 
   Iteration 4 (T081-T095) — 15 findings; 14 closed, T081 open by design
-    T081  **OPEN, BLOCKED.** The release gate above. Recorded, not performed.
+    T081  The release gate above. Recorded here, amended on `main`, merged
+          back — the only finding in five iterations that could not be fixed
+          on the branch that found it.
     T082  This marker reported three entries as not pinning `--basetemp` one
           commit after plan.md had been corrected to say they do. All four pin it.
     T083  `ruff format --check` failed at the root on an E010-owned file, so the
