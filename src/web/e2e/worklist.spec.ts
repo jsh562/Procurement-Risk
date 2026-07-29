@@ -200,7 +200,12 @@ test.describe("accessibility (FR-048, FR-049, FR-050, FR-051)", () => {
 
     await expect(pair).toBeVisible();
     await expect(pair).toContainText(/\d+ days/);
-    await expect(pair).toContainText("land later");
+
+    // FR-005 and SC-013 on the rendered page rather than only in the unit tier.
+    // The population has to sit against the denominator: "20 in 100 land later"
+    // passed the weaker `toContainText("land later")` while naming no reference
+    // class at all, and was read in the field as a count of parts.
+    await expect(pair).toContainText(/in 100 comparable orders land later/);
   });
 
   test("a degraded state is carried by text, not only by colour", async ({ page }) => {

@@ -111,13 +111,26 @@ describe("a ranked row", () => {
     expect(render(NOMINAL)).toContain("2026-07-24");
   });
 
-  it("states each quantile's complementary frequency", () => {
-    // FR-005. "Half of comparable orders land by this day" reads as a
-    // proportion of a population; a bare quantile reads as a commitment.
+  it("names the reference class at every point a frequency appears", () => {
+    // FR-005 and SC-013 bind *each* quantile, not each pair. This asserted only
+    // the median's label and two bare denominators, and the eightieth carried no
+    // reference class at all — its label read "Four in five land by" and its
+    // figure "20 in 100 land later", so it borrowed a population from the
+    // median's label two lines upstream.
+    //
+    // The observed consequence: "50 in 100" set beside a part number was read as
+    // fifty of the hundred parts on that line. A denominator without its
+    // population takes one from the nearest noun on the row, and a purchase-order
+    // line carries a quantity and a unit of measure.
     const markup = render(NOMINAL);
     expect(markup).toContain("Half of comparable orders land by");
-    expect(markup).toContain("50 in 100 land later");
-    expect(markup).toContain("20 in 100 land later");
+    expect(markup).toContain("Four in five comparable orders land by");
+    expect(markup).toContain("50 in 100 comparable orders land later");
+    expect(markup).toContain("20 in 100 comparable orders land later");
+
+    // The elision is what made the misreading reachable, so it is pinned shut
+    // rather than merely corrected: no denominator may appear unnouned.
+    expect(markup).not.toMatch(/in 100(?! comparable orders)/);
   });
 
   it("renders an upper bound in different words from a point figure", () => {

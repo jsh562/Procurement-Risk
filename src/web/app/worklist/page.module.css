@@ -137,23 +137,33 @@
 }
 
 /*
- * The column budget follows the reading order's weight, which an earlier
- * revision inverted. `1fr` for the primary column against `auto`-maxed trailing
- * columns let the two short ones size to max-content and starve the one holding
- * everything: measured at a 912px row, primary took 243px while the state label
- * — three words — took 279px. Inside 243px the quantile pair's own grid
- * resolved to a 36px value column and broke "36 days — 50 in 100 land later"
- * to one word per line, making a single row 686px tall.
+ * Two columns and three rows: the rank beside the content, and within the
+ * content the primary figures above a footer carrying the explanatory context
+ * and the row's state.
  *
- * So the trailing columns are bounded by fr rather than by `auto`, and the
- * primary column is given the largest share. The minmax floors keep the
- * secondary region and the state label from collapsing before the breakpoint
- * below switches the row to a single column.
+ * This replaces a four-column form in which the secondary region and the state
+ * label each held a full-height column of their own. Two things were wrong with
+ * that. Measured at a 912px row, those two columns took 185px and 166px for
+ * three short lines and one short phrase — roughly 240px of each stood empty —
+ * while the primary column, which holds all four comparison quantities, was
+ * squeezed to 443px. And a dedicated column reads as a data column whatever
+ * size its text is set at, so FR-009's subordination was carried by type scale
+ * alone and contradicted by position. A reader asked, reasonably, why
+ * criticality had a column of its own.
+ *
+ * Subordination is now structural: the context sits *below* the figures rather
+ * than beside them, and flows inline rather than stacking in a column of its
+ * own. Nothing moves into the primary region — FR-027's cap counts membership
+ * of that region, so promoting criticality or the margin would make it a fifth
+ * comparison quantity. They stay exactly where FR-027 puts them, and the
+ * primary region gains the full row width, which is what the FR-005 reference
+ * class needs now that each frequency names its population.
  */
 .row {
   display: grid;
-  grid-template-columns: 3rem minmax(22rem, 2.4fr) minmax(11rem, 1fr) minmax(9rem, 0.9fr);
-  gap: 0.75rem;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  column-gap: 0.75rem;
+  row-gap: 0.55rem;
   align-items: start;
   padding: 0.75rem 1rem;
   border: 1px solid currentColor;
@@ -166,6 +176,8 @@
  * under FR-041 that would leave the product's entire output unconveyed.
  */
 .rank {
+  /* Spans all three content rows so the number sits against the whole row. */
+  grid-area: 1 / 1 / 4 / 2;
   font-size: var(--scale-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -178,6 +190,7 @@
  * construction rather than by inspection.
  */
 .primary {
+  grid-area: 1 / 2 / 2 / 3;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -224,15 +237,15 @@
 }
 
 /*
- * Label above figure, not beside it. The labels carry the frequency framing
- * FR-005 requires — "Half of comparable orders land by" is thirty-three
- * characters, and its figure line another thirty — so a two-column grid needs
- * roughly 500px to set both on one line. The column holding them is about half
- * that even after the rebalance above, and at the single-column breakpoint it
- * is narrower still. Side by side, the label's `auto` track simply took the
- * width and left the figure to wrap a word at a time.
+ * Label above figure, not beside it. Both lines carry the frequency framing and
+ * the reference class FR-005 requires, so both are sentences rather than
+ * fragments: "Four in five comparable orders land by" is thirty-eight characters
+ * and "89 days — 20 in 100 comparable orders land later" is forty-eight. Side by
+ * side that needs something over 600px on one line, which no column on this row
+ * has ever had; the label's `auto` track simply took the width and left the
+ * figure to wrap a word at a time.
  *
- * Stacked, each line sets on its own at any width the row survives, and the
+ * Stacked, each line sets on its own at every width the row reaches, and the
  * figure still leads its line in the primary scale, so the number stays the
  * scannable thing rather than the sentence around it.
  */
@@ -276,9 +289,17 @@
  * the primary, which inverts the very subordination FR-009 asks for.
  */
 .secondary {
+  grid-area: 2 / 2 / 3 / 3;
+  /*
+   * Inline rather than stacked. FR-027 fixes the membership of this region at
+   * exactly three items and FR-009 requires them subordinate; a horizontal strip
+   * of three short phrases reads as an annotation on the row above, where the
+   * same three set as a column read as a third data field. Wrapping so the strip
+   * degrades to two lines rather than overflowing at narrow widths.
+   */
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  flex-flow: row wrap;
+  gap: 0.1rem 1.25rem;
   font-size: var(--scale-secondary);
   font-weight: 400;
 }
@@ -294,8 +315,20 @@
   font-weight: 600;
 }
 
-.description,
+.description {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+/*
+ * FR-027's row status, which counts against no cap, and FR-050, which requires
+ * the state be carried by text in the accessibility tree. It sits on the footer's
+ * own row beneath the context strip rather than in a column beside the figures:
+ * it answers "how much of this row can you trust", not "how does this row compare
+ * to that one", and a column of its own invited it to be read as a measurement.
+ */
 .rowState {
+  grid-area: 3 / 2 / 4 / 3;
   font-size: var(--scale-secondary);
   font-weight: 400;
 }
@@ -375,21 +408,21 @@
 }
 
 /*
- * The breakpoint is where the four-column row stops fitting, so it moved with
- * the columns. Their floors sum to 3rem + 22rem + 11rem + 9rem plus three gaps
- * and the row's padding — about 49rem — and below that the grid overflows its
- * container rather than degrading. It used to sit at 40rem because the primary
- * column was `1fr` and could be squeezed to nothing, which is the same
- * squeezing that broke the quantile pair at full width.
+ * No column restructuring at any width, and that is the point of the two-column
+ * form. The four-column row needed a breakpoint because its floors summed to
+ * about 49rem and it overflowed below that; before then it needed one at 40rem
+ * because the primary column was `1fr` and could be squeezed to nothing. Two
+ * columns of `3rem` and `minmax(0, 1fr)` have no floor to breach — the content
+ * column shrinks and its contents wrap — so the layout degrades continuously
+ * instead of switching form, and there is no band in which it is representable
+ * but unreadable.
  *
- * Between 40rem and 52rem the four-column form is technically representable and
- * not worth having: the primary column lands near 200px, which is where the
- * pair's figures begin wrapping mid-sentence again. Stacking earlier is the
- * better of the two.
+ * The gaps still tighten on a phone, where 0.75rem between a two-character rank
+ * and the row's content is most of the margin available.
  */
-@media (max-width: 52rem) {
+@media (max-width: 32rem) {
   .row {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
+    column-gap: 0.5rem;
+    row-gap: 0.4rem;
   }
 }
