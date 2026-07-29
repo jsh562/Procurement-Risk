@@ -16,6 +16,25 @@ __pycache__/
 # cause on different machines; the two entries are merged here into one.
 .tmp/
 
+# Caches belonging to libraries that do NOT resolve through `tempfile`, so
+# TMPDIR/TEMP/TMP never reach them. PyTensor and Numba each keep their own
+# compile cache, and left alone PyTensor writes to %LOCALAPPDATA%\PyTensor —
+# outside the checkout entirely. The Temporary Files rule now pins both into
+# `.tmp/`; these patterns are the second line, for the failure that already
+# happened: a `TMPDIR` handed to PyTensor in a form it could not parse was
+# flattened into the *relative* directory
+# `src/model/claudecodeKayaDemoProcurementRisk1.tmppytensor/`, created inside
+# the source tree, and committed. A redirect that silently degrades to a
+# relative path is worse than none, because it looks like it worked.
+compiledir_*/
+*.tmppytensor/
+.pytensor/
+.numba_cache/
+
+# ADR-0015's local spool. It is a runtime artifact of a gateway invocation, one
+# per working copy, and was committed once by a `git add -A` that swept it up.
+gateway-invocation-spool.sqlite3
+
 # Node
 node_modules/
 .next/

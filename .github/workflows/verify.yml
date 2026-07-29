@@ -113,6 +113,12 @@ jobs:
       TMPDIR: ${{ github.workspace }}/.tmp
       TEMP: ${{ github.workspace }}/.tmp
       TMP: ${{ github.workspace }}/.tmp
+      # v1.2.6: PyTensor and Numba keep private compile caches and consult
+      # neither `tempfile` nor the three above, so they are pinned by name.
+      # Absolute, because PyTensor flattens a path it cannot parse into a
+      # directory created relative to the working directory rather than failing.
+      PYTENSOR_FLAGS: base_compiledir=${{ github.workspace }}/.tmp/pytensor
+      NUMBA_CACHE_DIR: ${{ github.workspace }}/.tmp/numba
 
     # The model entry's schema tests assert constraint rejection, index presence,
     # and deferred-constraint behaviour at commit. All three are enforced by the
@@ -656,6 +662,12 @@ jobs:
       TMPDIR: ${{ github.workspace }}/.tmp
       TEMP: ${{ github.workspace }}/.tmp
       TMP: ${{ github.workspace }}/.tmp
+      # v1.2.6: PyTensor and Numba keep private compile caches and consult
+      # neither `tempfile` nor the three above, so they are pinned by name.
+      # Absolute, because PyTensor flattens a path it cannot parse into a
+      # directory created relative to the working directory rather than failing.
+      PYTENSOR_FLAGS: base_compiledir=${{ github.workspace }}/.tmp/pytensor
+      NUMBA_CACHE_DIR: ${{ github.workspace }}/.tmp/numba
 
     steps:
       - uses: actions/checkout@v4

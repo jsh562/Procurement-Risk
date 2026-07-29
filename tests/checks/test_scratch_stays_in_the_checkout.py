@@ -42,6 +42,17 @@ SCRATCH = ".tmp"
 #: on the other platform would fall back to the system directory silently.
 PROCESS_VARIABLES = ("TMPDIR", "TEMP", "TMP")
 
+#: The caches `TMPDIR` does not reach, pinned by name (v1.2.6). PyTensor and
+#: Numba each keep their own compile cache and consult neither `tempfile` nor
+#: these three variables — measured on the machine that raised this,
+#: `tempfile.gettempdir()` resolved inside the checkout while
+#: `pytensor.config.base_compiledir` resolved to `%LOCALAPPDATA%\PyTensor`. They
+#: are listed separately from `PROCESS_VARIABLES` because they are a different
+#: claim: those three are honoured by one library, `tempfile`, and these name
+#: two libraries that ignore it. Any third library with a private cache belongs
+#: here too, and the only way to find it is to measure rather than assume.
+CACHE_VARIABLES = ("PYTENSOR_FLAGS", "NUMBA_CACHE_DIR")
+
 #: What a job's value must resolve to. `github.workspace` is the checkout root,
 #: which is what makes the path per-checkout rather than machine-wide.
 EXPECTED_JOB_VALUE = "${{ github.workspace }}/.tmp"
@@ -198,6 +209,50 @@ def test_every_workflow_job_directs_its_scratch_into_the_checkout() -> None:
         if environment[variable] != EXPECTED_JOB_VALUE
     }
     assert not wrong, f"{wrong} do not resolve to the checkout root: {EXPECTED_JOB_VALUE!r}"
+
+
+def test_every_workflow_job_pins_the_caches_tmpdir_does_not_reach() -> None:
+    """v1.2.6. The three process variables are honoured by `tempfile` and by
+    nothing that keeps its own cache.
+
+    This test exists because the v1.2.5 rule was verified against
+    `tempfile.gettempdir()` and pytest, declared proven, and was not proven for
+    PyTensor or Numba — which is most of what E007's stack compiles through.
+    Measured on the machine that raised it, `tempfile.gettempdir()` resolved
+    inside the checkout while `pytensor.config.base_compiledir` resolved to
+    `%LOCALAPPDATA%\\PyTensor`. The rule covered the epic that wrote it and not
+    the epic that followed.
+
+    Both values must be **absolute**. PyTensor does not reject a
+    `base_compiledir` it cannot parse; it flattens it and creates the result
+    relative to the working directory, which is how
+    `src/model/claudecodeKayaDemoProcurementRisk1.tmppytensor/` came to be
+    created inside the source tree and committed. A redirect that degrades
+    silently to a relative path is worse than none, because it looks like it
+    worked.
+    """
+    missing = {
+        name: sorted(set(CACHE_VARIABLES) - set(environment))
+        for name, environment in _job_environments().items()
+        if set(CACHE_VARIABLES) - set(environment)
+    }
+    assert not missing, (
+        f"{missing} — every job must set {CACHE_VARIABLES}, because PyTensor and Numba "
+        f"consult neither `tempfile` nor {PROCESS_VARIABLES} and default to a "
+        f"machine-wide cache outside the checkout (project-instructions.md v1.2.6)"
+    )
+
+    relative = {
+        f"{name}.{variable}": environment[variable]
+        for name, environment in _job_environments().items()
+        for variable in CACHE_VARIABLES
+        if "${{ github.workspace }}" not in environment[variable]
+    }
+    assert not relative, (
+        f"{relative} — each must be rooted at `${{{{ github.workspace }}}}`. PyTensor "
+        f"flattens an unparseable path into a directory created relative to the working "
+        f"directory rather than failing, so a relative value writes into the source tree"
+    )
 
 
 def test_the_job_environment_check_reports_a_job_that_sets_nothing(tmp_path: Path) -> None:
