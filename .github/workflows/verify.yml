@@ -452,9 +452,42 @@ jobs:
           DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
         run: uv run --directory src/gateway coverage run -m pytest tests -q
 
+      # FR-040. Until E010 there was no api step at all — the entry was synced,
+      # linted, contract-checked and built into the serving image, and its tests
+      # were never executed anywhere. A tier that exists and does not run is
+      # worse than one that is absent, because the plan reads as though it is
+      # covered.
+      - name: Unit tests (api)
+        env:
+          COVERAGE_FILE: ${{ github.workspace }}/.coverage.api
+          # The worklist reads real tables. Its integration tier asserts the
+          # eight degraded states against a seeded database, and every one of
+          # them is a statement about what the server returns rather than what a
+          # fake would.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+        run: uv run --directory src/api coverage run -m pytest tests -q
+
       - name: Unit tests (web)
         working-directory: src/web
         run: npm test
+
+      # FR-032's presentation contract — type scale, reading order, the as-of
+      # date without hover, the live region — is a property of a laid-out page.
+      # `vitest run` collects only `__tests__/**`, so these specs would never
+      # have executed under the existing web step.
+      - name: E2E (web)
+        working-directory: src/web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      # FR-040 / SC-017. The 1.5 s p95 is adopted from the registered
+      # architecture document rather than chosen here, and a target nothing
+      # measures cannot have its miss published.
+      - name: Performance benchmark (api)
+        env:
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+        run: uv run --directory src/api python -m pytest tests/test_worklist_benchmark.py -q
 
       # OBJ1 VC6 says "when the application builds". Nothing built it, so the
       # criterion was unevidenced and a scaffold that could not compile would

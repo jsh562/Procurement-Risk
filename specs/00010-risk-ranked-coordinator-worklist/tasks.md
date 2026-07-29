@@ -57,13 +57,13 @@
 
 **Three owned deviations close here.** As `verify.yml` stands, none of this feature's api tests, rendered-page tests or performance measurements would execute, and the 80% gate measures neither `/src/api` nor `/src/web`. FR-040 is what makes that gating rather than merely noted.
 
-- [ ] T001 [P] Add the `psycopg` runtime dependency and the `pytest-benchmark` dev dependency in src/api/pyproject.toml, via `uv add --directory src/api`
-- [ ] T002 {FR-035} src/api/pyproject.toml — `forbidden_modules += api.risk_read`, plus a contract barring `api.risk_read`, `api.routes.worklist` and `api.compute` from `gateway`
-- [ ] T003 [P] {FR-040} Root pyproject.toml — `source += src/api/src/api` **and** a matching `[tool.coverage.paths]` entry; two edits, or the package is uncounted
-- [ ] T004 [P] {FR-040} src/web/package.json — `test:e2e` script and `@playwright/test`; `--coverage` with a Vitest v8 floor of 80% scoped to `app/worklist`
-- [ ] T005 {FR-040} Add `Unit tests (api)`, `E2E (web)` and `Performance benchmark (api)` steps to .github/workflows/verify.yml — api under `coverage run` with its own `COVERAGE_FILE`
-- [ ] T006 [P] {FR-057} Record the same-commit change rule and the recorded consumers E012, E017, E019 in contracts/openapi.yaml `info` § Compatibility — a review obligation, not a runtime one
-- [ ] T007 [P] Record the `specs/sad.md:124` `GET /lines?project=…` vs contract `/api/v1/worklist` conflict as a default-branch amendment request — this branch records, never performs (HINT-003)
+- [X] T001 [P] Add the `psycopg` runtime dependency and the `pytest-benchmark` dev dependency in src/api/pyproject.toml, via `uv add --directory src/api`
+- [X] T002 {FR-035} src/api/pyproject.toml — `forbidden_modules += api.risk_read`, plus a contract barring `api.risk_read`, `api.routes.worklist` and `api.compute` from `gateway`
+- [X] T003 [P] {FR-040} Root pyproject.toml — `source += src/api/src/api` **and** a matching `[tool.coverage.paths]` entry; two edits, or the package is uncounted
+- [X] T004 [P] {FR-040} src/web/package.json — `test:e2e` script and `@playwright/test`; `--coverage` with a Vitest v8 floor of 80% scoped to `app/worklist`
+- [X] T005 {FR-040} Add `Unit tests (api)`, `E2E (web)` and `Performance benchmark (api)` steps to .github/workflows/verify.yml — api under `coverage run` with its own `COVERAGE_FILE`
+- [X] T006 [P] {FR-057} Record the same-commit change rule and the recorded consumers E012, E017, E019 in contracts/openapi.yaml `info` § Compatibility — a review obligation, not a runtime one
+- [X] T007 [P] Record the `specs/sad.md:124` `GET /lines?project=…` vs contract `/api/v1/worklist` conflict as a default-branch amendment request — this branch records, never performs (HINT-003)
 
 ---
 

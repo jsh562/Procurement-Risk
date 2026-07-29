@@ -358,6 +358,26 @@ adopt rather than re-choose:
 | FR-057 | Response contract read-only for later epics | `contracts/openapi.yaml` (`info` § Compatibility) — a review obligation, not a runtime one |
 | SC-027 | Validator covers the reported line set | `src/api/tests/test_worklist_endpoint.py` |
 
+## Recorded Amendment Request — endpoint address
+
+**Raised by**: E010, 2026-07-28. **Target**: `specs/sad.md:124`. **Status**: recorded, not performed.
+
+`specs/sad.md:124` sketches the worklist read as `W->>A: GET /lines?project=…`. This feature's contract
+defines `GET /api/v1/worklist`. Governance says the registered document wins and a feature branch
+records the need for an amendment rather than performing it, so this branch does neither of the two
+things that would settle it: it does not rename the endpoint to match the sketch, and it does not edit
+`specs/sad.md`.
+
+**The case for `/worklist`**, for whoever resolves it: the resource is a ranked projection carrying
+page-scope state and two disjoint groups — not a collection of lines. A caller asking for `/lines`
+would reasonably expect line resources back, and would not expect `no_active_run` to be a successful
+response. E010's own Implementation Signals call it "a worklist endpoint". Against it: `/lines` is
+what the architecture document says today, and the sketch predates the contract.
+
+**Consequence if unresolved**: the two documents disagree in writing, and E012, E013 and E017 all build
+against this surface. Whichever name survives, it should be settled before the endpoint ships rather
+than discovered by the first consumer.
+
 ## Story Phasing Note
 
 `SC-009` and US3's Independent Test are P1 and require all eight degraded states, but `empty_filter`

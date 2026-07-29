@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.140.0",
     "gateway",
+    "psycopg[binary]>=3.3.4",
     "uvicorn>=0.51.0",
 ]
 
@@ -26,6 +27,7 @@ dev = [
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
     "pytest>=9.1.1",
+    "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.0",
 ]
@@ -46,6 +48,10 @@ source = ["src/api"]
 
 [tool.importlinter]
 root_package = "api"
+# Required for the gateway contract below: without it the graph holds only
+# this package's internal modules, and a contract naming an external
+# distribution fails with "are external forbidden modules" rather than passing.
+include_external_packages = true
 
 # TR-009: model-facing code must never reach deterministic computation.
 # Indirect detection stays ON here — laundering the dependency through an
@@ -55,4 +61,28 @@ name = "Model-facing code does not reach the computation package"
 type = "forbidden"
 source_modules = ["api.llm"]
 forbidden_modules = ["api.compute"]
+allow_indirect_imports = false
+
+# FR-035. The worklist read path holds date arithmetic (staleness, the as-of
+# frame) and the degraded-state precedence — arithmetic and decision logic that
+# `api.llm` must not reach any more than it may reach `api.compute`. The
+# contract above named only `api.compute`, which was correct while that was the
+# only such package; `api.risk_read` is the second, and a boundary that guards
+# one of two is a boundary in name.
+[[tool.importlinter.contracts]]
+name = "Model-facing code does not reach the read-side computation package"
+type = "forbidden"
+source_modules = ["api.llm"]
+forbidden_modules = ["api.risk_read"]
+allow_indirect_imports = false
+
+# FR-035. The worklist renders with the provider unreachable because it never
+# reaches for it. That is asserted here rather than left to review: nothing on
+# the read path may import the gateway, so an accidental provider dependency
+# fails the build instead of surfacing as a slow page on a bad network day.
+[[tool.importlinter.contracts]]
+name = "The worklist read path does not reach the model-provider gateway"
+type = "forbidden"
+source_modules = ["api.risk_read", "api.routes", "api.compute"]
+forbidden_modules = ["gateway"]
 allow_indirect_imports = false

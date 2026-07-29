@@ -33,9 +33,10 @@ testpaths = ["tests"]
 [tool.coverage.run]
 branch = true
 # Every Python package in the repository that ships executable runtime code.
-# Configuration is not coverable and `src/api` ships none yet -- three empty
-# `__init__.py` files -- so a literally repository-wide denominator would report
-# a number that means nothing.
+# Configuration is not coverable. `src/api` joined this list with E010, which
+# is the first feature to put runtime code there; before that it held three
+# empty `__init__.py` files and counting them would have reported a number
+# that meant nothing.
 #
 # `src/gateway` was excluded here until E003's QC, under a comment claiming that
 # two of the four entries ship no runtime code. That was true of `src/api` and
@@ -67,6 +68,7 @@ source = [
     "src/model/src/model/procurement",
     "src/model/src/model/forecast",
     "src/gateway/src/gateway",
+    "src/api/src/api",
 ]
 
 [tool.coverage.paths]
@@ -90,6 +92,7 @@ procurement = ["src/model/src/model/procurement", "*/src/model/procurement"]
 # `corpus` and `procurement`.
 forecast = ["src/model/src/model/forecast", "*/src/model/forecast"]
 gateway = ["src/gateway/src/gateway", "*/src/gateway"]
+api = ["src/api/src/api", "*/src/api"]
 
 [tool.coverage.report]
 fail_under = 80
