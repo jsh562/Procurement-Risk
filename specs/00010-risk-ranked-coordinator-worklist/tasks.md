@@ -152,6 +152,78 @@
 
 ---
 
+## Phase: Bug Fixes
+
+- [ ] T053 [BUG:CRITICAL] {FR-040} [pi-violation] Principle VII — the recorded security limitation states two falsehoods and its own reversal trigger has fired — specs/00010-risk-ranked-coordinator-worklist/plan.md:247-251
+  > Measured: `npm audit --omit=dev` reports 3 high advisories on **production** dependencies of /src/web — `next` (direct), `postcss`, `sharp` (CVE-2026-33327/33328/35590/35591). The record's evidence claims all 12 chain from `brace-expansion` through ESLint and are "dev-only".
+  > The record's scope decision says "dependency advisories are surfaced in CI and do not fail the build". No `pip-audit` or `npm audit` step exists in .github/workflows/verify.yml — they are surfaced nowhere.
+  > The record's stated reversal trigger is "any advisory affecting a runtime dependency of /src/api or /src/web". It has fired.
+  > Fix hint: correct the evidence, act on the trigger (pin resolutions or record a waiver), and either add a non-gating audit step or drop the claim that CI surfaces them.
+
+- [ ] T054 [BUG:ERROR] {FR-042} [behaviour] The scoping control is never on screen in the empty-filter state — src/web/app/worklist/page.tsx:50
+  > FR-042: "MUST leave the scoping control and its full set of selectable projects on screen so the coordinator can leave the scope without reloading or guessing."
+  > `empty_filter` is emitted only when `scoped and not resolved` (states.py:196), so `counts.total === 0` always holds in that state. page.tsx:50 then renders the empty paragraph and never mounts `WorklistBoard`, which is where `Controls` lives (WorklistBoard.tsx:51).
+  > Verified against the running endpoint: GET /api/v1/worklist?project_id=PRJ-009 returns page_states ['stale_run','empty_filter'], counts.total 0, and available_projects ['PRJ-001','PRJ-002','PRJ-003']. The payload is correct; the render discards it. The coordinator's only exit is a reload.
+  > Fix hint: render the controls whenever a scope is active, independently of `counts.total`. Add a page test for the empty-filter state asserting the project select is present.
+
+- [ ] T055 [BUG:ERROR] {FR-029} [missing-clause] The row-level stale mark is unimplemented — src/api/src/api/risk_read/rows.py:268
+  > FR-029 (spec.md:236): "Because a page-level banner alone stops carrying once rows are sorted, filtered, or read one at a time, the row MUST carry the signal too: while the active run is stale, every populated row's as-of date ... MUST be marked as stale in the row itself."
+  > `build_secondary` returns exactly {as_of_date, criticality, calendar_margin_days}; `RowInputs` carries no staleness; Row.tsx:182 renders "Forecast as of <date>" unqualified. Staleness reaches the client only via meta.forecast_run.stale and the page banner — the exact insufficiency the clause names.
+  > The requirement notes this needs no new figure and no new field: the response already carries the run's staleness and each row's as-of date.
+  > Fix hint: thread `stale` into `RowInputs`, qualify the row's as-of text when set, assert at the API and rendered tiers.
+
+- [ ] T056 [BUG:ERROR] {FR-051} [missing-clause] Bounded forms are not announced as words — src/web/app/worklist/Row.tsx:123
+  > FR-051: "FR-008's bounded forms MUST be announced as words, 'less than one percent' and 'greater than ninety-nine percent': the < and > glyphs are read inconsistently or dropped outright, and a dropped < turns <1% into a flat 1%, which is a false precision of exactly the kind FR-008 exists to remove."
+  > Row.tsx:123 renders the display string raw. Searching src/web/app and src/web/e2e for "less than one percent" or "greater than ninety" returns nothing.
+  > The e2e test named for this asserts only that <1% is visible and 0%/100% are absent, and is wrapped in an `if (count > 0)` guard so it vacates silently if the fixture stops producing a bound.
+  > Fix hint: add a visually-hidden spoken form or aria-label beside the glyph; assert the words; remove the count guard.
+
+- [ ] T057 [BUG:ERROR] {FR-036} [test-isolation] The E2E seed truncates and commits to the shared development database — src/api/tests/fixtures/frozen_run/seed.py:53
+  > seed.py unconditionally DELETEs line_posterior, forecast_run, lifecycle_event and purchase_order_line and commits, replacing E005's ~200-line dataset with E010's 16 fixture lines.
+  > src/model/tests/forecast/conftest.py:578 treats any non-empty purchase_order_line as proof the committed dataset is loaded (`if loaded: return loaded`), so the forecast tier fits against E010's fixture instead of reloading.
+  > Reproduced: `uv run --directory src/model pytest tests/forecast -x` -> "forecast-fit refused: ModelError: the sojourn frame is empty ... read 16 lines and 6 lifecycle events" — E010's exact counts.
+  > CI is green only incidentally: Unit tests (model) is step 14, Seed the frozen fixture is step 22. Nothing enforces that ordering.
+  > Fix hint: give the E2E tier its own database, or restore E005's dataset on teardown. Separately worth raising against `committed_dataset`, which should verify the dataset's identity rather than its non-emptiness.
+
+- [ ] T058 [BUG:WARNING] {FR-030} [test-coverage] A calendar-passed row's retained probability is asserted nowhere — src/api/tests/test_worklist_degraded.py
+  > US3 scenario 8 requires the row to show its forecast probability and separately flag the passed date. `test_calendar_passed` asserts only the state value.
+  > Both suite-wide probability loops skip None figures, so a regression suppressing PO-4475-1's miss probability would pass every test in the suite.
+  > Fix hint: assert miss_probability is not None and its value for the calendar-passed fixture line.
+
+- [ ] T059 [BUG:WARNING] {FR-003} [provenance] The per-figure reference class publishes schema_constants' draw count, not the run's — src/api/src/api/risk_read/rows.py:196
+  > FR-003 and CHK021 require the reference class published twice — per quantile and at page scope — to agree, with the figure's copy authoritative; a disagreement is "a provenance defect under Principle I, not a display choice".
+  > Both rows.py:196 and routes/worklist.py:338 read inputs.conventions.draw_count, sourced from schema_constants. The figure was computed from the run's draws, whose count is forecast_run.draw_count — a separate column. Only ck_schema_constants__draw_count_positive and ck_forecast_run__draw_count_positive exist; nothing ties the two values together.
+  > They agree today only because the fixture uses 4000 for both. A run fitted at a different draw count would publish a wrong denominator on every quantile.
+  > Fix hint: source the per-figure copy from the run; assert the two agree within a response.
+
+- [ ] T060 [BUG:WARNING] {FR-039} [test-coverage] The survival-array input domain is generated nowhere, and the test-first commit evidence is absent — src/api/tests/test_probability.py
+  > FR-039 names the generated domain: "survival arrays non-increasing and within [0,1] at length horizon_days, with the last element equal to residual_tail_mass". No such strategy exists; test_probability.py's only strategy is st.floats(0, 1). FR-013's property is therefore discharged by two endpoint examples plus a display-order property, not by a property over the offset domain.
+  > Separately: tasks.md Dependencies states "the branch carries a `test:` commit before the `feat:` commit for each pair". It does not — T015-T018 landed together in 1b96a5d. The RED state was observed during implementation, but the committed evidence the tasks file promises is absent. E007 on this same history used `test(E007): T094 RED`, so the convention exists and E010 departed from it.
+  > Fix hint: add a survival-array strategy and a property over as_of < d <= as_of + horizon_days.
+
+- [ ] T061 [BUG:WARNING] {FR-052} [test-coverage] Run identification is untested at the tier that produces it — src/api/src/api/routes/worklist.py:325
+  > _meta emits run_id, model_version and artifact_schema_version, but no API-tier assertion covers them. The only evidence is page.test.tsx "names the run and its as-of date once one is active", which renders a hand-authored stub rather than a server response.
+  > Fix hint: assert the three fields against the frozen fixture's run in test_worklist_ranked.py.
+
+- [ ] T062 [BUG:WARNING] {FR-024} [placement] The manifest check does not exist at the path T026 and the plan both name — tests/checks/test_web_has_no_db_driver.py
+  > T026 and plan.md Observation procedures both name tests/checks/test_web_has_no_db_driver.py, with an explicit Source Code Layout rationale for the root placement. The assertions exist and run, but live in src/api/tests/test_read_path_isolation.py:144-190.
+  > Fix hint: move the two manifest/lockfile assertions to the named path, or amend the task and plan to record the actual location and why.
+
+- [ ] T063 [BUG:WARNING] {FR-036} [test-coverage] One declared boundary case has a fixture line but no named test — src/api/tests/fixtures/frozen_run/fixture.json
+  > need_by_last_in_grid_day (PO-4475-2) is generated, committed and verified for its own values, but no acceptance test reads it. The boundary is asserted with a synthetic line in test_states.py::test_the_last_in_grid_day_is_not_beyond_the_horizon.
+  > FR-036 requires one named test per case against the committed fixture.
+  > Fix hint: assert PO-4475-2 through the endpoint — its miss probability equals its residual tail mass at the last in-grid day.
+
+- [ ] T064 [BUG:WARNING] {FR-057} [test-coverage] No test validates a served response against contracts/openapi.yaml — src/api/tests
+  > The contract declares closed objects (additionalProperties: false) and FR-057 binds three later epics to it, but nothing machine-checks a response against the document. Closure rests on hand-written key-set assertions covering primary, secondary and unranked.primary — not miss_probability, duration_pair, meta or sort.
+  > Fix hint: validate a live response against the schema with openapi-core or jsonschema.
+
+- [ ] T065 [BUG:WARNING] {FR-040} [accuracy] The .completed marker overstates web coverage — specs/00010-risk-ranked-coordinator-worklist/.completed:11
+  > Claims "100% statements / 98.4% branches". Measured this run: 99.2% statements (125/126), 95.74% branches (90/94). The figures predate Phase 6's Controls component and its tests. Both remain far above the 80 floor, so no gate impact — but a published figure that does not match its measurement is the defect Principle I names.
+  > Fix hint: regenerate the marker's figures from the run that writes it.
+
+---
+
 ## Dependencies
 
 Setup → Foundational → US1 → US2 → US3 → US4 → Polish
