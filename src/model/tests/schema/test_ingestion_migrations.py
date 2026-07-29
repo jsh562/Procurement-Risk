@@ -1,12 +1,12 @@
 """E006's migration set: FR-040, VR-013, VR-014, and the object inventory.
 
-Five properties of the `0300`-`0399` block as a *set*, none of which any one
+Five properties of the `0400`-`0499` block as a *set*, none of which any one
 revision can state about itself:
 
 * **The block is respected and the chain is named for itself.** Every revision
-  E006 authors carries an `03xx` prefix, its `revision` string equals that
+  E006 authors carries an `04xx` prefix, its `revision` string equals that
   prefix, and each one chains from the revision the migration sequence declares
-  -- `0300` from E004's head `0103`, then `0301`-`0304` in order. Ordering is
+  -- `0400` from E007's head `0303`, then `0401`-`0404` in order. Ordering is
   `down_revision` and only `down_revision`; the prefixes are a *claim on a number
   range* (`tests/checks/test_migration_ranges.py`), and a file whose name
   disagrees with its contents defeats the claim's whole purpose.
@@ -30,7 +30,7 @@ revision can state about itself:
 
 Downgrade bodies are not asserted here and their absence is deliberate rather
 than an omission: `test_migration_chain.py` parametrizes both of its
-downgrade tests over every revision the chain discovers, so `0300`-`0304` are
+downgrade tests over every revision the chain discovers, so `0400`-`0404` are
 covered there the moment they land -- by calling `downgrade()` and requiring
 `NotImplementedError`, and by an AST scan for `op.*` calls in the body. A second
 copy here would be a second answer about the same files.
@@ -70,20 +70,23 @@ VERSIONS_DIR = REPO_ROOT / "src" / "model" / "src" / "model" / "schema" / "versi
 #: E006's reserved filename-prefix block, inclusive (FR-040). Declared in
 #: `tests/checks/test_migration_ranges.py`, which asserts the partition across
 #: every epic; this module asserts only that E006 stayed inside its own claim.
-E006_BLOCK = (300, 399)
+E006_BLOCK = (400, 499)
 
 #: The migration sequence `data-model.md` fixes, as `(revision, down_revision)`
-#: in application order. `0300` chains from `0103`, E004's head at authoring
-#: time. Written out rather than derived: the chain each later revision needs is
+#: in application order. `0400` chains from `0303`, E007's head -- it was
+#: authored on `0103` as `0300` and re-parented on 2026-07-28, when E007's
+#: concurrent claim on `0300`-`0399` landed first and this epic renumbered.
+#:
+#: Written out rather than derived: the chain each later revision needs is
 #: a design fact -- every one of them carries a composite foreign key to a key an
 #: earlier one creates -- and a test that read the order out of the files would
 #: agree with any order they happened to declare.
 E006_SEQUENCE: tuple[tuple[str, str], ...] = (
-    ("0300", "0103"),
-    ("0301", "0300"),
-    ("0302", "0301"),
-    ("0303", "0302"),
-    ("0304", "0303"),
+    ("0400", "0303"),
+    ("0401", "0400"),
+    ("0402", "0401"),
+    ("0403", "0402"),
+    ("0404", "0403"),
 )
 
 E006_REVISIONS: tuple[str, ...] = tuple(revision for revision, _ in E006_SEQUENCE)
@@ -159,7 +162,7 @@ E006_INDEXES: frozenset[str] = frozenset(
 #: a foreign key of the same name, which is a different rule wearing a reviewed
 #: name.
 E006_CONSTRAINTS: dict[str, str] = {
-    # ingestion_run -- 0300
+    # ingestion_run -- 0400
     "pk_ingestion_run": "p",
     "ck_ingestion_run__agent_id_present": "c",
     "ck_ingestion_run__agent_id_format": "c",
@@ -183,13 +186,13 @@ E006_CONSTRAINTS: dict[str, str] = {
     "ck_ingestion_run__failure_kind_domain": "c",
     "ck_ingestion_run__failure_detail_iff_kind": "c",
     "ck_ingestion_run__failed_run_unfinished": "c",
-    # ingestion_run_document -- 0301
+    # ingestion_run_document -- 0401
     "pk_ingestion_run_document": "p",
     "ck_ingestion_run_document__status": "c",
     "ck_ingestion_run_document__tuple_digest_format": "c",
     "fk_ingestion_run_document__run": "f",
     "fk_ingestion_run_document__document": "f",
-    # the three run-output associations -- 0302
+    # the three run-output associations -- 0402
     "pk_ingestion_run_chunk": "p",
     "fk_ingestion_run_chunk__chunk": "f",
     "fk_ingestion_run_chunk__generation": "f",
@@ -200,7 +203,7 @@ E006_CONSTRAINTS: dict[str, str] = {
     "pk_ingestion_run_extraction_failure": "p",
     "fk_ingestion_run_extraction_failure__failure": "f",
     "fk_ingestion_run_extraction_failure__generation": "f",
-    # the two value-level associations -- 0303
+    # the two value-level associations -- 0403
     "pk_extracted_value_line_item": "p",
     "ck_extracted_value_line_item__ordinal_non_negative": "c",
     "fk_extracted_value_line_item__run_output": "f",
@@ -406,9 +409,9 @@ def _relation_kinds(url: URL, relation_name: str) -> list[str]:
 
 
 def test_the_revision_files_in_e006_s_block_are_exactly_the_declared_set() -> None:
-    """FR-040, VR-013: `03xx` holds these five revisions and no others.
+    """FR-040, VR-013: `04xx` holds these five revisions and no others.
 
-    Both directions. A sixth `03xx` file is a revision authored outside the
+    Both directions. A sixth `04xx` file is a revision authored outside the
     migration sequence `data-model.md` fixes -- which is where the composite
     foreign keys' ordering is decided -- and a missing one is an object the rest
     of the epic is written against.
@@ -436,8 +439,11 @@ def test_each_e006_revision_declares_its_prefix_and_its_declared_parent(
     directory the runner does not run.
 
     The parent is asserted because ordering is `down_revision` and *only*
-    `down_revision`. `0300` chaining from `0103` rather than from `0010` is what
-    puts E006's block after E004's work rather than beside it, and `0301`-`0304`
+    `down_revision`. `0400` chaining from `0303` rather than from `0010` is what
+    puts E006's block after everything already in the chain rather than beside
+    it -- E004's `0103` while this epic was authored, E007's `0303` since the
+    two epics' concurrent claims on `0300`-`0399` were untangled -- and
+    `0401`-`0404`
     are a hard order: each carries a composite foreign key to a key the previous
     one creates.
     """
@@ -463,7 +469,7 @@ def test_each_e006_revision_declares_its_prefix_and_its_declared_parent(
 
 
 def test_the_chain_resolves_to_one_head_and_it_is_e006_s_last_revision() -> None:
-    """FR-040, VR-013: a single head, and E006 left it at `0304`.
+    """FR-040, VR-013: a single head, and E006 left it at `0404`.
 
     Two heads is what parallel authoring produces -- two revisions naming the
     same parent -- and `alembic upgrade head` then fails outright rather than
@@ -513,9 +519,9 @@ def test_the_chain_applies_to_an_empty_database_through_e006_s_head(
     Run against a scratch database rather than the shared one: the shared
     database is already at head, so it would prove nothing, and it carries
     objects a fresh deployment will not have. This is the test that catches a
-    revision depending on something no earlier one created -- E006's `0302`
-    depends on E003's `chunk` and `extracted_value` and on E006's own `0301`,
-    and `0303` on E003's `uq_extracted_value__id_source_count` -- which is
+    revision depending on something no earlier one created -- E006's `0402`
+    depends on E003's `chunk` and `extracted_value` and on E006's own `0401`,
+    and `0403` on E003's `uq_extracted_value__id_source_count` -- which is
     invisible on any database that has been migrated incrementally.
 
     Asserted on the *tail* of the applied list rather than on the whole chain:
@@ -606,7 +612,7 @@ def test_each_declared_relation_exists_with_the_declared_kind(
 
     assert kinds == [expected_kind], (
         f"{relation_name!r} is {kinds or 'absent'} in the migrated schema; the inventory "
-        f"declares a {'view' if expected_kind == 'v' else 'table'}. Revisions 0300-0303 "
+        f"declares a {'view' if expected_kind == 'v' else 'table'}. Revisions 0400-0403 "
         f"create it, and every other epic's tests expect it by this name."
     )
 

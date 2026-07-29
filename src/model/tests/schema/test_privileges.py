@@ -1,7 +1,7 @@
 """FR-066 / SC-024 / VR-011 (T085): the thirteen privilege refusals, measured
 under `SET LOCAL ROLE procurement_app`.
 
-Revision `0304` follows E003's `0009` shape exactly — grant the ordinary four
+Revision `0404` follows E003's `0009` shape exactly — grant the ordinary four
 verbs, then take two back — so the append-only rule reads as a deliberate revoke
 rather than as an omission, and an omission is indistinguishable from having
 forgotten. What that leaves is **thirteen refusals**, and they are enumerated
@@ -45,7 +45,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-#: The role `0009` creates and `0304` constrains.
+#: The role `0009` creates and `0404` constrains.
 APPLICATION_ROLE = "procurement_app"
 
 #: The six tables E006 adds beyond the run record. Append-only by privilege,
@@ -127,7 +127,7 @@ def test_the_refusals_number_thirteen() -> None:
     """FR-066's count, stated where a reader can compare it with the revision.
 
     Twelve from six tables and two verbs, plus `DELETE` on the run record.
-    Asserted rather than left implicit because the number appears in `0304`'s
+    Asserted rather than left implicit because the number appears in `0404`'s
     own docstring and in the data model, and three places agreeing is worth
     something only if one of them fails when they stop.
     """
@@ -146,7 +146,7 @@ def test_the_application_role_is_refused(
     """One case per refusal, named for the object and the privilege it covers."""
     assert not _holds(as_application_role, object_name, privilege), (
         f"FR-066 / VR-011: `{APPLICATION_ROLE}` holds {privilege} on `{object_name}`, which "
-        f"revision 0304 revokes — {reason}."
+        f"revision 0404 revokes — {reason}."
     )
 
 

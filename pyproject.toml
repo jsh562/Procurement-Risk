@@ -97,6 +97,16 @@ branch = true
 # the day the model step loses its explicit scope these three leave the
 # denominator altogether. That direction is the worse one: an absent package is
 # not measured at all rather than measured badly.
+#
+# `model.forecast` was added with E007 (T001) under that same rule, in both
+# places in the same change. E003 and E005 each recorded the halves as one
+# change; adding a further package is where a note that has now been written
+# twice either holds or was never worth writing.
+#
+# E006's three and E007's one were added on separate branches against the same
+# baseline and merged on 2026-07-28. The union is what is correct: dropping
+# either side's packages to resolve the merge would remove them from the
+# denominator entirely, which is the failure mode the paragraph above describes.
 source = [
     "tests/checks/helpers",
     "src/model/src/model/roster",
@@ -106,6 +116,7 @@ source = [
     "src/model/src/model/ingest",
     "src/model/src/model/llm",
     "src/model/src/model/compute",
+    "src/model/src/model/forecast",
     "src/gateway/src/gateway",
 ]
 
@@ -128,11 +139,11 @@ corpus = ["src/model/src/model/corpus", "*/src/model/corpus"]
 procurement = ["src/model/src/model/procurement", "*/src/model/procurement"]
 # Added with E006. Same reasoning as `corpus` and `procurement` above, and the
 # same reason for writing them now rather than when they break: the model step
-# passes an explicit `--source` naming all seven packages and the data file
+# passes an explicit `--source` naming all eight packages and the data file
 # holds absolute paths, so the mapping is not consulted today. It is consulted
 # the moment anyone sets `relative_files` or the step loses its explicit scope,
 # and the package with no entry here is the one that silently double-counts
-# then. Three packages, three entries — a mapping that covered six of the nine
+# then. Three packages, three entries — a mapping that covered some of the
 # packages in `source` above would be a rule stated for some of them.
 #
 # Paired with the three added to `[tool.coverage.run] source` above in the same
@@ -142,6 +153,9 @@ procurement = ["src/model/src/model/procurement", "*/src/model/procurement"]
 ingest = ["src/model/src/model/ingest", "*/src/model/ingest"]
 llm = ["src/model/src/model/llm", "*/src/model/llm"]
 compute = ["src/model/src/model/compute", "*/src/model/compute"]
+# Added with E007, alongside the `source` entry above. Same reasoning as
+# `corpus` and `procurement`.
+forecast = ["src/model/src/model/forecast", "*/src/model/forecast"]
 gateway = ["src/gateway/src/gateway", "*/src/gateway"]
 
 [tool.coverage.report]

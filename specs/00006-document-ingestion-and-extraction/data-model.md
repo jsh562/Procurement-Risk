@@ -1,6 +1,6 @@
 # Data Model — Document Ingestion and Extraction
 
-> Feature: `00006-document-ingestion-and-extraction` (E006) | Storage: **PostgreSQL 16 + `pgvector`**, single instance, schema `public` | Migrations: forward-only Alembic in `/src/model`, filename block **`0300`–`0399`** | Consumers: E008 (retrieval), E009 (identity resolution), E013 (traceability view)
+> Feature: `00006-document-ingestion-and-extraction` (E006) | Storage: **PostgreSQL 16 + `pgvector`**, single instance, schema `public` | Migrations: forward-only Alembic in `/src/model`, filename block **`0400`–`0499`** | Consumers: E008 (retrieval), E009 (identity resolution), E013 (traceability view)
 
 E006 **populates** the corpus and extraction tables E003 owns and **adds seven objects of its own**: an ingestion-run record, a per-document generation record, three run-output associations, a line-item association, and a per-value parse-signal record — plus one view and one privilege revision.
 
@@ -11,7 +11,7 @@ E006 **populates** the corpus and extraction tables E003 owns and **adds seven o
 | Owned by this epic | `ingestion_run`, `ingestion_run_document`, `ingestion_run_chunk`, `ingestion_run_extracted_value`, `ingestion_run_extraction_failure`, `extracted_value_line_item`, `extracted_value_parse_signal`, and the view `v_active_ingestion_generation`. Nothing else. |
 | **Not** owned, **not** altered | `document`, `chunk`, `field_vocabulary`, `extracted_value`, `extracted_value_contributing_chunk`, `extraction_failure`. E006 adds **zero columns**, **zero constraints**, and **zero indexes** to any of them. `specs/00003-core-data-schema/data-model.md` is normative over this document under {SAD:ADR-0017}; where the two disagree, that one governs and this one is the defect (spec Scope Excluded, FR-039). **This is the boundary that decided {SAD:ADR-0020}**: `chunk` already carries `uq_chunk__document_ordinal UNIQUE (document_id, ordinal)` (`src/model/src/model/schema/versions/0004_chunk.py:257`), whose scope is the document and not the generation, so two generations of one document cannot both hold a chunk at ordinal 0 — and widening that constraint is exactly the alteration this row forbids. Retention was therefore not expensive but unstorable, and promotion removes the prior generation instead. |
 | Why associations rather than a column | FR-039. Three target tables cannot gain a `run_id` column without changing a schema this epic does not own, so run attribution is carried by three association tables whose primary key **is** the target row's identifier — which is what makes "exactly one run per row" (SC-021) a uniqueness fact rather than a convention. |
-| Migration block | `0300`–`0399` (FR-040). E003 holds `0001`–`0099`, E004 holds `0100`–`0199`, `0200`–`0299` is left for E005. The current head is `0103`; E006's first revision chains from it by `down_revision`. |
+| Migration block | `0400`–`0499` (FR-040). E003 holds `0001`–`0099`, E004 holds `0100`–`0199`, `0200`–`0299` is left for E005, `0300`–`0399` is E007's. The chain head is `0303`; E006's first revision chains from it by `down_revision`. *(Amended 2026-07-28: the block was `0300`–`0399` and the parent `0103` — E007 claimed the same block concurrently and landed first, so E006 renumbered and re-parented. See spec FR-040.)* |
 | Not a table | The ingestion report and its closed content list (FR-071), the deterministic baseline extractor's output, the leaf-length distribution, the per-document disposition ledger (FR-073), the attempt ledger (FR-069), and every per-field precision/recall figure. These are published artifacts, not rows: nothing downstream queries them, and storing a measurement beside the data it measures invites the measurement to be recomputed from a subset. `BaselineExtraction` in the spec's Key Entities is a committed report artifact, not a relation. |
 | Not computed in the database | Confidence, token counts, Wilson intervals, page containment, and the input-tuple digest are all computed in Python behind the computation-boundary contract (FR-048, FR-031, Principle V). The database stores results and enforces shape. No generated column and no trigger is added by this epic. |
 
@@ -116,7 +116,7 @@ A derived run-level status was considered and rejected rather than overlooked. I
 
 **Relationship to `ix_forecast_run__single_active` — the same pattern, a different scope, and the difference is the point.** E003's `0008_forecast.py` already carries `CREATE UNIQUE INDEX ix_forecast_run__single_active ON forecast_run (is_active) WHERE is_active`, paired with `v_active_forecast_run` and no `LIMIT`. This index follows that convention deliberately, so a reviewer meets a mechanism already proved and tested in this repository. **The two are not copies and must not be read as such:**
 
-| | `ix_forecast_run__single_active` (E003, `0008`) | `ix_ingestion_run_document__single_active` (E006, `0301`) |
+| | `ix_forecast_run__single_active` (E003, `0008`) | `ix_ingestion_run_document__single_active` (E006, `0401`) |
 |---|---|---|
 | Scope | **Global** — at most one active forecast run in the database | **Per document** — at most one active generation per `document_id`, 51 independent invariants |
 | Indexed column | `(is_active)`, a boolean that is the constant `true` for every row in the index, so the index holds at most one row in total | `(document_id)`, so the index holds at most one row *per document* and legitimately holds up to 51 |
@@ -303,7 +303,7 @@ This procedure is deliberately **not** a migration. A revision that dropped and 
 
 ### 2. Remove-and-reload correction — FR-041, SC-024
 
-Migration `0009` revoked `UPDATE` and `DELETE` on `extracted_value`, `extracted_value_contributing_chunk`, and `extraction_failure` from `procurement_app`, so **the ingestion job cannot delete what it wrote and no code path in this epic attempts to**. E006's revision `0304` extends the same posture to all six tables it adds beyond `ingestion_run`. A correction is therefore a **re-ingestion of the affected document under the schema-owning role** — procedure 3, which is now the promotion itself rather than a separate purge that precedes it. Zero rows are updated in place at any point, by anyone.
+Migration `0009` revoked `UPDATE` and `DELETE` on `extracted_value`, `extracted_value_contributing_chunk`, and `extraction_failure` from `procurement_app`, so **the ingestion job cannot delete what it wrote and no code path in this epic attempts to**. E006's revision `0404` extends the same posture to all six tables it adds beyond `ingestion_run`. A correction is therefore a **re-ingestion of the affected document under the schema-owning role** — procedure 3, which is now the promotion itself rather than a separate purge that precedes it. Zero rows are updated in place at any point, by anyone.
 
 ### 3. Promotion of a replacing generation — FR-055, {SAD:ADR-0020}
 
@@ -319,11 +319,11 @@ Migration `0009` revoked `UPDATE` and `DELETE` on `extracted_value`, `extracted_
 5. `ingestion_run_document` for that generation
 6. **Stop.** `ingestion_run` is *not* removed. It is droppable only once it holds zero generation rows — enforced by `fk_ingestion_run_document__run ON DELETE RESTRICT`, so the ordering is refused rather than trusted — but a replaced run's identity, input tuple configuration, timings, and model identifiers are exactly what makes the surviving history readable, and nothing in promotion drops them. There is no run-level status to update on the way out either: a run with no generation rows left is retired by the absence of its generations, not by a flag.
 
-**The ingestion job holds no `DELETE` privilege and cannot perform any of steps 1–5.** Step 0 is a read and it can do that; every step after it is refused. `procurement_app` was denied `DELETE` on `extracted_value`, `extracted_value_contributing_chunk`, and `extraction_failure` by migration `0009`, and revision `0304` withholds it on every table E006 adds. That is untouched: {SAD:ADR-0020} does not buy the privilege back, and FR-041's commitment not to weaken the revoke stands. What changed is *when* the schema-owning role acts — immediately before the replacing write, in the same transaction, rather than as a separate job at an unspecified later time — not *who* acts. The privilege objection that defeated ADR-0019's own deletion option therefore does not apply here, because the actor was never the ingestion job.
+**The ingestion job holds no `DELETE` privilege and cannot perform any of steps 1–5.** Step 0 is a read and it can do that; every step after it is refused. `procurement_app` was denied `DELETE` on `extracted_value`, `extracted_value_contributing_chunk`, and `extraction_failure` by migration `0009`, and revision `0404` withholds it on every table E006 adds. That is untouched: {SAD:ADR-0020} does not buy the privilege back, and FR-041's commitment not to weaken the revoke stands. What changed is *when* the schema-owning role acts — immediately before the replacing write, in the same transaction, rather than as a separate job at an unspecified later time — not *who* acts. The privilege objection that defeated ADR-0019's own deletion option therefore does not apply here, because the actor was never the ingestion job.
 
 **Reversal of a bad promotion is a re-run, not a flip.** ADR-0019's status-flip rollback is withdrawn: the predecessor's rows are gone and no status change recovers them. Recovery is re-running ingestion for that document at the previous chunker version, which is possible because ingestion is deterministic given its input tuple (FR-043) — the earlier generation is reproducible rather than merely lost. The cost is a full ingestion pass instead of a transaction, and it is disclosed as such.
 
-## Privileges — revision `0304`
+## Privileges — revision `0404`
 
 Following E003's `0009` shape exactly: grant the ordinary four verbs, then take two back, so the append-only rule reads as a deliberate revoke rather than as an omission — and an omission is indistinguishable from having forgotten.
 
@@ -341,19 +341,19 @@ Following E003's `0009` shape exactly: grant the ordinary four verbs, then take 
 
 ## Migration Sequence
 
-Filename prefixes `0300`–`0399` are E006's reserved block (FR-040). The chain head at authoring time is `0103`; `0300` chains from it by `down_revision`. Every revision is forward-only, authored as explicit DDL, and its `downgrade()` raises.
+Filename prefixes `0400`–`0499` are E006's reserved block (FR-040). The chain head is `0303`, E007's last revision; `0400` chains from it by `down_revision`. *(Amended 2026-07-28. The block was `0300`–`0399` and the parent `0103`, E004's head at authoring time. E007 claimed `0300`–`0399` concurrently, against the same baseline and by the same allocation rule, and landed on `main` first with four revisions also chaining from `0103`; leaving both would have given Alembic duplicate revision identifiers and two heads. E006 renumbered into the next free bucket and re-parented onto E007's head. See spec FR-040.)* Every revision is forward-only, authored as explicit DDL, and its `downgrade()` raises.
 
 | Prefix | `down_revision` | Contents | Gate |
 |--------|-----------------|----------|------|
-| `0300` | `0103` | `ingestion_run`, `ix_ingestion_run__started_at` | **Blocked until FR-047's amendment to TR-081 has landed on the default branch** (SC-034). Writing computed confidences into a column the normative document calls agent-asserted would mislead every reader who trusts that document. The gate is on the epic, recorded on its first revision. |
-| `0301` | `0300` | `ingestion_run_document`, `ix_ingestion_run_document__single_active`, `ix_ingestion_run_document__document`, `v_active_ingestion_generation` | After `0300` and after E003's `0003` (`document`). The view reads both tables, so it cannot be split from either. Implements {SAD:ADR-0019} as amended by {SAD:ADR-0020}; the identifiers are fixed here rather than in either ADR, per {SAD:ADR-0017}. No DDL differs between the two records — {SAD:ADR-0020} changes the promotion procedure, not this revision's objects. |
-| `0302` | `0301` | `ingestion_run_chunk`, `ingestion_run_extracted_value`, `ingestion_run_extraction_failure` and their three indexes | After `0301`, and after E003's `0004` and `0006`. One revision for all three: they share one FK target and no intermediate head is useful. |
-| `0303` | `0302` | `extracted_value_line_item`, `ix_extracted_value_line_item__item`, `extracted_value_parse_signal`, `ix_extracted_value_parse_signal__generation` | After `0302` — both tables' generation FK references `uq_ingestion_run_extracted_value__value_generation`, and the parse signal's second FK references E003's existing `uq_extracted_value__id_source_count` from `0006`. One revision for both, on the same grounds as `0302`: shared FK target, no useful intermediate head. |
-| `0304` | `0303` | Grants to `procurement_app` on all seven tables and the view; revoke `UPDATE, DELETE` on the six append-only tables; revoke `DELETE` on `ingestion_run` | Last, so the grant-then-revoke reads in one place. Mirrors `0009`. |
+| `0400` | `0303` | `ingestion_run`, `ix_ingestion_run__started_at` | **Blocked until FR-047's amendment to TR-081 has landed on the default branch** (SC-034). Writing computed confidences into a column the normative document calls agent-asserted would mislead every reader who trusts that document. The gate is on the epic, recorded on its first revision. |
+| `0401` | `0400` | `ingestion_run_document`, `ix_ingestion_run_document__single_active`, `ix_ingestion_run_document__document`, `v_active_ingestion_generation` | After `0400` and after E003's `0003` (`document`). The view reads both tables, so it cannot be split from either. Implements {SAD:ADR-0019} as amended by {SAD:ADR-0020}; the identifiers are fixed here rather than in either ADR, per {SAD:ADR-0017}. No DDL differs between the two records — {SAD:ADR-0020} changes the promotion procedure, not this revision's objects. |
+| `0402` | `0401` | `ingestion_run_chunk`, `ingestion_run_extracted_value`, `ingestion_run_extraction_failure` and their three indexes | After `0401`, and after E003's `0004` and `0006`. One revision for all three: they share one FK target and no intermediate head is useful. |
+| `0403` | `0402` | `extracted_value_line_item`, `ix_extracted_value_line_item__item`, `extracted_value_parse_signal`, `ix_extracted_value_parse_signal__generation` | After `0402` — both tables' generation FK references `uq_ingestion_run_extracted_value__value_generation`, and the parse signal's second FK references E003's existing `uq_extracted_value__id_source_count` from `0006`. One revision for both, on the same grounds as `0402`: shared FK target, no useful intermediate head. |
+| `0404` | `0403` | Grants to `procurement_app` on all seven tables and the view; revoke `UPDATE, DELETE` on the six append-only tables; revoke `DELETE` on `ingestion_run` | Last, so the grant-then-revoke reads in one place. Mirrors `0009`. |
 
-Verification this epic ships, mirroring E003's: apply-from-empty against the Compose `db` service; re-apply-at-head is a no-op; `alembic heads` returns exactly one; **every filename prefix falls in `0300`–`0399` and no object is placed in another epic's block** (SC-034); no `downgrade()` carries a body; and every object the chain leaves behind is named in §Named Object Inventory below.
+Verification this epic ships, mirroring E003's: apply-from-empty against the Compose `db` service; re-apply-at-head is a no-op; `alembic heads` returns exactly one; **every filename prefix falls in `0400`–`0499` and no object is placed in another epic's block** (SC-034); no `downgrade()` carries a body; and every object the chain leaves behind is named in §Named Object Inventory below.
 
-**Block-partition assertion.** The existing check that asserts each epic's prefix range is extended to declare **both** `0300`–`0399` as this epic's block and `0200`–`0299` as reserved-and-empty for E005 (FR-040, plan §AD-013). The reservation is therefore ratified by a file the build runs rather than by this epic's spec alone: an E005 that wants a different block edits one declared tuple and the conflict is loud. The amendment also distinguishes *claimed-and-populated* from *reserved-and-empty*, since a reserved block holding no revisions would otherwise fail the assertion that every declared block is populated.
+**Block-partition assertion.** The existing check that asserts each epic's prefix range is extended to declare **both** `0400`–`0499` as this epic's block and `0200`–`0299` as reserved-and-empty for E005 (FR-040, plan §AD-013). The reservation is therefore ratified by a file the build runs rather than by this epic's spec alone: an E005 that wants a different block edits one declared tuple and the conflict is loud. The amendment also distinguishes *claimed-and-populated* from *reserved-and-empty*, since a reserved block holding no revisions would otherwise fail the assertion that every declared block is populated.
 
 ## Named Object Inventory
 
@@ -363,30 +363,30 @@ Every database object E006's revisions create, by name. The names are the contra
 
 | Object | Kind | Revision | Purpose |
 |---|---|---|---|
-| `ingestion_run` | table | `0300` | One row per execution; the only home of agent identity in the project |
-| `ingestion_run_document` | table | `0301` | Per-document generation with active/superseded state |
-| `v_active_ingestion_generation` | view | `0301` | The active generation per document, joined to its run's identity |
-| `ingestion_run_chunk` | table | `0302` | Run attribution for a chunk |
-| `ingestion_run_extracted_value` | table | `0302` | Run attribution for an extracted value |
-| `ingestion_run_extraction_failure` | table | `0302` | Run attribution for an extraction failure |
-| `extracted_value_line_item` | table | `0303` | Line-item membership of an extracted value |
-| `extracted_value_parse_signal` | table | `0303` | The parse signals a value's confidence was computed from (FR-063) |
-| `pk_ingestion_run` | index | `0300` | Primary-key index on `run_id` |
-| `ix_ingestion_run__started_at` | index | `0300` | Operational listing by recency; never the selection mechanism |
-| `pk_ingestion_run_document` | index | `0301` | Primary-key index on `(run_id, document_id)`; the associations' FK target |
-| `ix_ingestion_run_document__single_active` | unique index, partial | `0301` | `(document_id) WHERE status = 'active'` — one live generation per document |
-| `ix_ingestion_run_document__document` | index | `0301` | Full index for the `document` delete check and the generation history read |
-| `pk_ingestion_run_chunk` | index | `0302` | Primary-key index on `chunk_id` |
-| `ix_ingestion_run_chunk__generation` | index | `0302` | Referencing-side index for the generation FK |
-| `pk_ingestion_run_extracted_value` | index | `0302` | Primary-key index on `extracted_value_id` |
-| `uq_ingestion_run_extracted_value__value_generation` | unique index | `0302` | FK target for the line-item and parse-signal associations; redundant against the PK by design |
-| `ix_ingestion_run_extracted_value__generation` | index | `0302` | Referencing-side index for the generation FK |
-| `pk_ingestion_run_extraction_failure` | index | `0302` | Primary-key index on `extraction_failure_id` |
-| `ix_ingestion_run_extraction_failure__generation` | index | `0302` | Referencing-side index for the generation FK |
-| `pk_extracted_value_line_item` | index | `0303` | Primary-key index on `extracted_value_id` |
-| `ix_extracted_value_line_item__item` | index | `0303` | The grouping read `(run_id, document_id, item_ordinal)` |
-| `pk_extracted_value_parse_signal` | index | `0303` | Primary-key index on `extracted_value_id`; one signal row per value |
-| `ix_extracted_value_parse_signal__generation` | index | `0303` | Referencing-side index for the generation FK; the promotion's removal reads it |
+| `ingestion_run` | table | `0400` | One row per execution; the only home of agent identity in the project |
+| `ingestion_run_document` | table | `0401` | Per-document generation with active/superseded state |
+| `v_active_ingestion_generation` | view | `0401` | The active generation per document, joined to its run's identity |
+| `ingestion_run_chunk` | table | `0402` | Run attribution for a chunk |
+| `ingestion_run_extracted_value` | table | `0402` | Run attribution for an extracted value |
+| `ingestion_run_extraction_failure` | table | `0402` | Run attribution for an extraction failure |
+| `extracted_value_line_item` | table | `0403` | Line-item membership of an extracted value |
+| `extracted_value_parse_signal` | table | `0403` | The parse signals a value's confidence was computed from (FR-063) |
+| `pk_ingestion_run` | index | `0400` | Primary-key index on `run_id` |
+| `ix_ingestion_run__started_at` | index | `0400` | Operational listing by recency; never the selection mechanism |
+| `pk_ingestion_run_document` | index | `0401` | Primary-key index on `(run_id, document_id)`; the associations' FK target |
+| `ix_ingestion_run_document__single_active` | unique index, partial | `0401` | `(document_id) WHERE status = 'active'` — one live generation per document |
+| `ix_ingestion_run_document__document` | index | `0401` | Full index for the `document` delete check and the generation history read |
+| `pk_ingestion_run_chunk` | index | `0402` | Primary-key index on `chunk_id` |
+| `ix_ingestion_run_chunk__generation` | index | `0402` | Referencing-side index for the generation FK |
+| `pk_ingestion_run_extracted_value` | index | `0402` | Primary-key index on `extracted_value_id` |
+| `uq_ingestion_run_extracted_value__value_generation` | unique index | `0402` | FK target for the line-item and parse-signal associations; redundant against the PK by design |
+| `ix_ingestion_run_extracted_value__generation` | index | `0402` | Referencing-side index for the generation FK |
+| `pk_ingestion_run_extraction_failure` | index | `0402` | Primary-key index on `extraction_failure_id` |
+| `ix_ingestion_run_extraction_failure__generation` | index | `0402` | Referencing-side index for the generation FK |
+| `pk_extracted_value_line_item` | index | `0403` | Primary-key index on `extracted_value_id` |
+| `ix_extracted_value_line_item__item` | index | `0403` | The grouping read `(run_id, document_id, item_ordinal)` |
+| `pk_extracted_value_parse_signal` | index | `0403` | Primary-key index on `extracted_value_id`; one signal row per value |
+| `ix_extracted_value_parse_signal__generation` | index | `0403` | Referencing-side index for the generation FK; the promotion's removal reads it |
 
 ### Constraints
 
@@ -512,8 +512,8 @@ The pattern, following E004: a nullable column's **value domain** and its **perm
 | VR-011 | `procurement_app` holds `SELECT` and `INSERT` and holds neither `UPDATE` nor `DELETE` on `ingestion_run_document`, `ingestion_run_chunk`, `ingestion_run_extracted_value`, `ingestion_run_extraction_failure`, `extracted_value_line_item`, and `extracted_value_parse_signal`; holds `SELECT, INSERT, UPDATE` and not `DELETE` on `ingestion_run`. Asserted under `SET LOCAL ROLE procurement_app` and read back from `has_table_privilege`: **thirteen refusals**, six tables × two verbs plus `DELETE` on `ingestion_run`. | privileges | FR-041, SC-024 |
 | VR-012 | Zero rows in `extracted_value`, `extracted_value_contributing_chunk`, `extraction_failure`, or the six append-only association tables are updated in place across any run or correction, and **zero deletions originate from the ingestion job under the application role** — including the promotion removal, which the role cannot execute at all. Asserted by the privilege test plus a source scan for `UPDATE`/`DELETE` statements against those table names in the ingestion package's application-role code path. | write path | FR-041, SC-024, {SAD:ADR-0020} |
 | VR-013 | Every migration filename this epic authors matches `^03[0-9]{2}_`, `alembic heads` returns one head, and no object created by an E006 revision falls outside the declared inventory. Asserted by the block-partition check and an object-ownership test comparing the migrated catalog against §Named Object Inventory. | migration set | FR-040, SC-034 |
-| VR-014 | Every `downgrade()` in `0300`–`0399` raises `NotImplementedError`, and re-application at head is a no-op verified by comparing `alembic_version` and `information_schema` before and after a second run. | migration set | FR-040 |
-| VR-015 | E006's migrations create no column, constraint, or index on `document`, `chunk`, `field_vocabulary`, `extracted_value`, `extracted_value_contributing_chunk`, or `extraction_failure`. Asserted by snapshotting those six tables' catalog entries at revision `0103` and again at head and requiring equality. | migration set | spec Scope Excluded, {SAD:ADR-0017} |
+| VR-014 | Every `downgrade()` in `0400`–`0499` raises `NotImplementedError`, and re-application at head is a no-op verified by comparing `alembic_version` and `information_schema` before and after a second run. | migration set | FR-040 |
+| VR-015 | E006's migrations create no column, constraint, or index on `document`, `chunk`, `field_vocabulary`, `extracted_value`, `extracted_value_contributing_chunk`, or `extraction_failure`. Asserted by snapshotting those six tables' catalog entries at revision `0303` — E006's parent, so the window holds this epic's revisions and no other's — and again at head, and requiring equality. | migration set | spec Scope Excluded, {SAD:ADR-0017} |
 | VR-016 | Removing one generation succeeds when executed leaf-up in the §Operator Procedures order and is **refused** at the first step when executed parent-first. Asserted by running the reverse order and expecting a `RESTRICT` violation naming the constraint. Because the removal is now inside the promotion transaction, the reverse order must be observed to abort the **promotion**, leaving the prior generation intact and active. Separately asserted: the removal **identifies its target rows before deleting any of them** (write-order step 0b), by driving a promotion of a document whose values and failures are non-empty and requiring VR-024's counts to be zero — an implementation that resolves ids after deleting the associations leaves E003 rows behind and fails there rather than silently. | promotion path | FR-055, {SAD:ADR-0020} |
 | VR-017 | Promotion marks the predecessor `superseded`, removes it leaf-up, and only then inserts the successor as `active`; inserting before the removal raises a unique violation naming `ix_ingestion_run_document__single_active`, and writing chunks before the removal raises one naming `uq_chunk__document_ordinal`. Asserted by driving all three orders. | write path | FR-055, {SAD:ADR-0020} |
 | VR-018 | `v_active_ingestion_generation` returns exactly one row per document that has an active generation and zero rows for a document with none — "no live generation" is distinguishable from "stale generation", never silently equal to it. | view | FR-055, SC-043 |
@@ -568,12 +568,12 @@ Recorded in the four-part form Principle VII fixes — scope decision, supportin
 | FR-038 | `ingestion_run` — all twelve identity and configuration columns NOT NULL; VR-003 |
 | FR-070 | `ingestion_run.run_trace_id` with its two format checks — the join that turns SC-011 from an import contract into a reconciliation against `llm_invocation`; VR-027; G-10 |
 | FR-039 | The three run-output associations, each keyed on its target's identifier; VR-001; G-1 |
-| FR-040 | **Migration Sequence** — `0300`–`0304`, block-partition assertion; VR-013 |
+| FR-040 | **Migration Sequence** — `0400`–`0404`, block-partition assertion; VR-013 |
 | FR-041 | **Operator Procedures** 2 and 3; **Privileges**; VR-011, VR-012, VR-016 |
 | FR-042 | **Write Order and Transaction Boundary**; VR-005 |
 | FR-043 | `ingestion_run_document.input_tuple_digest`, computed over the document's own manifest hash and including `provider_model`; VR-004; G-3 |
 | FR-046 | `extracted_value_parse_signal` holds the signals and `ingestion_run` holds the weights each carries, so "explainable and recomputable from the stored row" is literally true — both halves of the requirement are rows, and the ingestion report publishes them rather than being their only home; VR-026; G-9 |
-| FR-047 | Migration Sequence — `0300` gated on the TR-081 amendment landing on the default branch |
+| FR-047 | Migration Sequence — `0400` gated on the TR-081 amendment landing on the default branch |
 | FR-054 | **Write Order and Transaction Boundary** — steps 0a…7, the removal-before-write rule, and the post-rollback rule; VR-005, VR-008, VR-017 |
 | FR-055 | `ingestion_run_document.status` — **not** a run-level column ({SAD:ADR-0019}); `ix_ingestion_run_document__single_active`; `v_active_ingestion_generation`; **removal at promotion, leaf-up, under the schema-owning role** ({SAD:ADR-0020}); VR-002, VR-016, VR-017, VR-018, VR-022, VR-023, VR-024, VR-025 |
 | FR-063 | `extracted_value_parse_signal` — `label_match` and `validated_after_repair`, which exist in no E003 column, plus `source_chunk_count` held equal to the value's own by composite FK; VR-026; G-9 |
@@ -690,7 +690,7 @@ erDiagram
     }
 ```
 
-`DOCUMENT`, `CHUNK`, `EXTRACTED_VALUE`, and `EXTRACTION_FAILURE` are drawn with their key columns only: they are E003's tables, populated by this epic and altered by no revision in `0300`–`0399`. Two of their columns are drawn because E006's design turns on them and neither is E006's to change — `CHUNK.ordinal`, whose uniqueness is scoped to the document and therefore forces removal at promotion ({SAD:ADR-0020}), and `EXTRACTED_VALUE.source_chunk_count`, whose existing unique key with the value identifier is what lets the parse-signal row carry the page-split signal without duplicating it.
+`DOCUMENT`, `CHUNK`, `EXTRACTED_VALUE`, and `EXTRACTION_FAILURE` are drawn with their key columns only: they are E003's tables, populated by this epic and altered by no revision in `0400`–`0499`. Two of their columns are drawn because E006's design turns on them and neither is E006's to change — `CHUNK.ordinal`, whose uniqueness is scoped to the document and therefore forces removal at promotion ({SAD:ADR-0020}), and `EXTRACTED_VALUE.source_chunk_count`, whose existing unique key with the value identifier is what lets the parse-signal row carry the page-split signal without duplicating it.
 
 `INGESTION_RUN` carries **no** status column — the active/superseded state is on `INGESTION_RUN_DOCUMENT`, one row per document, and at commit that row is always `active`: the superseded predecessor was removed inside the same transaction that wrote its successor. The `1:1`-optional edges into `EXTRACTED_VALUE_PARSE_SIGNAL` are drawn from both parents because both FKs are real: run attribution comes from the association, the page-split signal from the value itself.
 

@@ -5,7 +5,7 @@ stored score exactly, under the run's own weights — is
 `src/model/tests/schema/test_parse_signals.py`, which needs a database. What is
 checked here needs none:
 
-* the column list the writer writes is the column list revision `0303` declares,
+* the column list the writer writes is the column list revision `0403` declares,
   compared rather than trusted, so a column added to the table and not to the
   statement fails here instead of at the first insert of a real run;
 * the score and its signals are checked to agree **before** either is written,
@@ -39,11 +39,11 @@ from model.ingest.writer import (
 #: `src/model`. Resolved from `__file__` so the read works from any cwd.
 ENTRY_ROOT = Path(__file__).resolve().parents[2]
 VERSIONS = ENTRY_ROOT / "src" / "model" / "schema" / "versions"
-SIGNAL_REVISION = VERSIONS / "0303_value_associations.py"
+SIGNAL_REVISION = VERSIONS / "0403_value_associations.py"
 
 
 def declared_columns() -> tuple[str, ...]:
-    """The `extracted_value_parse_signal` columns revision `0303` creates.
+    """The `extracted_value_parse_signal` columns revision `0403` creates.
 
     Read from the revision's own `CREATE TABLE` rather than from a live catalog:
     the comparison is between the writer's statement and the schema's

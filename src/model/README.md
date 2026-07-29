@@ -39,7 +39,7 @@ application role `procurement_app`, which holds:
 - **no `DELETE` anywhere**, and **no data-definition privilege at all**.
 
 Migration `0009` revoked `UPDATE` and `DELETE` on `extracted_value`,
-`extracted_value_contributing_chunk` and `extraction_failure`; revision `0304`
+`extracted_value_contributing_chunk` and `extraction_failure`; revision `0404`
 extends the same posture to everything this epic adds. Neither is weakened by
 these procedures — each is executed under the **schema-owning role**, which is a
 different actor rather than a temporarily larger job.

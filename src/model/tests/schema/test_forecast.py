@@ -200,6 +200,65 @@ LIBRARY_VERSIONS = (
 ARTIFACT_HASH = bytes(range(100, 132))
 DRAW_DIGEST = bytes(range(32))
 
+# --------------------------------------------------------------------------- #
+# E007's fourteen provenance columns (revision 0300, G-2)
+# --------------------------------------------------------------------------- #
+#
+# **Why these constants are here, in a file E003 owns.** Revision `0300` adds
+# fourteen `NOT NULL` columns to `forecast_run` with **no default**, because the
+# delivered TR-063 defaults audit admits defaults on an enumerated six columns
+# and none of these is one of them. Every `INSERT INTO forecast_run` in this
+# repository names its columns explicitly, so all three of this module's run
+# builders -- `RUN_INSERT`, `RUN_INSERT_LETTING_DEFAULTS_APPLY` and `run_row`
+# -- would fail with a not-null violation the moment `0300` applies. Extending
+# them is E007's **G-2** remediation and lands in the same change as the
+# migration; deferring it would leave this suite red between two commits.
+#
+# The values are valid but deliberately *fixture-shaped*, in the same spirit as
+# `FIXTURE_DRAW_COUNT = 5` against a declared 4,000: this file asserts what the
+# delivered schema accepts and refuses, not what an E007 run looks like. The
+# run-shape pin (4,000 draws, a 365-day grid) is asserted by E007 over the runs
+# E007 emits (DV-014), never over every row in this table -- which is exactly
+# why no `CHECK` binds it.
+
+#: `ck_forecast_run__covariates_non_empty` wants a non-empty `text[]` with no
+#: NULL and no all-blank element set. Passed as an array *literal* and cast
+#: server-side, following the two posterior arrays above rather than relying on
+#: the driver's list adaptation.
+COVARIATE_NAMES = "{elapsed_days,vendor_id,material_category}"
+
+#: The two E007 digests, distinct from `INPUT_DATA_HASH` and from each other so
+#: a test cannot pass by comparing one column against another. Same `sha256:` +
+#: 64 lowercase hex form the delivered columns use.
+INPUT_FIXTURE_DIGEST = "sha256:" + "7e02" * 16
+SPLIT_ASSIGNMENT_HASH = "sha256:" + "b41f" * 16
+
+#: The split's root entropy, in the same 1-to-39 decimal digit form as
+#: `SEED_ENTROPY` and deliberately a different number: the two are separate
+#: columns precisely because the split seed is a committed constant while the
+#: sampler's entropy is per run.
+SPLIT_SEED_ENTROPY = "884120397465120398476512039847651203"
+
+#: `ck_forecast_run__vendor_shrinkage_shape` calls
+#: `fn_vendor_shrinkage_wellformed`: an object of `VND-###` keys whose values
+#: carry exactly `median`, `hpdi_low` and `hpdi_high`, each in `[0, 1]` and
+#: correctly ordered. Two vendors rather than one, so a helper that validated
+#: only the first member would be caught here.
+VENDOR_SHRINKAGE = (
+    '{"VND-117": {"median": 0.62, "hpdi_low": 0.41, "hpdi_high": 0.83}, '
+    '"VND-204": {"median": 0.18, "hpdi_low": 0.02, "hpdi_high": 0.47}}'
+)
+
+#: The remaining scalars. `held_out_fraction_realized` differs from the declared
+#: fraction because a stratified split over a finite line set lands *near* the
+#: declared value and not on it -- equal values here would let a builder that
+#: wrote one column into both pass unnoticed.
+HELD_OUT_FRACTION_DECLARED = 0.25
+HELD_OUT_FRACTION_REALIZED = 0.2412060301507538
+HELD_OUT_UNCENSORED_EVENT_COUNT = 44
+OPEN_LINE_COUNT = 24
+TRAINING_LINE_COUNT = 151
+
 #: The run anchor. `date`, not `timestamptz`: day 0 of a delivery-duration grid
 #: is a calendar day (TR-049).
 AS_OF_DATE = date(2026, 3, 1)
@@ -275,20 +334,35 @@ LINE_INSERT = text(
 #: Names every column, `is_active` and `created_at` included, because a `NOT NULL`
 #: test on a column with a `DEFAULT` has to pass an **explicit NULL** to defeat
 #: the default -- omitting the column proves nothing.
+#:
+#: **Extended with E007's fourteen provenance columns (revision `0300`, G-2).**
+#: They carry no default and are `NOT NULL`, so an insert that omitted them
+#: would be refused by the schema rather than defaulted -- which is the same
+#: reason the statement already names `is_active` and `created_at`.
 RUN_INSERT = text(
     """
     INSERT INTO forecast_run (
         run_id, code_commit, code_worktree_dirty, input_data_hash, seed_entropy,
         chain_count, draw_count, tuning_count, library_versions, artifact_hash,
         draw_serialization, artifact_schema_version, model_version, as_of_date,
-        horizon_days, wall_clock_seconds, roster_hash, is_active, created_at
+        horizon_days, wall_clock_seconds, roster_hash, is_active, created_at,
+        covariate_names, open_line_draw_semantic, input_fixture_digest, input_layer,
+        input_datasheet_ref, canonical_serialization, split_seed_entropy,
+        split_assignment_hash, held_out_fraction_declared, held_out_fraction_realized,
+        held_out_uncensored_event_count, vendor_shrinkage, open_line_count,
+        training_line_count
     )
     VALUES (
         :run_id, :code_commit, :code_worktree_dirty, :input_data_hash, :seed_entropy,
         :chain_count, :draw_count, :tuning_count, CAST(:library_versions AS jsonb),
         :artifact_hash, :draw_serialization, :artifact_schema_version, :model_version,
         :as_of_date, :horizon_days, :wall_clock_seconds, :roster_hash, :is_active,
-        :created_at
+        :created_at,
+        CAST(:covariate_names AS text[]), :open_line_draw_semantic, :input_fixture_digest,
+        :input_layer, :input_datasheet_ref, :canonical_serialization, :split_seed_entropy,
+        :split_assignment_hash, :held_out_fraction_declared, :held_out_fraction_realized,
+        :held_out_uncensored_event_count, CAST(:vendor_shrinkage AS jsonb), :open_line_count,
+        :training_line_count
     )
     """
 )
@@ -297,19 +371,34 @@ RUN_INSERT = text(
 #: defaults apply. A separate statement rather than SQL assembled at the call
 #: site: SQL built from values is what Ruff S608 exists to catch, and there is no
 #: value here worth assembling.
+#:
+#: E007's fourteen are named here too, and that is not an oversight in a
+#: statement whose subject is defaults: **none of the fourteen has one** (TR-063),
+#: so omitting them would make this statement fail for a reason that has nothing
+#: to do with `is_active` or `created_at`.
 RUN_INSERT_LETTING_DEFAULTS_APPLY = text(
     """
     INSERT INTO forecast_run (
         run_id, code_commit, code_worktree_dirty, input_data_hash, seed_entropy,
         chain_count, draw_count, tuning_count, library_versions, artifact_hash,
         draw_serialization, artifact_schema_version, model_version, as_of_date,
-        horizon_days, wall_clock_seconds, roster_hash
+        horizon_days, wall_clock_seconds, roster_hash,
+        covariate_names, open_line_draw_semantic, input_fixture_digest, input_layer,
+        input_datasheet_ref, canonical_serialization, split_seed_entropy,
+        split_assignment_hash, held_out_fraction_declared, held_out_fraction_realized,
+        held_out_uncensored_event_count, vendor_shrinkage, open_line_count,
+        training_line_count
     )
     VALUES (
         :run_id, :code_commit, :code_worktree_dirty, :input_data_hash, :seed_entropy,
         :chain_count, :draw_count, :tuning_count, CAST(:library_versions AS jsonb),
         :artifact_hash, :draw_serialization, :artifact_schema_version, :model_version,
-        :as_of_date, :horizon_days, :wall_clock_seconds, :roster_hash
+        :as_of_date, :horizon_days, :wall_clock_seconds, :roster_hash,
+        CAST(:covariate_names AS text[]), :open_line_draw_semantic, :input_fixture_digest,
+        :input_layer, :input_datasheet_ref, :canonical_serialization, :split_seed_entropy,
+        :split_assignment_hash, :held_out_fraction_declared, :held_out_fraction_realized,
+        :held_out_uncensored_event_count, CAST(:vendor_shrinkage AS jsonb), :open_line_count,
+        :training_line_count
     )
     """
 )
@@ -393,6 +482,11 @@ def run_row(**overrides: Any) -> dict[str, Any]:
     Perturbing exactly one field of an otherwise-valid row is what makes a
     rejection attributable; break two and PostgreSQL reports whichever rule it
     evaluated first.
+
+    **Carries E007's fourteen provenance columns (revision `0300`, G-2)** for
+    the same reason it carries the delivered seventeen: the row this function
+    returns has to be *valid*, or every test that perturbs one field would be
+    measuring a not-null violation somewhere else on the row.
     """
     row: dict[str, Any] = {
         "run_id": uuid4(),
@@ -414,6 +508,21 @@ def run_row(**overrides: Any) -> dict[str, Any]:
         "roster_hash": ROSTER_HASH,
         "is_active": False,
         "created_at": CREATED_AT,
+        # E007's fourteen, revision 0300.
+        "covariate_names": COVARIATE_NAMES,
+        "open_line_draw_semantic": "conditional_remaining_duration_from_run_as_of_date",
+        "input_fixture_digest": INPUT_FIXTURE_DIGEST,
+        "input_layer": "SYNTHETIC",
+        "input_datasheet_ref": "data/procurement/datasheet.md",
+        "canonical_serialization": "canonical-json-sorted-keys-utf8",
+        "split_seed_entropy": SPLIT_SEED_ENTROPY,
+        "split_assignment_hash": SPLIT_ASSIGNMENT_HASH,
+        "held_out_fraction_declared": HELD_OUT_FRACTION_DECLARED,
+        "held_out_fraction_realized": HELD_OUT_FRACTION_REALIZED,
+        "held_out_uncensored_event_count": HELD_OUT_UNCENSORED_EVENT_COUNT,
+        "vendor_shrinkage": VENDOR_SHRINKAGE,
+        "open_line_count": OPEN_LINE_COUNT,
+        "training_line_count": TRAINING_LINE_COUNT,
     }
     row.update(overrides)
     return row
@@ -1664,24 +1773,69 @@ def test_neither_array_is_insertable_without_the_other(
     )
 
 
-def test_the_two_arrays_are_columns_of_a_single_table(db_session: Session) -> None:
+def test_neither_array_is_ever_separated_from_the_other(db_session: Session) -> None:
     """TR-031: the structural claim above, read from the catalogue.
 
-    If a later migration split the arrays into two tables, every `NOT NULL` test
-    above would keep passing while the invariant quietly became a cross-row rule
-    with nothing enforcing it. So the claim is asserted directly: in the whole
-    schema, `draws` and `survival` occur on exactly one table, they occur on the
-    same one, both are float8 arrays, and both are `NOT NULL`.
+    If a migration split the arrays into two tables, every `NOT NULL` test above
+    would keep passing while the invariant quietly became a cross-row rule with
+    nothing enforcing it. So the claim is asserted directly, over the whole
+    schema: wherever either array appears, both appear, on one table, as
+    `NOT NULL` float8 arrays.
+
+    **Rescoped 2026-07-27, and the reason is the one that rescoped
+    `test_table_ownership.py` and both `DECLARED_BLOCKS` tables before it.** This
+    read "both arrays live on `line_posterior` and nowhere else", which was a
+    faithful reading of TR-031 while there was one artifact store. E007's `0302`
+    adds a second, `held_out_prediction`, because the delivered table admits no
+    order-date-anchored row: `line_posterior.survival` is NOT NULL and
+    `ck_line_posterior__draws_non_negative` rejects the negative duration a
+    pre-as-of delivery carries under the run anchor. Two stores is the
+    arrangement working, not the invariant breaking.
+
+    The claim is unchanged and no weaker. TR-031 is *both-or-neither on one
+    row*, and the single-table list was a proxy that a second population
+    invalidated — exactly as the single-epic block list was a proxy that a second
+    authoring epic invalidated. Asserted as a **pairing** now, so a third store
+    is covered the day it lands and a store carrying only one of the two arrays
+    fails, which the old form could not distinguish from a store carrying both.
+
+    Still no mechanism, on either table. Two tables plus a both-or-neither rule
+    would need a deferred constraint pair or a trigger; this schema has one
+    deferrable constraint, in `0007`, and **zero** triggers. Each store carries
+    the invariant by table design, which is why `data-model.md`'s invariant map
+    records invariant 21's mechanism as "they are two NOT NULL columns of one
+    row" rather than naming a constraint.
     """
     columns = db_session.execute(ARRAY_COLUMNS_IN_SCHEMA).fetchall()
 
-    assert [(column.table_name, column.column_name) for column in columns] == [
-        ("line_posterior", "draws"),
-        ("line_posterior", "survival"),
-    ], "both arrays must live on line_posterior and nowhere else -- no second row to be missing"
+    assert columns, (
+        "neither `draws` nor `survival` exists anywhere in the schema, so this test is "
+        "asserting a pairing over an empty set. The artifact stores are gone or the "
+        "database is unmigrated."
+    )
+
+    carried_by: dict[str, set[str]] = {}
+    for column in columns:
+        carried_by.setdefault(column.table_name, set()).add(column.column_name)
+
+    unpaired = sorted(
+        (table, sorted(present)) for table, present in carried_by.items() if len(present) != 2
+    )
+    assert not unpaired, (
+        f"{unpaired} carry one of the two arrays and not the other. TR-031's invariant is "
+        f"that the draws and the survival curve cannot half-exist, and it is carried by "
+        f"their being two NOT NULL columns of one row -- a table holding one of them "
+        f"alone makes 'the other was never written' a representable state, with no "
+        f"constraint able to see it and no trigger available to."
+    )
+
     for column in columns:
         assert column.udt_name == "_float8", "double precision[], per §Conventions"
-        assert column.is_nullable == "NO"
+        assert column.is_nullable == "NO", (
+            f"{column.table_name}.{column.column_name} is nullable, so the half-written "
+            f"state this invariant forbids is expressible on that table by leaving one "
+            f"column null."
+        )
 
 
 def test_the_digest_is_bytes_taken_over_a_named_serialization(db_session: Session) -> None:
@@ -2022,11 +2176,27 @@ def test_tr062_carries_provenance_per_run_with_no_per_line_link_to_the_inputs(
 
 
 #: Column-name fragments that would mean a maximum permitted age had been recorded
-#: on the run. Substring matching, as `test_extraction.py`'s TR-082 assertion does,
-#: so `max_age_days`, `stale_after`, `expires_at`, and `freshness_ttl` are all
-#: caught rather than only the one spelling someone thought of. None of
-#: `forecast_run`'s nineteen delivered columns contains any of them.
-MAXIMUM_AGE_COLUMN_MARKERS = ("age", "stale", "expir", "ttl", "freshness", "max_", "deadline")
+#: on the run, matched against each underscore-separated *word* of a column name
+#: rather than against the name as a whole, so `max_age_days`, `stale_after`,
+#: `expires_at`, and `freshness_ttl` are all caught rather than only the one
+#: spelling someone thought of.
+#:
+#: **Narrowed 2026-07-27 from bare substring matching to word-prefix matching,
+#: and the marker `max_` to `max` with it.** The scan is a heuristic over names,
+#: and a bare substring makes it a heuristic over English: E007's
+#: `vendor_shrinkage` (revision `0300`, FR-019) contains the letters `age` and
+#: was reported here as a staleness threshold. The original comment recorded
+#: that "none of `forecast_run`'s nineteen delivered columns contains any of
+#: them", which was a true observation about nineteen columns and not a property
+#: of the rule.
+#:
+#: The claim is unweakened and the four spellings it was written for are still
+#: caught -- each marker is a *prefix of a word*, so `expires_at` matches
+#: `expir`, `maximum_age_days` matches `max`, and a column genuinely named for
+#: an age still fails. What no longer matches is a marker buried inside an
+#: unrelated word, which is a false positive rather than a lesser version of the
+#: finding.
+MAXIMUM_AGE_COLUMN_MARKERS = ("age", "stale", "expir", "ttl", "freshness", "max", "deadline")
 
 #: The seventh column would be the seventh constant. `schema_constants` publishes
 #: six values plus its `singleton` key and nothing else, and TR-080's clarification
@@ -2102,8 +2272,9 @@ def test_tr080_imposes_no_maximum_age_on_a_run_and_exposes_the_anchor_instead(
     offenders = sorted(
         column
         for column in run_columns
+        for word in column.lower().split("_")
         for marker in MAXIMUM_AGE_COLUMN_MARKERS
-        if marker in column.lower()
+        if word.startswith(marker)
     )
     assert not offenders, (
         f"TR-080 imposes no maximum permitted age on a forecast run, so `forecast_run` "

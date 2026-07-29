@@ -242,7 +242,7 @@ class DeductionWeights:
                 f"`ck_extracted_value__confidence_range` admits [0.0, 1.0], so under this "
                 f"policy one of the eight combinations has no representable score. The "
                 f"run row cannot state this rule — it is a cross-column condition revision "
-                f"`0300` does not carry, and an applied revision is not edited — so it is "
+                f"`0400` does not carry, and an applied revision is not edited — so it is "
                 f"refused where the policy is declared rather than at the end of a run."
             )
 

@@ -27,12 +27,12 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 ## Brownfield Notes
 
 - **Existing flows touched**: `src/model/src/model/corpus/derive.py` (the one committed reader — called, never re-implemented), `corpus/paths.resolve_within`, `corpus/manifest.py`, `src/model/pyproject.toml`, `tests/checks/test_migration_ranges.py`, `.github/workflows/verify.yml`, E003's `src/model/src/model/schema/versions/`
-- **Compatibility and migration concerns**: revisions are confined to `0300`–`0399` and chain from E003/E004's head `0103`; **zero columns, constraints, or indexes** are added to the six E003-owned tables (FR-065, VR-015); the promotion removal and the correction procedure run under the schema-owning role, never from the job (FR-041, FR-055)
+- **Compatibility and migration concerns**: revisions are confined to `0400`–`0499` and chain from E007's head `0303` (`0103` until the 2026-07-28 renumber); **zero columns, constraints, or indexes** are added to the six E003-owned tables (FR-065, VR-015); the promotion removal and the correction procedure run under the schema-owning role, never from the job (FR-041, FR-055)
 - **Ordering constraints that shape the phases**:
   - **FR-047 gates everything.** T001 verifies E003's TR-081 amendment is on `main`, and T009 — the first migration — declares `after:T001`. The gate reaches a delivery phase only through a **declared** edge, never by argument: the first row-writing task of each phase names a revision, and T031 is US1's (`after:T013`). It is a task, not a note, because a prose blocker is one nobody can mark done.
   - **Strict test-first for `model/compute/*`** (`plan.md` §The test-first boundary): T044→T045 (`coerce.py`), T049→T050 (`metrics.py`), T056→T057 (`confidence.py`). The test task is complete only when its suite has been run against the absent module and observed to fail; neither pair is ever `[P]`.
-  - **Migration chain**: `0300` → `0301` → `0302` → `0303` → `0304` is a hard order — each later revision carries a composite FK to a key an earlier one creates (`data-model.md` §Migration Sequence).
-  - **AD-013** — claiming block `0300`–`0399` is a **three-part** edit to `tests/checks/test_migration_ranges.py` (T003). The one-line `BLOCKS` append turns CI red three ways.
+  - **Migration chain**: `0400` → `0401` → `0402` → `0403` → `0404` is a hard order — each later revision carries a composite FK to a key an earlier one creates (`data-model.md` §Migration Sequence).
+  - **AD-013** — claiming block `0400`–`0499` is a **three-part** edit to `tests/checks/test_migration_ranges.py` (T003). The one-line `BLOCKS` append turns CI red three ways.
   - **HINT-004** — split on the page boundary *before* the structural ladder (T022), or a clean structural split straddles a page and violates the scalar `page_number`.
   - **HINT-002** — the per-document error handler catches **outside** the `with conn.transaction()` block, and what it writes afterwards is a run-level failure on `ingestion_run`, never an `extraction_failure` row (T075, T077).
 - **Regression focus**: `tests/checks/test_migration_ranges.py` stays green with two new blocks declared; the existing computation-boundary and single-provider-import contracts keep passing as `model.llm` and `model.ingest` grow; the root `coverage combine` gate stays at or above 80% with three new packages inside its `--source` enumeration.
@@ -41,11 +41,11 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 ## Phase 1: Setup (Repository / Workspace Delta)
 
-**Lands the gate (T001), the block claim (T003), the contracts, and the coverage wiring before any module or migration they constrain. T003 in particular precedes T009, the first `03xx` revision — see §Dependencies.**
+**Lands the gate (T001), the block claim (T003), the contracts, and the coverage wiring before any module or migration they constrain. T003 in particular precedes T009, the first `04xx` revision — see §Dependencies.**
 
 - [X] T001 {FR-047} Confirm E003's TR-081 amendment has landed on main and record the verifying revision in specs/00006-document-ingestion-and-extraction/plan.md
 - [X] T002 {FR-051} Verify specs/adrs/0018, 0019, and 0020 are committed and record the ADR and migration-block claim before implementation (SC-034)
-- [X] T003 {FR-040} Amend tests/checks/test_migration_ranges.py 3 ways (AD-013): BLOCKS += E005 200-299, E006 300-399; populated assert splits reserved-empty vs claimed; "0200" control -> "0400"
+- [X] T003 {FR-040} Amend tests/checks/test_migration_ranges.py 3 ways (AD-013): BLOCKS += E005 200-299, E006 400-499 (was 300-399, reclaimed by E007 on 2026-07-28); populated assert splits reserved-empty vs claimed; "0200" control -> "0500"
 - [X] T004 [P] Add onnxruntime, tokenizers, pysbd, and the pgvector psycopg adapter plus the ingest console script to src/model/pyproject.toml
 - [X] T005 [P] Append ingest,llm,compute to the coverage --source enumeration and add a per-package 80% floor for each in .github/workflows/verify.yml
 - [X] T006 {FR-048} Verify src/model/pyproject.toml's model.llm forbidden contract needs no edit — plant a model.llm.<new> import of model.compute and observe lint-imports reject it (AD-001)
@@ -58,13 +58,13 @@ E001 scaffolded the four entries, `import-linter`, and the Compose `db` service;
 
 **The seven owned objects and the view. Every delivery phase writes through them, so they are lifted here rather than into US5, which would otherwise make P1 unbuildable.**
 
-- [X] T009 {FR-038,FR-040} Author revision 0300_ingestion_run in src/model/src/model/schema/versions/ — agent-id grammar, floor/weight CHECKs, five failure kinds after:T001
-- [X] T010 {FR-055,FR-043} Author revision 0301_ingestion_run_document with its single-active partial index, document index, and v_active_ingestion_generation after:T009
-- [X] T011 {FR-039} Author revision 0302 — three run-output associations, their generation indexes, and the redundant value UK — in src/model/src/model/schema/versions/ after:T010
-- [X] T012 {FR-059,FR-063} Author revision 0303 — extracted_value_line_item and extracted_value_parse_signal with their indexes and composite FKs — after:T011
-- [X] T013 {FR-066} Author revision 0304 — grants, revoke UPDATE/DELETE on the six append-only tables, revoke DELETE on ingestion_run — after:T012
-- [X] T014 {FR-065} Assert the six E003-owned tables' catalog entries are identical at 0103 and at head in src/model/tests/schema/test_table_ownership.py after:T013
-- [X] T015 {FR-040} [COMPLETES FR-040] Verify apply-from-empty, re-apply no-op, single head, 03xx prefixes, and the object inventory in src/model/tests/schema/test_ingestion_migrations.py after:T013
+- [X] T009 {FR-038,FR-040} Author revision 0400_ingestion_run in src/model/src/model/schema/versions/ — agent-id grammar, floor/weight CHECKs, five failure kinds after:T001
+- [X] T010 {FR-055,FR-043} Author revision 0401_ingestion_run_document with its single-active partial index, document index, and v_active_ingestion_generation after:T009
+- [X] T011 {FR-039} Author revision 0402 — three run-output associations, their generation indexes, and the redundant value UK — in src/model/src/model/schema/versions/ after:T010
+- [X] T012 {FR-059,FR-063} Author revision 0403 — extracted_value_line_item and extracted_value_parse_signal with their indexes and composite FKs — after:T011
+- [X] T013 {FR-066} Author revision 0404 — grants, revoke UPDATE/DELETE on the six append-only tables, revoke DELETE on ingestion_run — after:T012
+- [X] T014 {FR-065} Assert the six E003-owned tables' catalog entries are identical at 0303 (E006's parent; was 0103 before the 2026-07-28 renumber) and at head in src/model/tests/schema/test_table_ownership.py after:T013
+- [X] T015 {FR-040} [COMPLETES FR-040] Verify apply-from-empty, re-apply no-op, single head, 04xx prefixes, and the object inventory in src/model/tests/schema/test_ingestion_migrations.py after:T013
 
 ---
 
@@ -354,7 +354,7 @@ Setup → Foundational → Delivery Work Items (US1 → US2 → US3 → US4 → 
 - **The migration-free US1 tasks are migration-free on purpose.** T016–T030 — manifests, id minting, the one page reader, the boundary ladder, the tokenizer and segmenter, the ONNX export and its parity assertion — touch no database and carry no edge into the chain. That is a genuine parallel opportunity against the migration work and must not be serialized by widening T031's edge onto them. T029 → T031 needs no `after:` of its own: both sit in Phase 3 and sequential `T###` ordering within a phase already implies it, which is what leaves T031's single `after:` free to carry the cross-phase edge.
 - **Foundational is not optional and is not US5.** The seven owned objects block US1, US2, US3, US4, US5, and US6. Placing them in US5 (P2) would leave the three P1 stories unbuildable, so they are lifted rather than left where their success criteria are labelled.
 - **Migration chain**: T009 → T010 → T011 → T012 → T013 is a hard order; each later revision carries a composite FK to a key an earlier one creates (`data-model.md` §Migration Sequence). T014 and T015 verify the set and run after T013.
-- **The block claim precedes the first revision it authorises.** T003 declares `0300`–`0399` in `tests/checks/test_migration_ranges.py` (AD-013). It is the first migration-facing task in Setup, and Setup completes before Foundational begins, so T003 precedes T009 by the phase gate rather than by an `after:` — T009's single `after:` is spent on the FR-047 gate (`after:T001`) and this file's grammar admits one `after:` per task. The ordering is recorded here as a requirement, not an accident: a `03xx` revision merged before T003 turns CI red three ways.
+- **The block claim precedes the first revision it authorises.** T003 declares `0400`–`0499` in `tests/checks/test_migration_ranges.py` (AD-013). It is the first migration-facing task in Setup, and Setup completes before Foundational begins, so T003 precedes T009 by the phase gate rather than by an `after:` — T009's single `after:` is spent on the FR-047 gate (`after:T001`) and this file's grammar admits one `after:` per task. The ordering is recorded here as a requirement, not an accident: a `04xx` revision merged before T003 turns CI red three ways.
 - **Mandatory red-green pairs** (`plan.md` §The test-first boundary): T044 before T045, T049 before T050, T056 before T057. Each test task is complete only when its suite has been run against the absent module and **observed to fail** — a collection error for the missing module, recorded on the task line. A test task marked complete beside a passing suite is the defect the condition exists to name. Neither member of a pair is ever `[P]`. T058 consumes T057's weights and sits directly after it in Phase 5, so sequential `T###` ordering within the phase carries that edge and leaves T058's single `after:` free for the cross-phase gate `after:T009` — the same construction T031 uses.
 - **Write order is a task, not a convention**: T075 implements `data-model.md` §Write Order steps 0a–7 exactly — mark, capture identifier sets, leaf-up removal, generation row, chunks, values, contributing chunks, failures, run associations, then the line-item and parse-signal rows. T066, T059, T070, and T072 attach to named steps in it and must not reorder them.
 - **The three operator procedures are deliverables**: T082 (whole-document correction, FR-041), T083 (index drop and rebuild, FR-064), T084 (promotion with removal, FR-055 / ADR-0020). None is reachable from the ingestion job, which is why each needs a runbook rather than code.

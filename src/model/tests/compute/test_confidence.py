@@ -377,7 +377,7 @@ def test_weights_that_could_drive_a_score_below_zero_are_refused() -> None:
     """Refused at declaration rather than at the write.
 
     The database cannot state this one: it is a cross-column rule on
-    `ingestion_run` that revision `0300` does not carry, and `0300` is applied
+    `ingestion_run` that revision `0400` does not carry, and `0400` is applied
     and forward-only. A policy whose worst combination scores below zero has a
     signal combination `ck_extracted_value__confidence_range` cannot hold, so it
     is refused where it is declared rather than producing an unstorable number

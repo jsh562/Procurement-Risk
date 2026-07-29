@@ -24,9 +24,9 @@ rather than wrong; a value split across a page break keeps both pages; every
 value names the run that produced it; and re-ingesting is safe, skipping
 documents whose per-document input tuple is unchanged.
 
-Five migrations in block 0300-0399, chaining from E003/E004's head at 0103.
+Five migrations in block 0400-0499, chaining from E007's head at 0303.
 Zero columns, constraints or indexes were added to the six E003-owned tables,
-and their catalog entries are asserted identical at 0103 and at head.
+and their catalog entries are asserted identical at 0303 and at head.
 
 The pipeline runs from the `ingest` console entry. On a clean database it
 wrote 6,391 chunks across the 26 real specifications, then aborted on the

@@ -24,7 +24,7 @@ recorded.
 
 **The two exclusions are not restated here.** FR-057 states the floor by what it
 rejects — any repaired invocation, and any value both alternate-labelled and
-page-split — and revision `0300` carries that as
+page-split — and revision `0400` carries that as
 `ck_ingestion_run__floor_excludes_repair` and
 `ck_ingestion_run__floor_excludes_alt_split`, written over the *columns* and
 hard-coding none of the numbers. A second copy of those rules in Python is a

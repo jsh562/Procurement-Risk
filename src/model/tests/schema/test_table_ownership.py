@@ -524,14 +524,21 @@ E003_OWNED_TABLES: tuple[str, ...] = (
     "field_vocabulary",
 )
 
-#: The revision the comparison starts from -- E004's head, and the last revision
+#: The revision the comparison starts from -- E007's head, and the last revision
 #: before E006's block opens. Everything after it in the chain is E006's, so any
 #: difference this test finds was introduced by an E006 revision and by nothing
 #: else.
-OWNERSHIP_BOUNDARY_REVISION = "0103"
+#:
+#: **Moved from `0103` to `0303` on 2026-07-28.** It was E004's head while E006
+#: chained directly onto `0103`; E007 claimed `0300`-`0399` concurrently and
+#: landed first, so E006 renumbered to `0400`-`0499` and re-parented onto E007's
+#: head. Left at `0103` this constant would put E007's four revisions inside the
+#: window and attribute anything they changed to E006 -- which is the one thing
+#: the sentence above promises it does not do.
+OWNERSHIP_BOUNDARY_REVISION = "0303"
 
 #: A relation E006 creates, used as the positive control. Without it, a chain
-#: whose `03xx` revisions had all been deleted would satisfy the equality below
+#: whose `04xx` revisions had all been deleted would satisfy the equality below
 #: perfectly and prove nothing.
 E006_PROBE_RELATION = "ingestion_run"
 
@@ -619,12 +626,12 @@ def _probe_relation_exists(url: URL, relation_name: str) -> bool:
 def test_e006_adds_no_column_constraint_or_index_to_a_table_e003_owns(
     empty_scratch_database: URL,
 ) -> None:
-    """E006 FR-065 / VR-015: the six tables are catalog-identical at `0103` and head.
+    """E006 FR-065 / VR-015: the six tables are catalog-identical at `0303` and head.
 
     Driven on a scratch database because the comparison needs the schema at two
-    revisions and the shared one is at head. `migrate 0103` stops the chain at
-    E004's head; the snapshot taken there is the state E006 inherited. `migrate
-    head` then runs `0300`-`0304` and the snapshot is taken again. Equality is
+    revisions and the shared one is at head. `migrate 0303` stops the chain at
+    E007's head; the snapshot taken there is the state E006 inherited. `migrate
+    head` then runs `0400`-`0404` and the snapshot is taken again. Equality is
     the requirement, stated across all three dimensions FR-065 names.
 
     Two guards keep the equality from holding for the wrong reason. The

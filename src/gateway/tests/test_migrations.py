@@ -153,6 +153,80 @@ def _ancestry(head: str) -> list[str]:
     return chain
 
 
+def _revision_files() -> list[Path]:
+    """Every revision module in the directory, whichever epic authored it."""
+    return sorted(path for path in VERSIONS_DIR.glob("*.py") if path.name != "__init__.py")
+
+
+def _declared_link(path: Path) -> tuple[str, str | None]:
+    """A revision module's own `(revision, down_revision)`.
+
+    Read from the module rather than from its filename: the two can disagree
+    and the runner obeys the contents. Parsed rather than imported, for the
+    architectural reason recorded on the downgrade test below — the gateway
+    entry does not resolve `alembic`, and a revision module's first statement
+    imports it.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    declared: dict[str, str | None] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.AnnAssign | ast.Assign) or node.value is None:
+            continue
+        targets = [node.target] if isinstance(node, ast.AnnAssign) else node.targets
+        names = {target.id for target in targets if isinstance(target, ast.Name)}
+        for name in names & {"revision", "down_revision"}:
+            assert isinstance(node.value, ast.Constant), (
+                f"{path.name}: `{name}` is not a literal, so the chain cannot be "
+                f"read without importing the module"
+            )
+            value = node.value.value
+            assert value is None or isinstance(value, str), (
+                f"{path.name}: `{name}` is {value!r}; this file reads single-parent "
+                f"chains only, and a branch point needs a decision, not a coercion"
+            )
+            declared[name] = value
+
+    revision = declared.get("revision")
+    assert isinstance(revision, str), f"{path.name} declares no `revision`"
+    return revision, declared.get("down_revision")
+
+
+def _chain_on_disk() -> list[str]:
+    """The whole directory's chain in `down_revision` order, root first.
+
+    **Derived, never named.** Ordering is `down_revision` and only
+    `down_revision`; the numeric prefix is a block claim (TR-018) and is never
+    compared to decide what runs. Walking the links is therefore the only way
+    to know which revision is last, and it is the one property here that
+    legitimately moves — a later epic extending the chain is the arrangement
+    working, not a defect.
+    """
+    predecessor = dict(_declared_link(path) for path in _revision_files())
+    assert predecessor, f"no revision modules found in {VERSIONS_DIR}"
+
+    roots = sorted(revision for revision, down in predecessor.items() if down is None)
+    assert len(roots) == 1, f"expected exactly one root revision, found {roots}"
+
+    successors: dict[str, list[str]] = {}
+    for revision, down in predecessor.items():
+        if down is not None:
+            successors.setdefault(down, []).append(revision)
+
+    chain: list[str] = []
+    current: str | None = roots[0]
+    while current is not None:
+        chain.append(current)
+        following = sorted(successors.get(current, []))
+        assert len(following) <= 1, f"{current} is followed by {following}; the chain branches"
+        current = following[0] if following else None
+
+    assert len(chain) == len(predecessor), (
+        f"the chain reaches {len(chain)} of {len(predecessor)} revisions on disk; "
+        f"unreachable: {sorted(set(predecessor) - set(chain))}"
+    )
+    return chain
+
+
 def _executed_statements(path: Path) -> list[str]:
     """Every SQL string the module holds, docstrings excluded.
 
@@ -303,6 +377,44 @@ def test_this_epics_tables_exist_after_the_chain(migrated_once: str) -> None:
     assert not missing, f"this epic's revisions did not create {sorted(missing)}"
 
 
+def test_this_epics_block_is_contiguous_and_in_order() -> None:
+    """TR-018's block claim over the chain **on disk**, without a database.
+
+    **This assertion used to be "the head is `0103`", and that was a stronger
+    claim than TR-018 makes.** A block is contiguous and ordered; it is not
+    permanently last. E007 chained `0300`-`0303` off `0103` — the documented
+    way a later epic extends one shared chain — and the literal turned a
+    correct extension into a red test, which trains the next author to bump the
+    literal rather than read what broke.
+
+    What the original docstring was reaching for survives here in full: if
+    another epic's revision had been *grafted into* the middle of `0100`-`0103`,
+    or one of the four had gone missing or been reordered, this epic's block
+    would no longer be one unbroken run and the claim would be broken somewhere
+    this file cannot see. That is what is asserted, over the chain rather than
+    over the filenames.
+
+    **Kept alongside the applied-chain form below, not folded into it**
+    (reconciled 2026-07-28, when E006 and E007 arrived at the same file having
+    each replaced the head literal). This one needs no database and therefore
+    runs everywhere; that one needs a migrated database and is skipped without
+    one, but sees what the runner *did* rather than what the directory says it
+    would do. A directory that is correct and a chain that applied are different
+    claims, and dropping either leaves one of them unasserted in some
+    environment the build runs in.
+    """
+    chain = _chain_on_disk()
+    missing = [revision for revision in EPIC_REVISIONS if revision not in chain]
+    assert not missing, f"this epic's revisions are not in the chain: {missing}"
+
+    positions = [chain.index(revision) for revision in EPIC_REVISIONS]
+    span = chain[positions[0] : positions[0] + len(EPIC_REVISIONS)]
+    assert span == list(EPIC_REVISIONS), (
+        f"this epic's block is not one unbroken run: expected {list(EPIC_REVISIONS)} "
+        f"consecutively, the chain has {span} at that position. Whole chain: {chain}"
+    )
+
+
 def test_this_epics_block_is_applied_whole_and_contiguous(migrated_once: str) -> None:
     """TR-018's block claim, asserted as a property of E004's four revisions
     rather than of whatever happens to be last in the directory.
@@ -312,10 +424,10 @@ def test_this_epics_block_is_applied_whole_and_contiguous(migrated_once: str) ->
     that "E004's block is applied last, so its final revision is the head". That
     reasoning held only while E004 was the newest epic. It is not what TR-018
     says: TR-018 confines E004's revisions to `0100`-`0199`, and says nothing
-    about E004 being the end of the chain. E006 authored `0300`-`0304` on top of
-    `0103`, exactly as the block scheme intends, and the assertion failed the
-    build for a chain that is correct. A check that fails when the design works
-    is not enforcing the design.
+    about E004 being the end of the chain. Later epics chained on top of `0103`,
+    exactly as the block scheme intends, and the assertion failed the build for a
+    chain that is correct. A check that fails when the design works is not
+    enforcing the design.
 
     **What it asserts instead**, all four against the chain a migrated database
     actually ran:
@@ -332,6 +444,10 @@ def test_this_epics_block_is_applied_whole_and_contiguous(migrated_once: str) ->
     E004 no longer being last is now the expected case rather than a failure, and
     the chain descending from `0103` is asserted by (2): the walk starts at the
     applied head, so a revision present in it is an ancestor of that head.
+
+    The four controls below plant damage in a copy of the revision directory and
+    require *this* function to report it; they are what stop a broad, quiet
+    check from rotting into one that passes on anything.
     """
     _, ledger = _snapshot(migrated_once)
     assert len(ledger) == 1, (
@@ -495,6 +611,20 @@ def test_the_block_assertion_passes_over_an_undamaged_copy(
     monkeypatch.setattr(module, "_snapshot", lambda url: ([], [head]))
 
     test_this_epics_block_is_applied_whole_and_contiguous("not a database url")
+
+
+def test_the_ledger_head_is_the_last_revision_on_disk(migrated_once: str) -> None:
+    """Whatever is last in the chain is what a run from empty must land on.
+
+    Read from the directory rather than named, so an epic extending the chain
+    moves the expectation with it — while a revision that exists on disk and
+    never applied, or a runner stopping short of the end, still fails. The
+    single-element comparison is the point: two rows in `alembic_version` mean
+    two heads, which is a branch nobody chose.
+    """
+    _, ledger = _snapshot(migrated_once)
+    head = _chain_on_disk()[-1]
+    assert ledger == [head], f"expected the head to be {head!r}, found {ledger}"
 
 
 def test_the_seed_landed_with_its_provenance(migrated_once: str) -> None:
