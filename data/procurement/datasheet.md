@@ -103,7 +103,7 @@ Slack is **multiplicative** on the line's expected duration: `f ~ Normal(0.13, 0
 
 **Does not evidence**: any claim about real vendors, real lead times, or real procurement risk. Nothing here is measurement.
 
-**No train/evaluation split is emitted**, and no split label appears anywhere in the artifact set. **Ownership of the split is unassigned** in the registered documents: this epic neither performs it nor names who does. The 0.25 held-out fraction that appears in FR-033's reasoning is an **assumed cross-epic fraction**, used only to bound the post-split event count, and it is not a value this dataset observes or commits anyone to.
+**No train/evaluation split is emitted**, and no split label appears anywhere in the artifact set. **The split is constructed by E007 and frozen and hashed by E014**, per `specs/project-plan.md`: this epic performs neither, and emits the full dataset so that whichever epic splits it does so from the whole. The 0.25 held-out fraction that appears in FR-033's reasoning is an **assumed cross-epic fraction**, used only to bound the post-split event count, and it is not a value this dataset observes or commits anyone to. E007 has since constructed the split at that same 0.25, so the assumption held.
 
 ## 6. Distribution
 
@@ -163,12 +163,12 @@ The fixture is **not a corpus document** and carries **no corpus manifest entry*
 - **Reversal trigger**: A `dataset_content_hash` column on every row would make each row traceable to its run, at the cost of one repeated constant per row.
 - **Production-scale alternative**: Production scale: carry a load-batch identifier and join provenance through it, rather than repeating the digest per row.
 
-### L-8 — The post-split uncensored event count is bounded only through an assumed fraction
+### L-8 — The pre-split event floor was derived against the wrong side of the split, and does not deliver the calibration sample the product document assumes
 
-- **Scope decision**: FR-033 assumes a held-out fraction of 0.25 to reason about the post-split event count; this epic neither performs the split nor observes the fraction used.
-- **Supporting evidence**: FR-028 emits no split and no split label; ownership of the split is recorded as unassigned in the registered documents.
-- **Reversal trigger**: The epic that owns the split publishing its fraction would replace the assumption with a read value.
-- **Production-scale alternative**: Production scale: perform the split where the evaluation protocol is defined and record the realized fraction alongside it.
+- **Scope decision**: FR-010 sets a floor of 160 uncensored events pre-split, derived as 120 / (1 - 0.25) = 160 from the product document's ~120. That computes the total whose *training* remainder is 120, but the product document spends its 120 on calibration precision, which is measured on the *held-out* side. The floor implied is 120 / 0.25 = 480. The 160 floor is retained because it is what this generator enforces and what this dataset satisfies; the claim attached to it is withdrawn.
+- **Supporting evidence**: E007 constructed the split at the assumed 0.25 and realized roughly 44 held-out uncensored events, against the ~120 the product document derives its coverage band from. 0.25 x ~175 delivered lines is ~44, so this is the arithmetic working as written rather than a generator shortfall.
+- **Reversal trigger**: Raising the pre-split floor to ~480 uncensored events, which at this censored share requires roughly a threefold larger line count than FR-003's 190-210 band permits. The band and the floor cannot both stand once the target is read on the correct side.
+- **Production-scale alternative**: Production scale: derive any pre-split floor from the side of the split the downstream claim is measured on, and state which side in the requirement itself. The fraction here was correct and applied to the wrong quantity, so no fraction-mismatch check would have caught it.
 
 ### L-9 — Corpus overlap is at vocabulary level, not instance level
 

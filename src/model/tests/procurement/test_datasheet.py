@@ -154,9 +154,13 @@ class TestLimitations:
 
 
 class TestSplitDisclosure:
-    def test_no_split_is_emitted_and_ownership_is_unassigned(self, text: str) -> None:
+    def test_no_split_is_emitted_and_the_owning_epics_are_named(self, text: str) -> None:
         assert "No train/evaluation split is emitted" in text
-        assert "Ownership of the split is unassigned" in text
+        # Was "Ownership of the split is unassigned" until 2026-07-28. FR-028 and
+        # SC-021 now require the datasheet to name who owns the split, because
+        # `specs/project-plan.md` assigns it and the old sentence contradicted the
+        # canonical source.
+        assert "constructed by E007 and frozen and hashed by E014" in text
 
     def test_the_assumed_fraction_is_labelled_as_assumed(self, text: str) -> None:
         assert "0.25" in text

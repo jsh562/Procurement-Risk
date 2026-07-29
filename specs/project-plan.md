@@ -48,7 +48,7 @@ dod_source: null
 
 > The three hardest epics, and all three are independent. This is the widest parallel band in the plan.
 
-- [ ] E007 [P1] [PRODUCT] [P] {PRD:CAP-005}{SAD:ADR-0004} Delivery Forecast Model — hierarchical censored model producing stored draws
+- [X] E007 [P1] [PRODUCT] [P] {PRD:CAP-005}{SAD:ADR-0004} Delivery Forecast Model — hierarchical censored model producing stored draws
 - [ ] E008 [P1] [PRODUCT] [P] {PRD:CAP-003}{SAD:ADR-0005}{SAD:ADR-0006} Hybrid Retrieval and Reranking — fused sparse and dense search with local reranking
 - [ ] E009 [P1] [PRODUCT] [P] {PRD:CAP-004} Cross-Document Identity Resolution — precision-biased linking with review routing
 
@@ -134,6 +134,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Interface shell contention (E010, E011; later E012, E013).** Parallel interface epics both modify routing and layout. Mitigation: the shell — navigation, layout, data-fetching conventions — is established once in E010 and treated as read-only by later interface epics.
 - **Retrieval configuration surface (E008 vs E014).** E014 exercises the exact-search path while E008 owns the configuration flag. Mitigation: the flag controls index usage only; filters, fusion, fetch depth, and reranking are shared code, per ADR-0005.
 - **Draw-array contract (E007 vs E010).** E007 writes both the canonical draw array and the derived survival array; E010 reads the latter. Mitigation: schema version on the forecast run, checked by the reader.
+- **Single-import-site regression (E005) — realized, and since repaired at `a18abb5`.** `tests/checks/test_single_import_site.py` permits exactly one file under `/src` to name `project-vendor-roster`. Seven did, so the required check "Cross-entry checks, image assertions, and supply chain" failed on `main` from `acfd1eb` until the repair. The count went 1→2 at `3bdc15a` and reached 7 by `915264a`, entirely within E005 — which had already repaired the identical breakage once, at `f732375`, by deriving the path from `model.roster.reader` instead of spelling it. The second repair took the same shape. Three offenders were generation-input manifest labels and three were test files, so this was name duplication rather than a second reader; the rule exists because the duplicate is the copy nobody remembers exists. Two details are worth keeping for whoever meets this next: a repair must reduce the count to one rather than reorder, because the companion assertion reads the first path-sorted mention and any survivor under `model/procurement/` keeps it red — and the same rule has now regressed twice in one epic, which says the check catches it but nothing prevents it. Mitigation for the class: what failed was not the check but noticing it, since the step is skipped whenever an earlier step aborts, and E007 aborted an earlier step on three consecutive runs. A required check that silently does not run is indistinguishable from one that passes.
 - **Amendment during flight (any wave with more than one epic).** The contended resource is not two epics amending at once — it is one epic amending while the others are mid-flight. The amendment procedure re-derives whole managed sections rather than patching lines, this plan is rewritten by every amendment and holds every epic's entry, and unchecked epics are precisely the ones another epic's amendment may adjust. Meanwhile the in-flight branches keep validating against the instruction version they were cut from, and quality control treats any violation as critical — so an epic can pass its gate against a rule that no longer exists. Mitigation: amendments serialize on the default branch, and every feature records the instruction version its compliance audit ran against, so drift is detectable at the next gate rather than at merge.
 
 ### Shared Resource Conflicts
@@ -652,6 +653,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0014 Provider SDK as an Optional Extra of the Gateway Package | accepted | E004, E006, E011 |
 | ADR-0015 Local Spool for Invocation Records Whose Database Write Fails | accepted | E004, E013 |
 | ADR-0016 Database-Client Access Is Not Restricted by Schema Ownership | accepted | E003, E004, E005, E006, E007 |
+| ADR-0017 A Plan-Phase Artifact May Be Declared Normative Over a Specify-Phase Requirement | accepted | E003, E004 |
+| ADR-0018 Two Anchor-Distinguished Posterior Populations in Two Tables | accepted | E007, E010 |
 
 ### Deployment Decisions
 
@@ -659,7 +662,7 @@ No Deployment & Operations Document exists, so no operational epics were extract
 
 ### Uncovered Items
 
-None. All 14 capabilities and all 9 accepted architecture decisions map to at least one epic.
+None. All 14 capabilities and all 16 accepted architecture decisions map to at least one epic. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
 
 ## Shared Artifact Surface
 

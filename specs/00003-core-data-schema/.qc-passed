@@ -28,3 +28,14 @@ Not measured here, recorded rather than implied:
     A-011 closed by reclassifying 11 soft MUSTs in place. A-012 (data-model.md
     normative over spec requirements) accepted with its mitigation named;
     an ADR to bind it beyond E003 is carried forward to main.
+    Update 2026-07-29: that carry-forward is discharged. ADR-0017, "A
+    Plan-Phase Artifact May Be Declared Normative Over a Specify-Phase
+    Requirement", is accepted and cataloged in specs/sad.md and
+    specs/project-plan.md, citing E003 and E004. Nothing is owed here.
+
+Two sentences in data-model.md's Drift control paragraph were corrected on
+2026-07-29 against E007's obligations P-1 and P-2 — the DDL-literal count is
+no longer two, and the claim that SURVIVAL_HORIZON_DAYS and DRAW_COUNT are
+asserted against the active run describes a check that was never written.
+Neither changes this QC verdict: both are documentation of enforcement, and
+the enforcement they misdescribe never existed to regress.

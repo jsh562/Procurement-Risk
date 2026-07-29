@@ -46,7 +46,7 @@ Five groups, one per task, each failing a different way when it is wrong:
   **latent** for the deployed connection, which is gap **G-11**.
 
 **Three requirements here are documentation, and are tested as documentation.**
-TR-081 (confidence is a self-reported score, not a calibrated probability),
+TR-081 (confidence is a computed score, not a calibrated probability),
 TR-082 (agent identity is at ingestion-run granularity, not per value), and
 TR-085 (provenance rows are retained for the life of the database) constrain what
 a *reader* may conclude. No constraint can carry any of them. Inventing a schema
@@ -1927,7 +1927,7 @@ DATA_MODEL_TEXT = _normalized(DATA_MODEL_PATH.read_text(encoding="utf-8"))
 #: without breaking the test, but not so loose that a passing mention elsewhere
 #: would satisfy it.
 DOCUMENTED_SEMANTICS: Mapping[str, tuple[str, ...]] = {
-    "TR-081": ("self-reported score", "calibrated probability"),
+    "TR-081": ("computed score", "calibrated probability"),
     "TR-082": ("ingestion-run granularity", "only per-row temporal fact"),
     "TR-085": ("retained for the life of the database", "regenerable"),
 }
@@ -1946,12 +1946,16 @@ def test_tr081_tr082_tr085_semantics_are_recorded_in_data_model_md_not_in_a_cons
     Each states something a reader must not conclude, and none of them is
     expressible as a constraint:
 
-    * **TR-081** -- confidence is a **self-reported score** asserted by the
-      extracting agent about its own output, **not a calibrated probability**. The
-      schema can carry the type and the closed interval, and it does. It cannot
-      carry calibration, and no `CHECK` could tell a well-calibrated `0.9` from a
-      badly-calibrated one. Recording the limitation is the honest alternative to
-      implying a guarantee, per Principle VII.
+    * **TR-081** -- confidence is a **computed score**, derived in deterministic
+      code from parse signals recorded beside the value, **not a calibrated
+      probability**. The schema can carry the type and the closed interval, and it
+      does. It cannot carry calibration, and no `CHECK` could tell a
+      well-calibrated `0.9` from a badly-calibrated one. Recording the limitation
+      is the honest alternative to implying a guarantee, per Principle VII.
+      Amended 2026-07-27: the score was originally specified as self-reported by
+      the extracting agent. A number a model asserts about its own output is not
+      reproducible, so E006 computes it instead; only the source moved, and the
+      non-calibration half is unchanged.
     * **TR-082** -- the agent responsible for a citation is identified at
       **ingestion-run granularity** by E006, never on the value row, so
       `extracted_at` is the **only per-row temporal fact**. The schema-side residue

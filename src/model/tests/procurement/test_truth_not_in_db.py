@@ -17,6 +17,7 @@ import pytest
 
 from model.procurement import paths
 from model.procurement.load import load
+from model.roster.reader import ROSTER_FILENAME
 
 pytestmark = pytest.mark.usefixtures("empty_procurement_tables")
 
@@ -117,7 +118,7 @@ class TestTheDatasetContentHashIsNotLoaded:
         roster = next(
             e["digest"]
             for e in envelope["generation_inputs"]
-            if e["path"].endswith("project-vendor-roster.json")
+            if e["path"].endswith(ROSTER_FILENAME)
         )
         with pg_connection.cursor() as cursor:
             cursor.execute("SELECT DISTINCT roster_hash FROM purchase_order_line")
