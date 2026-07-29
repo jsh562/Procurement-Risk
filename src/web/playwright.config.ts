@@ -38,7 +38,21 @@ export default defineConfig({
       // would resolve `today` wherever the runner happens to be (FR-038).
       command: `uv run --directory ../api uvicorn api.main:app --host 127.0.0.1 --port ${API_PORT} --log-level warning`,
       url: `http://127.0.0.1:${API_PORT}/api/v1/worklist`,
-      reuseExistingServer: !process.env.CI,
+      // Never adopt a server this run did not start.
+      //
+      // `!process.env.CI` meant "reuse locally", and locally the thing sitting on
+      // the default port is usually the developer's own `scripts/dev.py` — which
+      // serves `procurement`, the 199-line E005 set, while every spec here
+      // asserts against `procurement_e2e`'s 16-line frozen fixture. Playwright's
+      // readiness probe only asks whether *something* answers, so it would adopt
+      // that server and run the whole suite against the wrong database. Measured:
+      // a dev server on 3000 answers this probe with HTTP 200.
+      //
+      // That is a silent wrong answer rather than a failure, which is the worse
+      // of the two. `scripts/e2e.py` resolves free ports before invoking this
+      // config, so refusing to reuse costs a few seconds of startup and nothing
+      // else.
+      reuseExistingServer: false,
       timeout: 180_000,
       env: {
         // The dedicated end-to-end database, never the shared development one.
@@ -60,7 +74,21 @@ export default defineConfig({
     {
       command: `npm run build && npm run start -- --port ${WEB_PORT}`,
       url: `http://127.0.0.1:${WEB_PORT}`,
-      reuseExistingServer: !process.env.CI,
+      // Never adopt a server this run did not start.
+      //
+      // `!process.env.CI` meant "reuse locally", and locally the thing sitting on
+      // the default port is usually the developer's own `scripts/dev.py` — which
+      // serves `procurement`, the 199-line E005 set, while every spec here
+      // asserts against `procurement_e2e`'s 16-line frozen fixture. Playwright's
+      // readiness probe only asks whether *something* answers, so it would adopt
+      // that server and run the whole suite against the wrong database. Measured:
+      // a dev server on 3000 answers this probe with HTTP 200.
+      //
+      // That is a silent wrong answer rather than a failure, which is the worse
+      // of the two. `scripts/e2e.py` resolves free ports before invoking this
+      // config, so refusing to reuse costs a few seconds of startup and nothing
+      // else.
+      reuseExistingServer: false,
       timeout: 180_000,
       env: {
         // Both, because the server component fetches from Node and every
