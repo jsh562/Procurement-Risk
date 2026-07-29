@@ -114,6 +114,8 @@ The gateway package is the only module permitted to import the provider client; 
 
 The worklist is the product's primary surface, and it has **zero request-time model dependency**. Every number it shows is an array lookup against a precomputed artifact.
 
+> **Amended 2026-07-29.** The request below read `GET /lines?project=…` — a sketch written before the surface existed. E010 defines the contract at `/worklist` under a `/api/v1` server with a `project_id` parameter, and its plan recorded the mismatch as an amendment its branch could not perform: governance places amendments to this document on the default branch, and a feature branch records the need without acting on it. E010's QC then held the feature as not release-ready while three artifacts named three addresses. This is the amendment that closes that gate; the address here and in `contracts/openapi.yaml` are now the same one.
+
 ```mermaid
 sequenceDiagram
     participant C as Coordinator
@@ -121,7 +123,7 @@ sequenceDiagram
     participant A as API
     participant DB as Postgres
     C->>W: Open worklist
-    W->>A: GET /lines?project=…
+    W->>A: GET /api/v1/worklist?project_id=…
     A->>DB: Join lines to active forecast run
     DB-->>A: Survival arrays, need-by, criticality
     A->>A: P(late), P50, P80 from array offsets
@@ -343,6 +345,7 @@ Project-level architectural decisions are maintained as standalone MADR files un
 - Page provenance fixed as a deterministic parser output rather than model output, resolving the incompatibility between provider-native citations and schema-constrained extraction.
 - Reproducibility gate fixed as a published tolerance (±0.01 absolute, ±2% relative) with hash-pinned inputs and a harness that aborts on evaluation-set mismatch.
 - Observability fixed as a product surface: the model-invocation trace is rendered in the interface, not confined to logs.
+- Worklist address fixed as `GET /api/v1/worklist`, scoped by `project_id` (amended 2026-07-29). The Primary Flow above had sketched `GET /lines?project=…` before the surface existed; E010's contract defines the real one, and the flow now names it. Recorded here because the sketch outlived the sketch stage and became a registered document conflicting with a downstream artifact — which is the case the governance rule is written for, and which held E010 out of release until this amendment landed.
 - Python toolchain fixed to `uv` with one standalone project per entry — three `pyproject.toml` and `uv.lock` pairs, never a shared workspace, whose single resolution cannot stop one member reaching another's dependencies. Every Python tool runs as `uv run --directory src/<entry>`; a bare invocation from the repository root resolves against whichever environment is active and silently crosses the boundary the contracts exist to enforce.
 - Import contracts are configured per entry rather than repository-wide, because the tool requires an importable root package and a single root configuration would need every stack installed together — defeating the isolation being proved. The single-provider-import rule uses an allowlist contract checking direct imports only; the computation boundary uses a forbidden contract with indirect detection on.
 - Coverage aggregates to one report at the repository root and gates only there; per-entry runners report without gating, because two entries have an empty denominator. Distinct per-entry data files are the mechanism, since the test plugin overrides the library's own parallel setting.
