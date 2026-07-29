@@ -1,0 +1,366 @@
+# Tasks: Document Ingestion and Extraction
+
+**Input**: Design documents from `specs/00006-document-ingestion-and-extraction/`
+**Prerequisites**: `plan.md`, `spec.md`, `data-model.md`, `research.md`, `checklists/` (data-integrity, testing, observability — all evaluated)
+
+**Tests**: Included. `plan.md` §Testing Strategy makes tests part of the deliverable, and §The test-first boundary makes strict red-green-refactor **mandatory** for every module under `model/compute/` — `confidence.py`, `coerce.py`, `metrics.py`. Each appears as an ordered pair whose test task precedes its implementation task and whose completion condition is an **observed failure**, never a green suite. Every other module in this feature is test-after.
+
+**Organization**: Grouped by user story (`US#`) per `spec_type: product`. Requirement tags are `FR-###`. `plan.md` §Requirement Coverage Map is the authority for the requirement → component → file assignment below; `data-model.md` §Write Order fixes the per-document statement sequence the writer tasks implement.
+
+**Size**: 92 tasks over 74 requirements and six stories. This exceeds the skill's 5–10-per-phase target in US1 and US2; the epic is not split because every phase reads and writes the same six tables through one transaction boundary, and a sub-feature cut would put that boundary in two workspaces.
+
+## Project Mode
+
+`Brownfield`
+
+E001 scaffolded the four entries, `import-linter`, and the Compose `db` service; E002 committed the corpus, its manifests, and `corpus/derive.py`'s pinned reader; E003 owns the six tables this epic populates and the migration runner; E004 owns the traced path and its fixture discipline. No generic project-initialization tasks appear here. `~` paths in `plan.md` §Project Structure are extensions of files that already exist.
+
+## Epic / Capability Map
+
+- `[US1]` → Corpus becomes citable chunks — manifests, document records, one page reader, the three-class boundary ladder, the committed ONNX encoder, total page containment, the report's corpus figures (P1)
+- `[US2]` → Every extracted value points at its page — traced extraction, vocabulary bounds, as-printed storage, deterministic coercion, line-item grouping, the reference set, metrics and the honest baseline (P1)
+- `[US3]` → An untrustworthy value is absent, not wrong — validate-then-one-repair, computed confidence, the declared floor, the closed seven outcomes, the attempt ledger (P1)
+- `[US4]` → A value split across a page break keeps both pages — contributing-chunk rows, the anchor rule, the published multi-chunk counts (P2)
+- `[US5]` → Every value names the run that produced it — the run record, the three run-output associations, generations, figure labels (P2)
+- `[US6]` → Re-ingesting is safe and repeatable — per-document transactions, the input tuple, run-level failure, offline replay, the three operator runbooks, reproduction (P3)
+
+## Brownfield Notes
+
+- **Existing flows touched**: `src/model/src/model/corpus/derive.py` (the one committed reader — called, never re-implemented), `corpus/paths.resolve_within`, `corpus/manifest.py`, `src/model/pyproject.toml`, `tests/checks/test_migration_ranges.py`, `.github/workflows/verify.yml`, E003's `src/model/src/model/schema/versions/`
+- **Compatibility and migration concerns**: revisions are confined to `0400`–`0499` and chain from E007's head `0303` (`0103` until the 2026-07-28 renumber); **zero columns, constraints, or indexes** are added to the six E003-owned tables (FR-065, VR-015); the promotion removal and the correction procedure run under the schema-owning role, never from the job (FR-041, FR-055)
+- **Ordering constraints that shape the phases**:
+  - **FR-047 gates everything.** T001 verifies E003's TR-081 amendment is on `main`, and T009 — the first migration — declares `after:T001`. The gate reaches a delivery phase only through a **declared** edge, never by argument: the first row-writing task of each phase names a revision, and T031 is US1's (`after:T013`). It is a task, not a note, because a prose blocker is one nobody can mark done.
+  - **Strict test-first for `model/compute/*`** (`plan.md` §The test-first boundary): T044→T045 (`coerce.py`), T049→T050 (`metrics.py`), T056→T057 (`confidence.py`). The test task is complete only when its suite has been run against the absent module and observed to fail; neither pair is ever `[P]`.
+  - **Migration chain**: `0400` → `0401` → `0402` → `0403` → `0404` is a hard order — each later revision carries a composite FK to a key an earlier one creates (`data-model.md` §Migration Sequence).
+  - **AD-013** — claiming block `0400`–`0499` is a **three-part** edit to `tests/checks/test_migration_ranges.py` (T003). The one-line `BLOCKS` append turns CI red three ways.
+  - **HINT-004** — split on the page boundary *before* the structural ladder (T022), or a clean structural split straddles a page and violates the scalar `page_number`.
+  - **HINT-002** — the per-document error handler catches **outside** the `with conn.transaction()` block, and what it writes afterwards is a run-level failure on `ingestion_run`, never an `extraction_failure` row (T075, T077).
+- **Regression focus**: `tests/checks/test_migration_ranges.py` stays green with two new blocks declared; the existing computation-boundary and single-provider-import contracts keep passing as `model.llm` and `model.ingest` grow; the root `coverage combine` gate stays at or above 80% with three new packages inside its `--source` enumeration.
+
+---
+
+## Phase 1: Setup (Repository / Workspace Delta)
+
+**Lands the gate (T001), the block claim (T003), the contracts, and the coverage wiring before any module or migration they constrain. T003 in particular precedes T009, the first `04xx` revision — see §Dependencies.**
+
+- [X] T001 {FR-047} Confirm E003's TR-081 amendment has landed on main and record the verifying revision in specs/00006-document-ingestion-and-extraction/plan.md
+- [X] T002 {FR-051} Verify specs/adrs/0018, 0019, and 0020 are committed and record the ADR and migration-block claim before implementation (SC-034)
+- [X] T003 {FR-040} Amend tests/checks/test_migration_ranges.py 3 ways (AD-013): BLOCKS += E005 200-299, E006 400-499 (was 300-399, reclaimed by E007 on 2026-07-28); populated assert splits reserved-empty vs claimed; "0200" control -> "0500"
+- [X] T004 [P] Add onnxruntime, tokenizers, pysbd, and the pgvector psycopg adapter plus the ingest console script to src/model/pyproject.toml
+- [X] T005 [P] Append ingest,llm,compute to the coverage --source enumeration and add a per-package 80% floor for each in .github/workflows/verify.yml
+- [X] T006 {FR-048} Verify src/model/pyproject.toml's model.llm forbidden contract needs no edit — plant a model.llm.<new> import of model.compute and observe lint-imports reject it (AD-001)
+- [X] T007 {FR-023} Add the placement check — only model.llm may import gateway — with a seeded violation in tests/checks/test_model_facing_placement.py after:T006
+- [X] T008 {FR-050} Forbid model.ingest.baseline from model.corpus templates/render/model via [[tool.importlinter.contracts]] type=forbidden, allow_indirect_imports=false in src/model/pyproject.toml
+
+---
+
+## Phase 2: Foundational (Cross-Work-Item Blockers)
+
+**The seven owned objects and the view. Every delivery phase writes through them, so they are lifted here rather than into US5, which would otherwise make P1 unbuildable.**
+
+- [X] T009 {FR-038,FR-040} Author revision 0400_ingestion_run in src/model/src/model/schema/versions/ — agent-id grammar, floor/weight CHECKs, five failure kinds after:T001
+- [X] T010 {FR-055,FR-043} Author revision 0401_ingestion_run_document with its single-active partial index, document index, and v_active_ingestion_generation after:T009
+- [X] T011 {FR-039} Author revision 0402 — three run-output associations, their generation indexes, and the redundant value UK — in src/model/src/model/schema/versions/ after:T010
+- [X] T012 {FR-059,FR-063} Author revision 0403 — extracted_value_line_item and extracted_value_parse_signal with their indexes and composite FKs — after:T011
+- [X] T013 {FR-066} Author revision 0404 — grants, revoke UPDATE/DELETE on the six append-only tables, revoke DELETE on ingestion_run — after:T012
+- [X] T014 {FR-065} Assert the six E003-owned tables' catalog entries are identical at 0303 (E006's parent; was 0103 before the 2026-07-28 renumber) and at head in src/model/tests/schema/test_table_ownership.py after:T013
+- [X] T015 {FR-040} [COMPLETES FR-040] Verify apply-from-empty, re-apply no-op, single head, 04xx prefixes, and the object inventory in src/model/tests/schema/test_ingestion_migrations.py after:T013
+
+---
+
+## Phase 3: US1 - Corpus Becomes Citable Chunks (Priority: P1) 🎯 MVP
+
+- [X] T016 [P] [US1] {FR-001,FR-005} Read the committed manifests and hash-verify each file in src/model/src/model/ingest/manifest_reader.py → exports: iter_entries, verify_hash
+- [X] T017 [US1] {FR-002,FR-006,FR-052} Mint ids, classify the closed type set, abort on a corpus-wide collision in src/model/src/model/ingest/documents.py → exports: mint_document_id
+- [X] T018 [US1] {FR-003,FR-004} Attach real specifications to PRJ-000 and carry layer, licence basis, and layer-appropriate provenance unchanged in ingest/documents.py after:T017
+- [X] T019 [US1] {FR-007,FR-008} Derive pages and page text only through corpus.derive's committed reader in src/model/src/model/ingest/parse.py → exports: read_pages
+- [X] T020 [P] [US1] {FR-008} Assert the ingest package declares no second tolerance map, normalization, or page-text assembly in src/model/tests/ingest/test_single_page_reader.py
+- [X] T021 [P] [US1] {FR-014} Count content word pieces against the 254 budget and add the pinned pySBD split in ingest/tokens.py and segment.py → exports: content_pieces, sentences
+- [X] T022 [US1] {FR-012,FR-013} Detect UFGS structure and transmittal field blocks, splitting on the page break before the ladder, in ingest/structure.py (HINT-004) after:T019
+- [X] T023 [US1] {FR-012,FR-014} Cut the three boundary classes and descend article→paragraph→subparagraph→sentence in ingest/chunker.py after:T022 ← T021:content_pieces
+- [X] T024 [US1] {FR-015,FR-016} Assign contiguous zero-based ordinals in reading order and keep bracketed markup verbatim in src/model/src/model/ingest/chunker.py after:T023
+- [X] T025 [US1] {FR-014,FR-017} [COMPLETES FR-014] Record the chunker version and fail the run only on an over-long single sentence in ingest/chunker.py after:T024
+- [X] T026 [US1] {FR-017} Assert identical boundaries across two chunkings differing in process, hash seed, cwd, and enumeration order in src/model/tests/ingest/test_determinism.py
+- [X] T027 [P] [US1] {FR-019} Export the encoder to ONNX FP32, vendor it with its tokenizer and recorded digests under data/encoder/, and commit the two-layer parity probe set (AD-014)
+- [X] T028 [US1] {FR-019} Verify the committed encoder and tokenizer digests before the session is created, failing rather than fetching, in ingest/artifacts.py after:T027
+- [X] T029 [US1] {FR-019} Implement the ONNX Runtime session with attention-masked mean pooling and L2 normalization in ingest/embed.py after:T028 → exports: embed_chunks
+- [X] T030 [US1] {FR-019} [COMPLETES FR-019] Assert pre-declared cosine ≥ 0.999999 and max per-dim ≤ 1e-5 over the probe set in src/model/tests/ingest/test_encoder_parity.py ← T029:embed_chunks
+- [X] T031 [US1] {FR-020,FR-021} Record the embedding identity and revision on every chunk and read the vector dimension from schema_constants in ingest/writer.py after:T013
+- [X] T032 [US1] {FR-010} Re-check chunk-text containment inside each document's transaction before it commits in src/model/src/model/ingest/writer.py after:T031
+- [X] T033 [US1] {FR-010} Assert containment for every chunk against a fresh post-run read, publishing its population, in src/model/tests/ingest/test_page_attribution.py after:T032
+- [X] T034 [US1] {FR-071,FR-068} Build the closed-content-list report, failing on a missing item and on an empty population, in ingest/report.py after:T032 → exports: build_report
+- [X] T035 [US1] {FR-009,FR-018} Publish the per-layer zero-recognition-error bound and the chunk-identity contract in src/model/src/model/ingest/report.py after:T034
+- [X] T036 [US1] {FR-011} Publish the enumerated human-inspection claim set with inspected and defect counts and the 3/n or Wilson bound in ingest/report.py after:T034
+- [X] T037 [US1] {FR-053} Publish leaf-length distribution, sentence-split count, boundary-class counts, and page-terminal documents per layer in ingest/report.py after:T034
+- [X] T038 [US1] {FR-061} Publish near-duplicate cluster counts by cause as exact matches and at the declared grid 0.80–0.99 in ingest/report.py after:T034
+- [X] T039 [US1] {FR-068} Assert every total check names its population and count and that an empty population fails in src/model/tests/ingest/test_total_checks.py after:T034
+
+---
+
+## Phase 4: US2 - Every Extracted Value Points At Its Page (Priority: P1) 🎯 MVP
+
+- [X] T040 [US2] {FR-023} Create the extraction module — the only module in the repository importing gateway — in src/model/src/model/llm/extraction.py → exports: extract_fields
+- [X] T041 [P] [US2] {FR-024,FR-058} Bound field names to unretired vocabulary terms and declare the transmittal field subset in src/model/src/model/llm/schemas.py and prompts.py
+- [X] T042 [US2] {FR-022} Restrict extraction to the 25 synthetic transmittals and record the 26-specification exclusion in src/model/src/model/ingest/cli.py after:T040
+- [X] T043 [P] [US2] {FR-027,FR-028} Store manufacturer and part number as printed with no normalized twin; assert no identity claims in src/model/tests/ingest/test_no_identity_claims.py
+- [X] T044 [US2] {FR-049} Write failing property tests for coercion round-trip and metamorphism in src/model/tests/compute/test_coerce.py — done only on an observed collection error (observed 2026-07-27: `ModuleNotFoundError: No module named 'model.compute.coerce'`, 1 error during collection, 0 tests run)
+- [X] T045 [US2] {FR-049,FR-062} Implement deterministic numeric and date coercion, printed text kept as the evidence, in compute/coerce.py after:T044 → exports: coerce_value
+- [X] T046 [US2] {FR-029} Inherit the cited page from the source chunk and anchor a page-split value on the chunk printing the value in ingest/writer.py after:T032
+- [X] T047 [US2] {FR-059} Group values by run, document, and item ordinal, with ordinal 0 for document-scoped values, in ingest/lineitems.py after:T012 → exports: group_line_items
+- [X] T048 [P] [US2] {FR-067} Reproduce the pre-render document model from committed generation inputs and check it against the manifest digest in ingest/reference.py
+- [X] T049 [US2] {FR-060} Write failing property tests for the continuity-corrected Wilson interval in src/model/tests/compute/test_metrics.py — done only on an observed collection error (observed 2026-07-27: `ModuleNotFoundError: No module named 'model.compute.metrics'`, 1 error during collection, 0 tests run)
+- [X] T050 [US2] {FR-060} Implement precision, recall, and continuity-corrected Wilson intervals — no F1 — in compute/metrics.py after:T049 → exports: wilson_interval
+- [X] T051 [US2] {FR-050} Author the deterministic per-vendor template baseline from rendered text only in src/model/src/model/ingest/baseline.py after:T008
+- [X] T052 [US2] {FR-050} [COMPLETES FR-050] Record the declared baseline label before any figure, read the observed label off the table, publish disagreement in ingest/report.py after:T051
+- [X] T053 [US2] {FR-060} [COMPLETES FR-060] Publish per-field per-layer figures with denominators beside the baseline, the real layer not measured, in ingest/report.py ← T050:wilson_interval
+- [X] T054 [US2] {FR-070} Issue every invocation under one run-scoped trace id and reconcile attempted against recorded counts in ingest/cli.py and report.py after:T042
+- [X] T092 [US2] {FR-023} Cover llm/extraction.py's gateway invocation path and the schemas and prompts it imports in src/model/tests/llm/test_extraction.py after:T040
+
+---
+
+## Phase 5: US3 - An Untrustworthy Value Is Absent, Not Wrong (Priority: P1) 🎯 MVP
+
+- [X] T055 [US3] {FR-025,FR-026} Validate every model output against the caller's schema and attempt at most one repair, then fail closed, in llm/extraction.py after:T040
+- [X] T056 [US3] {FR-030,FR-031,FR-057} Write failing tests over all eight signal combinations in src/model/tests/compute/test_confidence.py — done only on an observed collection error (observed 2026-07-28: `ModuleNotFoundError: No module named 'model.compute.confidence'`, 1 error during collection, 0 tests run)
+- [X] T057 [US3] {FR-030,FR-031,FR-057} Compute confidence as 1.0 less deductions applied alternate → page-split → repair in compute/confidence.py after:T056 → exports: compute_confidence
+- [X] T058 [US3] {FR-032,FR-057} [COMPLETES FR-057] Record the declared floor 0.80 and the three deduction weights on the run row before the first document in ingest/runs.py after:T009
+- [X] T059 [US3] {FR-063} Write one parse-signal row per stored value carrying label form, source chunk count, and repair flag in ingest/writer.py after:T012
+- [X] T060 [US3] {FR-063} [COMPLETES FR-063] Recompute every stored confidence from its signal row and its own run's weights in src/model/tests/schema/test_parse_signals.py ← T057:compute_confidence
+- [X] T061 [P] [US3] {FR-034,FR-035,FR-036} Classify failures over the closed seven with the five required fields and no value or confidence in src/model/src/model/ingest/failures.py
+- [X] T062 [US3] {FR-037} Record a field the document does not print as no_value_found once per document, on its lowest-ordinal chunk, in ingest/failures.py after:T061
+- [X] T063 [US3] {FR-069} Keep the attempt ledger and resolve every attempt to a stored value or a failure, naming its unit, in ingest/cli.py and report.py after:T061
+- [X] T064 [US3] {FR-033,FR-046} Publish the floor, all eight scores with stored and rejected counts, the weights, and their order in ingest/report.py after:T058
+- [X] T065 [US3] {FR-034} Publish the failure count broken down by each of the seven outcomes, zeros included, in src/model/src/model/ingest/report.py after:T061
+
+---
+
+## Phase 6: US4 - A Value Split Across A Page Break Keeps Both Pages (Priority: P2)
+
+- [X] T066 [US4] {FR-029} Write one contributing-chunk row per additional page, the anchor never appearing among them, in ingest/writer.py after:T046
+- [X] T067 [US4] {FR-029} Publish the count of multi-chunk values and of their contributing-chunk rows in src/model/src/model/ingest/report.py after:T066
+- [X] T068 [US4] {FR-029} [COMPLETES FR-029] Assert the seeded page-split value cites the page printing it and reassembles in page order in src/model/tests/ingest/test_page_split.py after:T066
+
+---
+
+## Phase 7: US5 - Every Value Names The Run That Produced It (Priority: P2)
+
+- [X] T069 [US5] {FR-038} Write the run record with the composite principal-and-build agent identity and a finish only on completion in ingest/runs.py after:T009 → exports: write_run_record
+- [X] T070 [US5] {FR-039} Insert the three run-output associations in the document transaction and hold value-level rows' run and document equal in ingest/writer.py after:T011
+- [X] T071 [US5] {FR-039} [COMPLETES FR-039] Anti-join every chunk, value, and failure against its association corpus-wide in src/model/tests/schema/test_run_attribution.py after:T070
+- [X] T072 [US5] {FR-055} Mark the prior generation superseded and remove it leaf-up before inserting the successor as active in ingest/runs.py (HINT-003) after:T069
+- [X] T073 [US5] {FR-055} Assert one active generation per document, zero superseded rows at commit, and zero rows left after a promotion in src/model/tests/schema/test_generations.py after:T072
+- [X] T074 [US5] {FR-072} Label every published figure with its run, generation set, kind, unit, and layer, naming the run record by identifier, in ingest/report.py after:T069
+
+---
+
+## Phase 8: US6 - Re-Ingesting Is Safe And Repeatable (Priority: P3)
+
+- [X] T075 [US6] {FR-054,FR-042} Commit one document per transaction on an autocommit connection in the stated 0a–7 order in ingest/writer.py (HINT-002) after:T070
+- [X] T076 [US6] {FR-043} Compute the per-document input tuple digest, skip unchanged documents, and reload only those that differ in ingest/runs.py after:T075
+- [X] T077 [US6] {FR-056} Record a run-level failure from the closed five after the rollback, in a fresh transaction, in ingest/cli.py and runs.py after:T075
+- [X] T078 [US6] {FR-056} Assert the five run-level kinds and the seven per-field outcomes are disjoint by reading both CHECK bodies in src/model/tests/schema/test_failure_domains.py after:T077
+- [X] T079 [US6] {FR-044,FR-045} Add the offline ingest console entry in record and replay modes, reaching no network, in src/model/src/model/ingest/cli.py after:T054
+- [X] T080 [US6] {FR-044} Assert no ingestion module is reachable from a request-serving entry point in tests/checks/test_ingest_offline_only.py after:T079
+- [ ] T081 [US6] {FR-045} Commit the extraction fixtures and document the prompt- and schema-digest re-record trigger in src/model/fixtures/ and src/model/README.md after:T079 — BLOCKED, see §Blocked Work; the re-record trigger is documented, zero fixtures are committed
+- [X] T082 [US6] {FR-041} Document the whole-document remove-and-reload correction under the schema-owning role in src/model/README.md after:T075
+- [X] T083 [US6] {FR-064} Document the HNSW index drop and rebuild, the sequential-scan window, and abort recovery in src/model/README.md and ingest/report.py after:T079
+- [X] T084 [US6] {FR-055} [COMPLETES FR-055] Document promotion-with-removal under the schema-owning role, and that a first-ingest run stays unattended, in src/model/README.md after:T072
+- [X] T085 [US6] {FR-066} Assert the thirteen privilege refusals under SET LOCAL ROLE procurement_app in src/model/tests/schema/test_privileges.py after:T013
+- [X] T086 [US6] {FR-073} Publish the four-way per-document disposition ledger summing to the enumerated corpus in ingest/cli.py and report.py after:T076
+- [X] T087 [US6] {FR-074} Print the reproduction tolerance beside every figure and emit the committed results manifest in ingest/report.py after:T074
+
+---
+
+## Phase 8: Assembly Gaps Found During Implementation
+
+**These four were missing from the decomposition, not deferred by it.** Every task
+below is obliged by a requirement or success criterion that already had tasks
+against it — the gap is that no task connected the pieces those tasks built, or
+built a report item the closed content list already required. Analyze did not
+catch them because each individual task's exports were present and its tests
+green; what was absent was a caller. T093 in particular is why `extract_fields`
+had no production caller after T092 marked its coverage complete: T040 built the
+module, T042 restricted its scope, T046 placed its citation, and nothing invoked
+it. Recorded here rather than folded silently into Polish, because a task list
+that acquires work without saying so stops being a record.
+
+- [X] T093 [US2] {FR-025,FR-026,FR-030} Drive the extraction stage — chunks → extract_fields → coerce, confidence, citation, line items → writer — in src/model/src/model/ingest/extract.py after:T087 → exports: run_extraction_stage
+- [X] T094 {FR-054} Build report item 8 — chunk counts, total and per layer, against the 5,000–15,000 estimate with the cause of any deviation — in ingest/report.py after:T087
+- [X] T095 {FR-058} Build report item 14 — the count of fields printed but not attempted — in src/model/src/model/ingest/report.py after:T093
+- [X] T096 {FR-019} Build report item 21 — encoder parity bounds declared before the comparison, with observed maxima — in ingest/report.py after:T087
+- [X] T097 [US1] {FR-044,FR-073} Drive the write and extraction stages from the console entry — plan_documents → write_generations → run_extraction_stage → abort_run or finish_run — in src/model/src/model/ingest/cli.py after:T093
+
+**T097 is the top-level pipeline, and it was nobody's task.** `cli.main`
+enumerates, hash-verifies, mints identifiers and prints the partition, then
+stops; its own docstring records the write stage as a stated gap. The reason it
+gives — that an entry writing chunks and reporting zero extracted values would
+publish a corpus which looks ingested and is not — was correct while the
+extraction stage did not exist, and it names its own unblocking condition:
+*once the extraction stage it feeds is assembled*. T093 assembled it. The
+residual objection is answered by T086's disposition ledger, which publishes the
+four-way per-document outcome, so a run that commits the 26 real specifications
+and stops at the first synthetic transmittal reports itself as exactly that.
+Without T097 every component of this epic exists and nothing runs them, which is
+the one defect a per-task check cannot see.
+
+**Measured, from a clean database at `b03c7c0`**: `ingested=26
+skipped_unchanged=0 rolled_back=1 not_reached=24 enumerated=51`, 6,391 chunks
+committed, `fixture_missing` recorded on `ingestion_run` naming
+`prj-001-t0001-r0` and the resolution key that missed, no finish, exit code 3.
+`rolled_back` is **one** document and not twenty-five: `write_generations` stops
+at the first failure (FR-042), so the twenty-four behind it were never begun,
+which is what `not_reached` means and why the two dispositions are separate.
+
+---
+
+## Phase 8: The Publish Layer, Found During Quality Control
+
+**The same defect shape, a third time.** T093 found `extract_fields` with no
+production caller and T097 found the pipeline with none; QC found the whole
+**publish** layer with none. `report.py` is 3,977 lines behind twenty-one section
+builders, `build_report` had no caller outside tests, `REPORT_PATH` was declared
+and never written — the module says so itself, "this module writes no file" —
+`results_manifest` had zero call sites, and `cli.main` ended at four `print`
+statements. Twenty-two requirements' publish obligations were therefore unmet
+while every component that would have met them was complete and green.
+
+- [X] T098 {FR-071,FR-072,FR-074} Assemble all twenty-one report items from the run's own data, emit the report and the results manifest, and publish a named refusal naming every item with no data — in src/model/src/model/ingest/publish.py, called from run_ingestion after:T097 → exports: publish_report, PublicationOutcome, RunEvidence
+- [X] T099 {FR-050,FR-060,FR-067} Score the model path and the baseline against the verified reference set in production rather than only inside a test — in src/model/src/model/ingest/quality.py after:T098 → exports: score_against_reference, baseline_values
+- [X] T100 {FR-056,FR-014,FR-042} Carry FR-014's document, page and structural unit as attributes on ChunkerError and route every run-level abort through the constructor for its kind — in ingest/chunker.py, ingest/cli.py and llm/extraction.py after:T097
+- [X] T101 {FR-069} Add FR-069's third resolution — the correct negative — enumerate the three over attempt units in the extraction stage, and pair count_attempts with a real ExtractionStageResult in a test — in ingest/extract.py and ingest/report.py after:T098
+- [X] T102 {FR-058} Publish the printed fields with no vocabulary term as unattempted-but-printed, keeping them out of recall's denominator — in ingest/reference.py and ingest/report.py after:T098
+- [X] T103 {FR-029,FR-057} Narrow the page-split contributor rule to the adjacent chunk whose last line carries the label — in src/model/src/model/ingest/extract.py after:T093
+
+**Measured, from a clean database at `19dffc1` plus these six**: the full
+`ingest --mode replay` run reports `ingested=26 skipped_unchanged=0
+rolled_back=1 not_reached=24 enumerated=51`, 6,391 chunks committed,
+`fixture_missing` recorded through its own constructor naming
+`prj-001-t0001-r0` and the resolution key, exit code 3 — and, new, the report
+driver's named refusal: **16 of the 21 items built, 5 with no data** (items 6,
+7, 10, 12, 13), each named with what obliges it and the builder's own reason.
+No file is written, which is FR-071's rule, and the refusal is printed rather
+than left as silence, which is the defect QC found. A complete two-document run
+— one specification, one transmittal, a substituted invoker — emits all
+twenty-one items and the results manifest, asserted in
+`src/model/tests/schema/test_pipeline.py`.
+
+**Two spec amendments were required and are recorded in `spec.md` in place.**
+FR-069 and its two success criteria (SC-008, SC-054) stated a two-resolution
+identity that cannot balance on any run that extracts anything; FR-058's
+"twenty-two vocabulary terms, ten of which cannot appear on a transmittal"
+inverted the count — twelve cannot — and its escape hatch excluded the seven
+printed fields with no vocabulary term, which are the population it most needs
+to reach.
+
+---
+
+## Blocked Work
+
+- **T081 — extraction fixtures.** The re-record trigger is documented in
+  `src/model/README.md`; **zero fixtures are committed**. A fixture is a recorded
+  provider response, and none can be produced without network access and a
+  provider credential, neither of which is available to this work. A `replay` run
+  reaching extraction therefore aborts with `fixture_missing`, which is the
+  designed behaviour rather than a failure of it. Two further facts belong on the
+  record: `plan.md` §Project Structure places E006's fixtures at
+  `src/model/fixtures/`, but `gateway.orchestrator.DEFAULT_FIXTURE_ROOT` resolves
+  to `src/gateway/fixtures` and `Resolution.from_environment` constructs the store
+  from it with no environment override, so the committed plan and the committed
+  code disagree about where fixtures live. Closing T081 requires either E004
+  gaining a configurable fixture root or `plan.md` being corrected — a decision
+  outside this epic's scope. Marked `[ ]` rather than `[X]` deliberately: the task
+  names committing fixtures, and none were committed.
+- **T081 is blocked by a second cause, and it is the harder one: no fixture can
+  currently be replayed at all.** `gateway.compute.hashing.fixture_key` digests
+  `request.model_dump_json()`, and `trace_id` is a declared field on
+  `InvocationRequest` carrying no `exclude=True`, so the correlation identifier is
+  part of the key. FR-070 mints **one trace id per run**, which means the same
+  request keys differently on every run. Measured directly on the committed code:
+  two requests differing only in trace id give
+  `sha256:667b82331c676441…` and `sha256:b32df59be116cbd7…`. Recording fixtures
+  would therefore not close T081 — every lookup on the next run would miss.
+  This survived E004's QC because `resolve_trace_id` mints an identifier when the
+  caller supplies none, so E004's own tests key with `trace_id` null and stay
+  stable; E006 is the first caller obliged to supply one. Both epics are
+  internally correct and the defect exists only at the seam, which is why no
+  per-epic check could see it. **The fix is E004's**, is one field attribute, and
+  does not need a provider: only one fixture is committed
+  (`src/gateway/fixtures/sha256/72/72a4e4a4…`), and re-keying it is a recomputation
+  over the stored request, not a re-recording. It is left unfixed here because
+  changing a shipped, QC-passed epic's hashing is outside this epic's scope and
+  does not by itself unblock T081, which still needs a credential to record
+  anything.
+- **T089 — regenerated ingestion report.** Blocked transitively on T081, because a
+  full replay pipeline cannot reach extraction without fixtures. It was also
+  blocked on T093–T096, because `build_report` refuses any incomplete content
+  list; those four are now `[X]` and all 21 items have builders —
+  `src/model/tests/ingest/test_report_items.py` renders a complete
+  twenty-one-item set from real builders with no placeholders — so **T081 is the
+  only remaining blocker**. **T098 removed the third blocker, which nobody had
+  named**: until it landed nothing called `build_report` in production at all, so
+  even a fixture-complete run would have emitted no report. The full-corpus
+  `replay` run now assembles 16 of the 21 items from real data and publishes a
+  named refusal for the 5 that need extracted values; a complete run over a
+  two-document corpus emits all 21 and the results manifest, which is the
+  assertion that the remaining blocker is the fixtures and nothing else.
+
+---
+
+## Phase 9: Polish & Cross-Cutting Concerns
+
+- [X] T088 {FR-074} Add the replay-mode reproduction job comparing a clean-checkout run against the committed results manifest in .github/workflows/verify.yml after:T087
+- [ ] T089 {FR-071} Run the full replay pipeline and commit the regenerated specs/00006-document-ingestion-and-extraction/ingestion-report.md after:T087
+- [X] T090 [P] Verify ingest, llm, and compute each reach the 80% per-package coverage floor in the combined report after:T005
+- [X] T091 [P] Verify the four architecture checks stay green — computation boundary, gateway placement, single page reader, baseline independence after:T051
+
+**T088 compares the reachable portion, and says so in the workflow.** FR-074's
+figure-level comparison is unreachable today: `results-manifest.json` is not
+committed, because T089 is blocked on T081. The job therefore runs the replay
+pipeline from a clean checkout and compares the **disposition ledger** against an
+expectation derived from the committed corpus manifests — R real documents
+`ingested`, one `rolled_back`, S−1 `not_reached`, exit 3, `fixture_missing`
+recorded — and fails loudly on any deviation. It also **fails when a results
+manifest is committed**, because the entry emits no report and a figure-level
+gate silently downgraded to a ledger-level one is the do-nothing job the task
+forbids. Five negative controls were run against the comparison — exit 0, a
+moved count, a different abort kind, no ledger printed, and a manifest present —
+and each failed it.
+
+**T090, measured** on the combined model data file (2,392 passed, 0 skipped):
+`ingest` **89%**, `llm` **95%**, `compute` **92%**, each asserted alone with
+`--fail-under=80` and each exiting 0; the model aggregate is 92%. `ingest/cli.py`
+is 91% after T097. No test was added to move a number: the two new files exist
+because T097 added a pipeline that nothing exercised.
+
+**T091, each named with its result.** Computation boundary — `lint-imports` in
+`src/model` and `src/api`, "Model-facing code does not reach the computation
+package" KEPT in both. Gateway placement — `tests/checks/
+test_model_facing_placement.py` and `test_single_import_site.py`, 28 passed;
+`model.ingest.cli` gained imports of `model.llm.extraction` and
+`model.ingest.extract` under T097 and neither is `gateway`, which is what the
+placement check exists to hold. Single page reader —
+`src/model/tests/ingest/test_single_page_reader.py`, green (79 passed with the
+baseline file). Baseline independence — "The baseline extractor does not reach
+the corpus generator" KEPT, plus `test_baseline_and_reference.py`. The gateway
+entry's own four contracts are KEPT as well.
+
+---
+
+## Dependencies
+
+Setup → Foundational → Delivery Work Items (US1 → US2 → US3 → US4 → US5 → US6, by priority) → Polish
+
+- **T001 gates the epic, and every phase reaches it by a declared edge.** FR-047 blocks implementation until E003's TR-081 amendment is on `main`. T009 declares `after:T001` and T010–T013 chain from it. Each delivery phase then names a revision from its **first row-writing task**, so a scheduler honouring only declared edges cannot start a write before the gate has cleared: **T031 `after:T013`** (US1 — the first task touching `ingest/writer.py`), T047 `after:T012` (US2), **T058 `after:T009`** and T059 `after:T012` (US3 — T058 writes the floor and the three deduction weights to `ingestion_run` and is US3's first row-writing task, so naming only T059 left it ancestor-less), T069 `after:T009` and T070 `after:T011` (US5), T075 `after:T070` and T085 `after:T013` (US6). US4 reaches the chain through T066 → T046 → T032 → T031. No migration is authored and no row is written before T001 is `[X]`.
+- **The migration-free US1 tasks are migration-free on purpose.** T016–T030 — manifests, id minting, the one page reader, the boundary ladder, the tokenizer and segmenter, the ONNX export and its parity assertion — touch no database and carry no edge into the chain. That is a genuine parallel opportunity against the migration work and must not be serialized by widening T031's edge onto them. T029 → T031 needs no `after:` of its own: both sit in Phase 3 and sequential `T###` ordering within a phase already implies it, which is what leaves T031's single `after:` free to carry the cross-phase edge.
+- **Foundational is not optional and is not US5.** The seven owned objects block US1, US2, US3, US4, US5, and US6. Placing them in US5 (P2) would leave the three P1 stories unbuildable, so they are lifted rather than left where their success criteria are labelled.
+- **Migration chain**: T009 → T010 → T011 → T012 → T013 is a hard order; each later revision carries a composite FK to a key an earlier one creates (`data-model.md` §Migration Sequence). T014 and T015 verify the set and run after T013.
+- **The block claim precedes the first revision it authorises.** T003 declares `0400`–`0499` in `tests/checks/test_migration_ranges.py` (AD-013). It is the first migration-facing task in Setup, and Setup completes before Foundational begins, so T003 precedes T009 by the phase gate rather than by an `after:` — T009's single `after:` is spent on the FR-047 gate (`after:T001`) and this file's grammar admits one `after:` per task. The ordering is recorded here as a requirement, not an accident: a `04xx` revision merged before T003 turns CI red three ways.
+- **Mandatory red-green pairs** (`plan.md` §The test-first boundary): T044 before T045, T049 before T050, T056 before T057. Each test task is complete only when its suite has been run against the absent module and **observed to fail** — a collection error for the missing module, recorded on the task line. A test task marked complete beside a passing suite is the defect the condition exists to name. Neither member of a pair is ever `[P]`. T058 consumes T057's weights and sits directly after it in Phase 5, so sequential `T###` ordering within the phase carries that edge and leaves T058's single `after:` free for the cross-phase gate `after:T009` — the same construction T031 uses.
+- **Write order is a task, not a convention**: T075 implements `data-model.md` §Write Order steps 0a–7 exactly — mark, capture identifier sets, leaf-up removal, generation row, chunks, values, contributing chunks, failures, run associations, then the line-item and parse-signal rows. T066, T059, T070, and T072 attach to named steps in it and must not reorder them.
+- **The three operator procedures are deliverables**: T082 (whole-document correction, FR-041), T083 (index drop and rebuild, FR-064), T084 (promotion with removal, FR-055 / ADR-0020). None is reachable from the ingestion job, which is why each needs a runbook rather than code.
+- **Declared edges**: T009→T001, T023→T021, T030→T029, T031→T013, T032→T031, T034→T032, T046→T032, T047→T012, T051→T008, T055→T040, T058→T009, T059→T012, T060→T057, T069→T009, T070→T011, T075→T070, T079→T054, T085→T013, T090→T005, T091→T051, T092→T040, T093→T087, T094→T087, T095→T093, T096→T087, T097→T093, T098→T097, T099→T098, T100→T097, T101→T098, T102→T098, T103→T093. There is no `T031→T029` edge: it was dropped when T031 was redirected to `after:T013`, and within-phase ordering carries T029 before T031 as the bullet above explains.
+- **The publish layer runs last within a run and its tasks sit last in the graph.** T098 is `after:T097` because a report of a run's own data cannot precede the run; T099, T101 and T102 are `after:T098` because each supplies a section that driver assembles. T100 and T103 are independent of the driver — they are the run-level failure classification and the page-split contributor rule — and carry edges to the tasks whose code they change.
+- **Symbol-import edges gate execution exactly as `after:` does.** T023←T021, T030←T029, T053←T050, T060←T057 carry a `← T###:Symbol` edge; a consumer reading only `after:` under-constrains them, and both forms must be honoured.
+- **P1 boundary**: Phases 1–5 (T001–T065, plus T092 at the tail of US2) are the viable deliverable — all 51 documents chunked, embedded, and citable, the 25 transmittals extracted with page citations and computed confidences, and untrustworthy values recorded as failures. Phases 6–9 are omittable without breaking any P1 criterion.
+- Tasks marked `[P]` can run in parallel within their phase — they touch distinct files and carry no `after:T###` or `← T###:` edge to another task in the same batch.
+- A task with `after:T###` or `← T###:Symbol` must not be `[P]`-batched with the referenced task; the implementing agent must verify the referenced task is `[X]` before executing.

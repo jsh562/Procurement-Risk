@@ -1,0 +1,11 @@
+[importlinter]
+root_package = boundary_fixture
+
+[importlinter:contract:read-side-boundary]
+name = Model-facing code does not reach the read-side computation package
+type = forbidden
+source_modules =
+    boundary_fixture.llm
+forbidden_modules =
+    boundary_fixture.risk_read
+allow_indirect_imports = False

@@ -204,7 +204,7 @@ N/A — no request path, no external service call, and no user-facing error stat
 | TR-051 | Constraint audit | `src/model/tests/schema/test_constraint_audit.py` | No deferred check or non-null |
 | TR-052 | Amendment request | `specs/00003-core-data-schema/plan.md` | Recorded, not performed (v1.2.0) |
 | TR-087 | `document` generator columns | `.../versions/0003_document.py` | SYNTHETIC-only, rejected on REAL |
-| TR-053 | Array semantics contract | [data-model.md](data-model.md) | Beyond-horizon answer is `1 - residual_tail_mass`; E010 reads it |
+| TR-053 | Array semantics contract | [data-model.md](data-model.md) | Beyond-horizon answer is bounded above by `residual_tail_mass`; E010 reads it |
 | TR-054 | `extracted_value` | `.../versions/0006_extraction.py` | `double precision`, closed interval, no coarser scale |
 | TR-055 | `line_posterior` | `.../versions/0008_forecast.py` | Residual agrees with the survival tail within `1e-9` |
 | TR-056 | `schema_constants` seed | `.../versions/0002_schema_constants.py` | 365 / 4000 / 1e-9, with the scope-decision record in data-model.md |

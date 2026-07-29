@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.140.0",
     "gateway",
+    "psycopg[binary]>=3.3.4",
     "uvicorn>=0.51.0",
 ]
 
@@ -23,10 +24,18 @@ gateway = { path = "../gateway" }
 [dependency-groups]
 dev = [
     "coverage==7.15.2",
+    # Required by `fastapi.testclient.TestClient`, which drives the app through
+    # a real ASGI transport. Declared rather than left to arrive transitively:
+    # the tests fail at import without it, and a transitive pin is one upstream
+    # release away from disappearing. `httpx2` rather than `httpx` — Starlette
+    # deprecated the latter for the test client and warns on every import.
+    "httpx2>=2.9.1",
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
     "pytest>=9.1.1",
+    "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.1.0",
+    "pyyaml>=6.0.3",
     "ruff>=0.16.0",
 ]
 
@@ -39,6 +48,35 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The benchmark tier is deselectable, because its 200-sample variants take
+# minutes and a developer running the unit suite should not wait for them. It is
+# not *excluded* by default: FR-040 makes a check that does not run evidence
+# nothing, and a tier opted into by a flag nobody passes is a tier that stopped
+# running the day someone forgot.
+markers = ["benchmark: p95 latency against the registered envelope (SC-017, SC-018)"]
+
+# Keep pytest's scratch inside the checkout (project-instructions.md
+# § Temporary Files). Without this it derives its base temp from
+# `tempfile.gettempdir()`, which on Windows is %LOCALAPPDATA%\Temp — where a
+# build's unsigned compiler probes and a 1 GB throwaway environment once tripped
+# the machine's antivirus as a dropper. `.tmp/` is gitignored.
+#
+# Suffixed with the tier's own name because pytest clears its basetemp at the
+# start of every run: four tiers sharing one directory is safe only while they
+# are sequential, and two run concurrently wipe each other's `tmp_path` mid-run.
+# See the root manifest for the full note.
+#
+# Forward slashes, per the rule: on Windows a backslash in a redirected path is
+# stripped by at least one consumer and the flattened result is created relative
+# to the working directory rather than failing. v1.2.6 required these paths be
+# *absolute*; v1.2.8 withdrew that as the wrong requirement, because it is what
+# produced the flattened directory that reached `main`.
+#
+# Where it resolves is *asserted* rather than declared:
+# `tests/test_scratch_location.py` resolves `tmp_path` at runtime and fails if it
+# lands outside `.tmp/`. That is what the rule's own history argues for — it was
+# declared proven twice and was false both times.
+addopts = "--basetemp=../../.tmp/pytest-api"
 
 [tool.coverage.run]
 branch = true
@@ -46,6 +84,10 @@ source = ["src/api"]
 
 [tool.importlinter]
 root_package = "api"
+# Required for the gateway contract below: without it the graph holds only
+# this package's internal modules, and a contract naming an external
+# distribution fails with "are external forbidden modules" rather than passing.
+include_external_packages = true
 
 # TR-009: model-facing code must never reach deterministic computation.
 # Indirect detection stays ON here — laundering the dependency through an
@@ -55,4 +97,28 @@ name = "Model-facing code does not reach the computation package"
 type = "forbidden"
 source_modules = ["api.llm"]
 forbidden_modules = ["api.compute"]
+allow_indirect_imports = false
+
+# FR-035. The worklist read path holds date arithmetic (staleness, the as-of
+# frame) and the degraded-state precedence — arithmetic and decision logic that
+# `api.llm` must not reach any more than it may reach `api.compute`. The
+# contract above named only `api.compute`, which was correct while that was the
+# only such package; `api.risk_read` is the second, and a boundary that guards
+# one of two is a boundary in name.
+[[tool.importlinter.contracts]]
+name = "Model-facing code does not reach the read-side computation package"
+type = "forbidden"
+source_modules = ["api.llm"]
+forbidden_modules = ["api.risk_read"]
+allow_indirect_imports = false
+
+# FR-035. The worklist renders with the provider unreachable because it never
+# reaches for it. That is asserted here rather than left to review: nothing on
+# the read path may import the gateway, so an accidental provider dependency
+# fails the build instead of surfacing as a slow page on a bad network day.
+[[tool.importlinter.contracts]]
+name = "The worklist read path does not reach the model-provider gateway"
+type = "forbidden"
+source_modules = ["api.risk_read", "api.routes", "api.compute"]
+forbidden_modules = ["gateway"]
 allow_indirect_imports = false

@@ -1,0 +1,339 @@
+/*
+ * Worklist presentation.
+ *
+ * FR-009 and FR-032 make the primary/secondary distinction a contract rather
+ * than a matter of taste: explanatory context sits at a *smaller* type scale
+ * than the primary region's and never a heavier weight. The scale below is
+ * declared as custom properties so that relationship is one comparison a test
+ * can make, not a judgment about how a screenshot looks.
+ *
+ * FR-050 forbids colour as the sole carrier of a state, so nothing here encodes
+ * meaning in colour alone — every state is spelled out in text by page.tsx, and
+ * these rules only make that text findable.
+ */
+
+.page {
+  --scale-primary: 1rem;
+  --scale-secondary: 0.875rem;
+
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
+  line-height: 1.5;
+}
+
+.heading {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/*
+ * The page-scope banner. Rendered before any row content in the document, which
+ * is what FR-015 requires; nothing here may reorder it visually, because the
+ * accessibility tree's traversal and the rendered order must agree (FR-032).
+ */
+.banner {
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.bannerLabel {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.bannerCause,
+.bannerRemedy {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.bannerRemedy {
+  margin-top: 0.5rem;
+}
+
+.correlation {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+  margin-top: 0.5rem;
+}
+
+.correlation code {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: inherit;
+}
+
+.provenance {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+  opacity: 0.85;
+}
+
+.empty {
+  font-size: var(--scale-primary);
+}
+
+.group {
+  margin-top: 1rem;
+}
+
+.groupHeading {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+/*
+ * FR-025, FR-026, FR-051. The scope and sort controls. Above the list and
+ * before it in the document, because they govern what the list contains — a
+ * control a coordinator meets after the rows is one they reach having already
+ * read a list they might have wanted narrowed.
+ */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.control {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.control select {
+  font: inherit;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+}
+
+.groupNote,
+.tiebreak {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+  margin-bottom: 0.75rem;
+  opacity: 0.85;
+}
+
+.rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 3rem 1fr minmax(14rem, auto) minmax(12rem, auto);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.75rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+}
+
+/*
+ * FR-048. The position is text in the row, not the row's place on the page —
+ * geometry conveys nothing to a screen reader, and with the harm score absent
+ * under FR-041 that would leave the product's entire output unconveyed.
+ */
+.rank {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * FR-032's primary region, in the declared reading order: identity, need-by
+ * date, miss probability, quantile pair. The order here is document order, so
+ * the rendered sequence and the accessibility tree's traversal agree by
+ * construction rather than by inspection.
+ */
+.primary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.identity {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.needBy,
+.missProbability {
+  font-size: var(--scale-primary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * FR-006. Both directions at the same scale and weight, adjacent within one
+ * statement. A pair with one direction set larger is a single framing with a
+ * footnote, not the dual framing the requirement asks for.
+ */
+.figure {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* FR-004, FR-049. One labelled unit, never two adjacent bare numbers. */
+.durationPair {
+  margin-top: 0.25rem;
+}
+
+.pairLabel {
+  font-size: var(--scale-secondary);
+  font-weight: 600;
+}
+
+.pairFigures {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.5rem;
+  margin: 0.25rem 0 0;
+  font-size: var(--scale-primary);
+  font-weight: 400;
+}
+
+.pairFigures dt {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.pairFigures dd {
+  margin: 0;
+}
+
+.unsaved {
+  font-size: var(--scale-secondary);
+  font-weight: 600;
+}
+
+/*
+ * FR-009's explanatory context, and FR-032's subordination. Smaller than the
+ * primary scale and no heavier — the requirement states the direction because
+ * "distinct" without one is satisfied by a secondary region set *larger* than
+ * the primary, which inverts the very subordination FR-009 asks for.
+ */
+.secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+/*
+ * FR-029's row-level stale mark. FR-050 forbids colour as the sole carrier, so
+ * the mark is the words "out of date" in the row text; this rule only makes
+ * them findable. Italic rather than a tint for the same reason — a coordinator
+ * who cannot distinguish the colour still reads the words.
+ */
+.staleAsOf {
+  font-style: italic;
+  font-weight: 600;
+}
+
+.description,
+.rowState {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+/*
+ * FR-012, FR-046. The acknowledgement's live region.
+ *
+ * The element is always present and only its content changes — a region added
+ * to the document at the moment it gains text is one many screen readers do not
+ * announce, because they registered the page without it. It is also never
+ * hidden while empty for the same reason.
+ */
+.acknowledgement {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-height: 1.75rem;
+  margin-bottom: 1rem;
+  font-size: var(--scale-primary);
+  font-weight: 400;
+}
+
+.acknowledgement:not(:empty) {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+}
+
+.dismiss {
+  font: inherit;
+  font-size: var(--scale-secondary);
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+
+/*
+ * FR-051. The what-if control. Sits in the primary region beside the date it
+ * adjusts, because a control placed away from the value it changes is one a
+ * coordinator has to associate by memory.
+ */
+.needByControl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.needByControl input {
+  font: inherit;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  max-width: 12rem;
+}
+
+/*
+ * Present to assistive technology, absent from the visual layout. Not
+ * `display: none`, which removes it from the accessibility tree as well and
+ * would defeat the point.
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 40rem) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}

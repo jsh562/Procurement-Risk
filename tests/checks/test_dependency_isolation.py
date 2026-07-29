@@ -519,18 +519,32 @@ FORECAST_ENTRY_POINTS: dict[str, str] = {
 #: it, which is only assertable against an enumeration somebody has to edit. A
 #: distribution added by a later epic fails here rather than arriving unremarked
 #: in the entry that must stay resolvable apart from the serving one.
+#:
+#: **E006's four were added on 2026-07-28, at the merge.** This enumeration was
+#: authored on E007's branch while E006 was declaring `onnxruntime`,
+#: `tokenizers`, `pysbd` and `pgvector` on its own — two branches from one
+#: baseline, and git merged the manifest and the enumeration without a conflict
+#: because neither side touched the other's lines. The check did its job: it
+#: went red on the merge naming exactly the four, which is what an equality
+#: against a hand-maintained list is for. They are E006's ingestion-runtime
+#: dependencies, reviewed in that epic's plan, and none of them is reachable
+#: from `model.forecast`; E007's no-new-dependency claim is unaffected.
 DECLARED_BY_THE_MODELING_ENTRY: dict[str, str] = {
     "alembic": "E003 — the migration runner",
     "arviz": "the modeling stack, declared before E007 — sampler diagnostics",
     "jsonschema": "E002 — corpus manifest validation",
     "numpy": "the scaffold — arrays throughout",
+    "onnxruntime": "E006 — {SAD:ADR-0018}, the pinned embedding inference runtime",
     "pandas": "the modeling stack, declared before E007 — the summary frame",
     "pdfplumber": "E002 — corpus extraction",
+    "pgvector": "E006 — the psycopg 3 adapter for bulk-loading embeddings",
     "pillow": "E002 — corpus rendering",
     "psycopg": "E003 — the driver",
     "pymc": "the modeling stack, declared before E007 — the sampler",
+    "pysbd": "E006 — the pinned terminal sentence split below a paragraph",
     "reportlab": "E002 — corpus generation",
     "sqlalchemy": "E003 — the Core toolkit the driver is used through",
+    "tokenizers": "E006 — the encoder's own tokenizer, standalone",
 }
 
 #: Imports `model.forecast` makes that the entry does not declare, with the

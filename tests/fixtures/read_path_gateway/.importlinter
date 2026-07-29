@@ -1,0 +1,13 @@
+[importlinter]
+root_package = boundary_fixture
+
+[importlinter:contract:read-path-gateway]
+name = The worklist read path does not reach the model-provider gateway
+type = forbidden
+source_modules =
+    boundary_fixture.risk_read
+    boundary_fixture.routes
+    boundary_fixture.compute
+forbidden_modules =
+    boundary_fixture.gateway
+allow_indirect_imports = False

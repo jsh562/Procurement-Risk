@@ -19,8 +19,9 @@ breaking a deployment is otherwise invisible until the deployment:
   single-transaction-per-run on a server with transactional DDL, and until it was
   asserted it was only ever *implied* by a default nobody had written down.
 * **TR-004 -- prefix range.** E003 owns `0001`-`0099`, E004 `0100`-`0199`, E005
-  `0200`-`0299` (claimed, unused) and E007 `0300`-`0399`. A revision numbered
-  outside every block is a collision waiting for the workstreams to merge.
+  `0200`-`0299` (claimed, unused), E007 `0300`-`0399` and E006 `0400`-`0499`. A
+  revision numbered outside every block is a collision waiting for the
+  workstreams to merge.
 * **TR-002 -- no downgrade body.** Forward-only. A downgrade that *looks*
   plausible and has never been run is worse than none, because it invites
   someone to run it during an incident.
@@ -104,7 +105,7 @@ RESERVED_BLOCK_LAST = 99
 #: test walks now contains revisions that are correctly numbered *outside*
 #: E003's block, and the assertion failed on the arrangement working as designed.
 #:
-#: The claim keeps its teeth: a revision numbered `0450` still fails, because it
+#: The claim keeps its teeth: a revision numbered `0550` still fails, because it
 #: is inside no declared block at all. What it no longer does is treat another
 #: epic's correctly-numbered revision as an encroachment.
 #:
@@ -123,11 +124,32 @@ RESERVED_BLOCK_LAST = 99
 #: in `tests/checks/test_migration_ranges.py`, on the ground that it asserts the
 #: boundary *between* the authoring epics' claims and so belongs to no one
 #: entry.
+#:
+#: **E005's and E006's blocks added 2026-07-27**, when E006 authored five
+#: revisions and this per-revision check reported all five as belonging to no
+#: epic. The root partition check has declared both blocks since E006's T003;
+#: the two tables are separate on purpose — that one asserts the blocks tile the
+#: range, this one asserts each revision on disk sits inside some declared block
+#: — so they have to be extended together, and this half was the one a
+#: *populated* block made observable. E005's `0200`-`0299` is carried here as
+#: well, even though it holds no revision: a block is a claim on a number range,
+#: and omitting a claimed-but-empty block would make the two tables disagree
+#: about what is claimed the moment E005 authors its first revision.
+#:
+#: **E006 moved to `0400`-`0499` on 2026-07-28.** E006 and E007 both claimed
+#: `0300`-`0399` against the same baseline, by the same scan-for-the-highest
+#: rule, and both were right at allocation time; E007 landed on `main` first, so
+#: E006 renumbered. Git merged the two sets of `03xx` files without a conflict
+#: because the filenames differ — the collision surfaced as duplicate revision
+#: identifiers and two heads, not as a merge failure, which is why both halves
+#: of this table are maintained by hand and neither is derived from the
+#: directory it checks.
 DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
     (RESERVED_BLOCK_FIRST, RESERVED_BLOCK_LAST, "E003"),
     (100, 199, "E004"),
     (200, 299, "E005"),
     (300, 399, "E007"),
+    (400, 499, "E006"),
 )
 
 #: Revision ids are the four-digit prefix itself (see alembic.ini). Exactly four
@@ -503,9 +525,9 @@ def test_revision_id_falls_inside_the_reserved_block(script: Script) -> None:
     **Rescoped 2026-07-26 from "inside E003's block" to "inside a declared
     block", and the block table extended again 2026-07-27.** ADR-0013 makes this
     one directory serve every epic that authors into it, so the chain this test
-    walks contains E004's `0100`-`0103` and E007's `0300`-`0303` — correctly
-    numbered, in the blocks reserved for them, and each in turn previously
-    reported here as an encroachment. See `DECLARED_BLOCKS` for the full
+    walks contains E004's `0100`-`0103`, E007's `0300`-`0303` and E006's
+    `0400`-`0404` — correctly numbered, in the blocks reserved for them, and
+    each in turn previously reported here as an encroachment. See `DECLARED_BLOCKS` for the full
     reasoning and for why the partition claim lives at the repository root
     instead.
     """

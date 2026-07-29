@@ -1,0 +1,270 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { ExcludedRow, Row } from "./Row";
+import { useWorklist } from "./useWorklist";
+import type { WorklistResponse } from "./worklist";
+import styles from "./page.module.css";
+
+/**
+ * The interactive worklist.
+ *
+ * Rendered from a response the server component already fetched, so the first
+ * paint carries the ranking rather than a spinner — and every subsequent
+ * adjustment goes back to the server, because re-ranking needs arithmetic the
+ * client must not be given the inputs for (FR-024, FR-053).
+ *
+ * FR-046 puts two obligations here that are easy to miss:
+ *
+ * **Focus stays on the adjusted control.** A list that has just reordered
+ * underneath a coordinator, with focus returned to the top, is a list they have
+ * to find their place in again — and the row they were working on has moved.
+ *
+ * **The acknowledgement lives in one live region**, shared by both outcomes, so
+ * assistive technology announces "applied, order changed" and "applied, order
+ * unchanged" through the same channel. Two regions would let one be configured
+ * away and leave half the outcomes silent.
+ */
+export function WorklistBoard({ initial }: { readonly initial: WorklistResponse }) {
+  const {
+    worklist,
+    overrides,
+    acknowledgement,
+    pending,
+    adjust,
+    rescope,
+    resort,
+    clearAcknowledgement,
+  } = useWorklist(initial);
+  const controls = useRef(new Map<string, HTMLInputElement>());
+
+  useEffect(() => {
+    // FR-046. Focus returns to the control the coordinator was using, not to
+    // the top of a list that has just moved under them.
+    if (acknowledgement?.poLineId) {
+      controls.current.get(acknowledgement.poLineId)?.focus();
+    }
+  }, [acknowledgement]);
+
+  return (
+    <>
+      <Controls worklist={worklist} onRescope={rescope} onResort={resort} />
+
+      {/*
+       * FR-012, FR-046. One region, persistent, never on a timer — a message
+       * that disappears is the documented way an acknowledgement is missed.
+       * `aria-live="polite"` rather than `assertive`: the coordinator initiated
+       * this, so it is confirmation rather than an interruption.
+       */}
+      <div
+        className={styles.acknowledgement}
+        role="status"
+        aria-live="polite"
+        // FR-046. Named, because the page-scope banners are also `role=status`
+        // and an unnamed region among several is one a coordinator cannot tell
+        // apart from the others — they hear "status" three times and have to
+        // infer which one just spoke. The name is also what makes this region
+        // addressable in a test, which is the same problem in a different form.
+        aria-label="Adjustment status"
+      >
+        {acknowledgement ? (
+          <>
+            <span data-kind={acknowledgement.kind}>{acknowledgement.message}</span>
+            <button type="button" onClick={clearAcknowledgement} className={styles.dismiss}>
+              Dismiss
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      {worklist.ranked.length > 0 ? (
+        <section className={styles.group} aria-labelledby="ranked-heading">
+          <h2 id="ranked-heading" className={styles.groupHeading}>
+            Ranked by {SORT_LABELS[worklist.sort.key] ?? worklist.sort.key} (
+            {worklist.ranked.length} lines,{" "}
+            {worklist.sort.direction === "desc" ? "highest first" : "lowest first"})
+          </h2>
+          <p className={styles.tiebreak}>
+            Ties are broken by {worklist.sort.tiebreak.join(", then ")}.
+          </p>
+          <ol className={styles.rows} aria-busy={pending}>
+            {worklist.ranked.map((row) => (
+              <Row
+                key={row.po_line_id}
+                row={row}
+                runIsStale={worklist.meta.forecast_run?.stale ?? false}
+                control={
+                  <NeedByControl
+                    poLineId={row.po_line_id}
+                    value={overrides.get(row.po_line_id) ?? row.primary.need_by.date}
+                    onAdjust={adjust}
+                    register={(element) => {
+                      if (element) controls.current.set(row.po_line_id, element);
+                      else controls.current.delete(row.po_line_id);
+                    }}
+                  />
+                }
+              />
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {worklist.unranked.length > 0 ? (
+        <section className={styles.group} aria-labelledby="unranked-heading">
+          <h2 id="unranked-heading" className={styles.groupHeading}>
+            Not ranked ({worklist.unranked.length} lines)
+          </h2>
+          <p className={styles.groupNote}>
+            These lines are outstanding and are listed so they are not overlooked. No risk figures
+            are shown for them.
+          </p>
+          <ul className={styles.rows}>
+            {worklist.unranked.map((row) => (
+              <ExcludedRow key={row.po_line_id} row={row} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/*
+       * FR-042. Rendered *after* the controls, never instead of them. This is
+       * the empty-filter state's whole difficulty: the coordinator needs the
+       * scoping control most at the moment there is nothing to show, and a
+       * guard that swapped the board for this paragraph took the control away
+       * exactly then.
+       *
+       * The wording distinguishes the two ways a worklist can be empty. FR-042
+       * forbids an unfiltered empty worklist from borrowing the filter's
+       * wording — the claim that a filter matched nothing would be false, and
+       * FR-018's enumeration is canonical, so no ninth state may be invented
+       * for it either.
+       */}
+      {worklist.counts.total === 0 ? (
+        <p className={styles.empty}>
+          {worklist.scope.project_id === null
+            ? "No open purchase-order lines. Nothing is outstanding."
+            : `No open lines in ${worklist.scope.project_id}. Choose another project above, or select all projects, to see lines again.`}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The scope and sort controls.
+ *
+ * FR-025, FR-026, FR-051. Both are native `<select>` elements: keyboard-
+ * operable, announced with their label and current value, and navigable by
+ * typing — none of which a custom listbox gets for free, and all three of which
+ * a coordinator working through assistive technology needs.
+ *
+ * **The offered keys come from the response**, not from a list here. FR-032
+ * makes "the offered keys are exactly FR-026's four" testable against the
+ * response rather than against this component's source — and the absence is the
+ * point: no key orders lines by a single delivery date or by one quantile
+ * alone, which is how the point estimate would re-enter through the sort
+ * control.
+ *
+ * **The full project set is always offered**, including while a filter is
+ * active, so a coordinator can leave a scope without a second request. The
+ * open-line count travels with each because a project holding nothing and a
+ * project simply not selected are otherwise identical from inside a filtered
+ * list.
+ */
+function Controls({
+  worklist,
+  onRescope,
+  onResort,
+}: {
+  readonly worklist: WorklistResponse;
+  readonly onRescope: (projectId: string | null) => Promise<void>;
+  readonly onResort: (sortKey: string) => Promise<void>;
+}) {
+  return (
+    <div className={styles.controls}>
+      <span className={styles.control}>
+        <label htmlFor="worklist-scope">Project</label>
+        <select
+          id="worklist-scope"
+          value={worklist.scope.project_id ?? ""}
+          onChange={(event) => void onRescope(event.target.value || null)}
+        >
+          <option value="">All projects</option>
+          {worklist.scope.available_projects.map((project) => (
+            <option key={project.project_id} value={project.project_id}>
+              {project.project_id} ({project.open_line_count} open)
+            </option>
+          ))}
+        </select>
+      </span>
+
+      <span className={styles.control}>
+        <label htmlFor="worklist-sort">Order by</label>
+        <select
+          id="worklist-sort"
+          value={worklist.sort.key}
+          onChange={(event) => void onResort(event.target.value)}
+        >
+          {worklist.sort.options.map((option) => (
+            <option key={option.key} value={option.key}>
+              {SORT_LABELS[option.key] ?? option.key}
+              {option.direction === "desc" ? " (highest first)" : " (lowest first)"}
+            </option>
+          ))}
+        </select>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The need-by what-if control.
+ *
+ * FR-051. A native `<input type="date">` rather than a custom picker: it is
+ * keyboard-operable, announces itself, and accepts typed input without any of
+ * that having to be reimplemented — and reimplementing it is where custom
+ * pickers usually lose one of the three.
+ *
+ * The label states that the change is a what-if, because the control is the
+ * point at which a coordinator forms the expectation of what pressing it does.
+ */
+function NeedByControl({
+  poLineId,
+  value,
+  onAdjust,
+  register,
+}: {
+  readonly poLineId: string;
+  readonly value: string;
+  readonly onAdjust: (poLineId: string, needByDate: string) => Promise<void>;
+  readonly register: (element: HTMLInputElement | null) => void;
+}) {
+  const id = `need-by-${poLineId}`;
+  return (
+    <span className={styles.needByControl}>
+      <label htmlFor={id}>Try a different need-by date</label>
+      <input
+        id={id}
+        ref={register}
+        type="date"
+        defaultValue={value}
+        onChange={(event) => {
+          if (event.target.value) void onAdjust(poLineId, event.target.value);
+        }}
+      />
+    </span>
+  );
+}
+
+/**
+ * Wording for the four keys FR-026 admits. Read from the server's key rather
+ * than enumerated here — the server owns which keys exist (FR-032), and this
+ * map only supplies English for the one in force.
+ */
+const SORT_LABELS: Readonly<Record<string, string>> = {
+  expected_harm: "expected schedule harm",
+  need_by_date: "need-by date",
+  criticality: "criticality",
+  calendar_margin: "calendar margin",
+};
