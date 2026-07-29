@@ -63,7 +63,7 @@ dod_source: null
 
 - [ ] E012 [P1] [PRODUCT] [P] {PRD:CAP-007} Line Detail and Traceability — posterior plot and source-page navigation
 - [ ] E013 [P1] [PRODUCT] [P] {PRD:CAP-009}{SAD:ADR-0007} Model Invocation Panel — per-call cost, latency, and validation outcome
-- [ ] E014 [P1] [PRODUCT] [P] {PRD:CAP-009}{SAD:ADR-0009} Evaluation Harness and Ablations — frozen sets, published metrics, reproduction job
+- [ ] E014 [P1] [PRODUCT] [P] {PRD:CAP-009}{SAD:ADR-0009}{SAD:ADR-0022} Evaluation Harness and Ablations — frozen sets, published metrics, reproduction job
 
 ### Wave 7 — Publication
 
@@ -473,7 +473,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 ### E014 — Evaluation Harness and Ablations
 
 - **Category**: PRODUCT · **Priority**: P1
-- **Source**: {PRD:CAP-009}{SAD:ADR-0009}
+- **Source**: {PRD:CAP-009}{SAD:ADR-0009}{SAD:ADR-0022}
 - **Scope**: Build the evaluation harness covering retrieval, identity resolution, and forecast calibration. Evaluation sets are canonicalized, hashed, and committed before any tuning; the harness verifies the hash and aborts on mismatch. **E007 performs the train/held-out split of E005's lines; E014 freezes and hashes the resulting set.** The two are deliberately separated: construction belongs with the epic that reads the lines, and the freeze-before-tuning guarantee belongs with the harness that would otherwise be tuning against its own evaluation set. Results are written to a committed manifest that a reproduction job diffs against within the published tolerance.
 - **Actors**: Developer, evaluator
 - **Key entities**: GoldenSetItem, LabeledPair, ResultsManifest
@@ -481,19 +481,20 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007. It also needs E004's `replay` mode to resolve every model-dependent step with no network and no credential, and owns publishing replayed and live numbers side by side — the decoding-variance disclosure {SAD:ADR-0007} commits to, which E004 supplies the modes and the invocation record for but does not perform. Edge added during E004 planning.
 - **Depended on by**: E015
 - **Produces (shared)**: Frozen evaluation sets with hashes, evaluation harness, results manifest, reproduction job
-- **Constraints**: Sets frozen and hashed before tuning; retrieval evaluation runs the exact-search path; a missed target is published, never suppressed
+- **Constraints**: Sets frozen and hashed before tuning; retrieval evaluation runs the exact-search path; a missed target is published, never suppressed; every interval is computed by a method admissible for the estimator it bounds ({SAD:ADR-0022}) — recall@5 is a hit-or-miss proportion and takes Wilson, MRR is a mean of per-query reciprocal ranks and takes a percentile bootstrap over queries, and merge precision keeps its separately registered rule-of-three bound
 - **Acceptance criteria**:
   - [ ] Evaluation sets are canonicalized, hashed, and committed, and the harness aborts before running on a hash mismatch
   - [ ] The retrieval ablation publishes all arms including the approximate-versus-exact recall difference and the quantized-versus-full-precision reranking difference
+  - [ ] Arm-versus-arm retrieval comparisons are published as intervals on the **paired per-query difference**, computed by reusing one resample index matrix across arms — not as two independent per-arm intervals a reader would compare by overlap
   - [ ] Forecast evaluation publishes a skill score against both the naive and marginal baselines, interval coverage, a reliability diagram, and a calibration histogram
-  - [ ] The reproduction job rebuilds from pinned inputs and confirms published metrics within the stated tolerance
-  - [ ] Every metric is published with its confidence interval, and any missed target appears with its cause
+  - [ ] The reproduction job rebuilds from pinned inputs and confirms published metrics within the stated tolerance, and reproduces every bootstrap interval bound *exactly* from the recorded resample count, seed, and pinned bit generator
+  - [ ] Every metric is published with its confidence interval and with the name of the method that produced it; MRR's interval additionally publishes its resample count (B = 10,000) and seed. Any missed target appears with its cause
 - **Specify input**:
   - Description: Build the frozen-set evaluation harness and reproduction job covering retrieval, identity resolution, and forecast calibration, publishing every metric with its interval and baseline.
   - Actors: Developer, evaluator
   - Key entities: GoldenSetItem, LabeledPair, ResultsManifest
-  - Depends on artifacts: `specs/adrs/0005-*`, `specs/adrs/0006-*`, `specs/adrs/0009-*`, E007, E008, E009
-  - Constraints: Hash-gated execution; exact-search evaluation path; published-miss rule
+  - Depends on artifacts: `specs/adrs/0005-*`, `specs/adrs/0006-*`, `specs/adrs/0009-*`, `specs/adrs/0022-*`, E007, E008, E009
+  - Constraints: Hash-gated execution; exact-search evaluation path; published-miss rule; interval method admissible per estimator, with any resampled bound carrying its count, seed, and bit generator
 
 ### E015 — Rigor Documentation and README
 
@@ -506,7 +507,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Dependency contracts**: E015 needs the results manifest and calibration artifacts from E014
 - **Depended on by**: E018
 - **Produces (shared)**: README, model card, limitations record set
-- **Constraints**: Limitations address epistemic validity only — deliberately excluded features belong in scope, not limitations; every published figure traceable to the results manifest
+- **Constraints**: Limitations address epistemic validity only — deliberately excluded features belong in scope, not limitations; every published figure traceable to the results manifest, and every published interval carrying the name of its method plus, where resampled, its count and seed ({SAD:ADR-0022}) — a README figure that drops the method reintroduces exactly the ambiguity that let one interval name cover two estimators
 - **Acceptance criteria**:
   - [ ] A model card documents intended use, factors, metrics, evaluation data, and caveats
   - [ ] Each limitation is written as scope decision, supporting evidence, reversal trigger, and production-scale alternative
@@ -517,7 +518,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
   - Actors: Evaluator
   - Key entities: ModelCard, LimitationRecord
   - Depends on artifacts: `specs/prd.md` (CAP-010, Handoff Guidance), E002 manifest, E005 datasheet, E014 results
-  - Constraints: Epistemic limitations only; every figure traceable to the results manifest
+  - Constraints: Epistemic limitations only; every figure traceable to the results manifest; every interval published with its method, and resampled bounds with their count and seed
 
 ### E016 — Uncertain-Match Review Workspace
 
@@ -655,6 +656,10 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0016 Database-Client Access Is Not Restricted by Schema Ownership | accepted | E003, E004, E005, E006, E007 |
 | ADR-0017 A Plan-Phase Artifact May Be Declared Normative Over a Specify-Phase Requirement | accepted | E003, E004 |
 | ADR-0018 Two Anchor-Distinguished Posterior Populations in Two Tables | accepted | E007, E010 |
+| ADR-0019 Embedding Runtime Pinned to ONNX Runtime | accepted | E006, E008, E014 |
+| ADR-0020 Ingested Derived Data Carries an Active or Superseded Generation | superseded by ADR-0021 | E006, E008, E009, E012 |
+| ADR-0021 Superseded Generations Are Removed at Promotion, Not Retained | accepted | E003, E006, E008, E009, E012 |
+| ADR-0022 Interval Method Is Selected Per Estimator, Not Per Document | accepted | E014, E015 |
 
 ### Deployment Decisions
 
@@ -662,7 +667,9 @@ No Deployment & Operations Document exists, so no operational epics were extract
 
 ### Uncovered Items
 
-None. All 14 capabilities and all 16 accepted architecture decisions map to at least one epic. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
+None. All 14 capabilities and all 18 accepted architecture decisions map to at least one epic, across 22 records of which 4 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
+
+It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-0019, ADR-0020, and ADR-0021 had all landed, so three records — one of them a supersession — were absent from the only place this document checks whether a decision reached an epic. The recount convention was the mitigation and it did not fire, because it is prose in this section rather than a step anything performs. Recounting catches a wrong *number*; it does not catch a missing *row*, and a coverage table that silently omits a record reports full coverage of the subset it happens to list. The four rows added by this amendment were reconciled against `specs/adrs/` directly rather than against the previous count.
 
 ## Shared Artifact Surface
 

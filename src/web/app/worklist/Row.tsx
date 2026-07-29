@@ -1,3 +1,4 @@
+import { Explain } from "./Explain";
 import { STATE_COPY } from "./stateCopy";
 import type { PercentFigure, RankedRow, UnrankedRow } from "./worklist";
 import styles from "./page.module.css";
@@ -58,17 +59,20 @@ export function Row({
       <span className={styles.rank}>
         <span className={styles.visuallyHidden}>Position </span>
         {row.rank}
+        <Explain of="rank" />
       </span>
 
       <div className={styles.primary}>
         <span className={styles.identity}>
           {row.primary.identity.project_id} · {row.primary.identity.po_number}-
           {row.primary.identity.line_number}
+          <Explain of="identity" />
         </span>
         <span className={styles.description}>{row.primary.identity.description}</span>
 
         <span className={styles.needBy}>
           Need by <time dateTime={row.primary.need_by.date}>{row.primary.need_by.date}</time>
+          <Explain of="needBy" />
           {/*
            * FR-031, FR-051. The mark sits adjacent to the date it qualifies,
            * inside the same element, so it is read with the date rather than
@@ -91,7 +95,12 @@ export function Row({
       <Secondary secondary={row.secondary} runIsStale={runIsStale} />
 
       {/* FR-050. The resolved state as text, never as a tint alone. */}
-      {state ? <span className={styles.rowState}>{state.label}</span> : null}
+      {state ? (
+        <span className={styles.rowState}>
+          {state.label}
+          <Explain of="state" />
+        </span>
+      ) : null}
     </li>
   );
 }
@@ -121,6 +130,7 @@ function MissProbability({
     return (
       <span className={styles.missProbability}>
         No miss probability — this date has already passed the forecast anchor.
+        <Explain of="missProbability" />
       </span>
     );
   }
@@ -132,6 +142,7 @@ function MissProbability({
       <Percent figure={figure.miss} /> miss the date
       {bound ? ", at least " : ", "}
       <Percent figure={figure.on_time} /> arrive in time
+      <Explain of="missProbability" />
     </span>
   );
 }
@@ -182,6 +193,24 @@ const SPOKEN_BOUND: Readonly<Record<string, string>> = {
  *
  * The anchor is rendered, not implied: an unanchored median of thirty days on a
  * ten-day-old run reads ten days more optimistic than it is.
+ *
+ * FR-005 requires the reference class on *each* quantile, and the class is named
+ * at every point a frequency appears rather than once per pair. Two reasons, and
+ * the second was observed rather than anticipated:
+ *
+ * The eightieth previously carried no reference class at all — its label read
+ * "Four in five land by" and its figure "20 in 100 land later", so it borrowed a
+ * population from the *median's* label two lines up, across the very gap the
+ * stylesheet inserts to separate the two statements.
+ *
+ * And a denominator standing without its population takes one from the nearest
+ * noun on the row. An open purchase-order line carries a quantity and a unit of
+ * measure, so "50 in 100" set beside a part number was read in the field as
+ * fifty of the hundred parts on that line rather than as fifty of every hundred
+ * comparable orders. That is a third lay misreading beside the two Research
+ * records, and it is the one this requirement's own mitigation produces: the
+ * frequency framing supplies a denominator, and an absent noun leaves it free to
+ * be filled from context.
  */
 function DurationPair({ pair }: { readonly pair: RankedRow["primary"]["duration_pair"] }) {
   const labelId = `pair-${pair.as_of_date}-${pair.median.days}-${pair.eightieth.days}`;
@@ -190,17 +219,18 @@ function DurationPair({ pair }: { readonly pair: RankedRow["primary"]["duration_
       <h3 id={labelId} className={styles.pairLabel}>
         Likely delivery window, counted from{" "}
         <time dateTime={pair.as_of_date}>{pair.as_of_date}</time>
+        <Explain of="durationPair" />
       </h3>
       <dl className={styles.pairFigures}>
         <dt>Half of comparable orders land by</dt>
         <dd>
           <strong className={styles.figure}>{pair.median.days} days</strong> —{" "}
-          {pair.median.later_percent} in 100 land later
+          {pair.median.later_percent} in 100 comparable orders land later
         </dd>
-        <dt>Four in five land by</dt>
+        <dt>Four in five comparable orders land by</dt>
         <dd>
           <strong className={styles.figure}>{pair.eightieth.days} days</strong> —{" "}
-          {pair.eightieth.later_percent} in 100 land later
+          {pair.eightieth.later_percent} in 100 comparable orders land later
         </dd>
       </dl>
     </section>
@@ -225,9 +255,13 @@ function Secondary({
   const margin = secondary.calendar_margin_days;
   return (
     <div className={styles.secondary}>
-      <span>Criticality {secondary.criticality} of 5</span>
+      <span>
+        Criticality {secondary.criticality} of 5
+        <Explain of="criticality" />
+      </span>
       <span>
         {margin >= 0 ? `${margin} days of margin` : `${Math.abs(margin)} days past the anchor`}
+        <Explain of="calendarMargin" />
       </span>
       {/*
        * FR-019, and FR-029's row-level stale mark. Reachable without hover or
@@ -239,6 +273,7 @@ function Secondary({
       <span className={runIsStale ? styles.staleAsOf : undefined}>
         Forecast as of <time dateTime={secondary.as_of_date}>{secondary.as_of_date}</time>
         {runIsStale ? " — out of date" : null}
+        <Explain of="asOfDate" />
       </span>
     </div>
   );
