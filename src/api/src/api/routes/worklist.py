@@ -40,6 +40,12 @@ from api.compute.ordering import (
 )
 from api.compute.ordering import ordering_digest as compute_ordering_digest
 from api.compute.ranking import RankableLine, order_lines
+from api.risk_read.failures import (
+    SUPPORTED_ARTIFACT_SCHEMA_VERSIONS,
+    UnsupportedArtifactSchema,
+    correlation_id,
+    problem,
+)
 from api.risk_read.overrides import (
     MAX_OVERRIDES,
     OverrideRejection,
@@ -150,14 +156,40 @@ def read_worklist(
     try:
         inputs = load_worklist(connection, today=today, project_id=project_id, overrides=overrides)
     except psycopg.OperationalError as exc:  # pragma: no cover - needs a downed database
+        # FR-043. The system could not look, which is a different statement from
+        # "it looked and found nothing" — and rendering them alike presents an
+        # outage as an honest empty state.
         raise HTTPException(
             status_code=503,
-            detail={
-                "type": "datastore-unavailable",
-                "title": "The worklist could not be read",
-                "detail": str(exc),
-            },
+            detail=problem(
+                kind="datastore-unavailable",
+                title="Cannot read forecast data",
+                detail=str(exc),
+                correlation=correlation_id(),
+            ),
         ) from exc
+
+    # FR-043, FR-052. A run written by a schema this build does not read is
+    # refused rather than read anyway: the array offsets are what a version
+    # governs, and a misread offset produces a figure wrong in a way no
+    # coordinator could see.
+    if (
+        inputs.run is not None
+        and inputs.run.artifact_schema_version not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS
+    ):
+        refusal = UnsupportedArtifactSchema(
+            str(inputs.run.run_id), inputs.run.artifact_schema_version
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=problem(
+                kind="unsupported-artifact-schema",
+                title="Forecast artifact schema not recognised",
+                detail=str(refusal),
+                correlation=correlation_id(),
+                artifact_schema_version=inputs.run.artifact_schema_version,
+            ),
+        )
 
     reported = {line.po_line_id for line in inputs.lines}
     terminal, out_of_scope = classify_lines(

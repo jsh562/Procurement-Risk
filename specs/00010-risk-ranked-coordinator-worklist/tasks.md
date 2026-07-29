@@ -117,15 +117,15 @@
 
 **Independent test**: load the worklist in each of the eight degraded states and confirm each renders its own distinct wording with no risk figure fabricated. The `project_id` parameter is delivered here, not in US4, because `empty_filter` is otherwise unreachable at P1 (§ Story Phasing Note).
 
-- [ ] T033 [P] [US3] {FR-016,FR-018a,FR-021} FR-018a precedence and the excluded group in API/risk_read/states.py — roster mismatch, not covered, beyond horizon, already late, calendar passed
-- [ ] T034 [P] [US3] {FR-019,FR-029} Age as `today − as_of_date`, `stale`, the threshold with its recorded basis, per-row as-of date in API/risk_read/query.py
-- [ ] T035 [US3] {FR-017,FR-030,FR-054} [COMPLETES FR-054] Already-late suppresses only the miss probability; beyond horizon bounds by `residual_tail_mass` — API/risk_read/rows.py
-- [ ] T036 [US3] {FR-045} Excluded group ordered by need-by ascending then `po_line_id` ascending, invariant under every sort key — API/risk_read/query.py
-- [ ] T037 [US3] {FR-025,FR-042} P1 half of FR-025 — `project_id` parameter, its pattern validator and `WHERE` clause — plus the `empty_filter` page state, in API/routes/worklist.py
-- [ ] T038 [US3] {FR-043} 500 `unsupported-artifact-schema` / `internal-error` and 503 `datastore-unavailable` with `correlation_id`, and the page-level failure state in WEB/page.tsx
-- [ ] T039 [P] [US3] {FR-018a,FR-033} Jointly constructible co-occurrences and the precedence winner for each pair, in TST/test_states.py
-- [ ] T040 [P] [US3] {FR-044} Copy-table distinctness — no entry a substring of another, each holding a phrase in no other — and region assignment, in WTS/worklist.test.tsx
-- [ ] T041 [US3] {FR-018} [COMPLETES FR-018] All eight states reported as `200` outcomes, counts reconcile, no placeholder anywhere — TST/test_worklist_endpoint.py
+- [X] T033 [P] [US3] {FR-016,FR-018a,FR-021} FR-018a precedence and the excluded group in API/risk_read/states.py — roster mismatch, not covered, beyond horizon, already late, calendar passed
+- [X] T034 [P] [US3] {FR-019,FR-029} Age as `today − as_of_date`, `stale`, the threshold with its recorded basis, per-row as-of date in API/risk_read/query.py
+- [X] T035 [US3] {FR-017,FR-030,FR-054} [COMPLETES FR-054] Already-late suppresses only the miss probability; beyond horizon bounds by `residual_tail_mass` — API/risk_read/rows.py
+- [X] T036 [US3] {FR-045} Excluded group ordered by need-by ascending then `po_line_id` ascending, invariant under every sort key — API/risk_read/query.py
+- [X] T037 [US3] {FR-025,FR-042} P1 half of FR-025 — `project_id` parameter, its pattern validator and `WHERE` clause — plus the `empty_filter` page state, in API/routes/worklist.py
+- [X] T038 [US3] {FR-043} 500 `unsupported-artifact-schema` / `internal-error` and 503 `datastore-unavailable` with `correlation_id`, and the page-level failure state in WEB/page.tsx
+- [X] T039 [P] [US3] {FR-018a,FR-033} Jointly constructible co-occurrences and the precedence winner for each pair, in TST/test_states.py
+- [X] T040 [P] [US3] {FR-044} Copy-table distinctness — no entry a substring of another, each holding a phrase in no other — and region assignment, in WTS/worklist.test.tsx
+- [X] T041 [US3] {FR-018} [COMPLETES FR-018] All eight states reported as `200` outcomes, counts reconcile, no placeholder anywhere — TST/test_worklist_endpoint.py
 
 ---
 

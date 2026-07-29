@@ -208,9 +208,25 @@ export interface WorklistResponse {
  */
 export const API_BASE_URL = process.env.WORKLIST_API_BASE_URL ?? "http://localhost:8000";
 
-/** Raised when the endpoint could not be read at all — FR-043's condition. */
+/**
+ * Raised when the worklist could not be read at all — FR-043's three
+ * conditions.
+ *
+ * `correlationId` is what a coordinator can quote off the screen and an
+ * engineer can find in the record. Without it the report is "the worklist was
+ * broken this morning" and the matching log line has to be found by timestamp.
+ *
+ * `title` carries the server's own wording where it supplied one, because the
+ * three conditions are not interchangeable: "the datastore is unreachable" and
+ * "this run was written by a schema this build does not know" name different
+ * things to do about them, and a single generic message names neither.
+ */
 export class WorklistUnavailableError extends Error {
-  constructor(readonly cause_detail: string) {
+  constructor(
+    readonly cause_detail: string,
+    readonly correlationId: string | null = null,
+    readonly title: string | null = null,
+  ) {
     super(cause_detail);
     this.name = "WorklistUnavailableError";
   }
@@ -253,8 +269,21 @@ export async function fetchWorklist(
   }
 
   if (!response.ok) {
+    // The problem document, where the server sent one. Read defensively: a
+    // proxy returning a 502 with an HTML body is exactly the case where the
+    // parse fails, and losing the failure to a parse error would be worse than
+    // reporting it without its detail.
+    let detail: { title?: string; detail?: string; correlation_id?: string } | undefined;
+    try {
+      detail = (await response.json())?.detail;
+    } catch {
+      detail = undefined;
+    }
+
     throw new WorklistUnavailableError(
-      `the serving boundary answered ${response.status} ${response.statusText}`,
+      detail?.detail ?? `the serving boundary answered ${response.status} ${response.statusText}`,
+      detail?.correlation_id ?? null,
+      detail?.title ?? null,
     );
   }
   return (await response.json()) as WorklistResponse;

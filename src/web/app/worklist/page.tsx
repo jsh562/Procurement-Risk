@@ -33,7 +33,7 @@ export default async function WorklistPage() {
     // FR-043. An outage is a fault, never a ninth degraded state: rendering it
     // as an empty worklist would tell a coordinator that nothing is outstanding,
     // which is the most damaging thing this page could say incorrectly.
-    return <DatastoreUnavailable detail={(error as WorklistUnavailableError).message} />;
+    return <CouldNotRead failure={error as WorklistUnavailableError} />;
   }
 
   return (
@@ -93,20 +93,40 @@ function AsOf({ meta }: { readonly meta: WorklistResponse["meta"] }) {
   );
 }
 
-/** FR-043. An outage, stated as one. */
-function DatastoreUnavailable({ detail }: { readonly detail: string }) {
+/**
+ * FR-043. The system could not look — stated as that, and not as an empty
+ * worklist.
+ *
+ * The wording is deliberately unlike the no-active-run banner's. One means the
+ * system looked and there was nothing there; this one means it could not look,
+ * and rendering them alike presents an outage as an honest empty state — the
+ * same defect in the opposite direction to a missing figure rendered as a zero.
+ *
+ * No row and no figure appear, because the system holds no knowledge about any
+ * line to report. The correlation identifier is shown so the thing a
+ * coordinator can quote is the thing an engineer can find.
+ */
+function CouldNotRead({ failure }: { readonly failure: WorklistUnavailableError }) {
   return (
     <main className={styles.page}>
       <h1 className={styles.heading}>Delivery risk worklist</h1>
-      <section className={styles.banner} role="alert" data-state="unavailable">
-        <h2 className={styles.bannerLabel}>The worklist could not be loaded</h2>
+      <section className={styles.banner} role="alert" data-state="could-not-read">
+        <h2 className={styles.bannerLabel}>
+          {failure.title ?? "The forecast data could not be read"}
+        </h2>
         <p className={styles.bannerCause}>
-          The stored forecast artifacts could not be read, so this page cannot say what is
-          outstanding — not that nothing is.
+          This page could not read the stored forecast, so it cannot say what is outstanding. That
+          is not the same as there being nothing outstanding — no lines are shown because none could
+          be loaded, not because none exist.
         </p>
         <p className={styles.bannerRemedy}>
-          Retry in a moment. If it persists the serving boundary needs attention: {detail}
+          Retry in a moment. If it persists, the serving boundary needs attention: {failure.message}
         </p>
+        {failure.correlationId ? (
+          <p className={styles.correlation}>
+            Quote this reference when reporting it: <code>{failure.correlationId}</code>
+          </p>
+        ) : null}
       </section>
     </main>
   );

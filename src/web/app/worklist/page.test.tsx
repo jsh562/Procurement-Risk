@@ -200,9 +200,59 @@ describe("worklist page, no active run", () => {
     // FR-043. "Nothing is outstanding" is the most damaging thing this page
     // could say incorrectly, so an outage must not render as one.
     const markup = await renderWith(null, false);
-    expect(markup).toContain("could not be loaded");
+    expect(markup).toContain("could not be read");
     expect(markup).toContain('role="alert"');
     expect(markup).not.toContain("No open purchase-order lines are in scope.");
+  });
+
+  it("uses wording unlike the no-active-run banner's", async () => {
+    // FR-043. One means the system looked and there was nothing there; the
+    // other means it could not look. Rendering them alike presents an outage as
+    // an honest empty state.
+    const markup = await renderWith(null, false);
+    expect(markup).not.toContain(STATE_COPY.no_active_run.label);
+    expect(markup).toContain("not the same as there being nothing outstanding");
+  });
+
+  it("shows the server's own cause and the correlation reference", async () => {
+    // FR-043. The three conditions are not interchangeable — "unreachable" and
+    // "schema this build does not know" call for different actions — and the
+    // reference is what makes a report findable in the record.
+    const markup = await renderWith(
+      {
+        detail: {
+          type: "https://procurement-risk.local/problems/unsupported-artifact-schema",
+          title: "Forecast artifact schema not recognised",
+          detail: "Active run 3f7c2b90 carries artifact_schema_version 2; this build reads 1.",
+          correlation_id: "01J9Z6Q4T7B3K2V8N1M0X5C7YD",
+        },
+      },
+      false,
+    );
+
+    expect(markup).toContain("Forecast artifact schema not recognised");
+    expect(markup).toContain("artifact_schema_version 2");
+    expect(markup).toContain("01J9Z6Q4T7B3K2V8N1M0X5C7YD");
+  });
+
+  it("still reports the failure when the body is not a problem document", async () => {
+    // A proxy answering 502 with an HTML body is exactly where the parse fails,
+    // and losing the failure to a parse error would be worse than reporting it
+    // without its detail.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: async () => {
+          throw new Error("not JSON");
+        },
+      })),
+    );
+    const markup = renderToStaticMarkup(await WorklistPage());
+    expect(markup).toContain("502");
+    expect(markup).toContain('role="alert"');
   });
 
   it("distinguishes an empty worklist from a failed one", async () => {

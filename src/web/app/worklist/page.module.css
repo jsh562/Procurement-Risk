@@ -57,6 +57,17 @@
   margin-top: 0.5rem;
 }
 
+.correlation {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+  margin-top: 0.5rem;
+}
+
+.correlation code {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: inherit;
+}
+
 .provenance {
   font-size: var(--scale-secondary);
   font-weight: 400;
