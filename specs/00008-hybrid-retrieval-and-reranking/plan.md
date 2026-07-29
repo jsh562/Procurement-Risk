@@ -105,6 +105,7 @@ Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its 
 | AD-009 | Where SC-005's enumerated part-number set comes from | `chunk.part_numbers` / `extracted_value` / the pre-render document model | **Pre-render document model** | The first is null on every row and the second is empty while extraction is fixture-blocked. The generator's record, already E006's FR-067 reference set, makes the criterion measurable before extraction runs |
 | AD-012 | Where the method for taking the performance figures is fixed | Left to implementation / a benchmark-job README / stated in the requirement itself | **Stated in the requirement (spec FR-033)** | A budget with no workload, environment, measurement point, occasion or counter is satisfied by whichever reading the implementer happens to take, and two runs can then disagree with neither being wrong. The four parts recognised practice asks of a performance statement (`research-quality.md` §Performance-requirement quality) belong in the text that is adjudicated, not in a document nobody adjudicates. **The one part this plan cannot supply is the statistic** — that is `specs/sad.md`'s to declare, and amendment 7 raises it |
 | AD-013 | Whether both reranker graphs are resident at once or loaded per arm | Both resident / FP32 loaded on demand / FP32 only in a separate evaluation process | **Both resident in the one serving process** | AD-006 makes arm selection a *request* parameter and FR-025 makes full precision an arm, so a per-arm load would be a load on a request path — exactly what FR-017 forbids, and it would put the cost SC-007 exists to exclude back into a served query. A separate FP32 process was rejected for the same reason it was accepted for the exact/approximate flag and no further: that flag is configuration, arms are not. The consequence is that the 400 MB envelope covers two reranker sessions, which §Technical Context now states and spec FR-033 requires itemized |
+| AD-014 | Contract conformance for E008's own surface | Extend E010's module / follow it with a second / rely on hand-written assertions | **Follow it with a second** | E010's module names one contract by path, so E008's would be unvalidated. Extending it would make one test own two epics' contracts and fail for reasons belonging to the other; hand-written assertions are what E010 records as bad at asserting closure, because the keys nobody wrote are the ones that drift |
 
 **AD-010 stated further: what the freeze settles, and what it does not** *(added 2026-07-29)*. The
 digest check is the whole of the discipline recorded until now, and it detects **modification** of
@@ -794,3 +795,47 @@ recomputes "from the same per-arm rank vectors" — reading inputs back from the
 which makes the comparison prove only that the copy was faithful. The substitution is now named a
 pseudo-oracle, its independence assumption is stated as empirically falsified, and four soundness
 conditions and three uncovered surfaces are enumerated.
+
+## Inherited from E010, checked after its merge
+
+E010 merged (PR #17) while this epic was in planning. All four surfaces that collided with E007 were
+checked and none collided here: decision-record numbers still top out at 0021 so ADR-0022 stands,
+`specs/sad.md` still lacks the ADR-0022 row so amendment 4 is still owed, `project-instructions.md`
+is still v1.2.8 so this plan's compliance audit names the current version, and none of
+`pyproject.toml`, `image_contents.py`, `test_dependency_isolation.py` or `verify.yml` was touched.
+First clean merge with a sibling epic.
+
+**One gap, of the class that does not announce itself.** E010 added
+`src/api/tests/test_contract_conformance.py`, which validates a served response against its committed
+contract — and it names one contract by path:
+
+```
+CONTRACT = … / "00010-risk-ranked-coordinator-worklist" / … / "openapi.yaml"
+```
+
+So it covers E010's contract and nothing else. **E008's contract would ship unvalidated**, which is
+the same shape as the benchmark module that runs nowhere and the merge gate that runs against an
+empty chunk table: a check that exists, passes, and does not cover the thing you assumed it did.
+
+E010's own reasoning is the argument for closing it — *"Hand-written key sets are … a bad way to
+assert closure over a whole document, because the ones nobody wrote are exactly the ones that
+drift."* E008's contract is closed throughout (`additionalProperties: false`) and its response
+carries members no hand-written assertion is likely to enumerate: `weighted_fields.all_empty`,
+`match_kind`, `deterministic_route`, per-session memory, `ordering_digest`.
+
+**AD-014**: E008 adds contract conformance for its own surface, following E010's module rather than
+extending it. Extending would make one test own two epics' contracts and fail for reasons belonging
+to the other; following keeps each contract's authority with its own epic. Recorded in §Testing
+Strategy's Integration tier and in the Requirement Coverage Map against FR-008, FR-013, FR-022 and
+FR-029, whose response members it is the only mechanical check over.
+
+**Not inherited, checked and ruled out**: E010's FR-057 makes its response contract read-only for
+later epics, but names E012, E017 and E019 as the bound consumers. E008 adds its own retrieval
+surface and does not extend the worklist response, so FR-057 does not reach it. Recorded because the
+conformance module's docstring says the contract "binds three later epics", which reads as though it
+might.
+
+**Still open and not this epic's to fix**: `src/api/src/api/risk_read/failures.py`'s `problem()` emits
+no `status` while E010's contract declares it required, and `worklist.py`'s 422 path bypasses the
+helper. E010 merged without correcting it. E008's contract follows its own declaration, so the two
+epics' error bodies now differ in shape from each other and one of them differs from its contract.
