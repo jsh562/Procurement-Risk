@@ -472,9 +472,10 @@ jobs:
         run: npm test
 
       # FR-032's presentation contract — type scale, reading order, the as-of
-      # date without hover, the live region — is a property of a laid-out page.
-      # `vitest run` collects only `__tests__/**`, so these specs would never
-      # have executed under the existing web step.
+      # date without hover, the live region — is a property of a laid-out page
+      # and of a real accessibility tree, neither of which jsdom provides. The
+      # step above runs the unit specs; these are the assertions that need a
+      # browser to mean anything.
       - name: E2E (web)
         working-directory: src/web
         run: |

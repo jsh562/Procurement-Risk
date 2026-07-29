@@ -1,0 +1,130 @@
+/*
+ * Worklist presentation.
+ *
+ * FR-009 and FR-032 make the primary/secondary distinction a contract rather
+ * than a matter of taste: explanatory context sits at a *smaller* type scale
+ * than the primary region's and never a heavier weight. The scale below is
+ * declared as custom properties so that relationship is one comparison a test
+ * can make, not a judgment about how a screenshot looks.
+ *
+ * FR-050 forbids colour as the sole carrier of a state, so nothing here encodes
+ * meaning in colour alone — every state is spelled out in text by page.tsx, and
+ * these rules only make that text findable.
+ */
+
+.page {
+  --scale-primary: 1rem;
+  --scale-secondary: 0.875rem;
+
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
+  line-height: 1.5;
+}
+
+.heading {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/*
+ * The page-scope banner. Rendered before any row content in the document, which
+ * is what FR-015 requires; nothing here may reorder it visually, because the
+ * accessibility tree's traversal and the rendered order must agree (FR-032).
+ */
+.banner {
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.bannerLabel {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.bannerCause,
+.bannerRemedy {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+.bannerRemedy {
+  margin-top: 0.5rem;
+}
+
+.provenance {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+  opacity: 0.85;
+}
+
+.empty {
+  font-size: var(--scale-primary);
+}
+
+.group {
+  margin-top: 1rem;
+}
+
+.groupHeading {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) 1fr minmax(9rem, auto) minmax(12rem, auto);
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.75rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+}
+
+/* The identity leads the row — FR-032's stated reading order starts here. */
+.identity {
+  font-size: var(--scale-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.needBy {
+  font-size: var(--scale-primary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Explanatory context. Smaller than the primary scale and no heavier — FR-032
+ * states the direction because "distinct" without one is satisfied by a
+ * secondary region set *larger* than the primary, which inverts the very
+ * subordination FR-009 asks for.
+ */
+.description,
+.rowState {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+@media (max-width: 40rem) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}

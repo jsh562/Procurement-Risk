@@ -71,13 +71,13 @@
 
 **The `no_active_run` slice ships first, end to end (HINT-001).** It is the only state reachable with an empty `forecast_run`, it is a P1 acceptance scenario in its own right, and building it first forces the absent-figure path to exist before any code can assume figures are present — the failure Principle III names. Every delivery phase extends the same four files this slice creates.
 
-- [ ] T008 [P] {FR-036,FR-037} Frozen fixture in TST/fixtures/frozen_run/ — generator, seed, generation date, regeneration command, row digest; loaded only through the migrated schema
-- [ ] T009 [P] {FR-044} Committed degraded-state copy table keyed by state, each entry naming the cause and what would change it, in WEB/stateCopy.ts → exports: STATE_COPY
-- [ ] T010 [P] {FR-002,FR-022,FR-038} Active-run pointer lookup, open-line filter excluding terminal lines, injected `today` in API/risk_read/query.py → exports: load_worklist(today, tz)
-- [ ] T011 {FR-015,FR-018,FR-054} Page states, `no_active_run` echoed onto every row, structural absence in API/risk_read/states.py ← T010:load_worklist → exports: resolve_states()
-- [ ] T012 {FR-018,FR-038} `GET /api/v1/worklist` and app wiring in API/routes/worklist.py — meta envelope, counts, empty-sequence `ordering_digest` ← T011:resolve_states
-- [ ] T013 {FR-015,FR-023,FR-024} Server component in WEB/page.tsx — endpoint only, no datastore connection, banner before any row content ← T009:STATE_COPY
-- [ ] T014 {FR-015} [COMPLETES FR-015] `no_active_run` against an empty `forecast_run` in TST/test_worklist_endpoint.py — every open line listed, no figure anywhere
+- [X] T008 [P] {FR-036,FR-037} Frozen fixture in TST/fixtures/frozen_run/ — generator, seed, generation date, regeneration command, row digest; loaded only through the migrated schema
+- [X] T009 [P] {FR-044} Committed degraded-state copy table keyed by state, each entry naming the cause and what would change it, in WEB/stateCopy.ts → exports: STATE_COPY
+- [X] T010 [P] {FR-002,FR-022,FR-038} Active-run pointer lookup, open-line filter excluding terminal lines, injected `today` in API/risk_read/query.py → exports: load_worklist(today, tz)
+- [X] T011 {FR-015,FR-018,FR-054} Page states, `no_active_run` echoed onto every row, structural absence in API/risk_read/states.py ← T010:load_worklist → exports: resolve_states()
+- [X] T012 {FR-018,FR-038} `GET /api/v1/worklist` and app wiring in API/routes/worklist.py — meta envelope, counts, empty-sequence `ordering_digest` ← T011:resolve_states
+- [X] T013 {FR-015,FR-023,FR-024} Server component in WEB/page.tsx — endpoint only, no datastore connection, banner before any row content ← T009:STATE_COPY
+- [X] T014 {FR-015} [COMPLETES FR-015] `no_active_run` against an empty `forecast_run` in TST/test_worklist_endpoint.py — every open line listed, no figure anywhere
 
 ---
 

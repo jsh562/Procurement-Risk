@@ -6,7 +6,10 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
     environment: "jsdom",
-    include: ["__tests__/**/*.test.{ts,tsx}"],
+    // Boundary-wide tests live in `__tests__/`; a module's own tests sit beside
+    // it. Colocation is what keeps a copy table and the assertions pinning its
+    // wording in one directory, so neither can be moved without the other.
+    include: ["__tests__/**/*.test.{ts,tsx}", "app/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
       reportsDirectory: "coverage",
@@ -16,6 +19,9 @@ export default defineConfig({
       // untouched scaffolding measures nothing. Fails independently of the
       // Python floor, so neither can mask the other.
       include: ["app/worklist/**/*.{ts,tsx}"],
+      // A test file counts itself as covered, which inflates the numerator by
+      // exactly the code that does the asserting.
+      exclude: ["app/worklist/**/*.test.{ts,tsx}"],
       thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 },
     },
   },

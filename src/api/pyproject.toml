@@ -24,6 +24,12 @@ gateway = { path = "../gateway" }
 [dependency-groups]
 dev = [
     "coverage==7.15.2",
+    # Required by `fastapi.testclient.TestClient`, which drives the app through
+    # a real ASGI transport. Declared rather than left to arrive transitively:
+    # the tests fail at import without it, and a transitive pin is one upstream
+    # release away from disappearing. `httpx2` rather than `httpx` — Starlette
+    # deprecated the latter for the test client and warns on every import.
+    "httpx2>=2.9.1",
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
     "pytest>=9.1.1",
