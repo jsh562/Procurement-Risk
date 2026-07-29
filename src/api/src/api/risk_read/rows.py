@@ -81,11 +81,6 @@ class RowInputs:
     #: computed from a differently-sized run would state a denominator that
     #: figure never had. The figure's copy is authoritative (FR-003).
     run_draw_count: int = 0
-    #: FR-029. Whether the run these figures came from is stale. Carried onto
-    #: the row rather than left to the page banner: a banner stops carrying
-    #: once rows are sorted, filtered, or read one at a time, and a coordinator
-    #: reading a single row would take its figures as current.
-    run_is_stale: bool = False
 
 
 def quantile_days(draws: tuple[float, ...], percentile: int) -> int:
@@ -281,28 +276,28 @@ def build_primary(inputs: RowInputs) -> dict[str, Any]:
 
 
 def build_secondary(inputs: RowInputs) -> dict[str, Any]:
-    """FR-009's explanatory context, and FR-029's row-level stale mark.
+    """FR-009's explanatory context — exactly the three items FR-027 admits.
 
     The as-of date, the criticality, and the calendar margin: the two inputs to
     the harm score that are not the distribution, plus the frame everything is
-    counted from. The score itself is absent under FR-041, and the region stays
-    closed so a fifth scannable *figure* cannot be parked here instead of in
-    `primary`, which is what makes FR-027's cap decidable at all.
+    counted from. The score itself is absent under FR-041, and the set is closed
+    at three because FR-027 says "the as-of date, the criticality, and the
+    calendar margin -- in the secondary region and nothing else", and that
+    closure is the counting procedure SC-014 is evaluated by.
 
-    ``as_of_is_stale`` is the fourth member and is not a fifth figure — it is a
-    boolean qualifying the as-of date already present, which is why FR-029 says
-    the mark "needs no new figure and no new field". FR-027 counts comparison
-    quantities a coordinator scans across rows; a staleness flag is not one, and
-    it carries no number to read.
-
-    It is on the row because a page-scope banner stops carrying once rows are
-    sorted, filtered, or read one at a time — and a coordinator reading a single
-    row in isolation would otherwise take stale figures as current.
+    **FR-029's row-level stale mark is not a member here, and that is the
+    requirement rather than an omission.** An earlier revision added an
+    ``as_of_is_stale`` boolean and amended the contract to admit a fourth
+    member. FR-029 states the mark "needs no new figure and *no new field*; the
+    response already carries the run's staleness and each row's as-of date" —
+    so the interface composes it from ``meta.forecast_run.stale`` and the
+    ``as_of_date`` on this row. Adding the field and then widening the contract
+    to fit was moving the boundary to match the implementation, which is the
+    direction this codebase refuses elsewhere.
     """
     line = inputs.resolved.line
     return {
         "as_of_date": inputs.as_of_date.isoformat(),
-        "as_of_is_stale": inputs.run_is_stale,
         "criticality": line.criticality,
         "calendar_margin_days": calendar_margin_days(
             line.effective_need_by_date, inputs.as_of_date

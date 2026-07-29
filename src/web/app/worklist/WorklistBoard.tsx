@@ -92,6 +92,7 @@ export function WorklistBoard({ initial }: { readonly initial: WorklistResponse 
               <Row
                 key={row.po_line_id}
                 row={row}
+                runIsStale={worklist.meta.forecast_run?.stale ?? false}
                 control={
                   <NeedByControl
                     poLineId={row.po_line_id}

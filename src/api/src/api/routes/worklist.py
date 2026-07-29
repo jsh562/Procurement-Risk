@@ -374,9 +374,6 @@ def _ranked_row(item: ResolvedLine, rank: int, inputs: Any) -> dict[str, Any]:
         horizon_days=inputs.run.horizon_days,
         conventions=inputs.conventions,
         today=inputs.today,
-        # FR-029. The run's staleness travels onto every populated row, not
-        # only into the page banner.
-        run_is_stale=inputs.run.is_stale(inputs.today),
         run_draw_count=inputs.run.draw_count,
     )
     return {

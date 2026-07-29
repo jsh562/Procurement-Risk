@@ -253,51 +253,58 @@ class TestFailuresAreNotStates:
 
 
 class TestTheRowLevelStaleMark:
-    """FR-029. The signal reaches the row, not only the page banner."""
+    """FR-029. The signal reaches the row — composed, not carried as a field.
 
-    def test_a_stale_run_marks_every_populated_row(
+    FR-029 states the mark "needs no new figure and *no new field*; the response
+    already carries the run's staleness and each row's as-of date". So the
+    response's obligation is to make both available and to keep them consistent;
+    the *rendering* obligation is the interface's, asserted in `Row.test.tsx`
+    and `worklist.spec.ts`.
+
+    An earlier revision added an `as_of_is_stale` member to every row and
+    widened the contract to admit it. That violated FR-027's closed three-item
+    secondary set as well as FR-029's own clause, and was reverted.
+    """
+
+    def test_the_response_carries_the_staleness_the_row_mark_is_composed_from(
         self, frozen_run: dict[str, Any], client: Any, at_today: Any
     ) -> None:
-        """FR-029: "Because a page-level banner alone stops carrying once rows
-        are sorted, filtered, or read one at a time, the row MUST carry the
-        signal too ... so a coordinator reading one row in isolation cannot take
-        its figures as current."
-
-        Asserted over *every* ranked row rather than one: a mark applied to the
-        first row only would satisfy a single-row check and leave the rest
-        reading as current.
-        """
+        """Both halves present, on the same response: the run's staleness at
+        page scope, and an as-of date on every populated row."""
         at_today(AS_OF + timedelta(days=8))
         body = client.get("/api/v1/worklist").json()
 
-        assert "stale_run" in body["page_states"], "precondition: the run must be stale"
+        assert body["meta"]["forecast_run"]["stale"] is True
         assert body["ranked"], "precondition: there must be populated rows to mark"
         for row in body["ranked"]:
-            assert row["secondary"]["as_of_is_stale"] is True, (
-                f"{row['primary']['identity']['po_number']} carries no stale mark while the "
-                "run is stale — a coordinator reading this row alone would take it as current"
-            )
+            assert row["secondary"]["as_of_date"] == AS_OF.isoformat()
 
-    def test_a_fresh_run_marks_no_row(
+    def test_the_row_carries_no_staleness_field_of_its_own(
         self, frozen_run: dict[str, Any], client: Any, at_today: Any
     ) -> None:
-        """The mark must not be permanent furniture. A qualifier present on
-        every row regardless of the run says nothing on the rows that need it."""
-        at_today(AS_OF + timedelta(days=2))
-        body = client.get("/api/v1/worklist").json()
+        """FR-027, FR-029. The secondary region is closed at three items, and
+        the mark is composed rather than transmitted.
 
-        assert "stale_run" not in body["page_states"]
-        assert all(row["secondary"]["as_of_is_stale"] is False for row in body["ranked"])
+        Asserted over the key set rather than for one absent name: a differently
+        spelled staleness field would pass a name check and break the closure
+        just the same.
+        """
+        at_today(AS_OF + timedelta(days=8))
+        for row in client.get("/api/v1/worklist").json()["ranked"]:
+            assert set(row["secondary"]) == {
+                "as_of_date",
+                "criticality",
+                "calendar_margin_days",
+            }
 
-    def test_the_mark_tracks_the_threshold_from_both_sides(
+    def test_the_page_scope_claim_tracks_the_threshold_from_both_sides(
         self, frozen_run: dict[str, Any], client: Any, at_today: Any
     ) -> None:
-        """The row mark and the page banner are the same claim at two scopes, so
-        they must agree at the boundary — seven days fresh, eight days stale."""
+        """FR-029's threshold, pinned at seven days and eight so `>` cannot be
+        confused with `>=`. This is the value the row mark is composed from, so
+        an error here would reach every row."""
         at_today(AS_OF + timedelta(days=7))
-        fresh = client.get("/api/v1/worklist").json()
-        assert all(row["secondary"]["as_of_is_stale"] is False for row in fresh["ranked"])
+        assert client.get("/api/v1/worklist").json()["meta"]["forecast_run"]["stale"] is False
 
         at_today(AS_OF + timedelta(days=8))
-        stale = client.get("/api/v1/worklist").json()
-        assert all(row["secondary"]["as_of_is_stale"] is True for row in stale["ranked"])
+        assert client.get("/api/v1/worklist").json()["meta"]["forecast_run"]["stale"] is True

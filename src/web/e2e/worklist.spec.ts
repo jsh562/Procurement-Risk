@@ -43,9 +43,21 @@ test.describe("the presentation contract (FR-032)", () => {
     const secondary = await fontSize(row.locator("[class*='secondary']"));
     expect(secondary).toBeLessThan(primary);
 
+    // Measured over every descendant of the secondary region, not over the
+    // container. The container's own weight says nothing about what is rendered
+    // inside it — a mark set heavier than the primary would sit in a child and
+    // leave a container-only assertion green, which is what the earlier
+    // revision of this test did while the stale mark was added at weight 600.
     const primaryWeight = await fontWeight(row.locator("[class*='identity']"));
-    const secondaryWeight = await fontWeight(row.locator("[class*='secondary']"));
-    expect(secondaryWeight).toBeLessThanOrEqual(primaryWeight);
+    const secondaryWeights = await row.locator("[class*='secondary']").evaluate((el) =>
+      [el, ...el.querySelectorAll("*")].map((node) => {
+        const weight = getComputedStyle(node as Element).fontWeight;
+        return weight === "normal" ? 400 : weight === "bold" ? 700 : parseInt(weight, 10);
+      }),
+    );
+
+    expect(secondaryWeights.length).toBeGreaterThan(1);
+    expect(Math.max(...secondaryWeights)).toBeLessThanOrEqual(primaryWeight);
   });
 
   test("both directions of the probability carry equal prominence", async ({ page }) => {

@@ -51,13 +51,13 @@ const NOMINAL: RankedRow = {
   },
   secondary: {
     as_of_date: "2026-07-24",
-    as_of_is_stale: false,
     criticality: 5,
     calendar_margin_days: 17,
   },
 };
 
-const render = (row: RankedRow) => renderToStaticMarkup(<Row row={row} />);
+const render = (row: RankedRow, runIsStale = false) =>
+  renderToStaticMarkup(<Row row={row} runIsStale={runIsStale} />);
 
 const withMiss = (miss: RankedRow["primary"]["miss_probability"]): RankedRow => ({
   ...NOMINAL,
@@ -220,22 +220,28 @@ describe("the row-level stale mark (FR-029)", () => {
     // sorted, filtered, or read one at a time, the row MUST carry the signal
     // too ... so a coordinator reading one row in isolation cannot take its
     // figures as current."
-    const markup = render({
-      ...NOMINAL,
-      secondary: { ...NOMINAL.secondary, as_of_is_stale: true },
-    });
-    expect(markup).toContain("out of date");
+    // Driven by the run's staleness from page scope, not by a per-row field:
+    // FR-029 says the mark "needs no new figure and no new field".
+    expect(render(NOMINAL, true)).toContain("out of date");
   });
 
   it("carries the mark as words, not as a style alone", () => {
     // FR-050. A mark carried only by italics or a tint is invisible to a
     // coordinator who cannot see it, and to every automated check.
-    const markup = render({
-      ...NOMINAL,
-      secondary: { ...NOMINAL.secondary, as_of_is_stale: true },
-    });
-    const withoutMarkup = markup.replace(/<[^>]*>/g, "");
+    const withoutMarkup = render(NOMINAL, true).replace(/<[^>]*>/g, "");
     expect(withoutMarkup).toContain("out of date");
+  });
+
+  it("composes the mark without any per-row field", () => {
+    // The regression this replaced. An `as_of_is_stale` member on `secondary`
+    // would violate FR-027's closed three-item set and FR-029's own "no new
+    // field" clause — so the row's inputs are asserted to carry exactly the
+    // three the contract declares.
+    expect(Object.keys(NOMINAL.secondary).sort()).toEqual([
+      "as_of_date",
+      "calendar_margin_days",
+      "criticality",
+    ]);
   });
 
   it("says nothing extra when the run is fresh", () => {

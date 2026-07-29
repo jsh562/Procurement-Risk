@@ -96,7 +96,7 @@
 - [X] T023 [P] [US1] {FR-032,FR-048,FR-049,FR-050} WEB/Row.tsx — primary/secondary regions, reading order, rank as text, pair under one accessible name, state as text
 - [X] T024 [US1] {FR-047} Ranked list, active key and direction, and the server-sent tiebreak rule in WEB/page.tsx after:T023
 - [X] T025 [US1] {FR-002,FR-023,FR-035} [COMPLETES FR-002] Provider unreachable renders fully and the invocation record gains no row — TST/test_worklist_endpoint.py
-- [X] T026 [P] [US1] {FR-024} Both observation sites — CHK/test_web_has_no_db_driver.py for the manifest and lockfile, TST/test_no_datastore_from_web.py for the request set
+- [X] T026 [P] [US1] {FR-024} Both observation sites — CHK/test_web_has_no_db_driver.py for the manifest and lockfile, TST/test_read_path_isolation.py for the request set (this second path was written as `test_no_datastore_from_web.py`; the work landed in `test_read_path_isolation.py` beside the other read-path assertions, and the entry is corrected to the file that holds it)
 
 ---
 
@@ -124,7 +124,7 @@
 - [X] T037 [US3] {FR-025,FR-042} P1 half of FR-025 — `project_id` parameter, its pattern validator and `WHERE` clause — plus the `empty_filter` page state, in API/routes/worklist.py
 - [X] T038 [US3] {FR-043} 500 `unsupported-artifact-schema` / `internal-error` and 503 `datastore-unavailable` with `correlation_id`, and the page-level failure state in WEB/page.tsx
 - [X] T039 [P] [US3] {FR-018a,FR-033} Jointly constructible co-occurrences and the precedence winner for each pair, in TST/test_states.py
-- [X] T040 [P] [US3] {FR-044} Copy-table distinctness — no entry a substring of another, each holding a phrase in no other — and region assignment, in WTS/worklist.test.tsx
+- [X] T040 [P] [US3] {FR-044} Copy-table distinctness — no entry a substring of another, each holding a phrase in no other — and region assignment, in WTS/stateCopy.test.ts (written as `worklist.test.tsx`; the assertions belong beside the table they pin, and colocation is what keeps the two from being moved apart)
 - [X] T041 [US3] {FR-018} [COMPLETES FR-018] All eight states reported as `200` outcomes, counts reconcile, no placeholder anywhere — TST/test_worklist_endpoint.py
 
 ---
@@ -136,7 +136,7 @@
 - [X] T042 [US4] {FR-025} `scope.available_projects` with `open_line_count`, the full set in every state including while a scope is active — API/routes/worklist.py
 - [X] T043 [US4] {FR-025,FR-051} [COMPLETES FR-025] Scoping control in WEB/page.tsx — full selectable set, keyboard-operable, active scope exposed to assistive technology
 - [X] T044 [US4] {FR-026} On-screen enumeration of FR-026's four keys with the active key and direction, in WEB/page.tsx after:T043
-- [X] T045 [P] [US4] {FR-026,FR-032} [COMPLETES FR-026] Offered key set holds no delivery-date or single-quantile key; scope reranks — WTS/worklist.test.tsx
+- [X] T045 [P] [US4] {FR-026,FR-032} [COMPLETES FR-026] Offered key set holds no delivery-date or single-quantile key; scope reranks — WTS/WorklistBoard.test.tsx (written as `worklist.test.tsx`; the sort control lives in `WorklistBoard`, so its assertions do too)
 - [X] T046 [P] [US4] {FR-045} Excluded-group order and scope invariance under all four keys, in TST/test_worklist_endpoint.py
 
 ---
@@ -222,6 +222,65 @@
   > Claims "100% statements / 98.4% branches". Measured this run: 99.2% statements (125/126), 95.74% branches (90/94). The figures predate Phase 6's Controls component and its tests. Both remain far above the 80 floor, so no gate impact — but a published figure that does not match its measurement is the defect Principle I names.
   > Fix hint: regenerate the marker's figures from the run that writes it.
 
+
+- [X] T066 [BUG:ERROR] {FR-027,FR-029} [requirement-conflict] `as_of_is_stale` is a new row field both requirements forbid, and the contract was amended to accommodate it — src/api/src/api/risk_read/rows.py:305
+  > FR-029 states the row-level mark "needs no new figure and **no new field**; the response already carries the run's staleness and each row's as-of date". The T055 fix added a per-row field anyway.
+  > FR-027 closes the secondary region at "exactly the three items FR-009 and FR-019 require -- the as-of date, the criticality, and the calendar margin -- in the secondary region and nothing else", and adds "Anything outside these three closed sets is a fifth comparison quantity whatever region it is rendered in, and that is the counting procedure SC-014 is evaluated by".
+  > `contracts/openapi.yaml:917` was amended to four required members with prose justifying the addition; `spec.md` was not, so the two now disagree and only the contract records the divergence.
+  > This is the same wrong direction as widening a dependency allowlist to make a test pass: the requirement said how to do it and the implementation did something else, then moved the contract to match.
+  > Fix hint: remove the member from the payload, the contract and the TS type; have the renderer qualify the row's as-of text from `meta.forecast_run.stale`, which the response already carries. Re-target the API-tier assertions at `meta.forecast_run.stale`. Keep the rendered-tier and e2e assertions — those test the requirement, not the mechanism.
+
+- [X] T067 [BUG:ERROR] {FR-039} [test-quality] T060's third property is a tautology, and none of the three exercise the production reader — src/api/tests/test_probability.py:266
+  > `_read(survival, offset)` is `percent_figure(survival[offset - 1])`. `test_the_residual_tail_mass_is_the_last_grid_entry` asserts `_read(survival, len(survival)).display == percent_figure(survival[-1]).display` — both sides are the same call on the same float. It asserts `x == x` and can never fail on its own terms.
+  > It is named in `.completed` as one of three properties discharging T060, so the marker overstates what was delivered — the same defect T065 corrected.
+  > `survival_arrays` does not generate `residual_tail_mass`, though its docstring and FR-039 both name "the last element equal to `residual_tail_mass` within `PROB_SUM_TOLERANCE`" as part of the domain.
+  > All three properties assert over the test-local `_read` rather than `api.risk_read.rows.miss_probability`, which is the function that actually performs this read. An off-by-one or a complement introduced in `rows.py:160` would leave all three green; the inversion is guarded only by an example at `test_worklist_ranked.py:108`, which is what T060 said was insufficient.
+  > Fix hint: generate `(survival, residual_tail_mass)` as a pair so the storage invariant is modelled, and drive the properties through `miss_probability` with a constructed `RowInputs` so production code is under test. Then re-check that a mutation to `rows.py` fails them.
+
+- [X] T068 [BUG:WARNING] {FR-039} [accuracy] tasks.md still claims a `test:` commit precedes each `feat:` commit — specs/00010-risk-ranked-coordinator-worklist/tasks.md:233
+  > The Dependencies section reads "the branch carries a `test:` commit before the `feat:` commit for each pair". `git log --all -- src/api/tests/test_ranking.py src/api/src/api/compute/ranking.py` returns `1b96a5d` for both files: T015-T018 landed together.
+  > The RED state was observed during implementation and FR-039's substance was met; the committed evidence the tasks file promises does not exist. T065 corrected a figure of exactly this kind and this sentence was left standing.
+  > Fix hint: amend the sentence to record what happened, or drop the claim. Do not retro-fit history.
+
+- [X] T069 [BUG:WARNING] {FR-035} [test-coverage] The invocation-record test carries no adjustment — src/api/tests/test_read_path_isolation.py:97
+  > FR-035 and SC-003 require that a worklist request, "including one carrying a need-by adjustment", adds no row to the model-invocation record. The test issues a plain `client.get("/api/v1/worklist")` with no `need_by_override`.
+  > The table half is blocked on E008 and the test skips honestly. The adjustment half is not blocked and was flagged in QC iteration 1 as fixable now.
+  > Fix hint: add the override-carrying request to the same test so it is covered the day E008's table lands.
+
+- [X] T070 [BUG:WARNING] {FR-024} [accuracy] The recorded runtime observation for FR-024 does not exist — specs/00010-risk-ranked-coordinator-worklist/plan.md:203
+  > The plan records: "during a Playwright page load every outbound request the page issues is recorded, and each must target the worklist endpoint with none targeting the database port". `src/web/e2e/worklist.spec.ts` contains no `page.on('request')` and no route interception.
+  > The runtime half is discharged instead by a source scan of `worklist.ts` at `src/api/tests/test_read_path_isolation.py:129`. That is a weaker observable than the one recorded, and the record does not say so — the same defect class T062 fixed for the manifest half.
+  > Fix hint: add the request-recording spec, or amend the plan to record the source scan as the actual observable with its limitation.
+
+- [X] T071 [BUG:WARNING] {FR-040} [accuracy] Three task/plan entries name files that do not exist — specs/00010-risk-ranked-coordinator-worklist/tasks.md
+  > T026 and plan.md:237 name `TST/test_no_datastore_from_web.py`; T040/T045 and plan.md:235 name `WTS/worklist.test.tsx`. Neither exists. The work lives in `src/api/tests/test_read_path_isolation.py` and `src/web/app/worklist/*.test.tsx`.
+  > T062 moved one file to match its named path and left these standing, so the naming is now inconsistent rather than uniformly aspirational.
+  > Fix hint: amend the entries to the paths that hold the work.
+
+- [X] T072 [BUG:WARNING] {FR-040} [accuracy] SC-017 and SC-018 are measured against 16 lines, not the recorded population — src/api/tests/test_worklist_benchmark.py:87
+  > plan.md:184 records the benchmark's line population as "The E005 seeded set -- ~200 open lines across 5 projects"; plan.md:115 repeats "~200 lines". The benchmark takes the `frozen_run` fixture, which truncates and seeds 16.
+  > QC iteration 1 reported both criteria as PASSED "under the plan's recorded conditions". One of those conditions is not met. The measured margin is roughly 30x, so the criteria very likely hold at 200 lines — but "likely holds" is not the claim that was published.
+  > Fix hint: benchmark against the E005 population, or amend the recorded condition to the population actually used and re-state the figures as scoped to it.
+
+- [X] T073 [BUG:WARNING] {FR-032} [test-coverage] The type-scale assertion measures the secondary container, not its descendants — src/web/e2e/worklist.spec.ts:46
+  > FR-032 requires the secondary region to be smaller than the primary and never heavier. The spec reads the computed weight of `[class*='secondary']` (400) rather than of the elements inside it.
+  > The T055 fix added `.staleAsOf { font-weight: 600 }` inside that region. It holds by equality with `.identity`'s 600, so the requirement is not currently violated — but the assertion would not have noticed if it were, which is the property FR-032 asks to be asserted rather than reviewed.
+  > Fix hint: assert over the heaviest descendant of the secondary region, not the container.
+
+
+- [X] T074 [BUG:CRITICAL] {FR-040} [governance] E010's compliance audit names a superseded project-instructions version — specs/00010-risk-ranked-coordinator-worklist/plan.md:30
+  > The Instructions Check records "Audited against `project-instructions.md` v1.2.4". `main` now carries **v1.2.7**, amended 2026-07-29 by v1.2.5, v1.2.6 and v1.2.7 — three revisions of one new Temporary Files rule.
+  > Governance states: "A feature whose recorded compliance audit names a superseded version of this document MUST re-run its compliance gate before passing its next phase gate. — An amendment moves the ground under every epic already in flight, and their branches keep validating against the version they were cut from."
+  > E010's next phase gate is QC. The re-run is therefore a precondition of `.qc-passed`, not a follow-up.
+  > Fix hint: re-audit every row of the Instructions Check against v1.2.7, add a row for the new Temporary Files rule, and update the recorded version. T075 is the one row that does not already pass.
+
+- [X] T075 [BUG:ERROR] {FR-040} [governance] `src/api`'s pytest configuration does not pin `--basetemp` — src/api/pyproject.toml:48
+  > project-instructions.md v1.2.5+ § Temporary Files: "Every command run against this repository MUST direct temporary files into the checkout's own gitignored `.tmp/` — `TMPDIR`, `TEMP` and `TMP` set to `$PWD/.tmp`, and **`--basetemp` pinned there in the root and in each entry's pytest configuration**." Each path MUST be absolute.
+  > Measured: no `basetemp` appears in `src/api/pyproject.toml`, `src/model/pyproject.toml`, `src/gateway/pyproject.toml` or the root `pyproject.toml`. `.tmp/` is gitignored (`.gitignore:17`), so the destination exists and nothing writes to it.
+  > E010 owns `src/api`'s pytest configuration — it added `testpaths` and `markers` there — so that entry is this epic's to fix. The other three are outside E010's scope and are reported rather than changed.
+  > The rule postdates E010's recorded audit (v1.2.4), which is why T074 and this task arrive together.
+  > Fix hint: add `addopts = "--basetemp=..."` resolved to an absolute path under the checkout, and confirm pytest actually writes there.
+
 ---
 
 ## Dependencies
@@ -230,7 +289,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → Polish
 
 - **Phase 1 → Phase 2**: T005's `Unit tests (api)` step needs T001's dependencies; nothing in Phase 2 runs in the gate until it lands.
 - **Phase 2 is the `no_active_run` slice** and blocks all four stories: `query.py` (T010) → `states.py` (T011) → `routes/worklist.py` (T012) → `page.tsx` (T013).
-- **Strict test-first pairs**: T015 → T017 and T016 → T018. The RED task must be observed failing before its GREEN task begins; the branch carries a `test:` commit before the `feat:` commit for each pair.
+- **Strict test-first pairs**: T015 → T017 and T016 → T018. The RED task must be observed failing before its GREEN task begins. **The branch does not carry a separate `test:` commit for either pair** — this line originally promised one, and QC found the promise false: `git log` shows `test_ranking.py`, `test_probability.py`, `compute/ranking.py` and `compute/probability.py` all first appearing in `1b96a5d`. The RED state *was* observed — both modules were imported by tests that failed with `ModuleNotFoundError` before either was written — but the committed evidence a reader could check does not exist. Corrected rather than back-filled: a changelog states what happened, and rewriting history to match a claim is the opposite of the property FR-039 asks for.
 - **`compute/probability.py` (T018) precedes `risk_read/rows.py` (T020)** — the row assembles finished figures rather than raw values.
 - **`risk_read/states.py` (T011, T033) precedes `rows.py` (T020, T035)** — the winning state governs which figures a row carries.
 - **The endpoint composes the read modules**: T022 depends on T017, T019, T020 and T021.

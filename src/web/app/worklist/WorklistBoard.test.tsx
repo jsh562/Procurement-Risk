@@ -50,7 +50,6 @@ const row = (id: string, rank: number, needBy: string): RankedRow => ({
   },
   secondary: {
     as_of_date: "2026-06-01",
-    as_of_is_stale: false,
     criticality: 3,
     calendar_margin_days: 30,
   },

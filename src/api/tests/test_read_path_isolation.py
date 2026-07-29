@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import socket
 import tomllib
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -94,7 +95,25 @@ def test_serving_the_worklist_records_no_model_invocation(
         cursor.execute("SELECT count(*) FROM model_invocation")
         before = cursor.fetchone()[0]
 
+    # Both request shapes FR-035 and SC-003 name: the plain read, **and** one
+    # carrying a need-by adjustment. The adjustment is the half that matters —
+    # it is the interaction a coordinator repeats in a loop, and it is the one
+    # where a request-time model call would be easiest to justify to oneself.
+    # An earlier revision issued only the plain read, so the clause's own words
+    # ("including one carrying a need-by adjustment") were uncovered even on the
+    # day E008's table lands.
     client.get("/api/v1/worklist")
+
+    line = next(item for item in frozen_run["lines"] if item["case"] == "nominal")
+    adjusted = date.fromisoformat(line["need_by_date"]) - timedelta(days=10)
+    response = client.get(
+        "/api/v1/worklist",
+        params={"need_by_override": [f"{line['po_line_id']}:{adjusted.isoformat()}"]},
+    )
+    assert response.json()["overrides"]["applied"], (
+        "precondition: the adjustment must actually have applied, or this asserts nothing "
+        "about the path FR-035 names"
+    )
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT count(*) FROM model_invocation")

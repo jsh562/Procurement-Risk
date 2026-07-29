@@ -54,6 +54,19 @@ testpaths = ["tests"]
 # nothing, and a tier opted into by a flag nobody passes is a tier that stopped
 # running the day someone forgot.
 markers = ["benchmark: p95 latency against the registered envelope (SC-017, SC-018)"]
+# project-instructions.md § Temporary Files (v1.2.5, tightened by v1.2.6 and
+# v1.2.7): scratch stays inside the checkout, and `--basetemp` is pinned in each
+# entry's pytest configuration. Relative to this file's directory, which is
+# where `uv run --directory src/api` puts the working directory, so it resolves
+# to the repository's own gitignored `.tmp/`.
+#
+# A path in a tracked manifest cannot be machine-absolute, so the absoluteness
+# the rule asks for is *asserted* rather than declared:
+# `tests/test_scratch_location.py` resolves `tmp_path` at runtime and fails if
+# it lands outside the checkout. That is the lesson v1.2.6 records — a scratch
+# rule holds only for the writers actually measured, and this is the
+# measurement for this entry.
+addopts = "--basetemp=../../.tmp/pytest-api"
 
 [tool.coverage.run]
 branch = true

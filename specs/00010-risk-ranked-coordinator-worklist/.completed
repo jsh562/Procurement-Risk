@@ -1,46 +1,81 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 13 bug tasks from QC iteration 1.
+Implementation complete: 52 tasks, plus 23 bug tasks from two QC iterations.
 
-Every figure below was measured in the run that wrote this file. The previous
-revision carried web coverage figures that predated Phase 6 and overstated them;
-T065 is that correction.
+Every figure below was measured in the run that wrote this file.
 
-Local verification at completion (2026-07-29):
-  api tests            194 passed, 1 skipped, 3 deselected
+Local verification (2026-07-29, after QC iteration 2's fixes):
+  api tests            200 passed, 1 skipped, 3 deselected
                        (the skip is model_invocation — E008 owns that table)
-  api benchmark        3 passed — p95 47.1 ms and 39.7 ms against a 1500 ms budget
-  web unit tests       76 passed
+  api benchmark        3 passed — p95 48.3 ms and 45.2 ms against a 1500 ms budget,
+                       measured against the frozen fixture's 16 lines (see below)
+  web unit tests       77 passed
   web e2e specs        19 passed against the real page and the real boundary
-  root checks          246 passed, 3 pre-existing failures from main
+  root checks          249 passed, 0 failed
   python coverage      97% (floor 80, verified failing at 99)
-  web coverage         99.23% statements / 96.07% branches / 97.22% functions
+  web coverage         99.23% statements / 96.19% branches / 97.22% functions
                        / 99.17% lines (floor 80, verified failing at 100)
-  ruff                 clean
+  ruff / mypy / eslint / tsc   clean
   import contracts     3 kept, 0 broken, each with a negative fixture
   contract conformance 9 tests — every response state validated against
-                       contracts/openapi.yaml, with two negative controls
+                       contracts/openapi.yaml, with negative controls
 
-QC iteration 1 found 13 defects; all are fixed:
-  T053  Principle VII — the security limitation record stated two falsehoods and
-        its reversal trigger had fired. Corrected, and a non-gating audit step
-        added so its scope decision is true rather than aspirational.
-  T054  FR-042 — the scoping control was never on screen in the empty-filter
-        state, so a coordinator could only leave the scope by reloading.
-  T055  FR-029 — the row-level stale mark was unimplemented.
-  T056  FR-051 — bounded forms were not announced as words.
-  T057  The E2E seed truncated the shared development database, breaking
-        src/model's forecast tier. It now owns a separate database.
-  T058-T064  Test-coverage and provenance gaps, including a per-figure reference
-        class sourced from schema_constants rather than the run it describes.
-  T065  This marker's own figures.
+Audited against project-instructions.md **v1.2.7**. The prior audit named
+v1.2.4, superseded in flight by three revisions of a new Temporary Files rule;
+governance required the compliance gate to be re-run before this phase gate, and
+it was (T074).
 
-Pre-existing failures, outside this epic:
-  tests/checks/test_single_import_site.py — 3 tests. The roster filename is
-  named in 7 files where 1 is permitted, all in src/model from E005 and E007.
-  Fails identically on main; E007's two merges did not touch it.
+QC iteration 1 found 13 defects. QC iteration 2 found that one of them (T060)
+had been marked complete without being implemented, and found 9 more — including
+two introduced by iteration 1's own fixes. All 23 are now closed:
 
-Carried forward, not closed:
+  Iteration 1 (T053-T065)
+    T053  Principle VII — the security limitation record stated two falsehoods
+          and its reversal trigger had fired.
+    T054  FR-042 — the scoping control was absent in the empty-filter state.
+    T055  FR-029 — the row-level stale mark was unimplemented.
+    T056  FR-051 — bounded forms were not announced as words.
+    T057  The E2E seed truncated the shared development database.
+    T058-T065  Test-coverage, provenance and accuracy gaps.
+
+  Iteration 2 (T066-T075)
+    T066  T055's fix added a per-row `as_of_is_stale` field and widened the
+          contract to admit it. FR-029 says the mark "needs no new figure and no
+          new field" and FR-027 closes the secondary region at three items. The
+          field is gone; the interface composes the mark from
+          `meta.forecast_run.stale`, and the contract is back to three.
+    T067  T060's three properties read through a helper defined in the test file
+          rather than through `rows.miss_probability`, and one of them asserted
+          `x == x`. They now drive production code: mutating the survival read
+          with a complement, or with an off-by-one, fails them.
+    T068  tasks.md claimed a `test:` commit precedes each `feat:` commit. It
+          does not, and the sentence is corrected rather than back-filled.
+    T069  The invocation-record test issued no adjustment-carrying request,
+          which is the half of FR-035 that was not blocked on E008.
+    T070  plan.md recorded a Playwright request-recording observation that does
+          not exist; the weaker source assertion that does is now what it says.
+    T071  Three task entries named files that were never created.
+    T072  plan.md recorded the benchmark population as "~200 open lines"; it is
+          16. Corrected to what is measured.
+    T073  The type-scale assertion measured the secondary container rather than
+          its descendants, so the mark T055 added sat unchecked.
+    T074  The compliance re-audit against v1.2.7.
+    T075  `src/api` did not pin `--basetemp`, so its tests wrote to the shared
+          system temp directory. Pinned, and measured by
+          `tests/test_scratch_location.py` rather than declared.
+
+Reported, outside E010's scope:
+  The root, `src/model` and `src/gateway` pytest configurations do not pin
+  `--basetemp` either. Same rule, other epics' entries.
+
+  SC-017 and SC-018 are measured against the frozen fixture's 16 lines. The
+  margin is roughly 30x, so the criteria very likely hold at the E005
+  population — but widening the benchmark needs the two datasets to coexist,
+  which T057 has just deliberately separated.
+
+  pip-audit has produced no result on either side: it cannot run locally (TLS
+  interception) and its CI step has not executed yet. Recorded as unmeasured
+  rather than as a null result.
+
   The security limitation's reversal trigger has fired for /src/web — 3 high
-  advisories on production dependencies (next, postcss, sharp). Recorded in
-  plan.md with its scope: upgrading next across a major is a change to E001's
-  scaffold with its own verification surface, not a worklist change.
+  advisories on production dependencies. Upgrading `next` across a major is
+  E001 scaffold work with its own verification surface.

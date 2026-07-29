@@ -1,274 +1,248 @@
 # QC Report: E010 — Risk-Ranked Coordinator Worklist
 
-**Date**: 2026-07-29
+**Date**: 2026-07-29 (iteration 2)
 **Feature Directory**: `specs/00010-risk-ranked-coordinator-worklist/`
 **Overall Verdict**: FAIL
 
-Branch `00010-risk-ranked-coordinator-worklist` @ `e0ecf53`. Full run — no prior `qc-report.md`.
+Full re-run — `plan.md` and `contracts/openapi.yaml` were both modified since the prior `.completed`,
+which triggers the full-run condition rather than scoped re-verification.
 
-Both **required** categories pass. QC fails on requirement compliance: three requirement clauses
-are unimplemented, one Principle VII record states falsehoods, and a test fixture this epic added
-destroys another epic's dataset.
+**Iteration 2 found 10 further defects, fixed them, and re-verified.** The verdict is FAIL because
+that is what this iteration *found*; the fixes landed inside this run and are recorded below with
+their evidence. A third iteration should confirm them from a clean start, exactly as this one
+confirmed iteration 1's — that pattern is what caught T060.
+
+## Changes from Prior Run
+
+| Metric | Iteration 1 | Iteration 2 | Delta |
+|--------|-------------|-------------|-------|
+| Verdict | FAIL | FAIL | — |
+| Defects found | 13 | 10 | 2 of them introduced by iteration 1's own fixes |
+| api tests | 179 | **200** | +21 |
+| web unit tests | 67 | **77** | +10 |
+| e2e specs | 18 | **19** | +1 |
+| root checks | 243 passed / 3 failed | **249 passed / 0 failed** | 3 pre-existing failures cleared by E005 |
+| Python coverage | 97% | 97% | — |
+| Web coverage (branches) | 95.74% | **96.19%** | +0.45 |
+| p95 (worklist / +override) | 50.0 / 44.8 ms | 48.3 / 45.2 ms | within run-to-run variance |
+| PI version audited | v1.2.4 | **v1.2.7** | governance re-run performed |
+
+No regressions.
 
 ## Summary
 
 | Check | Status | Details |
 |-------|--------|---------|
-| Build | PASSED | `tsc --noEmit`, `npm run build` (3 routes), uv build, api image 149 MB |
-| Static Analysis / Linting *(required)* | PASSED | ruff, mypy, eslint, tsc clean; 3 import contracts kept, 0 broken |
-| Security | SKIPPED / findings | pip-audit blocked by TLS interception; `npm audit` → 3 **production** highs |
-| Tests | PASSED (E010 tiers) | api 179, benchmark 3, web 67, e2e 18, gate checks 42, image 34 |
-| Code Coverage *(required)* | PASSED | Python 97%, web 99.2%/95.7% — two independent floors, both exit 0 |
-| PI Compliance | **FAILED** | Principle VII — T053 |
-| Requirements Traceability | **FAILED** | 24/27 SC, 1/4 stories fully PASSED; 3 requirement clauses unimplemented |
-| Checklist Fulfillment | PASSED (120/120) with 1 gap | CHK021's agreement rule unasserted — T059 |
-| Performance | PASSED | p95 50.0 ms / 44.8 ms vs 1500 ms budget |
-| Accessibility | MANUAL VERIFICATION NEEDED | No tooling installed; see `manual-test.md` |
-| Browser Runtime | PASSED (headless supplement) | No browser tool exposed; Playwright covered the scenarios |
+| Build | PASSED | `tsc --noEmit`, `mypy` (18 files), uv build, api image |
+| Static Analysis / Linting *(required)* | PASSED | ruff, mypy, eslint, tsc; 3 import contracts kept. Prettier's failures independently confirmed CRLF-only |
+| Security | SKIPPED / reported | `npm audit` 3 production highs; `pip-audit` unrunnable locally and unrun in CI |
+| Tests | PASSED | api 200 · web 77 · e2e 19 · root 249 · benchmark 3 |
+| Code Coverage *(required)* | PASSED | Python 97%, web 99.23%/96.19% — two independent floors, both exit 0 |
+| PI Compliance | **FAILED → fixed** | v1.2.4 audit superseded; new Temporary Files rule unmet in `src/api` |
+| Requirements Traceability | **FAILED → fixed** | Two requirement clauses were contradicted by iteration 1's own fixes |
+| Checklist Fulfillment | PASSED (120/120) | CHK021's iteration-1 intent gap closed |
+| Performance | PASSED (population corrected) | 48.3 / 45.2 ms vs 1500 ms — against 16 lines, not the recorded ~200 |
+| Accessibility | MANUAL VERIFICATION NEEDED | No tooling installed; `manual-test.md` |
+| Browser Runtime | PASSED (headless supplement) | Probe found no browser tool; 19 Playwright specs cover the scenarios |
 
-## Test Results — PASSED (for E010's own tiers)
+## Test Results — PASSED
 
-| Suite | Command | Exit | Counts |
-|---|---|---|---|
-| api unit + integration | `pytest -m "not benchmark"` | 0 | 179 passed, 1 skipped, 3 deselected |
-| api benchmark | `pytest tests/test_worklist_benchmark.py -s` | 0 | 3 passed — p95 **50.0 ms** / **44.8 ms** vs 1500 ms |
-| web unit | `vitest run --coverage` | 0 | 67 passed |
-| web e2e | `playwright test` | 0 | 18 passed |
-| root checks | `pytest tests` | 1 | 243 passed, **3 failed (pre-existing)** |
-| image / supply chain | `pytest tests/checks/test_image_*.py test_supply_chain.py` | 0 | 34 passed |
-| model entry | `pytest` (shared DB) | 1 | **6 failed, 366 errors — caused by T057** |
-| model entry | `pytest` (clean DB) | 0 | 2569 passed |
+| Suite | Exit | Counts |
+|---|---|---|
+| api (`-m "not benchmark"`) | 0 | 200 passed, 1 skipped, 3 deselected |
+| api benchmark | 0 | 3 passed — p95 **48.3 ms** / **45.2 ms** vs 1500 ms |
+| web unit | 0 | 77 passed |
+| web e2e | 0 | 19 passed |
+| root checks | 0 | **249 passed, 0 failed** |
 
-The 1 skipped api test is `test_serving_the_worklist_records_no_model_invocation` — the
-`model_invocation` table does not exist (E008 owns it). The skip is honest; see Traceability Gaps.
+The 1 skip is `model_invocation` — the table does not exist and E008 owns it.
 
-**Pre-existing, NOT this epic** — `tests/checks/test_single_import_site.py`, 3 tests. The roster
-filename is named in 7 files where 1 is permitted, all in `src/model` from E005/E007. Verified three
-ways: `git grep project-vendor-roster main -- src/` returns the identical 7 files;
-`git log main..HEAD -- tests/checks/test_single_import_site.py` is empty; `git diff --stat main..HEAD`
-touches no file under `src/model`.
+**The three pre-existing root failures are gone.** `tests/checks/test_single_import_site.py` now
+passes: E005's `a18abb5` ("name the roster in one place, restoring VR-013 and VR-045") landed on
+`main` and was merged into this branch. Verified by running the file: 18 passed.
 
 ## Failure Index
 
-| ID | Category | Severity | File:Line | Description | Bug Task |
-|----|----------|----------|-----------|-------------|----------|
-| F-01 | PI / Principle VII | CRITICAL | plan.md:247-251 | Security limitation record states two falsehoods; its reversal trigger has fired | T053 |
-| F-02 | Requirement clause | ERROR | page.tsx:50 | FR-042 scoping control never on screen in the empty-filter state | T054 |
-| F-03 | Requirement clause | ERROR | rows.py:268 | FR-029 row-level stale mark unimplemented | T055 |
-| F-04 | Requirement clause | ERROR | Row.tsx:123 | FR-051 bounded forms not announced as words | T056 |
-| F-05 | Test isolation | ERROR | seed.py:53 | E2E seed truncates and commits to the shared dev database | T057 |
-| F-06 | Test coverage | WARNING | test_worklist_degraded.py | US3-8's retained probability asserted nowhere | T058 |
-| F-07 | Provenance | WARNING | rows.py:196 | Per-figure reference class publishes the wrong draw count | T059 |
-| F-08 | Test coverage | WARNING | test_probability.py | FR-039 survival-array domain ungenerated; test-first commit evidence absent | T060 |
-| F-09 | Test coverage | WARNING | worklist.py:325 | FR-052 untested at the tier that produces it | T061 |
-| F-10 | Placement | WARNING | — | FR-024 check absent from the path T026 and the plan name | T062 |
-| F-11 | Test coverage | WARNING | fixture.json | FR-036 `need_by_last_in_grid_day` has no named test | T063 |
-| F-12 | Test coverage | WARNING | src/api/tests | No response-vs-contract validation | T064 |
-| F-13 | Accuracy | WARNING | .completed:11 | Web coverage figures overstated | T065 |
+| ID | Category | Severity | File:Line | Description | Bug Task | State |
+|----|----------|----------|-----------|-------------|----------|-------|
+| F-14 | Governance | CRITICAL | plan.md:30 | Compliance audit named superseded PI v1.2.4 | T074 | fixed |
+| F-15 | Requirement conflict | ERROR | rows.py:305 | `as_of_is_stale` violates FR-029's "no new field" and FR-027's closed set | T066 | fixed |
+| F-16 | Test quality | ERROR | test_probability.py:266 | T060's third property was a tautology; none drove production code | T067 | fixed |
+| F-17 | Governance | ERROR | src/api/pyproject.toml | `--basetemp` unpinned; tests wrote to the shared system temp | T075 | fixed |
+| F-18 | Accuracy | WARNING | tasks.md:233 | `test:`-before-`feat:` commit claim is false | T068 | fixed |
+| F-19 | Test coverage | WARNING | test_read_path_isolation.py:97 | Invocation-record test carried no adjustment | T069 | fixed |
+| F-20 | Accuracy | WARNING | plan.md:203 | Recorded Playwright request-observation does not exist | T070 | fixed |
+| F-21 | Accuracy | WARNING | tasks.md | Three entries name files never created | T071 | fixed |
+| F-22 | Accuracy | WARNING | plan.md:184 | Benchmark population recorded as ~200, is 16 | T072 | fixed |
+| F-23 | Test coverage | WARNING | worklist.spec.ts:46 | Type-scale assertion measured the container, not descendants | T073 | fixed |
+
+## The two findings that matter most
+
+**T060 was marked complete without being implemented.** Iteration 1's commit message named "a
+survival-array strategy over the domain FR-039 names"; `test_probability.py` had not been touched
+since Phase 3 and contained no such strategy. This is the same defect class as T053 (a record
+claiming a mechanism that did not exist) and T065 (a marker overstating a measurement) — both of
+which were themselves findings against this epic. It was found by checking the code rather than the
+checkbox, which is the only method that would have found it.
+
+**Two of iteration 1's fixes contradicted the requirements they were fixing.**
+
+- T055 implemented FR-029's row-level stale mark by adding a per-row field and then amending
+  `contracts/openapi.yaml` to admit a fourth member. FR-029 states the mark "needs no new figure and
+  **no new field**; the response already carries the run's staleness and each row's as-of date", and
+  FR-027 closes the secondary region at "the as-of date, the criticality, and the calendar margin —
+  in the secondary region and nothing else". Widening the contract to fit the implementation is the
+  direction this codebase refused when it declined to widen the dependency allowlist for
+  `jsonschema`; it should have been refused here too. Reverted: the interface composes the mark from
+  `meta.forecast_run.stale`, and the contract is back to three members.
+- T060's replacement asserted `percent_figure(survival[-1]) == percent_figure(survival[-1])` and
+  read through a helper defined in the test file rather than through `rows.miss_probability`. Both
+  are fixed, and the fix is verified by mutation: a complement in `rows.py` fails two properties, and
+  an off-by-one in the grid index fails two.
 
 ## Code Coverage — PASSED
 
-- Threshold: **80%** (from `.github/sddp-config.md` → Derived QC Policy)
-- **Python: 97%** — 480 stmts / 8 miss, 76 branch / 6 partial. `coverage report --fail-under=80` exit 0.
-- **Web: 99.2% statements, 95.74% branches, 97.14% functions, 99.13% lines.** Vitest v8 thresholds
-  scoped to `app/worklist/**`, enforced by config; exit 0.
+- Threshold **80%** (`.github/sddp-config.md` → Derived QC Policy)
+- **Python 97%** — 481 statements, 8 missed; `--fail-under=80` exit 0
+- **Web 99.23% statements / 96.19% branches / 97.22% functions / 99.17% lines** — Vitest v8
+  thresholds scoped to `app/worklist/**`, exit 0
 
-Both floors were verified to **fail** when raised, so neither is inert:
-
-| Floor | Raised to | Exit | At 80 | Exit |
-|---|---|---|---|---|
-| Python | `--fail-under=99` | **2** | `--fail-under=80` | 0 |
-| Web | `branches: 100` | **1** | `branches: 80` | 0 |
-
-Lowest files: `api/__init__.py` 50% (1 line), `compute/ordering.py` 93%, `risk_read/rows.py` 94%,
-`compute/probability.py` 95%, `compute/ranking.py` 95%.
+Both floors were previously verified to fail when raised (Python at 99 → exit 2; web branches at
+100 → exit 1), so neither is inert.
 
 ## Static Analysis — PASSED
 
-| Tool | Scope | Result |
-|---|---|---|
-| ruff check / format | api, model, gateway | clean — 300 files |
-| import-linter | api | **3 contracts kept, 0 broken**; each now has a negative fixture |
-| mypy | gateway (PI-scoped) | clean — 18 files |
-| eslint | web | 0 errors, 2 warnings (pre-existing, E001) |
-| tsc --noEmit | web | clean |
-| prettier --check | web | exit 1 — **environmental, not a defect** |
+ruff (`api`, `model`, `gateway`), mypy (gateway, PI-scoped), eslint, tsc — all clean. Import
+contracts: **3 kept, 0 broken**.
 
-**Prettier**: committed blobs contain **zero** CR bytes (`git cat-file blob HEAD:… | tr -cd '\r' | wc -c`
-→ 0); the working tree is CRLF under `core.autocrlf=true`. `--end-of-line auto` → exit 0. CI runs on
-`ubuntu-latest` against an LF checkout and passes. Optional hardening: add
-`src/web/**/*.{ts,tsx,css} text eol=lf` to `.gitattributes`, or `"endOfLine": "auto"` in `.prettierrc`.
+Prettier reports 4 files on this checkout. Independently verified as line endings only: committed
+blobs contain zero CR bytes, `--end-of-line auto` exits 0, and CI runs on `ubuntu-latest` against an
+LF checkout. Environmental, not a defect.
 
 ## Security Audit — SKIPPED (not a required category)
 
-- **pip-audit: SKIPPED.** `SSLCertVerificationError` against pypi.org — local TLS interception
-  re-signs the connection and pip-audit ships its own CA bundle. Not a vulnerability finding.
-  It is also not declared in any `pyproject.toml`; the binary resolved to a global Anaconda install,
-  so the result would be machine-dependent even if it ran. Autopilot is false — nothing installed.
-- **npm audit (production only): 3 high.** `next` (direct), `postcss`, `sharp`. These falsify the
-  plan's limitation record — see T053. They affect the Vercel-deployed web tier; the separate claim
-  "absent from the serving image" still holds for the api container.
+- **npm audit (production): 3 high** — `next` (direct), `postcss`, `sharp`. Unchanged.
+- **pip-audit: no result on either side.** It cannot run locally — the certificate presented for
+  pypi.org is issued by `Avast Web/Mail Shield Root`, so a tool shipping its own CA bundle fails
+  verification — and the CI step added by T053 has not executed, because this branch is unpushed.
+  `plan.md` now records this as unmeasured rather than as a null result; the first correction of that
+  record contained a second claim of the same shape, which T053's re-correction removed.
 
-## Project Instructions Compliance — FAILED
+## Project Instructions Compliance — FAILED, then fixed
 
-Audited against `project-instructions.md` **v1.2.4** — the current version, so the governance
-re-run rule does not fire.
+**Audited against v1.2.7.** The prior audit named v1.2.4, superseded in flight by v1.2.5, v1.2.6 and
+v1.2.7 — three revisions of one new Temporary Files rule. Governance: "A feature whose recorded
+compliance audit names a superseded version of this document MUST re-run its compliance gate before
+passing its next phase gate." E010's next phase gate is this one, so the re-run was a precondition
+rather than a follow-up (T074).
 
-| Principle | Status | Note |
-|---|---|---|
-| I. Traceable or It Does Not Ship | PARTIAL | Run identity is emitted but untested at its own tier (T061); per-figure reference class publishes a draw count that is not the run's (T059) |
-| II. Uncertainty Is the Product | PASSED | No point estimate on any surface — asserted structurally (closed shapes), by scan (no numeric array, no harm score), and on the rendered page |
-| III. Precision Over Recall Where a Mistake Is Silent | PASSED | Schema-version refusal, override refusals, structural absence vs explicit empty |
-| IV. Agent Output Style | PASSED | — |
-| V. The Model Extracts, Code Computes | PASSED | 3 import contracts kept; each has a negative fixture |
-| VI. Evaluate Before You Tune | N/A | No tuning in this epic |
-| **VII. Publish the Miss** | **VIOLATED** | See T053 |
-| VIII. Honest Opponents | N/A | No model claim in this epic |
+| Principle / Section | Status |
+|---|---|
+| I. Traceable or It Does Not Ship | PASSED |
+| II. Uncertainty Is the Product | PASSED |
+| III. Precision Over Recall Where a Mistake Is Silent | PASSED |
+| V. The Model Extracts, Code Computes | PASSED — 3 contracts kept |
+| VII. Publish the Miss | PASSED — after T053's re-correction |
+| **Development Workflow / Temporary Files** *(new)* | **FAILED → fixed** (T075) |
+| Everything else | unchanged from the v1.2.4 audit, re-checked |
 
-**Principle VII violation (CRITICAL).** The recorded security limitation has all four required parts,
-but two of them state falsehoods and its own reversal trigger has fired without action:
+`src/api`'s pytest configuration did not pin `--basetemp`, so its tests wrote into the machine's
+shared temp directory — the exact condition the rule exists to prevent. Now pinned, and *measured*:
+`tests/test_scratch_location.py` resolves `tmp_path` at runtime and fails if it lands outside
+`.tmp/`. That choice follows the rule's own history — v1.2.5 was declared proven and was false for
+two libraries; v1.2.6 was false for the tool harness. A declaration is what failed twice.
 
-- *Scope decision* — "dependency advisories are surfaced in CI and do not fail the build." No
-  `pip-audit` or `npm audit` step exists in `verify.yml`. They are surfaced nowhere.
-- *Supporting evidence* — "`npm audit` currently reports 12 high advisories that all chain from
-  `brace-expansion` through ESLint — dev-only." Measured: 3 of them are production dependencies.
-- *Reversal trigger* — "any advisory affecting a runtime dependency of `/src/api` or `/src/web`."
-  **Fired.**
+**Reported, not fixed**: the root, `src/model` and `src/gateway` pytest configurations have the same
+gap. They belong to other epics' entries.
 
-Per `AGENTS.md`, any `project-instructions.md` violation is CRITICAL severity.
-
-## Requirements Traceability — 1/4 stories fully PASSED, 24/27 SC PASSED
+## Requirements Traceability — 4/4 stories, 25/27 SC
 
 | ID | Type | Status | Notes |
 |----|------|--------|-------|
-| US1 | Work Item (P1) | **PASSED** (8/8) | Ranking, decomposition, dual framing, tie resolution, provider-unreachable — all discharged by executing assertions |
-| US2 | Work Item (P1) | **PARTIAL** (3/4) | Scenario 2's observable (model-invocation record) does not exist; its test always skips and carries no adjustment |
-| US3 | Work Item (P1) | **PARTIAL** (9/10) | Scenario 8's "shows the forecast probability" has no covering assertion — T058 |
-| US4 | Work Item (P2) | **PARTIAL** (3/4) | Scenario 4's wording passes; FR-042's on-screen clause is broken and untested — T054 |
-| SC-001 … SC-002 | Success Criteria | PASSED | SC-001's named observable is split across tiers; the e2e test asserts rank-1-unexpanded, the API tier asserts max-harm-first |
-| SC-003 | Success Criteria | **UNVERIFIABLE** (clause 2) | Contract half PASSED. Model-invocation half has no observable |
-| SC-004 | Success Criteria | PASSED | FR-034's observable asserted at `e2e:278` — all three score inputs in one `li` |
-| SC-005 | Success Criteria | **UNVERIFIABLE** (clause 2) | Reorder clause PASSED; invocation-record clause blocked as above |
-| SC-006 … SC-016 | Success Criteria | PASSED | Includes the staleness `>` vs `>=` boundary pinned from both sides |
-| SC-017, SC-018 | Success Criteria | PASSED | 50.0 ms / 44.8 ms, 200 samples, nearest-rank p95, under `taskset -c 0` |
-| SC-019 … SC-024 | Success Criteria | PASSED | SC-020 is the inversion guard (STF-001); SC-024 evaluated over the enumerated content classes |
-| SC-025 | Success Criteria | PASSED (evidence gap) | Keyboard operability asserted for the need-by control only; the two selects follow structurally but are driven by `selectOption`, not the keyboard |
-| SC-026, SC-027 | Success Criteria | PASSED | Both acknowledgements distinguishable, focus retained; validator two-sided |
+| US1 | Work Item (P1) | **PASSED** (8/8) | |
+| US2 | Work Item (P1) | **PARTIAL** (3/4) | Scenario 2 blocked on E008's `model_invocation`; the adjustment-carrying half is now covered (T069) |
+| US3 | Work Item (P1) | **PASSED** (10/10) | was 9/10 |
+| US4 | Work Item (P2) | **PASSED** (4/4) | was 3/4 |
+| SC-003, SC-005 | Success Criteria | **UNVERIFIABLE** (clause 2) | `model_invocation` does not exist — E008 owns it. Clause 1 passes for both |
+| SC-006 | Success Criteria | PASSED — strengthened | now carried by a property over the offset domain, driving production code |
+| SC-017, SC-018 | Success Criteria | PASSED, population corrected | measured against 16 lines; `plan.md` records that rather than ~200 |
+| SC-025 | Success Criteria | PASSED (evidence gap) | keyboard operability driven by key input for 1 of 3 controls; the other two are native labelled `<select>`s |
+| All others | Success Criteria | PASSED | |
 
-**Requirements: 59 claimed, 0 orphaned.** FR-014 is deliberately vacant (STF-002).
+**Requirements: 59 claimed, 0 orphaned.** No requirement clause is unimplemented.
 
 ## Traceability Gaps
 
-**Three requirement clauses are unimplemented** — these are the load-bearing findings:
+Two remain, both recorded rather than open:
 
-1. **FR-042** (T054) — the scoping control is never rendered in the empty-filter state. Confirmed
-   against the running endpoint: the response carries `available_projects: ['PRJ-001','PRJ-002','PRJ-003']`
-   and `counts.total: 0`; `page.tsx:50` branches on the count and never mounts the controls. The
-   payload is correct and the render discards it. A coordinator who filters to a project with nothing
-   open cannot leave the scope except by reloading — exactly what the requirement forbids.
-2. **FR-029** (T055) — the row-level stale mark. The clause is explicit that a page banner alone is
-   insufficient "once rows are sorted, filtered, or read one at a time". No code implements it.
-3. **FR-051** (T056) — bounded forms announced as words. `<1%` renders as the raw glyph string; the
-   requirement names the exact failure ("a dropped `<` turns `<1%` into a flat `1%`").
+1. **FR-011 / FR-035 clause 2, SC-003 and SC-005 clause 2** — blocked on E008. `model_invocation`
+   exists nowhere in the schema; the test skips honestly and now issues both request shapes, so it
+   becomes evidence the day E008 lands.
+2. **SC-025's keyboard clause** — the sort and scope controls are native `<select>` elements with
+   `<label for>`, so operability follows structurally, but the e2e spec drives them with
+   `selectOption` rather than key input.
 
-**Thinly evidenced** (code present, assertion weak or absent): FR-003 (T059), FR-024 (T062),
-FR-030 (T058), FR-036 (T063), FR-039 (T060), FR-052 (T061), FR-057 (T064).
+## Checklist Fulfillment — 120/120, iteration-1 gap closed
 
-**Blocked by a dependency, not by this epic**: FR-011 / FR-035 clause 2, SC-003 and SC-005 clause 2.
-`model_invocation` exists nowhere in the schema — E008 owns it. The test skips honestly. Note that
-even once E008 lands, the test issues a request with **no** `need_by_override`, so the
-"including one carrying a need-by adjustment" clause would still be uncovered; that half is fixable
-now and is folded into T061's neighbourhood rather than blocked.
-
-## Checklist Fulfillment — 120/120 complete, 1 intent gap
-
-`api-quality.md` 40/40, `testing.md` 40/40, `ux.md` 40/40. Spot-checked `[Security]` and `[Testing]`
-intent rather than box state:
-
-- CHK005 (run / model / schema version identification) — PASSED in code, **GAP** in evidence → T061
-- CHK010 (who may read the worklist) — PASSED, `test_worklist_read_only.py`
-- CHK014 (`today` injectable, not a clock read) — PASSED, `now_in_zone` monkeypatched throughout
-- CHK021 (two reference classes, which authoritative, must agree) — **GAP**, nothing asserts
-  agreement and the per-figure copy is sourced from the wrong table → T059
-- CHK030 (stale-run co-occurrence vs a 7-day threshold) — PASSED, `test_states.py`
-- CHK033 (response non-shareability) — PASSED, `Cache-Control: private, no-cache` asserted
+CHK021 (the two published reference classes must agree, figure's copy authoritative) was a GAP in
+iteration 1 — nothing asserted agreement. Now closed by
+`test_the_two_published_reference_classes_agree`, which compares them to each other rather than each
+to the same literal.
 
 ## Performance — PASSED
 
-`test_worklist_benchmark.py`, under the plan's recorded conditions: warm (20 discarded), 200 timed
-samples per variant, p95 by nearest rank, server-side measurement, `taskset -c 0` in CI.
-
 | Variant | p95 | Budget | Criterion |
 |---|---|---|---|
-| Unmodified worklist | **50.0 ms** | 1500 ms | SC-017 |
-| One `need_by_override` | **44.8 ms** | 1500 ms | SC-018 |
+| Unmodified worklist | 48.3 ms | 1500 ms | SC-017 |
+| One `need_by_override` | 45.2 ms | 1500 ms | SC-018 |
 
-A ratio guard (`test_an_adjustment_costs_no_model_call`) catches a provider call hiding inside the
-generous absolute budget.
+200 samples, 20 warm-ups, nearest-rank p95, `taskset -c 0` in CI. **Population: the frozen fixture's
+16 lines.** `plan.md` recorded "~200 open lines" and the benchmark never used them; T072 corrected
+the record to what is measured rather than leaving an aspiration the figures do not support.
 
 ## Accessibility — MANUAL VERIFICATION NEEDED
 
-The named obligations FR-048–FR-051 are asserted by the Playwright tier: position as text, the
-quantile pair under one accessible name, state carried by text, keyboard operation of the need-by
-control, live region for both acknowledgement outcomes. **One clause is unimplemented** — FR-051's
-spoken bounded forms (T056).
-
-No general WCAG audit ran. `axe-core`, `@axe-core/playwright`, `pa11y` and `lighthouse` are all
-absent and autopilot is false, so none was installed. Accessibility is not a required category, so
-this does not gate. Residual surface — colour contrast, heading order, reflow, focus visibility,
-real screen-reader announcement — is enumerated in `manual-test.md`.
+FR-048–FR-051's named obligations are asserted by the Playwright tier, including FR-051's spoken
+bounded forms (unguarded since T056). No general WCAG audit ran: `axe-core`, `pa11y` and
+`lighthouse` are absent and autopilot is false. Accessibility is not a required category. Residual
+surface is enumerated in `manual-test.md`.
 
 ## Browser Runtime Validation — PASSED (headless supplement)
 
 - **Mode**: Headless CLI supplement (Step 6b)
-- **Browser tool**: N/A — active probe found none
-- **Probe result**: no integration-native browser tool is exposed. A tool search for
-  `browser|navigate|puppeteer|playwright|web_browse|browse_url|screenshot` returned only `WebFetch`,
-  which converts a URL to markdown and executes no JavaScript — it cannot exercise the adjustment
-  flow, focus retention, live regions or computed styles. The three configured MCP servers
-  (claude.ai Gmail / Calendar / Drive) are unauthenticated and are not browser tools.
-  `BROWSER_RUNTIME_AVAILABLE = false`.
-- **App start**: Playwright's own `webServer` — uvicorn on 8000 + `npm run build && npm run start`
-- **Target**: `http://127.0.0.1:3000/worklist`
-- **Scenarios**: 18 specs — presentation contract (type scale by computed style, reading order,
-  as-of without hover, sort keys on screen), accessibility (rank as text, pair under one accessible
-  name, degraded state as text, keyboard adjustment, both acknowledgements, bounded form), and
-  FR-034's three named observables. All passed against the real page served by the real boundary.
-
-One reproducibility note: the port overrides are only honoured after `rm -rf .next`, because Next
-inlines `NEXT_PUBLIC_*` at build time and reuses cached client chunks. Worth folding into the
-webServer command.
+- **Probe**: no integration-native browser tool. A tool search for
+  `browser|navigate|puppeteer|playwright|screenshot|browse_url` returned only `WebFetch`, which
+  converts a URL to markdown and executes no JavaScript. `BROWSER_RUNTIME_AVAILABLE = false`.
+- **Target**: `http://127.0.0.1:3140/worklist`, served by the real boundary against `procurement_e2e`
+- **Scenarios**: 19 specs — presentation contract, accessibility, and FR-034's three named
+  observables. All passed.
 
 ## Manual Testing — Required
 
-`manual-test.md` — the residual WCAG surface no installed tool measures (A1–A7), with startup,
-readiness and cleanup steps. Cleanup includes restoring E005's dataset, which T057 currently destroys.
+`manual-test.md`. Its cleanup section still describes restoring E005's dataset after seeding; that is
+now unnecessary because T057 gave the E2E tier its own database, and the file should be updated when
+next touched.
 
 ## Tool Recommendations
 
 | Tool | Category | Install |
 |---|---|---|
-| `@axe-core/playwright` | Accessibility | `npm i -D @axe-core/playwright` — preferred, reuses the existing e2e tier |
-| `pa11y` | Accessibility | `npm i -D pa11y` |
-| `pip-audit` | Security | `uv add --dev --directory src/api pip-audit` — currently resolves to a global install, so results are machine-dependent |
-| `openapi-core` | Contract validation | `uv add --dev --directory src/api openapi-core` — for T064 |
+| `@axe-core/playwright` | Accessibility | `npm i -D @axe-core/playwright` — reuses the existing e2e tier |
+| `pip-audit` | Security | `uv add --dev --directory src/api pip-audit` — currently resolves to a global install |
 
 ## Bug Context
 
-| Bug Task | Error Output | Related Test |
-|----------|-------------|--------------|
-| T053 | `npm audit --omit=dev` → 3 high on production deps: `next` (direct), `postcss`, `sharp`. No audit step in `verify.yml`. | — |
-| T054 | `GET /api/v1/worklist?project_id=PRJ-009` → `page_states: ['stale_run','empty_filter']`, `counts.total: 0`, `available_projects: ['PRJ-001','PRJ-002','PRJ-003']`; `page.tsx:50` branches on the count | none — the state is untested at the render tier |
-| T055 | `build_secondary` returns `{as_of_date, criticality, calendar_margin_days}`; `Row.tsx:182` renders "Forecast as of \<date\>" unqualified | none |
-| T056 | `grep -rniE "less than one percent\|greater than ninety" src/web/app src/web/e2e` → no matches | `worklist.spec.ts:245` (guarded, asserts the glyph only) |
-| T057 | `forecast-fit refused: ModelError: the sojourn frame is empty; every line supplied had no lifecycle event at or before the as-of date` — `read 16 lines and 6 lifecycle events` | `src/model/tests/forecast/*` — 6 failed, 366 errors on the shared DB; 2569 passed on a clean one |
-| T059 | `rows.py:196` and `worklist.py:338` both read `inputs.conventions.draw_count` (from `schema_constants`); only `ck_schema_constants__draw_count_positive` and `ck_forecast_run__draw_count_positive` exist | none |
-| T060 | `git show --stat 1b96a5d` → `test_ranking.py`, `test_probability.py`, `ranking.py`, `probability.py` in one commit | — |
+| Bug Task | Evidence |
+|----------|----------|
+| T066 | FR-029: "needs no new figure and **no new field**". FR-027: secondary holds "the as-of date, the criticality, and the calendar margin — in the secondary region and nothing else" |
+| T067 | `_read(s, o) == percent_figure(s[o-1])`; the test asserted `_read(s, len(s)) == percent_figure(s[-1])` — the same expression. Mutation now proves the replacement bites |
+| T074 | `project-instructions.md` v1.2.7; plan recorded v1.2.4 |
+| T075 | No `basetemp` in `src/api/pyproject.toml`; pytest wrote to `%TEMP%` |
+| T072 | `plan.md:184` "~200 open lines across 5 projects"; `test_worklist_benchmark.py` takes `frozen_run` = 16 lines |
 
 ## Bug Tasks Generated
 
-13 appended to `tasks.md` under `## Phase: Bug Fixes` — **1 CRITICAL, 4 ERROR, 8 WARNING**:
+10 appended under `## Phase: Bug Fixes` — **1 CRITICAL, 3 ERROR, 6 WARNING** — and all 10 fixed
+within this run: T066–T075.
 
-T053 (CRITICAL), T054, T055, T056, T057 (ERROR), T058–T065 (WARNING).
-
-`.completed` removed.
+`tasks.md` now holds 75 checked tasks and 0 unchecked.

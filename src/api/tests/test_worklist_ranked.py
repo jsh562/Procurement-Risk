@@ -97,12 +97,7 @@ def test_a_nominal_row_carries_exactly_the_four_comparison_quantities(
     it is only decidable because the shape is closed."""
     row = _by_identifier(worklist["ranked"])["PO-4471-1"]
     assert set(row["primary"]) == {"identity", "need_by", "miss_probability", "duration_pair"}
-    assert set(row["secondary"]) == {
-        "as_of_date",
-        "as_of_is_stale",
-        "criticality",
-        "calendar_margin_days",
-    }
+    assert set(row["secondary"]) == {"as_of_date", "criticality", "calendar_margin_days"}
 
 
 def test_the_miss_probability_matches_the_stored_survival_value(

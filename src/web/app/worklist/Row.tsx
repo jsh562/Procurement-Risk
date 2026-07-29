@@ -29,8 +29,17 @@ import styles from "./page.module.css";
 export function Row({
   row,
   control,
+  runIsStale = false,
 }: {
   readonly row: RankedRow;
+  /**
+   * FR-029's row-level stale mark, composed from `meta.forecast_run.stale`
+   * rather than from a per-row field. The requirement states the mark "needs no
+   * new figure and no new field; the response already carries the run's
+   * staleness and each row's as-of date" — so the page reads the run's flag
+   * once and each row qualifies its own as-of date with it.
+   */
+  readonly runIsStale?: boolean;
   /**
    * FR-031's what-if control, when the page is interactive. Passed in rather
    * than built here so this component stays renderable on the server for the
@@ -79,7 +88,7 @@ export function Row({
         <DurationPair pair={pair} />
       </div>
 
-      <Secondary secondary={row.secondary} />
+      <Secondary secondary={row.secondary} runIsStale={runIsStale} />
 
       {/* FR-050. The resolved state as text, never as a tint alone. */}
       {state ? <span className={styles.rowState}>{state.label}</span> : null}
@@ -206,7 +215,13 @@ function DurationPair({ pair }: { readonly pair: RankedRow["primary"]["duration_
  * it, publishing the score would surrender the mean overrun to one division,
  * and need-by plus mean overrun is a mean delivery date.
  */
-function Secondary({ secondary }: { readonly secondary: RankedRow["secondary"] }) {
+function Secondary({
+  secondary,
+  runIsStale,
+}: {
+  readonly secondary: RankedRow["secondary"];
+  readonly runIsStale: boolean;
+}) {
   const margin = secondary.calendar_margin_days;
   return (
     <div className={styles.secondary}>
@@ -221,9 +236,9 @@ function Secondary({ secondary }: { readonly secondary: RankedRow["secondary"] }
        * at a time, and a coordinator reading this row alone would otherwise
        * take its figures as current.
        */}
-      <span className={secondary.as_of_is_stale ? styles.staleAsOf : undefined}>
+      <span className={runIsStale ? styles.staleAsOf : undefined}>
         Forecast as of <time dateTime={secondary.as_of_date}>{secondary.as_of_date}</time>
-        {secondary.as_of_is_stale ? " — out of date" : null}
+        {runIsStale ? " — out of date" : null}
       </span>
     </div>
   );

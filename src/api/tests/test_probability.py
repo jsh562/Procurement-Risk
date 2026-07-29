@@ -23,18 +23,27 @@ one hundred and asserting that it does would be asserting something false.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import date, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from api.compute.probability import PercentFigure, complement, percent_figure
+from api.risk_read.query import Conventions, OpenLine
+from api.risk_read.rows import MEASURE_UPPER_BOUND, RowInputs, miss_probability
+from api.risk_read.states import ResolvedLine, RowState
 
 #: Stored probabilities: the domain `ck_line_posterior__survival_unit_interval`
 #: admits. Both endpoints included, because both are reachable and both take the
 #: bounded form.
 stored_probability = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
+
+#: The run anchor every generated posterior is positioned against.
+_AS_OF = date(2026, 6, 1)
 
 
 @pytest.mark.parametrize(
@@ -161,3 +170,182 @@ def test_a_probability_outside_the_unit_interval_is_refused(stored: float) -> No
     would turn a computation defect into a plausible-looking figure."""
     with pytest.raises(ValueError, match="unit interval"):
         percent_figure(stored)
+
+
+# --- FR-013's monotonicity, over the domain FR-039 names ---------------------
+#
+# T060, corrected by T067. Two things were wrong with the first attempt and are
+# worth stating rather than quietly replacing.
+#
+# It asserted `percent_figure(survival[-1]) == percent_figure(survival[-1])` and
+# called that the residual-tail property — a tautology that could not fail.
+#
+# And all three properties read through a helper defined in this file rather
+# than through `api.risk_read.rows.miss_probability`, which is the function that
+# actually performs the survival lookup. A complement or an off-by-one
+# introduced in production would have left them green, which is precisely the
+# gap the properties were written to close.
+
+
+@st.composite
+def posteriors(draw: st.DrawFn, *, horizon: int = 60) -> tuple[tuple[float, ...], float]:
+    """A `(survival, residual_tail_mass)` pair the storage layer would accept.
+
+    Generated together because E003 ties them: `ck_line_posterior__survival_monotone`
+    (non-increasing), `ck_line_posterior__survival_unit_interval` ([0,1]),
+    `ck_line_posterior__survival_length` (exactly `horizon_days`), and
+    `ck_line_posterior__residual_matches_grid_tail` (the residual equals the last
+    grid entry within tolerance). Generating the array alone and inventing a
+    residual would model a database state that cannot exist.
+
+    Sorted descending rather than filtered for monotonicity: a filter would
+    spend its budget rejecting candidates and shrink to uninformative examples.
+
+    `horizon` is 60 rather than the production 365 because every shape property
+    holds identically at either width, and a 365-element array per example makes
+    the run slow without making the property stronger. The frozen fixture
+    carries the production width.
+    """
+    values = draw(
+        st.lists(
+            st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
+            min_size=horizon,
+            max_size=horizon,
+        )
+    )
+    survival = tuple(sorted(values, reverse=True))
+    return survival, survival[-1]
+
+
+def _row_inputs(survival: tuple[float, ...], residual: float, *, need_by_offset: int) -> RowInputs:
+    """A `RowInputs` positioned at `need_by_offset`, for the production reader.
+
+    Built here so the properties below drive `miss_probability` rather than a
+    reimplementation of it. Everything not under test is held at a value that
+    resolves the row to `NOMINAL`, so the figure is read from the grid rather
+    than suppressed by a state.
+    """
+    line = OpenLine(
+        po_line_id=UUID(int=1),
+        project_id="PRJ-001",
+        vendor_id="VND-001",
+        po_number="PO-1",
+        line_number=1,
+        description="line",
+        quantity=1.0,
+        unit_of_measure="EA",
+        need_by_date=_AS_OF + timedelta(days=need_by_offset),
+        criticality=3,
+        lifecycle_state="submitted",
+        roster_hash="sha256:" + "a" * 64,
+        draws=(1.0, 2.0),
+        survival=survival,
+        residual_tail_mass=residual,
+    )
+    return RowInputs(
+        resolved=ResolvedLine(line=line, state=RowState.NOMINAL),
+        as_of_date=_AS_OF,
+        horizon_days=len(survival),
+        conventions=Conventions(
+            draw_count=4000,
+            percentile_convention="nearest_rank_one_based_no_interpolation",
+            anchor_date_convention="run_as_of_date",
+        ),
+        today=_AS_OF,
+        run_draw_count=4000,
+    )
+
+
+def _displayed(survival: tuple[float, ...], residual: float, offset: int) -> PercentFigure:
+    """The miss figure production code emits for a need-by at `offset`."""
+    figure = miss_probability(_row_inputs(survival, residual, need_by_offset=offset))
+    assert figure is not None, "a nominal row inside the grid must carry a figure"
+    percent = figure["miss"]["percent"]
+    return PercentFigure(
+        display=figure["miss"]["display"], bounded=percent is None, percent=percent
+    )
+
+
+@given(posterior=posteriors(), data=st.data())
+def test_pulling_a_need_by_date_in_never_lowers_the_displayed_probability(
+    posterior: tuple[tuple[float, ...], float], data: st.DataObject
+) -> None:
+    """FR-013, over the interval it names, through the production reader.
+
+    "While a need-by date remains within the interval from the active run's
+    as-of date to the end of its horizon, moving it earlier MUST NOT decrease
+    the displayed probability of missing it."
+
+    The interval is `as_of < d <= as_of + horizon_days` — exactly the offsets
+    `1..horizon_days` the grid stores. Open at the lower end because
+    `d == as_of` resolves to already-late under FR-030 and displays no
+    probability, so the property would have no subject at its own endpoint.
+
+    Compared over **displayed forms**, because that is what the requirement says
+    and because the two can disagree: two stored probabilities a hair apart can
+    round to the same integer, and `<1%` is not an integer at all.
+    """
+    survival, residual = posterior
+    later = data.draw(st.integers(min_value=1, max_value=len(survival)))
+    earlier = data.draw(st.integers(min_value=1, max_value=later))
+
+    assert _rank(_displayed(survival, residual, earlier)) >= _rank(
+        _displayed(survival, residual, later)
+    ), (
+        f"moving the need-by date from offset {later} to {earlier} lowered the displayed "
+        "probability of missing it — which inverts the direction a coordinator relies on"
+    )
+
+
+@settings(max_examples=25)
+@given(posterior=posteriors(horizon=20))
+def test_every_offset_in_the_grid_displays_an_admissible_form(
+    posterior: tuple[tuple[float, ...], float],
+) -> None:
+    """FR-008 over the whole grid rather than at sampled points.
+
+    A rounding rule correct at most offsets and wrong at one is a rule that is
+    wrong on the day a line's need-by date lands there.
+    """
+    survival, residual = posterior
+    for offset in range(1, len(survival) + 1):
+        figure = _displayed(survival, residual, offset)
+        if figure.bounded:
+            assert figure.percent is None
+            assert figure.display in {"<1%", ">99%"}
+        else:
+            assert figure.percent is not None
+            assert 1 <= figure.percent <= 99
+            assert complement(figure).percent == 100 - figure.percent
+
+
+@given(posterior=posteriors())
+def test_the_horizon_day_figure_and_the_residual_bound_agree(
+    posterior: tuple[tuple[float, ...], float],
+) -> None:
+    """`ck_line_posterior__residual_matches_grid_tail` ties the residual to the
+    last grid entry, which is why FR-013's point figure and FR-017's bound meet
+    at the horizon instead of jumping.
+
+    Not a tautology — that is what the first version of this test was. The left
+    side is the **point** figure production code reads from the grid at the last
+    in-grid day; the right side is the **bound** it derives from
+    `residual_tail_mass` for a line one day further out. Two different branches
+    of `miss_probability` — `MEASURE_POINT` and `MEASURE_UPPER_BOUND` — reaching
+    the same displayed value.
+    """
+    survival, residual = posterior
+    horizon = len(survival)
+
+    point = _displayed(survival, residual, horizon)
+
+    beyond = _row_inputs(survival, residual, need_by_offset=horizon + 1)
+    beyond = replace(
+        beyond,
+        resolved=ResolvedLine(line=beyond.resolved.line, state=RowState.BEYOND_HORIZON),
+    )
+    bound = miss_probability(beyond)
+
+    assert bound is not None
+    assert bound["measure"] == MEASURE_UPPER_BOUND
+    assert bound["miss"]["display"] == point.display
