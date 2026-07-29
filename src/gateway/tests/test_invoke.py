@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -29,14 +30,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from gateway.compute.hashing import fixture_key, repair_fixture_key
 from gateway.config import (
+    FIXTURE_ROOT_ENV_VAR,
     RECORD_MODE,
     REPLAY_MODE,
     GatewayConfig,
 )
 from gateway.errors import GatewayValidationError
 from gateway.fixtures import FixtureMissError, FixtureProvenance, FixtureStore
-from gateway.models import InvocationRequest
-from gateway.orchestrator import Resolution, _invoke
+from gateway.models import InvocationRequest, generate_trace_id
+from gateway.orchestrator import DEFAULT_FIXTURE_ROOT, Resolution, _invoke
 from gateway.record.spool import InvocationSpool
 from gateway.record.writer import RecordWriteError, RecordWriter
 from gateway.validation import ValidationFailure, repair_instruction
@@ -671,3 +673,125 @@ def test_the_record_arm_repairs_by_asking_again(
     assert len(prompts) == 2, "the repair did not issue a second request"
     assert "score" in prompts[1], "the repair carried no failing field path"
     assert resolution.store.has(fixture_key(request, schema=Assessment))
+
+
+# --- TR-022: where `from_environment` looks for fixtures ---------------------
+#
+# `Resolution.from_environment` is the path every real caller takes and the one
+# no test took, which is how `DEFAULT_FIXTURE_ROOT` came to be correct only in
+# this checkout. Every test above injects a `Resolution` built over `tmp_path`,
+# so all of them pass against a default that resolves to a directory that does
+# not exist.
+
+
+def test_the_default_fixture_root_is_the_gateways_own_store() -> None:
+    """The behaviour an unset override must preserve.
+
+    Asserted against the store that ships rather than against the path
+    expression, so it fails if the walk stops being right *here* — which is the
+    only place it was ever right.
+    """
+    assert (DEFAULT_FIXTURE_ROOT / "sha256").is_dir(), (
+        f"{DEFAULT_FIXTURE_ROOT} does not hold the committed store, so the "
+        f"default root no longer resolves inside this checkout either"
+    )
+
+
+def test_an_unset_override_keeps_the_gateways_own_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A default, not a fallback. Nothing that worked before the variable
+    existed may depend on it now being set."""
+    monkeypatch.setenv("GATEWAY_MODE", REPLAY_MODE)
+    monkeypatch.delenv(FIXTURE_ROOT_ENV_VAR, raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    assert Resolution.from_environment().store.root == DEFAULT_FIXTURE_ROOT
+
+
+def test_the_override_reaches_the_store_from_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole point of the variable, asserted on the path a caller takes.
+
+    `load_config` reading the value is not enough — the value has to arrive at
+    the `FixtureStore` that `from_environment` builds, and that is the join the
+    old code got wrong by never consulting the configuration at all.
+    """
+    monkeypatch.setenv("GATEWAY_MODE", REPLAY_MODE)
+    monkeypatch.setenv(FIXTURE_ROOT_ENV_VAR, str(tmp_path / "elsewhere"))
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    assert Resolution.from_environment().store.root == tmp_path / "elsewhere"
+
+
+def test_the_committed_exemplar_replays_end_to_end_for_a_traced_caller(
+    tmp_path: Path,
+) -> None:
+    """The defect's acceptance criterion, on the full composed path.
+
+    Not `store.load` — the whole invocation: resolve from the committed store,
+    price from the sidecar, classify, write one row, return. Run twice with two
+    freshly minted trace identifiers, because a single run cannot distinguish a
+    key that is stable from one that is merely stable-within-a-process.
+
+    Before the fix each run derived a different key and raised
+    `FixtureMissError` naming a key nothing had ever recorded.
+    """
+    if not DEFAULT_FIXTURE_ROOT.is_dir():
+        pytest.skip(f"no committed fixture store at {DEFAULT_FIXTURE_ROOT}")
+
+    # Deliberately **not** guarded on `committed.has(fixture_key(request))`.
+    # That is the condition under test, so skipping on it would make this test
+    # disappear in exactly the state it exists to catch — it was written that
+    # way first, and neutralising the fix turned the failure into a silent skip.
+    request = InvocationRequest(prompt="exemplar", model=MODEL)
+    committed = FixtureStore(DEFAULT_FIXTURE_ROOT)
+
+    contents = []
+    for _ in range(2):
+        traced = InvocationRequest(prompt="exemplar", model=MODEL, trace_id=generate_trace_id())
+        resolution = replace(a_resolution(tmp_path), store=committed)
+        connection = resolution.writer._connect("")  # type: ignore[attr-defined]
+
+        result = _invoke(traced, resolution)
+
+        assert result.resolution_mode == REPLAY_MODE
+        assert result.trace_id == traced.trace_id, "the caller's identifier was not recorded"
+        assert len(connection.rows) == 1
+        assert connection.rows[0]["fixture_key"] == fixture_key(request)
+        contents.append(result.content)
+
+    assert contents[0] == contents[1]
+
+
+def test_a_consumer_root_resolves_its_own_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End to end: a fixture committed under a consumer's own root replays.
+
+    E006 keeps its fixtures at `src/model/fixtures/`. Before the override the
+    gateway looked under `…/.venv/Lib/fixtures` — a directory that does not
+    exist — so every lookup missed and each miss reported itself as an
+    unrecorded request rather than as a misconfigured root.
+    """
+    consumer_root = tmp_path / "consumer-fixtures"
+    request = InvocationRequest(prompt="from the consumer's own store")
+    FixtureStore(consumer_root).save(
+        fixture_key(request),
+        "recorded elsewhere",
+        FixtureProvenance(
+            recorded_on=date(2026, 7, 26),
+            gen_ai_response_model=MODEL,
+            gateway_revision="0" * 40,
+            gen_ai_usage_input_tokens=1,
+            gen_ai_usage_output_tokens=1,
+        ),
+    )
+
+    monkeypatch.setenv("GATEWAY_MODE", REPLAY_MODE)
+    monkeypatch.setenv(FIXTURE_ROOT_ENV_VAR, str(consumer_root))
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    store = Resolution.from_environment().store
+    assert store.load(fixture_key(request)).content == "recorded elsewhere"

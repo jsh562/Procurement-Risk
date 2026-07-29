@@ -51,6 +51,7 @@ __all__ = [
     "resolve_mode",
     "DATABASE_URL_ENV_VAR",
     "DEADLINE_ENV_VAR",
+    "FIXTURE_ROOT_ENV_VAR",
     "PRICE_TABLE_PIN_ENV_VAR",
     "SPOOL_PATH_ENV_VAR",
     "DEFAULT_REQUEST_DEADLINE_SECONDS",
@@ -104,6 +105,24 @@ DATABASE_URL_ENV_VAR: Final[str] = "DATABASE_URL"
 PRICE_TABLE_PIN_ENV_VAR: Final[str] = "GATEWAY_PRICE_TABLE_VERSION"
 
 SPOOL_PATH_ENV_VAR: Final[str] = "GATEWAY_SPOOL_PATH"
+
+#: Where committed fixtures are read from and recorded to (TR-022, TR-033).
+#:
+#: **It needs an override because the default is derived from this package's own
+#: location, and that location moves.** `orchestrator.DEFAULT_FIXTURE_ROOT`
+#: walks up from `orchestrator.py` to the gateway entry root, which is correct
+#: in this checkout and wrong in every consumer that installs the package:
+#: resolved from `src/model/.venv/Lib/site-packages/gateway/`, the same walk
+#: lands on `src/model/.venv/Lib/fixtures`, which does not exist. A consumer
+#: keeping its own fixtures — E006 keeps them at `src/model/fixtures/` — had no
+#: way to say so, so `replay` mode missed on every request and each miss
+#: reported itself as an unrecorded one.
+#:
+#: A default, not a fallback. An unset variable keeps the gateway's own store,
+#: so nothing that works today changes; a set one is used as given, and a set
+#: one naming a directory that does not exist is a miss reported by
+#: `FixtureMissError` naming the root, which is the actionable message.
+FIXTURE_ROOT_ENV_VAR: Final[str] = "GATEWAY_FIXTURE_ROOT"
 
 #: TR-021. Exactly two, and **no default**. Not `record`, not `replay`, not
 #: "whichever the credential suggests" — a default here would mean an operator
@@ -210,6 +229,19 @@ class GatewayConfig(BaseModel):
         ),
     )
 
+    fixture_root: Path | None = Field(
+        default=None,
+        description=(
+            "Where committed fixtures are resolved from (TR-022). `None` means "
+            "the gateway's own store, which is what every existing caller gets "
+            "and why this is a default rather than a fallback. A consumer that "
+            "keeps its own fixtures sets it, because the gateway's default is "
+            "derived from this package's installed location and resolves to a "
+            "directory that does not exist once the package is installed "
+            "anywhere but this checkout."
+        ),
+    )
+
 
 def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
     """Build the configuration from the environment.
@@ -244,6 +276,8 @@ def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
     price_pin = (source.get(PRICE_TABLE_PIN_ENV_VAR) or "").strip() or None
     spool = (source.get(SPOOL_PATH_ENV_VAR) or "").strip()
     spool_path = Path(spool) if spool else None
+    fixtures = (source.get(FIXTURE_ROOT_ENV_VAR) or "").strip()
+    fixture_root = Path(fixtures) if fixtures else None
 
     raw = source.get(DEADLINE_ENV_VAR)
     if raw is None:
@@ -251,6 +285,7 @@ def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
             database_url=database_url,
             price_table_version_id=price_pin,
             spool_path=spool_path,
+            fixture_root=fixture_root,
         )
 
     try:
@@ -266,6 +301,7 @@ def load_config(env: Mapping[str, str] | None = None) -> GatewayConfig:
             database_url=database_url,
             price_table_version_id=price_pin,
             spool_path=spool_path,
+            fixture_root=fixture_root,
         )
     except ValidationError:
         # Re-raised as a gateway-owned error rather than allowed to escape:

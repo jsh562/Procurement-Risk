@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from gateway.config import (
     DEADLINE_ENV_VAR,
     DEFAULT_REQUEST_DEADLINE_SECONDS,
+    FIXTURE_ROOT_ENV_VAR,
     OTEL_GENAI_SEMCONV_VERSION,
     GatewayConfig,
     load_config,
@@ -86,6 +89,36 @@ def test_the_loader_does_not_consult_the_process_environment_when_given_one() ->
     `os.environ` for absent keys would make every test's result depend on the
     developer's shell."""
     assert load_config({}).request_deadline_seconds == DEFAULT_REQUEST_DEADLINE_SECONDS
+
+
+# --- TR-022: the fixture-root override ---------------------------------------
+
+
+def test_the_fixture_root_is_absent_unless_set() -> None:
+    """`None` means "the gateway's own store", resolved by the orchestrator.
+
+    Held as absence here rather than as the default path, so this module never
+    needs to know where that store is — the loader's job is to report what the
+    environment said, and inventing a path would put the same value in two
+    places with nothing comparing them.
+    """
+    assert load_config({}).fixture_root is None
+
+
+def test_the_fixture_root_is_read_from_the_environment() -> None:
+    assert load_config({FIXTURE_ROOT_ENV_VAR: "/srv/fixtures"}).fixture_root == Path(
+        "/srv/fixtures"
+    )
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_a_blank_fixture_root_is_absent_rather_than_the_current_directory(value: str) -> None:
+    """An exported-but-blank variable is a broken shell far more often than an
+    instruction, and `Path("")` is the *working directory* — so treating blank
+    as a value would silently root the store wherever the process happened to
+    start. Same reading the loader already gives the connection URL and the
+    price pin."""
+    assert load_config({FIXTURE_ROOT_ENV_VAR: value}).fixture_root is None
 
 
 # --- TR-070 (T026): the pinned semantic-convention version -------------------
