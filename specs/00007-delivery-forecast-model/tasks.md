@@ -210,8 +210,8 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T102 [US5] {FR-023} [COMPLETES FR-023] **NC-4** / SC-039 — a mutated fixture against unchanged rows warns **and the run completes** — TST/test_provenance_warning.py after:T100
 - [X] T103 [US5] {FR-022} DV-018 / SC-018, SC-041 — per-line agreement in both stores within the tolerance and **exact** provenance equality — TST/test_reproduction.py after:T098
 - [X] T104 [US5] {FR-022} [COMPLETES FR-022] **NC-17** — one line's P80 perturbed beyond the tolerance makes the harness exit non-zero naming it — TST/test_reproduction_controls.py
-- [X] T105 [US5] {FR-032} DV-019 / SC-030 — a digest mismatch under a version outside the **whole** recorded pin is a scope limit, not a failure — TST/test_pin_scope.py after:T098
-- [X] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit; the same mismatch inside the pin fails — TST/test_pin_scope_controls.py
+- [X] T105 [US5] {FR-032} DV-019 / SC-030 — **every** digest mismatch is a scope limit, never a failure, with the two readings named apart: pin differs, versus pin matches and does not determine bitwise numerics — TST/test_pin_scope.py after:T098
+- [X] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit, and so does the same mismatch inside it; **no disposition of the claim reaches the exit status**, asserted by substituting all three into a real outcome — TST/test_pin_scope_controls.py
 - [X] T107 [US5] {FR-025} DV-022 / SC-021 — `/src/api` has no import path to `model.forecast`, over the transitive graph — CHK/test_dependency_isolation.py after:T015
 - [X] T108 [US5] {FR-024} **NC-15** — two planted imports to `gateway`, one direct and one indirect, each fail the contract (G-17 bounds the rest) — TST/test_import_contract_controls.py
 
@@ -247,6 +247,8 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [X] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
 
 **A-015 — and the pair rule reaches them by this sentence, not by a label.** T055 and T051 add behaviour to property-tier modules outside any of the ten pairs. T117 and T118 are their RED halves and T055 and T051 are the corresponding GREEN halves, **so the `test:`-before-`feat:` commit ordering binds those two couples exactly as it binds the ten** — they are recorded here rather than in the table because the table is keyed by module and both modules already appear in it. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
+
+**T105 and T106 were rescoped after CI.** Both described an in-pin digest mismatch as a failure. Ubuntu proved the premise false — a re-fit at the recorded seed and shape, with all six pinned keys equal, moved every one of 68 lines' stored `draw_digest` values — so the mismatch is a scope limit in every case and the day tolerance is the only gate. Corrected here rather than left describing behaviour the code no longer has. **Why the digests move is unestablished** and is recorded as such in G-21; nothing in these two tasks asserts a cause.
 
 **T124's scope was corrected during implementation.** Its line named SC-036 and SC-037, which are US4 criteria already carried by T089 and T091 against machinery US3 does not have. T124 owns FR-041 only.
 
@@ -302,7 +304,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | NC-6 | T053 | **2** — the shorter median, and a no-censoring input at a zero delta |
 | NC-7 | T076 | 1 |
 | NC-8 | T072 | 1 |
-| NC-9 | T106 | **2** — outside the pin reports a scope limit, inside it fails |
+| NC-9 | T106 | **2** — the same digest mismatch outside the pin and inside it; both report a scope limit and what moves between them is the reported reason |
 | NC-10 | T045 | 1 |
 | NC-11 | T043 | 1 — a strict comparison, not a threshold any width satisfies |
 | NC-12 | T011 | **3** — `0400` probes outside, `0200`–`0299` declared-but-unpopulated, part (a) alone red |

@@ -1,9 +1,37 @@
 # QC Report: Delivery Forecast Model
 
-**Feature**: E007 · **Branch**: `00007-delivery-forecast-model` · **Date**: 2026-07-28 · **Iterations**: 3
+**Feature**: E007 · **Branch**: `00007-delivery-forecast-model` · **Date**: 2026-07-28 · **Iterations**: 4
 **Governing**: `project-instructions.md` v1.2.4 · **QC profile**: standard · **Required categories**: linting, coverage · **Coverage target**: 80
 
-## Overall Verdict: **PASS** (confirmed at iteration 3)
+## Overall Verdict: **PASS** (iteration 4)
+
+### Iteration 4 — CI found what three local passes could not
+
+The first CI run **failed**: 10 tests, all in the reproduction tier, on Ubuntu. Every local iteration had passed at 2569 on Windows. This is the finding of the epic, and it is a design defect rather than a flaky test.
+
+**A recorded run's stored digests do not reproduce on Linux.** The recorded run and the re-fit execute in the **same pytest session on the same machine**, and every one of 68 lines produced a different draw digest — with the recorded library pin matching on all six keys, `blas` included. Measured drift: **0.124 days** on the median, against a published **5.0-day** tolerance — so FR-022's actual gate passed with three orders of magnitude to spare. On Windows no line differs.
+
+**The mechanism is unestablished, and this report previously claimed one.** The first version of this narrative diagnosed the failure as "the fit is not bitwise deterministic, because multi-threaded OpenBLAS varies reduction order". That was written from plausibility, not from an experiment. Probing on the same Linux image under CI-like conditions against the real database ruled out the three candidates it rested on: sampling twice from one built graph at one seed is bitwise identical across all ten posterior variables; rebuilding the graph and resampling is bitwise identical; and a 4005-value float64 array — subnormals, `nextafter(1, 2)` and `1/3` among them — survives the Postgres round-trip bitwise, worst delta `0.0`. The sampler is deterministic, graph construction is deterministic, storage is lossless, and **why the stored digests move is not known**. What is established is the observation — a mismatch reported *with the pin matching* — and that is what the corrected code and specification text are written around. It is sufficient to justify the behaviour: the pin demonstrably does not determine the digest, whatever does.
+
+**What failed was code asserting bitwise equality, which the spec forbids.** FR-022 requires agreement "never as bitwise equality of draws"; {SAD:ADR-0009} says the same. `_digest_claim` nonetheless resolved a mismatch to a **failure** whenever the pins matched, on the written premise that "inside it the environment is the recorded one". That premise is falsified by the run above: the pins matched and the digests differed, so the pin does not determine the digest — whatever does. FR-032's own words are "degrade to a reported scope limit rather than a failure **when the observed environment differs**" — and it did differ, in a dimension the pin does not record. The implementation had narrowed *environment* to *pinned versions*.
+
+| Change | |
+|---|---|
+| `reproduce.py` | A digest mismatch is now a scope limit in **every** case, with the two readings named apart — pin differs, versus pin matches and does not determine bitwise numerics. `DIGEST_CLAIM_FAILED` deleted. `exit_status` no longer reads the claim at all; FR-022's three outcomes govern it |
+| `sample.py` | Its docstring claimed the same seed and versions reproduce the same draws — the false premise at its source |
+| `spec.md` | FR-032 and SC-030 restated. SC-030 is recorded as the **seventh** criterion in this spec's history to assert something a correct implementation fails |
+| `data-model.md` | DV-019 corrected; **G-21** added — the recorded pin is *measured* not to determine the stored digest, with the mechanism recorded as unestablished and the three ruled-out candidates named so they are not re-investigated. Its reversal trigger and production-scale alternative are restated around what would actually settle it: a fingerprint **shown** to determine the digest, which requires finding the mechanism first, and bisecting the divergence to its source rather than pinning an environment around a guess |
+| `plan.md`, `tasks.md` | NC-9, the FR-032 coverage row, the edge case, and T105/T106 all described the withdrawn semantics |
+
+**No test was weakened to pass.** Each restatement still discriminates, and one was strengthened: `test_no_disposition_of_the_claim_is_reported_as_a_failure` substitutes all three claim dispositions into a real outcome and requires the exit status unmoved — an `exit_status` that reads the claim again passes the first substitution and fails the other two, which is the exact shape of this regression.
+
+**Swept for recurrence.** `draw_digest`, `artifact_hash`, `array_equal`, `approx(0`, `abs=0`, `1e-12`, `rel=0`, and every test driving a fit, across all four entries. Nothing else depends on reproduction being bitwise. One assertion depends on *same-process, same-graph* determinism — NC-6's no-censoring delta — which is a weaker and different dependency, and it **passed on the very Ubuntu run that exposed this defect**.
+
+**What this says about the earlier passes.** Three local QC iterations reported PASS. They were honest about what they measured and wrong about what that implied: convergence and reproduction had been evidenced on **one platform**, and I reported "6/6 seeds pass" without saying so. CI is the first execution on a second platform, and it found the defect immediately.
+
+---
+
+## Verdict at iteration 3: PASS (local confirmation re-run)
 
 ### Iteration 3 — confirmation re-run
 
