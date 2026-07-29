@@ -50,8 +50,11 @@ import re
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import URL, create_engine, text
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
+
+from model.schema.cli import DEFAULT_REVISION, EXIT_OK, main
 
 #: `src/model/tests/schema/` -> repository root.
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -483,4 +486,215 @@ def test_the_extension_exclusion_is_derived_and_excludes_something(db_session: S
         f"data-model.md does not name the {REQUIRED_EXTENSION!r} extension anywhere in code "
         f"formatting. Its objects are excluded from the enumerations above on the strength "
         f"of it being documented; if it is not, the exclusion is unaccounted for (TR-083)."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# E006 FR-065 / VR-015 -- the six tables E003 owns are untouched by E006
+# --------------------------------------------------------------------------- #
+#
+# The mirror image of TR-036 above, and it belongs in this module for the same
+# reason: it is a claim about the *boundary*, not about any one table. TR-036
+# says E003 must not create another epic's design; FR-065 says E006 must not
+# extend E003's. Both are ownership, read from opposite sides.
+#
+# E006 populates these six tables and adds seven of its own plus a view
+# (`specs/00006-document-ingestion-and-extraction/data-model.md` §Scope). What it
+# may not do is add a column, a constraint, or an index to any of them --
+# {SAD:ADR-0017} makes E003's document normative for them, so an E006 revision
+# widening `uq_chunk__document_ordinal` (say) would put two documents in
+# disagreement with one catalog. That constraint's document scope is precisely
+# what forced {SAD:ADR-0020}'s remove-then-write promotion, so "E006 did not
+# simply widen it" is load-bearing rather than tidy.
+#
+# Asserted by *snapshot comparison across two revisions of the same database*,
+# which is the only form that can see an addition made by any means. Reading the
+# revision sources for `ALTER TABLE` would miss a `CREATE INDEX ... ON chunk`,
+# and asserting a hardcoded expected catalog would restate E003's schema here and
+# fail on every legitimate E003 amendment.
+
+#: E006's spec Scope Excluded, VR-015. Named, not derived: the claim is about
+#: these six designs specifically.
+E003_OWNED_TABLES: tuple[str, ...] = (
+    "chunk",
+    "document",
+    "extracted_value",
+    "extracted_value_contributing_chunk",
+    "extraction_failure",
+    "field_vocabulary",
+)
+
+#: The revision the comparison starts from -- E007's head, and the last revision
+#: before E006's block opens. Everything after it in the chain is E006's, so any
+#: difference this test finds was introduced by an E006 revision and by nothing
+#: else.
+#:
+#: **Moved from `0103` to `0303` on 2026-07-28.** It was E004's head while E006
+#: chained directly onto `0103`; E007 claimed `0300`-`0399` concurrently and
+#: landed first, so E006 renumbered to `0400`-`0499` and re-parented onto E007's
+#: head. Left at `0103` this constant would put E007's four revisions inside the
+#: window and attribute anything they changed to E006 -- which is the one thing
+#: the sentence above promises it does not do.
+OWNERSHIP_BOUNDARY_REVISION = "0303"
+
+#: A relation E006 creates, used as the positive control. Without it, a chain
+#: whose `04xx` revisions had all been deleted would satisfy the equality below
+#: perfectly and prove nothing.
+E006_PROBE_RELATION = "ingestion_run"
+
+OWNED_COLUMNS_SQL = """
+SELECT table_name, column_name, ordinal_position, data_type, udt_name,
+       is_nullable, column_default, character_maximum_length,
+       numeric_precision, numeric_scale, is_generated, generation_expression
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = ANY(:tables)
+ORDER BY table_name, column_name
+"""
+
+#: Constraints are stored on the table they constrain (`conrelid`), so a foreign
+#: key *from* an E006 table *to* one of these six is correctly invisible here:
+#: it adds no object to the parent. What would show up is a constraint E006 put
+#: on one of these tables, which is exactly what FR-065 forbids.
+OWNED_CONSTRAINTS_SQL = """
+SELECT cls.relname, con.conname, con.contype, pg_get_constraintdef(con.oid)
+FROM pg_constraint con
+JOIN pg_class cls ON cls.oid = con.conrelid
+JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+WHERE nsp.nspname = 'public' AND cls.relname = ANY(:tables)
+ORDER BY cls.relname, con.conname
+"""
+
+OWNED_INDEXES_SQL = """
+SELECT tablename, indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'public' AND tablename = ANY(:tables)
+ORDER BY tablename, indexname
+"""
+
+PROBE_RELATION_SQL = """
+SELECT count(*)
+FROM pg_class cls
+JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+WHERE nsp.nspname = 'public' AND cls.relname = :relation_name
+"""
+
+#: The three catalog dimensions FR-065 names, in the order a failure reports
+#: them: "zero columns, zero constraints, and zero indexes".
+OWNERSHIP_DIMENSIONS = ("columns", "constraints", "indexes")
+
+
+def _ownership_snapshot(url: URL) -> dict[str, list[tuple[object, ...]]]:
+    """Columns, constraints, and indexes of the six E003-owned tables at `url`.
+
+    A short-lived engine disposed immediately, for the reason the scratch
+    fixture gives: the caller is about to migrate or drop this database, and a
+    pooled connection left open would make either fail for a reason unrelated to
+    what is under test.
+    """
+    engine = create_engine(url, poolclass=NullPool)
+    tables = {"tables": list(E003_OWNED_TABLES)}
+    try:
+        with engine.connect() as connection:
+            return {
+                "columns": [
+                    tuple(row) for row in connection.execute(text(OWNED_COLUMNS_SQL), tables)
+                ],
+                "constraints": [
+                    tuple(row) for row in connection.execute(text(OWNED_CONSTRAINTS_SQL), tables)
+                ],
+                "indexes": [
+                    tuple(row) for row in connection.execute(text(OWNED_INDEXES_SQL), tables)
+                ],
+            }
+    finally:
+        engine.dispose()
+
+
+def _probe_relation_exists(url: URL, relation_name: str) -> bool:
+    engine = create_engine(url, poolclass=NullPool)
+    try:
+        with engine.connect() as connection:
+            return bool(
+                connection.execute(
+                    text(PROBE_RELATION_SQL), {"relation_name": relation_name}
+                ).scalar_one()
+            )
+    finally:
+        engine.dispose()
+
+
+def test_e006_adds_no_column_constraint_or_index_to_a_table_e003_owns(
+    empty_scratch_database: URL,
+) -> None:
+    """E006 FR-065 / VR-015: the six tables are catalog-identical at `0303` and head.
+
+    Driven on a scratch database because the comparison needs the schema at two
+    revisions and the shared one is at head. `migrate 0303` stops the chain at
+    E007's head; the snapshot taken there is the state E006 inherited. `migrate
+    head` then runs `0400`-`0404` and the snapshot is taken again. Equality is
+    the requirement, stated across all three dimensions FR-065 names.
+
+    Two guards keep the equality from holding for the wrong reason. The
+    before-snapshot must actually contain all six tables -- a query returning
+    nothing would compare the empty set with itself -- and an E006 relation must
+    exist afterwards, so the run being compared is one in which E006's revisions
+    genuinely executed.
+
+    Column *values* are out of scope and deliberately so: E006 writes rows into
+    every one of these tables, and that is what the epic is for. What is asserted
+    is that the *shape* it writes into is the shape E003 declared.
+    """
+    assert main([OWNERSHIP_BOUNDARY_REVISION]) == EXIT_OK, (
+        f"`migrate {OWNERSHIP_BOUNDARY_REVISION}` failed against the scratch database, so "
+        f"there is no inherited state to compare against."
+    )
+
+    before = _ownership_snapshot(empty_scratch_database)
+    tables_present = {row[0] for row in before["columns"]}
+
+    assert tables_present == set(E003_OWNED_TABLES), (
+        f"at revision {OWNERSHIP_BOUNDARY_REVISION} the catalog reports "
+        f"{sorted(tables_present)} of the six tables E003 owns, not "
+        f"{sorted(E003_OWNED_TABLES)}. The comparison below would be between two "
+        f"partial snapshots and would pass without having looked at the missing tables."
+    )
+
+    assert main([DEFAULT_REVISION]) == EXIT_OK, (
+        "`migrate head` failed against the scratch database, so the after-snapshot would "
+        "be taken at the same revision as the before-snapshot."
+    )
+
+    assert _probe_relation_exists(empty_scratch_database, E006_PROBE_RELATION), (
+        f"{E006_PROBE_RELATION!r} does not exist after `migrate head`, so E006's revisions "
+        f"did not run and the equality below holds because nothing happened between the two "
+        f"snapshots."
+    )
+
+    after = _ownership_snapshot(empty_scratch_database)
+
+    added = {
+        dimension: sorted(set(after[dimension]) - set(before[dimension]))
+        for dimension in OWNERSHIP_DIMENSIONS
+    }
+    removed = {
+        dimension: sorted(set(before[dimension]) - set(after[dimension]))
+        for dimension in OWNERSHIP_DIMENSIONS
+    }
+
+    added_report = {dimension: rows for dimension, rows in added.items() if rows}
+    removed_report = {dimension: rows for dimension, rows in removed.items() if rows}
+
+    assert not any(added.values()), (
+        f"E006's revisions added {added_report} to tables E003 "
+        f"owns. FR-065 and VR-015 allow zero columns, zero constraints, and zero indexes on "
+        f"`document`, `chunk`, `field_vocabulary`, `extracted_value`, "
+        f"`extracted_value_contributing_chunk`, and `extraction_failure`: {{SAD:ADR-0017}} "
+        f"makes E003's data-model.md normative for them, so an addition here puts two "
+        f"documents in disagreement with one catalog. Declare the object on a table E006 "
+        f"owns, or raise an E003 amendment."
+    )
+    assert not any(removed.values()), (
+        f"E006's revisions removed {removed_report} from tables "
+        f"E003 owns. That is the same boundary crossed in the other direction, and it is "
+        f"worse: a dropped constraint takes an invariant with it silently."
     )

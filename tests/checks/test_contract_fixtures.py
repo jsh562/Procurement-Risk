@@ -111,6 +111,48 @@ def test_vr_044_corpus_offline_contract_breaks_on_a_direct_provider_import() -> 
     )
 
 
+# --- FR-050 / Principle VIII: the baseline is an honest opponent --------------
+# The real contract forbids `model.ingest.baseline` from `model.corpus.templates`,
+# `.render` and `.model` — the per-vendor generation source, the renderer, and the
+# pre-render document model. Those three are the answer key. A baseline reading
+# any of them is not extracting from a document, and an opponent that cannot lose
+# makes every quality figure published beside it flattery rather than evidence.
+#
+# The contract passes on this tree, so its failing direction needs evidence of its
+# own. The dispatch input offers no payload for it, and a payload nobody is
+# obliged to trigger is not evidence anyway.
+
+
+def test_baseline_independence_breaks_on_a_direct_answer_key_read() -> None:
+    """The crude violation: the baseline imports the pre-render document model
+    and reports the values it was handed."""
+    result = run_contract("baseline_independence")
+    assert not result.passed, "FR-050: a direct answer-key read did not break the contract"
+    assert result.names("baseline_fixture.corpus.model"), (
+        f"FR-050: failure did not name the answer-key module:\n{result.output}"
+    )
+
+
+def test_baseline_independence_breaks_on_a_laundered_reach() -> None:
+    """The evasion `allow_indirect_imports = false` exists to catch.
+
+    The baseline imports an ordinary corpus module that violates nothing itself
+    and merely reads the templates and the renderer, because generating a corpus
+    is what it does. That leaves no direct edge to either, so with indirect
+    detection off this reads as a clean module — which is the shape the evasion
+    would actually take, not the direct read above.
+    """
+    result = run_contract("baseline_independence")
+    assert not result.passed, "FR-050: a laundered reach did not break the contract"
+    assert result.names("baseline_fixture.corpus.generator"), (
+        f"FR-050: failure did not name the laundering module:\n{result.output}"
+    )
+    for answer_key in ("baseline_fixture.corpus.templates", "baseline_fixture.corpus.render"):
+        assert result.names(answer_key), (
+            f"FR-050: the laundered chain did not resolve to {answer_key}:\n{result.output}"
+        )
+
+
 # --- FR-035: a violated contract is named, by a failing check in the PR run ----
 
 # Which fixture stands in for which real contract, keyed by the contract name as
@@ -150,6 +192,11 @@ FIXTURE_FOR_CONTRACT = {
     # imported rather than a claim about what is called.
     "Model-facing code does not reach the read-side computation package": "read_side_boundary",
     "The worklist read path does not reach the model-provider gateway": "read_path_gateway",
+    # E006 / FR-050. Added with the contract itself rather than after it: this
+    # map is checked against the manifests, so declaring the contract without a
+    # fixture fails `test_every_declared_contract_has_a_negative_fixture` — which
+    # is the mechanism working, not an obstacle to it.
+    "The baseline extractor does not reach the corpus generator": "baseline_independence",
 }
 
 # The step in verify.yml that executes this file.
