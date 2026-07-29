@@ -321,10 +321,30 @@ test.describe("the named observables (FR-034)", () => {
     const first = page.locator("ol li").first();
 
     await expect(first.locator("[class*='rank']")).toContainText("1");
-    // Reachable without expanding or opening anything: no disclosure control
-    // stands between the page load and this row.
     await expect(first).toBeVisible();
-    expect(await page.locator("details, [aria-expanded='false']").count()).toBe(0);
+
+    // "Reachable without expanding or opening anything", asserted as the
+    // property SC-001 states rather than as the absence of a mechanism.
+    //
+    // This previously read `locator("details, [aria-expanded='false']").count()
+    // === 0` — no disclosure element anywhere on the page. That was a sound
+    // proxy while the page had no disclosures at all, but it cannot tell a
+    // control that *hides a figure* from one that only adds an explanation
+    // beside it. The provenance panels are the second kind: every comparison
+    // quantity renders whether they are open or shut.
+    //
+    // So the check is now the stronger one. Every disclosure starts closed, and
+    // with all of them closed the row's figures are on screen. A disclosure that
+    // ever gated a figure would fail this, where counting elements would have
+    // passed a page whose figures were all hidden behind an *open* one.
+    for (const disclosure of await page.locator("details").all()) {
+      await expect(disclosure).not.toHaveAttribute("open", /.*/);
+    }
+    // `.first()` on the need-by locator: the substring also matches the
+    // adjustment control that sits beside the date. The figure is the first.
+    await expect(first.locator("[class*='identity']").first()).toBeVisible();
+    await expect(first.locator("[class*='needBy']").first()).toBeVisible();
+    await expect(first.getByRole("region", { name: /Likely delivery window/ })).toBeVisible();
   });
 
   test("SC-004: the three score inputs sit in one row element", async ({ page }) => {

@@ -15,6 +15,13 @@
 .page {
   --scale-primary: 1rem;
   --scale-secondary: 0.875rem;
+  /*
+   * Below the secondary scale, because the provenance panels render inside both
+   * regions and FR-032's contract caps the largest type *anywhere* inside the
+   * secondary region below the primary region's. A third scale keeps that true
+   * by construction rather than by remembering it at each rule.
+   */
+  --scale-explain: 0.8125rem;
 
   max-width: 60rem;
   margin: 0 auto;
@@ -405,6 +412,109 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * The provenance disclosures.
+ *
+ * Every rule here is bounded by FR-032's presentation contract, which the e2e
+ * tier asserts over *descendants* rather than over the region elements: the
+ * largest type anywhere inside the secondary region must stay below the primary
+ * region's, and no weight inside it may exceed the primary's. Some of these
+ * panels sit inside that region, so the whole component is set at a scale below
+ * `--scale-secondary` and never above weight 600. That is also the right visual
+ * answer — an explanation that competed with the figure it explains would be a
+ * fifth thing to read on a row capped at four.
+ */
+.explain {
+  display: inline;
+  font-size: var(--scale-explain);
+  font-weight: 400;
+}
+
+/*
+ * The toggle is a glyph plus a visually-hidden name, never a glyph alone —
+ * FR-050 refuses an icon with no accessible name, and the name is the entry's
+ * own title so twenty toggles on a row announce distinctly instead of twenty
+ * identical "more information" buttons. `list-item` is removed because the
+ * default marker sits oddly mid-sentence; the glyph is the affordance.
+ */
+.explainToggle {
+  display: inline;
+  list-style: none;
+  cursor: help;
+  opacity: 0.65;
+  margin-left: 0.3rem;
+}
+
+.explainToggle::-webkit-details-marker {
+  display: none;
+}
+
+.explainToggle:hover,
+.explainToggle:focus-visible {
+  opacity: 1;
+}
+
+/*
+ * Opened, the panel becomes a block in the row's flow rather than a floating
+ * layer. Nothing has to be positioned, nothing can be clipped by an ancestor,
+ * and the row simply grows — which is the behaviour a keyboard or screen-reader
+ * reader gets anyway, so sighted readers get the same one.
+ */
+.explainBody {
+  display: block;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-left: 2px solid currentColor;
+  max-width: 46rem;
+}
+
+.explainWhat {
+  margin: 0 0 0.4rem;
+}
+
+.explainRow {
+  display: block;
+  margin: 0 0 0.35rem;
+}
+
+.explainRow:last-child {
+  margin-bottom: 0;
+}
+
+/* 600 rather than bold: the assertion caps weight inside the secondary region
+ * at the primary region's, which is 600. */
+.explainTerm {
+  display: block;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.explainFormula {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Set explicitly: a `code` element inherits a browser default that is often
+   * larger than the surrounding text, which would breach the descendant cap. */
+  font-size: var(--scale-explain);
+  overflow-wrap: anywhere;
+}
+
+.explainInputs {
+  margin: 0.15rem 0 0;
+}
+
+/* The bullet is drawn rather than inherited, since these are spans with a list
+ * role rather than list items — see Explain.tsx for why. */
+.explainInput {
+  display: block;
+  padding-left: 1.1rem;
+  text-indent: -0.7rem;
+}
+
+.explainInput::before {
+  content: "· ";
+  font-weight: 600;
 }
 
 /*
