@@ -39,7 +39,11 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - **Existing files touched**: `pyproject.toml` (coverage `source` **and** `paths`), `src/model/pyproject.toml` (two `[project.scripts]`, one `[tool.importlinter]` contract), `CHK/test_migration_ranges.py`, `SCH/test_migration_chain.py`, `SCH/test_forecast.py`, `SCH/test_constants_agreement.py`, `.github/workflows/verify.yml`.
 - **Never run `CHK/test_orchestration.py`** — its teardown destroys the database volume. The local database is on `${PRC_DB_PORT:-5434}`.
 - **The nineteen disclosed gaps `G-1`–`G-19` are not tasks.** They are recorded as uncovered enforcement, which is the point of recording them. The one exception is **G-1**, whose remediation *is* AD-007: it lands as T003 with T011 as its failing direction.
-- **The eight propagation obligations `P-1`–`P-8` are out of scope and are not tasks.** Each is a statement in another epic's delivered artifact or in a registered document a feature branch may not amend: P-1 and P-2 (E003's data model), P-3 and P-5 (E005, merged and immutable), P-4 (the PRD's ~120-event assumption and its 73–87% band — recorded here, never routed to another feature branch), P-6 ({SAD:ADR-0013}), P-7 (the published anchor constant's documentation and `/src/api`'s serving contract), P-8 (E010's read contract for `held_out_prediction`).
+- **The eleven propagation obligations `P-1`–`P-11` are out of scope and are not tasks.** Each is a statement in another epic's delivered artifact or in a registered document a feature branch may not amend: P-1 and P-2 (E003's data model), P-3 and P-5 (E005, merged and immutable), P-4 (the PRD's ~120-event assumption and its 73–87% band — recorded here, never routed to another feature branch), P-6 ({SAD:ADR-0013}), P-7 (the published anchor constant's documentation and `/src/api`'s serving contract), P-8 (E010's read contract for `held_out_prediction`), P-9 and P-10 (the PRD bullets and SAD entries reverted at the analyze gate), P-11 (the SAD's copy of the ~120-event figure).
+
+  This list read "eight `P-1`–`P-8`" until 2026-07-28. `P-9`–`P-11` were appended to `plan.md` by the analyze gate in `636e9f0` and this file was never refreshed, so it undercounted from that commit onward. Corrected against `plan.md` rather than re-derived.
+
+  **Six have since been performed**, on `main` after the merge, where Governance requires them: `P-4` and `P-9` in `4431b6f`, `P-10` and `P-11` in `bcfc424`, `P-5` in `af40196`, `P-3` in `1d703a5`. `P-6` is retired; `P-1`, `P-2`, `P-7` and `P-8` remain open, and `plan.md` § Propagation Obligations carries the standing disposition. They remain out of scope for this epic — performing them here is exactly what the branch was forbidden to do, and the record of that restraint is the point.
 - **Two criteria are discharged by nothing this list can check.** SC-032's prohibition half is verified by **review of the commit history** of `PKG/config.py` (AD-005, G-11) — T077 asserts the mechanism half and records the prohibition half as uncovered rather than letting a green suite read as covering it. SC-022's tie-breaking half is discharged by argument (G-13); only the recorded serialization label is checkable.
 
 ## Design constants — quoted, never re-derived
@@ -210,8 +214,8 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 - [X] T102 [US5] {FR-023} [COMPLETES FR-023] **NC-4** / SC-039 — a mutated fixture against unchanged rows warns **and the run completes** — TST/test_provenance_warning.py after:T100
 - [X] T103 [US5] {FR-022} DV-018 / SC-018, SC-041 — per-line agreement in both stores within the tolerance and **exact** provenance equality — TST/test_reproduction.py after:T098
 - [X] T104 [US5] {FR-022} [COMPLETES FR-022] **NC-17** — one line's P80 perturbed beyond the tolerance makes the harness exit non-zero naming it — TST/test_reproduction_controls.py
-- [X] T105 [US5] {FR-032} DV-019 / SC-030 — a digest mismatch under a version outside the **whole** recorded pin is a scope limit, not a failure — TST/test_pin_scope.py after:T098
-- [X] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit; the same mismatch inside the pin fails — TST/test_pin_scope_controls.py
+- [X] T105 [US5] {FR-032} DV-019 / SC-030 — **every** digest mismatch is a scope limit, never a failure, with the two readings named apart: pin differs, versus pin matches and does not determine bitwise numerics — TST/test_pin_scope.py after:T098
+- [X] T106 [US5] {FR-032} **NC-9** — an **injected** version outside the pin reports a scope limit, and so does the same mismatch inside it; **no disposition of the claim reaches the exit status**, asserted by substituting all three into a real outcome — TST/test_pin_scope_controls.py
 - [X] T107 [US5] {FR-025} DV-022 / SC-021 — `/src/api` has no import path to `model.forecast`, over the transitive graph — CHK/test_dependency_isolation.py after:T015
 - [X] T108 [US5] {FR-024} **NC-15** — two planted imports to `gateway`, one direct and one indirect, each fail the contract (G-17 bounds the rest) — TST/test_import_contract_controls.py
 
@@ -247,6 +251,8 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 - [X] T127 {FR-042} [COMPLETES FR-042] The fixture-file digest is recorded beside the row hash as a distinct value, and DV-016 proves the mismatch **warns** where DV-015 refuses — the two dispositions separately evidenced — TST/test_fixture_digest.py after:T018
 
 **A-015 — and the pair rule reaches them by this sentence, not by a label.** T055 and T051 add behaviour to property-tier modules outside any of the ten pairs. T117 and T118 are their RED halves and T055 and T051 are the corresponding GREEN halves, **so the `test:`-before-`feat:` commit ordering binds those two couples exactly as it binds the ten** — they are recorded here rather than in the table because the table is keyed by module and both modules already appear in it. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
+
+**T105 and T106 were rescoped after CI.** Both described an in-pin digest mismatch as a failure. Ubuntu proved the premise false — a re-fit at the recorded seed and shape, with all six pinned keys equal, moved every one of 68 lines' stored `draw_digest` values — so the mismatch is a scope limit in every case and the day tolerance is the only gate. Corrected here rather than left describing behaviour the code no longer has. **Why the digests move is unestablished** and is recorded as such in G-21; nothing in these two tasks asserts a cause.
 
 **T124's scope was corrected during implementation.** Its line named SC-036 and SC-037, which are US4 criteria already carried by T089 and T091 against machinery US3 does not have. T124 owns FR-041 only.
 
@@ -302,7 +308,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | NC-6 | T053 | **2** — the shorter median, and a no-censoring input at a zero delta |
 | NC-7 | T076 | 1 |
 | NC-8 | T072 | 1 |
-| NC-9 | T106 | **2** — outside the pin reports a scope limit, inside it fails |
+| NC-9 | T106 | **2** — the same digest mismatch outside the pin and inside it; both report a scope limit and what moves between them is the reported reason |
 | NC-10 | T045 | 1 |
 | NC-11 | T043 | 1 — a strict comparison, not a threshold any width satisfies |
 | NC-12 | T011 | **3** — `0400` probes outside, `0200`–`0299` declared-but-unpopulated, part (a) alone red |
@@ -319,7 +325,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 ### Not tasks, by design
 
 - **The nineteen disclosed gaps `G-1`–`G-19`** are recorded in `data-model.md` as enforcement this design does not carry; recording them *is* the treatment. **G-1 is the sole exception**: its remediation is AD-007, which lands as T003 with T011 as its failing direction.
-- **The eight propagation obligations `P-1`–`P-8`** belong to other epics or to registered documents a feature branch may not amend — see § Brownfield Notes. A feature branch records the need and does not perform it, and may not route it to another feature branch.
+- **The eleven propagation obligations `P-1`–`P-11`** belong to other epics or to registered documents a feature branch may not amend — see § Brownfield Notes. A feature branch records the need and does not perform it, and may not route it to another feature branch.
 - **No project-initialization task.** E001 scaffolded the entries and the toolchain, E002 established the package shape, E003 delivered the schema and E005 delivered the data — all fixed input.
 - **No checklist-completion task.** All 115 items across data-integrity, testing and observability are evaluated and checked.
 - **P1 boundary**: Phases 1–6 (T001–T093) plus the appended Foundational pair T114–T116 are the viable deliverable. Phase 7 (US5, P2) and Phase 8 are omittable, though SC-018, SC-019, SC-021 and SC-030 go unasserted without them. **Two exceptions were found at the Analyze gate (A-016), and an earlier revision of this line claimed no P1 criterion breaks.** *SC-034* is tagged `[US1]` — P1 — yet was asserted only by T109/T110 in Phase 8; **T119** adds a P1-side assertion over the run report. *SC-035* asserts a closed-kind equality over a set including the reproduction report, which T098 emits in Phase 7; under a P1-only cut the equality ranges over the kinds a P1 cut actually emits, and T073 now carries `after:T098` so the full-scope form is ordered correctly whenever Phase 7 is present.
@@ -346,7 +352,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | No task line exceeds 200 characters | **fail — 17 lines exceed it**, measured again while correcting the row above. The claim was true when written and is not true of the document as delivered: the Analyze-gate appends (T114–T127) and the QC bug tasks (T128–T133) are among them, and the longest is T111 at 506 characters. Recorded rather than silently re-measured — the limit is a readability convention with no consumer, and shortening thirty-odd delivered task lines to satisfy a row about them would edit the record of what was done to make a self-report come out green |
 | Migration tasks emitted | **4** — `0300`–`0303` inside the claimed block, each `downgrade()` raising |
 | Tasks for `G-1`–`G-19` other than G-1 | **0**, by design — a disclosed gap is a record, not work |
-| Tasks for `P-1`–`P-8` | **0**, by design — each belongs to another epic or to a registered document |
+| Tasks for `P-1`–`P-11` | **0**, by design — each belongs to another epic or to a registered document |
 
 ## QC Bug Tasks — iteration 1
 

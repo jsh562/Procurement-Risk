@@ -20,6 +20,12 @@ publishes a **basis condition** with that number, and where any line's realized
 predictive effective sample size falls below half the run's draw count the
 comparison is reported as *outside the tolerance's stated basis* rather than
 passing or failing it.
+
+**The optional draw-digest claim (FR-032) never reaches the exit status.** It is
+published where bitwise equality holds and reported as a scope limit where it
+does not, in either of two readings — the observed pin differs, or the pin
+matches and does not determine bitwise numerics. FR-022's outcome is the gate,
+and it is never bitwise equality of draws.
 """
 
 from __future__ import annotations
@@ -92,8 +98,9 @@ from model.schema.url import DatabaseUrlNotConfiguredError, get_database_url
 
 __all__ = [
     "DIGEST_CLAIM_EQUAL",
-    "DIGEST_CLAIM_FAILED",
     "DIGEST_CLAIM_SCOPE_LIMIT",
+    "DIGEST_SCOPE_PIN_DIFFERS",
+    "DIGEST_SCOPE_PIN_DOES_NOT_DETERMINE_NUMERICS",
     "HELD_OUT_STORE",
     "LINE_POSTERIOR_STORE",
     "OUTCOME_AGREES",
@@ -198,15 +205,46 @@ PROVENANCE_FIELDS: tuple[str, ...] = (
 #: SC-018's three outcomes. Three and not two: AD-004 publishes a basis
 #: condition with its tolerance, and a comparison taken outside that basis is
 #: neither a pass nor a failure — the scope-limit treatment FR-032 already uses
-#: for an out-of-pin digest.
+#: for a digest mismatch.
 OUTCOME_AGREES = "agrees"
 OUTCOME_DISAGREES = "disagrees"
 OUTCOME_OUTSIDE_BASIS = "outside the tolerance's stated basis"
 
-#: FR-032's optional draw-digest claim, in its three dispositions.
+#: FR-032's optional draw-digest claim, in its **two** dispositions. There is no
+#: failing one, and an earlier revision carried a third: a mismatch inside the
+#: recorded pin resolved to `failed`, on the premise that "inside it the
+#: environment is the recorded one". **Measurement falsifies that premise**: on
+#: Linux a re-fit of one recorded run, at its own seed and shape and under a pin
+#: equal on all six keys — `blas` included — moved every one of 68 stored lines'
+#: digests, while the realized median drift was 0.12 days against a 5.0-day
+#: tolerance. A mismatch is therefore *observed with the pin matching*, which is
+#: the whole of what this disposition rests on: the pin demonstrably does not
+#: determine the digest.
+#:
+#: **Why it does not is unestablished** (G-21). Three candidates were ruled out
+#: by measurement on the CI Linux image, recorded here so they are not
+#: re-investigated: sampling twice from one built graph at one seed is bitwise
+#: identical across all ten posterior variables; rebuilding the graph and
+#: resampling is bitwise identical; and a float64 array survives the Postgres
+#: round-trip bitwise. Naming a cause beyond that would be asserting one. FR-022
+#: is explicit that reproduction is the day tolerance and "never bitwise
+#: equality of draws" ({SAD:ADR-0009}), so this claim is published where it
+#: holds and degrades everywhere else — and on the evidence available the
+#: difference is confined to this optional claim.
 DIGEST_CLAIM_EQUAL = "equal"
 DIGEST_CLAIM_SCOPE_LIMIT = "scope limit"
-DIGEST_CLAIM_FAILED = "failed"
+
+#: **Why** a scope limit was reported. Two different facts about a run and a
+#: reader is owed both: an observed pin outside the recorded one says the
+#: environment moved in a dimension the manifest records, while a matching pin
+#: says it moved in a dimension the manifest does not record. Neither is a
+#: failure, and collapsing them would tell a reader only that the digests
+#: differed — which they already knew from `differing_lines`.
+DIGEST_SCOPE_PIN_DIFFERS = "the observed environment differs from the recorded pin"
+DIGEST_SCOPE_PIN_DOES_NOT_DETERMINE_NUMERICS = (
+    "the observed environment matches the whole recorded pin, and the pin does not determine "
+    "bitwise numerics"
+)
 
 #: Module-level SQL, never assembled from values (Ruff S608).
 ACTIVE_RUN_SQL = text("SELECT run_id FROM v_active_forecast_run")
@@ -802,13 +840,18 @@ class LineComparison:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class DigestClaim:
-    """FR-032's optional draw-digest equality claim, scoped to the recorded pin.
+    """FR-032's optional draw-digest equality claim, published with its pin.
 
-    Three dispositions and the middle one is the requirement: where the observed
-    environment differs from the recorded pin the claim **degrades to a reported
-    scope limit rather than a failure**, which is the treatment E005 established
-    for the same problem. Inside the pin the same mismatch is a failure, and that
-    contrast is what stops the scope limit being unconditional.
+    Two dispositions, and **neither of them fails the run**. Equal digests are a
+    bitwise reproduction and are published as one, because a stronger positive
+    claim is worth keeping where it holds. Anything else is a reported scope
+    limit: FR-032 requires the claim to degrade "when the observed environment
+    differs", and on Linux a re-fit under a pin equal on every key was measured
+    to move every stored digest. That mismatch-*with-a-matching-pin* is the
+    observation the degradation rests on — the pin is not what decides the
+    digest, whatever does, and what does is unestablished (G-21). What the pin
+    *does* decide is `scope_reason`, which names which kind of difference was
+    observed.
     """
 
     verdict: str
@@ -830,6 +873,19 @@ class DigestClaim:
             key for key in keys if self.recorded_pin.get(key) != self.observed_pin.get(key)
         )
 
+    @property
+    def scope_reason(self) -> str | None:
+        """Why the claim degraded, or `None` where it did not degrade at all.
+
+        Derived rather than stored, because both operands it is decided from are
+        already on the record and a second field could disagree with them.
+        """
+        if not self.differing_lines:
+            return None
+        if self.differing_pin_keys:
+            return DIGEST_SCOPE_PIN_DIFFERS
+        return DIGEST_SCOPE_PIN_DOES_NOT_DETERMINE_NUMERICS
+
 
 def digest_claim(
     recorded: Mapping[str, Mapping[uuid.UUID, StoredArtifact]],
@@ -837,16 +893,25 @@ def digest_claim(
     recorded_pin: Mapping[str, str],
     observed_pin: Mapping[str, str],
 ) -> DigestClaim:
-    """The draw-digest claim, and the pin it is scoped to (FR-032, DV-019, SC-030).
+    """The draw-digest claim, and the pin it is published with (FR-032, DV-019, SC-030).
 
     Equal digests are a bitwise reproduction and are published as one. Unequal
-    digests are read against the pin: outside it the environment differs and the
-    claim is a **scope limit**, because bitwise equality was never promised across
-    library versions; inside it the environment is the recorded one and the
-    mismatch is a genuine failure of the optional claim.
+    digests are a **scope limit in every case** — never a failure — and the pin
+    decides only which reason is reported. Outside the pin, something the
+    manifest records has moved. Inside it, something the manifest does not
+    record has: on Linux, with all six recorded keys equal, every one of 68
+    stored lines digested differently while the day tolerance agreed to 0.12
+    days against 5.0. **What** moved is unestablished (G-21) — the sampler at a
+    fixed seed, model construction across a rebuild, and the float64 Postgres
+    round-trip were each measured bitwise-identical, so none of those three is
+    it. An earlier revision resolved that second case to a failure on the stated
+    premise that "inside it the environment is the recorded one", which the
+    observation above falsifies and this docstring exists to withdraw.
 
-    FR-022's reproduction verdict is never this — it is the day tolerance — which
-    is why this returns its own disposition rather than folding into that one.
+    FR-022's reproduction verdict is never this — it is the day tolerance, and
+    explicitly "never bitwise equality of draws" — which is why this returns its
+    own disposition rather than folding into that one, and why no disposition it
+    returns reaches the exit status.
     """
     differing = tuple(
         po_line_id
@@ -855,15 +920,8 @@ def digest_claim(
         if po_line_id not in reproduced.get(store, {})
         or reproduced[store][po_line_id].draw_digest != artifact.draw_digest
     )
-    pins_differ = dict(recorded_pin) != dict(observed_pin)
-    if not differing:
-        verdict = DIGEST_CLAIM_EQUAL
-    elif pins_differ:
-        verdict = DIGEST_CLAIM_SCOPE_LIMIT
-    else:
-        verdict = DIGEST_CLAIM_FAILED
     return DigestClaim(
-        verdict=verdict,
+        verdict=DIGEST_CLAIM_EQUAL if not differing else DIGEST_CLAIM_SCOPE_LIMIT,
         differing_lines=differing,
         recorded_pin=dict(recorded_pin),
         observed_pin=dict(observed_pin),
@@ -943,15 +1001,15 @@ class ReproductionOutcome:
     def exit_status(self) -> int:
         """Zero exactly when every required action completed (FR-017, FR-039).
 
-        A **scope limit is a zero**, on both of the paths that can produce one:
-        AD-004's outside-the-basis outcome and FR-032's out-of-pin digest are
-        reported rather than failed, which is the whole of what "degrades to a
-        reported scope limit rather than a failure" means. A disagreement and a
-        digest mismatch inside the recorded pin are the two non-zero cases, as
-        one status class rather than two codes.
+        **FR-022's three outcomes govern this and nothing else does.**
+        `OUTCOME_DISAGREES` is the single non-zero case;
+        `OUTCOME_OUTSIDE_BASIS` is a reported scope limit and exits zero, and so
+        does every disposition of the optional digest claim. This deliberately
+        does **not** read `self.claim.verdict`: an earlier revision did, which
+        made a bitwise digest mismatch fail the job and put the reproduction
+        gate on exactly the quantity FR-022 says it is never expressed as.
         """
-        failed = self.verdict == OUTCOME_DISAGREES or self.claim.verdict == DIGEST_CLAIM_FAILED
-        return 1 if failed else 0
+        return 1 if self.verdict == OUTCOME_DISAGREES else 0
 
 
 def _paired(
@@ -1158,7 +1216,7 @@ def _outcome_section(outcome: ReproductionOutcome) -> list[str]:
             f"effective sample size below "
             f"{REPRODUCTION_PREDICTIVE_ESS_FRACTION_MIN:.2f} x {outcome.draw_count}, which is "
             f"the condition AD-004 published the 5.0-day tolerance under. Reported as a scope "
-            f"limit, the treatment FR-032 already uses for an out-of-pin digest."
+            f"limit, the treatment FR-032 already uses for a digest mismatch."
         )
     else:
         parts = []
@@ -1234,16 +1292,25 @@ def _pin_agreement(differing_keys: Sequence[str]) -> str:
 
 
 def _digest_claim_section(outcome: ReproductionOutcome) -> list[str]:
-    """FR-032's optional claim, published with the pin that scopes it (SC-030)."""
+    """FR-032's optional claim, published with the pin it is reported against.
+
+    The two degraded readings are rendered apart rather than as one, because
+    they are different facts about the run: one says something `library_versions`
+    records moved, the other says every recorded key held and the digests moved
+    anyway. Both are scope limits and neither is a failure, which the text states
+    in those words on both branches so a reader scanning for the disposition
+    finds the same phrase either way. Neither branch names a cause for the second
+    reading, because none has been established (G-21).
+    """
     claim = outcome.claim
     differing_keys = claim.differing_pin_keys
     if claim.verdict == DIGEST_CLAIM_EQUAL:
         verdict = (
             "**equal** — every stored line's draw digest is reproduced bit for bit. "
-            "Published as an additional claim; FR-022's reproduction verdict is the day "
-            "tolerance above and is never this."
+            "Published as an additional claim, and a stronger one than the tolerance above; "
+            "FR-022's reproduction verdict is the day tolerance and is never this."
         )
-    elif claim.verdict == DIGEST_CLAIM_SCOPE_LIMIT:
+    elif claim.scope_reason == DIGEST_SCOPE_PIN_DIFFERS:
         verdict = (
             f"**scope limit, not a failure** — {len(claim.differing_lines)} line(s) digest "
             f"differently under an environment that differs from the recorded pin on "
@@ -1253,10 +1320,17 @@ def _digest_claim_section(outcome: ReproductionOutcome) -> list[str]:
         )
     else:
         verdict = (
-            f"**failed** — {len(claim.differing_lines)} line(s) digest differently while the "
-            f"observed environment matches the whole recorded pin, so there is no version "
-            f"difference to scope the claim out of. First line "
-            f"{claim.differing_lines[0]}."
+            f"**scope limit, not a failure** — {len(claim.differing_lines)} line(s) digest "
+            f"differently while the observed environment matches the whole recorded pin. "
+            f"That is the observation itself, not an inference from one: a digest mismatch "
+            f"is reported here *with every recorded key equal*, so the pin demonstrably does "
+            f"not determine the digest. **Why it does not is unestablished.** Measurement has "
+            f"ruled out three candidates — the sampler at a fixed seed, model construction "
+            f"across a rebuild, and the float64 storage round-trip each reproduced bitwise — "
+            f"and naming a cause past that would be asserting one. FR-022's tolerance above "
+            f"is the gate, and it is never bitwise equality of draws, so on the evidence "
+            f"available the difference is confined to this optional claim (FR-032, SC-030, "
+            f"DV-019, G-21). First line {claim.differing_lines[0]}."
         )
     return [
         f"- **Recorded library pin**: "
@@ -1265,9 +1339,10 @@ def _digest_claim_section(outcome: ReproductionOutcome) -> list[str]:
         f"{', '.join(f'`{k}` {v}' for k, v in sorted(claim.observed_pin.items()))}",
         f"- **Digest agreement**: {len(claim.differing_lines)} line(s) of "
         f"{len({row.po_line_id for row in outcome.comparisons})} compared differ.",
-        f"- **Decision criterion**: every stored draw digest equal, **scoped to the whole "
-        f"recorded `library_versions` set** rather than to a chosen subset of it — "
-        f"{_pin_agreement(differing_keys)}.",
+        f"- **Decision criterion**: every stored draw digest equal, compared against the "
+        f"**whole recorded `library_versions` set** rather than a chosen subset of it — "
+        f"{_pin_agreement(differing_keys)}. The criterion decides what is *published*, never "
+        f"the exit status: this claim has no failing disposition.",
         f"- **Verdict**: {verdict}",
     ]
 
@@ -1416,7 +1491,10 @@ def run_reproduce(
     outcome = compare_reproduction(recorded, refit, wall_clock_seconds=time.monotonic() - started)
     emitted = write_reproduction_report(outcome, recorded, report_root)
     note(f"reproduction report at {emitted}")
-    note(f"verdict: {outcome.verdict}; draw-digest claim: {outcome.claim.verdict}")
+    claimed = outcome.claim.verdict
+    if outcome.claim.scope_reason is not None:
+        claimed = f"{claimed} ({outcome.claim.scope_reason})"
+    note(f"verdict: {outcome.verdict}; draw-digest claim: {claimed}")
     return Reproduction(recorded=recorded, refit=refit, outcome=outcome, report=emitted)
 
 
@@ -1467,9 +1545,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Reproduce one run. **Standard output carries one line: the `run_id`.**
 
-    Exit zero exactly when every required action completed, which includes both
-    scope limits: AD-004's outside-the-basis outcome and FR-032's out-of-pin
-    digest are reported rather than failed. A refusal writes its reason to
+    Exit zero exactly when every required action completed, which includes every
+    scope limit: AD-004's outside-the-basis outcome, and FR-032's digest claim in
+    either of its degraded readings, are reported rather than failed. The only
+    non-zero completion is FR-022's `disagrees`. A refusal writes its reason to
     standard error, puts nothing at all on standard output, and exits the single
     non-zero class every refusal in this package shares — so a consumer tests the
     status against zero rather than against a particular value.

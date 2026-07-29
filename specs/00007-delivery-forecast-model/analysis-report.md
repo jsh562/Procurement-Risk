@@ -58,6 +58,8 @@ The CRITICAL must be resolved before `/sddp-implement`. It is not a design defec
 
 Both agents ran read-only. All eight propagation obligations `P-1`–`P-8` were verified **not performed** — each stale sentence still stands in the other epic's file. `specs/project-plan.md` was **not** touched on this branch; its E007 amendment was performed on `main`, as `P-3` states.
 
+Eight was the count when the check ran. This same gate then appended `P-9`–`P-11` from the Governance finding above, so the branch closed with eleven — not performed either, the third of them by construction. `tasks.md` carried the stale eight until 2026-07-28.
+
 ## Coverage Summary
 
 | Requirement Key | Has Task? | Task IDs | Notes |
