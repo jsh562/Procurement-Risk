@@ -14,11 +14,12 @@ holds the pin as it was, and the environment answering now is different.
 
 **What the two directions contrast is the reported reason, not pass against
 fail.** An earlier revision of this file asserted that the in-pin planting
-*fails*, on the premise that a matching pin means a matching environment. It does
-not: `library_versions` records package versions and cannot record the BLAS
-thread count or reduction order that decide the low bits of a floating sum, and
-on Linux the tier's own re-fit moved every one of 68 lines' digests under an
-identical pin while agreeing to 0.12 days against a 5.0-day tolerance. So both
+*fails*, on the premise that a matching pin means a matching environment. The
+measurement says otherwise: on Linux the tier's own re-fit moved every one of 68
+lines' digests with all six recorded keys equal, while agreeing to 0.12 days
+against a 5.0-day tolerance. The mismatch is observed *with the pin matching*,
+which is what withdraws the premise; the mechanism behind it is unestablished
+(G-21) and is not asserted here or anywhere else in this tier. So both
 directions degrade, neither has a failing disposition, and what moves between
 them is the reason — which is a fact about the run that a reader is owed and that
 an implementation reading no pin at all cannot produce. The in-pin direction
@@ -65,13 +66,13 @@ from model.forecast.reproduce import (
     render_reproduction_report,
 )
 
-#: The key the injection moves. `blas` on purpose: it is the member of the pin
-#: that moves floating results without moving any distribution version, so an
+#: The key the injection moves. `blas` on purpose: it is the one member of the
+#: pin that can move without any distribution version moving, so an
 #: implementation reading only the PyMC-stack versions reports the two
 #: environments as identical and reports the wrong reason for this scope limit.
-#: That the pin carries the key at all does **not** make it a numeric
-#: determinant — a BLAS build holds its version while varying its thread count
-#: and reduction order, which is the gap G-21 records.
+#: That the pin carries the key at all does **not** make the pin a determinant of
+#: the digest: on Linux the digests move with this key equal too, which is the
+#: measurement G-21 records and the reason it records no mechanism.
 INJECTED_KEY = "blas"
 
 

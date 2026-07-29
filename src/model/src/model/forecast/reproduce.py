@@ -213,14 +213,24 @@ OUTCOME_OUTSIDE_BASIS = "outside the tolerance's stated basis"
 #: FR-032's optional draw-digest claim, in its **two** dispositions. There is no
 #: failing one, and an earlier revision carried a third: a mismatch inside the
 #: recorded pin resolved to `failed`, on the premise that "inside it the
-#: environment is the recorded one". That premise is false. `library_versions`
-#: records package versions and cannot record BLAS thread count, reduction
-#: order, instruction set or scheduling — every one of which moves the low bits
-#: of a floating reduction — so the pin does not determine bitwise numerics and
-#: a mismatch inside it is an environment difference the pin cannot see. FR-022
+#: environment is the recorded one". **Measurement falsifies that premise**: on
+#: Linux a re-fit of one recorded run, at its own seed and shape and under a pin
+#: equal on all six keys — `blas` included — moved every one of 68 stored lines'
+#: digests, while the realized median drift was 0.12 days against a 5.0-day
+#: tolerance. A mismatch is therefore *observed with the pin matching*, which is
+#: the whole of what this disposition rests on: the pin demonstrably does not
+#: determine the digest.
+#:
+#: **Why it does not is unestablished** (G-21). Three candidates were ruled out
+#: by measurement on the CI Linux image, recorded here so they are not
+#: re-investigated: sampling twice from one built graph at one seed is bitwise
+#: identical across all ten posterior variables; rebuilding the graph and
+#: resampling is bitwise identical; and a float64 array survives the Postgres
+#: round-trip bitwise. Naming a cause beyond that would be asserting one. FR-022
 #: is explicit that reproduction is the day tolerance and "never bitwise
 #: equality of draws" ({SAD:ADR-0009}), so this claim is published where it
-#: holds and degrades everywhere else.
+#: holds and degrades everywhere else — and on the evidence available the
+#: difference is confined to this optional claim.
 DIGEST_CLAIM_EQUAL = "equal"
 DIGEST_CLAIM_SCOPE_LIMIT = "scope limit"
 
@@ -836,10 +846,12 @@ class DigestClaim:
     bitwise reproduction and are published as one, because a stronger positive
     claim is worth keeping where it holds. Anything else is a reported scope
     limit: FR-032 requires the claim to degrade "when the observed environment
-    differs", and the recorded pin does not span the environment — it records
-    package versions, not the BLAS thread count or reduction order a floating
-    sum is sensitive to. What the pin *does* decide is `scope_reason`, which
-    names which kind of difference was observed.
+    differs", and on Linux a re-fit under a pin equal on every key was measured
+    to move every stored digest. That mismatch-*with-a-matching-pin* is the
+    observation the degradation rests on — the pin is not what decides the
+    digest, whatever does, and what does is unestablished (G-21). What the pin
+    *does* decide is `scope_reason`, which names which kind of difference was
+    observed.
     """
 
     verdict: str
@@ -885,15 +897,16 @@ def digest_claim(
 
     Equal digests are a bitwise reproduction and are published as one. Unequal
     digests are a **scope limit in every case** — never a failure — and the pin
-    decides only which reason is reported. Outside the pin the environment
-    differs in a dimension the manifest records; inside it the environment still
-    differs, in one the manifest does not: `library_versions` cannot record a
-    BLAS thread count, a reduction order, a processor instruction set or a
-    scheduling decision, and each of those moves the low bits of a floating
-    reduction while every recorded version holds still. An earlier revision
-    resolved that second case to a failure on the stated premise that "inside it
-    the environment is the recorded one", which is the premise this docstring
-    exists to withdraw.
+    decides only which reason is reported. Outside the pin, something the
+    manifest records has moved. Inside it, something the manifest does not
+    record has: on Linux, with all six recorded keys equal, every one of 68
+    stored lines digested differently while the day tolerance agreed to 0.12
+    days against 5.0. **What** moved is unestablished (G-21) — the sampler at a
+    fixed seed, model construction across a rebuild, and the float64 Postgres
+    round-trip were each measured bitwise-identical, so none of those three is
+    it. An earlier revision resolved that second case to a failure on the stated
+    premise that "inside it the environment is the recorded one", which the
+    observation above falsifies and this docstring exists to withdraw.
 
     FR-022's reproduction verdict is never this — it is the day tolerance, and
     explicitly "never bitwise equality of draws" — which is why this returns its
@@ -1282,11 +1295,12 @@ def _digest_claim_section(outcome: ReproductionOutcome) -> list[str]:
     """FR-032's optional claim, published with the pin it is reported against.
 
     The two degraded readings are rendered apart rather than as one, because
-    they are different facts about the run: one says the environment moved in a
-    dimension `library_versions` records, the other says it moved in a dimension
-    `library_versions` cannot record. Both are scope limits and neither is a
-    failure, which the text states in those words on both branches so a reader
-    scanning for the disposition finds the same phrase either way.
+    they are different facts about the run: one says something `library_versions`
+    records moved, the other says every recorded key held and the digests moved
+    anyway. Both are scope limits and neither is a failure, which the text states
+    in those words on both branches so a reader scanning for the disposition
+    finds the same phrase either way. Neither branch names a cause for the second
+    reading, because none has been established (G-21).
     """
     claim = outcome.claim
     differing_keys = claim.differing_pin_keys
@@ -1308,13 +1322,15 @@ def _digest_claim_section(outcome: ReproductionOutcome) -> list[str]:
         verdict = (
             f"**scope limit, not a failure** — {len(claim.differing_lines)} line(s) digest "
             f"differently while the observed environment matches the whole recorded pin. "
-            f"The pin is not a numeric determinant: `library_versions` records package "
-            f"versions and cannot record the BLAS thread count, the reduction order, the "
-            f"processor instruction set or the scheduling that decide the low bits of a "
-            f"floating sum, so an in-pin mismatch is still an environment difference — one "
-            f"the manifest has no field for. FR-022's tolerance above is the gate, and it is "
-            f"never bitwise equality of draws (FR-032, SC-030, DV-019, G-21). First line "
-            f"{claim.differing_lines[0]}."
+            f"That is the observation itself, not an inference from one: a digest mismatch "
+            f"is reported here *with every recorded key equal*, so the pin demonstrably does "
+            f"not determine the digest. **Why it does not is unestablished.** Measurement has "
+            f"ruled out three candidates — the sampler at a fixed seed, model construction "
+            f"across a rebuild, and the float64 storage round-trip each reproduced bitwise — "
+            f"and naming a cause past that would be asserting one. FR-022's tolerance above "
+            f"is the gate, and it is never bitwise equality of draws, so on the evidence "
+            f"available the difference is confined to this optional claim (FR-032, SC-030, "
+            f"DV-019, G-21). First line {claim.differing_lines[0]}."
         )
     return [
         f"- **Recorded library pin**: "

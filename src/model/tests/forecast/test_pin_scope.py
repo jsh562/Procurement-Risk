@@ -6,17 +6,18 @@ it brings the obligation SC-030 states: where the observed environment differs
 from the recorded pin, a digest mismatch is reported as a **scope limit rather
 than a failure** — the treatment E005 established for the same problem.
 
-**The recorded pin does not determine bitwise numerics, so every mismatch is a
-scope limit.** An earlier revision of this file asserted that the tier's shared
-reproduction publishes `equal`, and that a mismatch *inside* the pin is a
-failure. Both were wrong in the same way. `library_versions` records package
-versions; it cannot record a BLAS thread count, a reduction order, an
-instruction set or a scheduling decision, and each of those moves the low bits
-of a floating sum. On Linux the same re-fit, in the same pytest session, at the
-same seed and shape and under an identical pin, moved every one of 68 lines'
-digests — while the realized median drift was 0.12 days against the published
-5.0-day tolerance. The claim asserting `equal` failed on a run FR-022's actual
-gate passed with three orders of magnitude to spare.
+**The recorded pin is measured not to determine the stored digest, so every
+mismatch is a scope limit.** An earlier revision of this file asserted that the
+tier's shared reproduction publishes `equal`, and that a mismatch *inside* the
+pin is a failure. Both were wrong in the same way. On Linux the same re-fit, in
+the same pytest session, at the same seed and shape and with all six recorded
+keys equal, moved every one of 68 lines' digests — while the realized median
+drift was 0.12 days against the published 5.0-day tolerance. The claim asserting
+`equal` failed on a run FR-022's actual gate passed with three orders of
+magnitude to spare. **Why the digests move is unestablished** (G-21): sampler
+determinism at a fixed seed, model-construction determinism across a rebuild and
+float64 fidelity through the storage round-trip were each measured on that
+platform and each held bitwise. This file asserts the observation and no cause.
 
 Three things are asserted here and the third is what makes the first two mean
 anything.

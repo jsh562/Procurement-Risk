@@ -110,10 +110,10 @@ def realized_noise(outcome: ReproductionOutcome) -> float:
     """The largest absolute per-line delta this reproduction actually realized.
 
     The run's own noise floor, measured rather than assumed. On a platform whose
-    sampler reproduces bit for bit this is ~0 and every bound below is tight; on
-    one whose BLAS varies its reduction order it is the realized drift, and the
-    bounds widen to exactly what that run did — never to a constant chosen to
-    make a test pass.
+    re-fit reproduces bit for bit this is ~0 and every bound below is tight; on
+    one where it does not — Linux, for a reason G-21 records as unestablished —
+    it is the realized drift, and the bounds widen to exactly what that run did,
+    never to a constant chosen to make a test pass.
     """
     return max(abs(row.delta_days) for row in outcome.comparisons)
 

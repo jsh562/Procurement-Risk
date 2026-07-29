@@ -248,7 +248,7 @@ Task IDs are never reused or renumbered, so the tenth red-green pair appends her
 
 **A-015 — and the pair rule reaches them by this sentence, not by a label.** T055 and T051 add behaviour to property-tier modules outside any of the ten pairs. T117 and T118 are their RED halves and T055 and T051 are the corresponding GREEN halves, **so the `test:`-before-`feat:` commit ordering binds those two couples exactly as it binds the ten** — they are recorded here rather than in the table because the table is keyed by module and both modules already appear in it. T117 and T118 supply the missing RED halves; T055 gains `after:T117` and T051 gains `after:T118` below.
 
-**T105 and T106 were rescoped after CI.** Both described an in-pin digest mismatch as a failure. Ubuntu proved the premise false — the same seed in the same process produced different draws on all 68 lines — so the mismatch is a scope limit in every case and the day tolerance is the only gate. Corrected here rather than left describing behaviour the code no longer has.
+**T105 and T106 were rescoped after CI.** Both described an in-pin digest mismatch as a failure. Ubuntu proved the premise false — a re-fit at the recorded seed and shape, with all six pinned keys equal, moved every one of 68 lines' stored `draw_digest` values — so the mismatch is a scope limit in every case and the day tolerance is the only gate. Corrected here rather than left describing behaviour the code no longer has. **Why the digests move is unestablished** and is recorded as such in G-21; nothing in these two tasks asserts a cause.
 
 **T124's scope was corrected during implementation.** Its line named SC-036 and SC-037, which are US4 criteria already carried by T089 and T091 against machinery US3 does not have. T124 owns FR-041 only.
 
@@ -304,7 +304,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → US5 → Polish
 | NC-6 | T053 | **2** — the shorter median, and a no-censoring input at a zero delta |
 | NC-7 | T076 | 1 |
 | NC-8 | T072 | 1 |
-| NC-9 | T106 | **2** — outside the pin reports a scope limit, inside it fails |
+| NC-9 | T106 | **2** — the same digest mismatch outside the pin and inside it; both report a scope limit and what moves between them is the reported reason |
 | NC-10 | T045 | 1 |
 | NC-11 | T043 | 1 — a strict comparison, not a threshold any width satisfies |
 | NC-12 | T011 | **3** — `0400` probes outside, `0200`–`0299` declared-but-unpopulated, part (a) alone red |

@@ -93,17 +93,23 @@ def sample_posterior(
 
     `random_seed` is passed through unchanged: PyMC derives one stream per chain
     from it, so the same seed at the same shape drives the same *sequence of
-    decisions*. It does **not** follow that it produces the same bits: the seed
-    fixes the stream, and the arithmetic under it is a floating reduction whose
-    order a multi-threaded BLAS is free to vary run to run. The recorded library
-    pin does not close that — it names package versions, not thread counts,
-    reduction orders or instruction sets — which is measured rather than
-    asserted: on Linux a re-fit of one recorded run at its own seed and shape
-    moved every one of 68 lines' digests while the realized median drift was
-    0.12 days against a 5.0-day tolerance. ADR-0009 rules out bitwise equality
-    as the *gate* for exactly this reason, which is why FR-022 compares through
-    a published tolerance — the seed is recorded so a re-run is a re-run, not so
-    a float is a float.
+    decisions*. It does **not** follow that a whole recorded *run* reproduces the
+    same bits, and that is measured rather than argued: on Linux a re-fit of one
+    recorded run at its own seed and shape, under a library pin equal on all six
+    keys, moved every one of 68 lines' stored digests, while the realized median
+    drift was 0.12 days against a 5.0-day tolerance. On Windows none moved.
+
+    **The mechanism is unestablished** (G-21), and three candidates are already
+    ruled out on that same Linux image against the real database, so the next
+    reader need not re-measure them: sampling twice from one built graph at one
+    seed returns all ten posterior variables bitwise identical; rebuilding the
+    graph and resampling returns the same; and a float64 array — 4005 values
+    including subnormals, `nextafter(1, 2)` and `1/3` — survives the Postgres
+    round-trip bitwise, worst delta `0.0`. This function at a fixed seed is
+    therefore not the source, on the evidence available. ADR-0009 rules out
+    bitwise equality as the *gate* independently of any of that, which is why
+    FR-022 compares through a published tolerance — the seed is recorded so a
+    re-run is a re-run, not so a float is a float.
 
     Two defaults are load-bearing rather than cosmetic. `progressbar` is off
     because PyMC's rich backend imports `matplotlib`, which this entry does not
