@@ -54,12 +54,18 @@ branch = true
 # the model step's own data file, lands there with zero hits, and drags the
 # combined percentage down while measuring nothing. The two settings are one
 # change, not two.
+#
+# `model.forecast` was added with E007 (T001) under that same rule, in both
+# places in the same change. E003 and E005 each recorded the halves as one
+# change; adding the third package is where a note that has now been written
+# twice either holds or was never worth writing.
 source = [
     "tests/checks/helpers",
     "src/model/src/model/roster",
     "src/model/src/model/schema",
     "src/model/src/model/corpus",
     "src/model/src/model/procurement",
+    "src/model/src/model/forecast",
     "src/gateway/src/gateway",
 ]
 
@@ -80,6 +86,9 @@ corpus = ["src/model/src/model/corpus", "*/src/model/corpus"]
 # explicit `--source` and the data file holds absolute paths, and it is written
 # anyway so the package is not the one that breaks when that stops being true.
 procurement = ["src/model/src/model/procurement", "*/src/model/procurement"]
+# Added with E007, alongside the `source` entry above. Same reasoning as
+# `corpus` and `procurement`.
+forecast = ["src/model/src/model/forecast", "*/src/model/forecast"]
 gateway = ["src/gateway/src/gateway", "*/src/gateway"]
 
 [tool.coverage.report]

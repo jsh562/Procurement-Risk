@@ -18,9 +18,9 @@ breaking a deployment is otherwise invisible until the deployment:
   manual repair. This is the property `env.py` gets from Alembic's default
   single-transaction-per-run on a server with transactional DDL, and until it was
   asserted it was only ever *implied* by a default nobody had written down.
-* **TR-004 -- prefix range.** E003 owns `0001`-`0099` and E004 owns `0100`-`0199`.
-  A revision numbered outside the block is a collision waiting for the two
-  workstreams to merge.
+* **TR-004 -- prefix range.** E003 owns `0001`-`0099`, E004 `0100`-`0199`, E005
+  `0200`-`0299` (claimed, unused) and E007 `0300`-`0399`. A revision numbered
+  outside every block is a collision waiting for the workstreams to merge.
 * **TR-002 -- no downgrade body.** Forward-only. A downgrade that *looks*
   plausible and has never been run is worse than none, because it invites
   someone to run it during an incident.
@@ -104,17 +104,30 @@ RESERVED_BLOCK_LAST = 99
 #: test walks now contains revisions that are correctly numbered *outside*
 #: E003's block, and the assertion failed on the arrangement working as designed.
 #:
-#: The claim keeps its teeth: a revision numbered `0250` still fails, because it
+#: The claim keeps its teeth: a revision numbered `0450` still fails, because it
 #: is inside no declared block at all. What it no longer does is treat another
 #: epic's correctly-numbered revision as an encroachment.
+#:
+#: **Extended again 2026-07-27 (E007 AD-007 part f).** E007 claims `0300`-`0399`
+#: and authors `0300`-`0303` into this directory, so the same rescoping is owed
+#: a second time. E005's `0200`-`0299` is listed with them: it is claimed and
+#: deliberately unused, and this table is the *membership* claim, so a declared
+#: block that happens to hold no revision costs nothing here. This constant is a
+#: second, independent copy of the one in
+#: `tests/checks/test_migration_ranges.py` and is deliberately not shared — see
+#: the paragraph below — so extending one and not the other leaves half the
+#: chain reported as unowned.
 #:
 #: The *partition* claim — that the blocks tile the range without overlap or gap
 #: — deliberately does not live here. TR-051 places it at the repository root,
 #: in `tests/checks/test_migration_ranges.py`, on the ground that it asserts the
-#: boundary *between* two epics' claims and so belongs to neither entry.
+#: boundary *between* the authoring epics' claims and so belongs to no one
+#: entry.
 DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
     (RESERVED_BLOCK_FIRST, RESERVED_BLOCK_LAST, "E003"),
     (100, 199, "E004"),
+    (200, 299, "E005"),
+    (300, 399, "E007"),
 )
 
 #: Revision ids are the four-digit prefix itself (see alembic.ini). Exactly four
@@ -488,11 +501,13 @@ def test_revision_id_falls_inside_the_reserved_block(script: Script) -> None:
     `file_template` is `%(rev)s_%(slug)s`), so checking the id checks both.
 
     **Rescoped 2026-07-26 from "inside E003's block" to "inside a declared
-    block".** ADR-0013 makes this one directory serve two epics, so the chain
-    this test walks contains E004's `0100`-`0103` — correctly numbered, in the
-    block reserved for them, and previously reported here as an encroachment.
-    See `DECLARED_BLOCKS` for the full reasoning and for why the partition claim
-    lives at the repository root instead.
+    block", and the block table extended again 2026-07-27.** ADR-0013 makes this
+    one directory serve every epic that authors into it, so the chain this test
+    walks contains E004's `0100`-`0103` and E007's `0300`-`0303` — correctly
+    numbered, in the blocks reserved for them, and each in turn previously
+    reported here as an encroachment. See `DECLARED_BLOCKS` for the full
+    reasoning and for why the partition claim lives at the repository root
+    instead.
     """
     assert REVISION_ID_PATTERN.match(script.revision), (
         f"revision id {script.revision!r} is not a four-digit prefix. "

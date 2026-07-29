@@ -11,7 +11,9 @@ __pycache__/
 # Temporary Files rule in project-instructions.md. Several checkouts of this
 # repository share one disk, and the system temp directory is shared with the
 # whole machine; a ~1 GB unsigned install there was blocked as a dropper by the
-# host's antivirus, correctly.
+# host's antivirus, correctly, and drop-then-execute is what trips endpoint
+# protection. E006 and E007 added this rule independently, from the same
+# cause on different machines; the two entries are merged here into one.
 .tmp/
 
 # Node

@@ -39,6 +39,16 @@ dependencies = [
 # E005 adds no dependency: the generator draws with the NumPy already declared
 # above, the loader uses the declared psycopg, and everything else it needs is
 # stdlib or a package this entry already ships (`model.roster`, `model.corpus`).
+#
+# The two `forecast-*` commands arrived with E007 and keep the same split — one
+# verb per job, `<domain>-<verb>`, no subcommand dispatcher. `forecast-fit` runs
+# the model; `forecast-reproduce` re-derives a stored run and compares. They are
+# two entry points rather than one with a mode flag because a workflow step
+# names the job it runs.
+#
+# E007 adds no dependency either. PyMC, ArviZ, NumPy and pandas are already
+# declared above and the rest is stdlib or a package this entry already ships;
+# the plan audited the declaration list rather than assuming it.
 [project.scripts]
 migrate = "model.schema.cli:main"
 corpus-retrieve = "model.corpus.retrieve:main"
@@ -48,6 +58,8 @@ corpus-reverify = "model.corpus.reverify:main"
 procurement-generate = "model.procurement.generate:main"
 procurement-load = "model.procurement.load:main"
 procurement-validate = "model.procurement.validate:main"
+forecast-fit = "model.forecast.fit:main"
+forecast-reproduce = "model.forecast.reproduce:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
@@ -114,5 +126,20 @@ allow_indirect_imports = false
 name = "Corpus code does not reach the model provider"
 type = "forbidden"
 source_modules = ["model.corpus"]
+forbidden_modules = ["model.llm", "gateway"]
+allow_indirect_imports = false
+
+# FR-024, FR-025: the fit is offline on every path and no request-time entry
+# point may reach it. Stated as a build-gating contract rather than an
+# assertion, so the claim is enforced on every commit instead of re-argued per
+# review. `gateway` is named alongside `model.llm` because reaching the provider
+# through the shared client is the same violation by another route. Indirect
+# detection stays ON: laundering the dependency through an intermediate module
+# is the evasion. DV-022 is the assertion, NC-15 the planted failing direction,
+# and G-17 records what a static contract still does not reach.
+[[tool.importlinter.contracts]]
+name = "Forecast code does not reach the model provider"
+type = "forbidden"
+source_modules = ["model.forecast"]
 forbidden_modules = ["model.llm", "gateway"]
 allow_indirect_imports = false

@@ -299,12 +299,20 @@ jobs:
         working-directory: src/model
         # --source overrides the root pyproject.toml `source` list rather than
         # merging with it, so every package in that list must appear here too or
-        # it lands in the denominator with no hits. Four packages now: roster
+        # it lands in the denominator with no hits. Five packages now: roster
         # from the scaffold, corpus from E002, schema from E003, procurement
-        # from E005. Each epic widened this line independently and the union is
-        # what is correct — dropping any package would put it in the denominator
-        # uncovered and drag the gate down while measuring nothing.
-        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement -m pytest tests -q
+        # from E005, forecast from E007. Each epic widened this line
+        # independently and the union is what is correct — dropping any package
+        # would put it in the denominator uncovered and drag the gate down while
+        # measuring nothing.
+        #
+        # `forecast` was the one that proved the rule rather than restating it.
+        # E007's T001 made both root `pyproject.toml` edits — the `source` entry
+        # and the `[tool.coverage.paths]` mapping — and this inline list, which
+        # overrides the first of them, was left at four. `tests/forecast` ran on
+        # every CI run while the package it exercises was uncounted, so the two
+        # halves of T001 bought nothing on the only run that gates (T111).
+        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement,src/model/forecast -m pytest tests -q
 
       # E005's release gate. Each command below is a checkable claim about the
       # committed dataset, and each fails the build rather than warning:
@@ -345,6 +353,68 @@ jobs:
           uv run pytest -q tests/procurement/test_emitted_artifact_set.py
           uv run pytest -q tests/procurement/test_gate_discharged.py
           uv run pytest -q tests/procurement/test_corpus_match_fields.py
+
+      # E007's release gate (T113). Four checkable claims about the forecast
+      # tier, each failing the build rather than warning:
+      #
+      #   emitted-set equality  every file the fit and reproduction jobs write is
+      #                         an instance of one of FR-040's three declared
+      #                         kinds, as an equality rather than a containment
+      #                         (SC-035, DV-041).
+      #
+      #   reportable unit       every measure with a decision criterion is
+      #                         reported as measure, realized value, criterion
+      #                         with its direction, and verdict — over the
+      #                         emitted reports and the stored diagnostic rows —
+      #                         and the wall clock carries none (SC-034, DV-039).
+      #                         Its controls run beside it: an absence check with
+      #                         no planted positive is green when it finds
+      #                         nothing (NC-20).
+      #
+      #   import contract       the modeling entry's `model.forecast` contract
+      #                         evidenced in its failing direction by two planted
+      #                         imports (NC-15), and the conjunct no entry owns —
+      #                         no request-time entry point reaches the fit over
+      #                         the transitive closure (DV-022, SC-021).
+      #
+      #   migration ranges      `0300`-`0399` is E007's declared block; the
+      #                         partition check is what keeps the directory
+      #                         tiled without overlap as each epic claims one
+      #                         (TR-018, TR-051).
+      #
+      # The forecast files run as ONE pytest invocation rather than one each, and
+      # that differs from E005's gate above deliberately: this tier's fixtures
+      # emit a real `forecast-fit` and a real `forecast-reproduce`, both
+      # package-scoped, so five invocations would sample five times over. E005's
+      # four checks share no fixture and cost nothing to separate.
+      #
+      # **No `procurement-load` step precedes this**, and none is added: CI runs
+      # `pytest tests` after `migrate` alone, and the model test step above
+      # leaves `purchase_order_line` empty because `tests/procurement` empties it
+      # in teardown by design. The forecast tier's `committed_dataset` fixture
+      # loads the committed dataset through the same `load()` the console entry
+      # calls whenever the table is empty, so the gate relies on that fixture
+      # rather than on a step — one place that establishes the precondition
+      # instead of two that can disagree about it.
+      - name: Forecast model release gate
+        env:
+          # Step-scoped, and ABOVE `run:` — E005's gate learned both halves. The
+          # scoping is for the reason the migration and coverage steps carry
+          # their own: a job-wide URL would point the web and image steps at a
+          # database too. The placement is because
+          # `tests/forecast/conftest.py::pytest_configure` turns `CI` set with
+          # `DATABASE_URL` unset into a hard abort *before collection*, exactly
+          # as the procurement tier's does, so a swallowed `env:` block kills
+          # every invocation below for a reason unrelated to what it gates.
+          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+          # Redundant with the runner's own `CI`, stated anyway so the demand is
+          # visible beside the value it demands and a runner that does not set
+          # `CI` is still covered.
+          REQUIRE_DB: "1"
+        run: |
+          uv run --directory src/model pytest -q tests/forecast/test_emitted_set.py tests/forecast/test_reportable_unit.py tests/forecast/test_reportable_unit_controls.py tests/forecast/test_import_contract_controls.py
+          uv run pytest -q tests/checks/test_dependency_isolation.py
+          uv run pytest -q tests/checks/test_migration_ranges.py
 
       # FR-017: corpus validation runs automatically, not on demand. The console
       # entry point is the same one a developer runs, so a green CI run and a

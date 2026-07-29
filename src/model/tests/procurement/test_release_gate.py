@@ -79,11 +79,17 @@ class TestCoveragePlacement:
             step["run"] for step in steps if "coverage run --source" in step.get("run", "")
         )
         source = set(command.split("--source=")[1].split()[0].split(","))
+        # `forecast` was added with E007 (T111). The inline list had been left at
+        # four while `tests/forecast` ran on every CI run, so the package was in
+        # the denominator with no hits — which is the exact failure this
+        # assertion's own docstring describes, arriving one epic after it was
+        # written.
         assert source >= {
             "src/model/roster",
             "src/model/schema",
             "src/model/corpus",
             "src/model/procurement",
+            "src/model/forecast",
         }
 
     def test_the_root_config_also_lists_the_package(self) -> None:
