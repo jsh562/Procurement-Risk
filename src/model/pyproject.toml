@@ -47,7 +47,7 @@ dependencies = [
 # E006 adds four, and each is a runtime dependency of the ingestion job rather
 # than tooling:
 #
-#   onnxruntime  {SAD:ADR-0018} pins the inference runtime for corpus and query
+#   onnxruntime  {SAD:ADR-0019} pins the inference runtime for corpus and query
 #                embedding. FP32 export, per AD-014 -- ADR-0012 budgets roughly
 #                80 MB for full-precision weights, and INT8 would change the
 #                vectors every published retrieval figure is measured on.
