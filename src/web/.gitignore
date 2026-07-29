@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright run artifacts — traces, screenshots and the last-run marker. Output
+# of a check, never input to one.
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

@@ -158,7 +158,7 @@ CREATE TABLE held_out_prediction (
 
     -- `survival[k] = P(not yet delivered at end of day anchor_date + k)`, for
     -- k = 1..horizon_days. **Read by E014 only** -- E010 must never read this
-    -- table, because its `1 - survival[d - as_of_date]` contract is false here
+    -- table, because its `survival[d - as_of_date]` contract is false here
     -- and it has no way to distinguish the two anchors. That contract has no
     -- schema mechanism; it is ADR-0018's, and **G-19**.
     survival double precision[] NOT NULL,
