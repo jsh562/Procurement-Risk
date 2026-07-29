@@ -3,7 +3,7 @@ feature_branch: "00009-cross-document-identity-resolution"
 created: "2026-07-29"
 input: "E009"
 spec_type: "product"
-spec_maturity: "draft"
+spec_maturity: "clarified"
 epic_id: "E009"
 epic_sources: "{PRD:CAP-004}"
 instructions_version: "1.2.7"
@@ -82,11 +82,11 @@ A pair the system is not confident about is held back and written to a review qu
 3. **Given** a withheld pair, **When** the resolved-entity output is inspected, **Then** the two records appear in separate clusters — withholding is not a deferred merge.
 4. **Given** a normalization rule that would map two records known to be distinct onto the same key, **When** the collision guard runs, **Then** the run writes no resolved entities, no review items, and no manifest.
 
-### User Story 3 - Read the resolution's own quality evidence (Priority: P2)
+### User Story 3 - Read the resolution's own quality evidence (Priority: P1)
 
-A technical evaluator can see how good the resolution is, with intervals on every figure, and can tell which stage caused a miss.
+A technical evaluator can see how good the resolution is, with intervals on every estimated figure, and can tell which stage caused a miss.
 
-**Why this priority**: Significant value and the basis of the published claim, but the MVP resolves identities without it. Separated from P1 because the evidence is only meaningful once merges exist to measure. Recorded as a risk rather than resolved here: `specs/prd.md` gates both identity metrics at "P1 release", so this split places the registered gate's evidence outside the MVP slice.
+**Why this priority**: `specs/prd.md` gates both identity metrics at "P1 release", so the MVP slice must carry the registered gate's evidence or the gate is unmeetable at the release it names. Raised from P2 at clarification for that reason. It also breaks a circular dependency: `specs/project-plan.md` gives E014 the LabeledPair entity while E014 depends on E009, so the frozen set has to be authored here and consumed there.
 
 **Independent Test**: Run resolution against the frozen labeled set and demonstrate a report carrying merge precision, recall, coverage, blocking pair completeness and reduction ratio, and the withheld set's size — each with its interval.
 
@@ -169,6 +169,13 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 - **FR-033**: Every resolved entity MUST be traceable to its member source records and their document locations.
 - **FR-034**: System MUST write a run manifest recording the alias-table version, the threshold constants, the labeled-set hash, and the input record counts, so any published figure resolves to the run that produced it.
 - **FR-035**: A run that cannot satisfy FR-007's collision guard or FR-017's hash verification MUST write no resolved entities, no review items, and no manifest, rather than writing a partial result.
+- **FR-036**: A true pair MUST be established by annotator judgment recorded in the frozen labeled set, over pairs sampled from the within-project pair space independently of the blocking keys. No stage may derive a true pair from a blocking key, since that would make blocking pair completeness true by construction.
+- **FR-037**: The frozen labeled set MUST be balanced at approximately equal counts of true and false pairs, and MUST record its sampling frame alongside its hash so every published denominator is attributable.
+- **FR-038**: A proportion estimated from the labeled set — recall and blocking pair completeness — MUST be published with a Wilson 95% interval. A census over the run's own candidate set — coverage, reduction ratio, and the withheld share — MUST be published as an exact count with its denominator and MUST NOT carry an interval, because there is no sampling uncertainty to express.
+- **FR-039**: Resolution runs MUST be append-only and immutable. A later run MUST NOT alter or delete an earlier run's resolved entities or review items, and consumers MUST select a run through an explicit active-run pointer rather than by recency.
+- **FR-040**: The alias table's initial contents MUST derive from E002's committed manufacturer catalogue, and the run manifest MUST record that catalogue's digest alongside the alias-table version.
+- **FR-041**: A ResolvedEntity MUST contain at most one specification-section record. Purchase-order lines are unbounded within a cluster, because partial shipments and change orders legitimately produce several against one specified material.
+- **FR-042**: Each threshold's exact value MUST belong to the more conservative adjacent band: a score exactly at the merge threshold is withheld, and a score exactly at the reject threshold is rejected.
 
 ### Key Entities
 
@@ -185,8 +192,9 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 ### Assumptions
 
 - **The registered merge-precision target of 0.95 is a point estimate, not an interval lower bound.** This reading is what FR-026 and FR-027 encode, and it is the only reading under which the criterion is satisfiable at this sample size. It is an assumption this specification makes, not a settled question — see the amendment need in Risks.
-- Ground truth for blocking pair completeness is available from E005's generator or E006's extraction provenance, independently of the blocking keys. If no such source exists, FR-010 is unmeasurable and the figure must be disclosed as unavailable rather than computed from the blocked pool.
+- **No upstream epic records a material-identity link, and none is assumed.** E005 settles the manufacturer/part-number overlap as shared vocabulary with no foreign key, and E002 links generated submittals to the real specification layer at equipment-category granularity only. Ground truth for this feature is therefore annotator judgment over a sampled frame (FR-036), not a generator-emitted key.
 - E006's extraction output carries manufacturer and part-number fields at a fidelity sufficient to block and score on.
+- The alias table's initial contents derive from E002's committed manufacturer catalogue, which guarantees a canonical name, at least one alias spelling, and a part-number prefix per manufacturer. A distinct misspelling class is not guaranteed by that catalogue and is not assumed here.
 - Resolution runs offline as a batch job over a project's records, not at request time.
 - The 40 hand-labeled pairs are labeled by a single annotator, consistent with the product document's disclosure that no inter-annotator agreement is measured.
 
@@ -200,7 +208,11 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 
 - **E009 depends on E006, which has no workspace (likelihood: high, impact: high).** E006 has claimed decision records ADR-0019 through ADR-0021 but has not been specified, so the extraction output this feature blocks and scores on does not exist. Nothing here is implementable until E006 lands. Mitigation: the specification is written against E006's declared contract from `specs/project-plan.md` rather than against a delivered schema, and the dependency is recorded rather than assumed away. Planning should not begin until E006's data model is readable.
 
-- **The MVP slice does not carry the registered gate's evidence (likelihood: medium, impact: medium).** `specs/prd.md` gates merge precision and recall at "P1 release", while every publication requirement for those figures sits in US3 at P2. P1 therefore resolves identities and withholds correctly but publishes no quality evidence. Recorded rather than resolved by promoting US3: the evidence is only computable once merges exist, and re-priorit­ising it would make P1 depend on the frozen labeled set that E014 owns. Whoever plans this should decide whether US3 rises to P1 or the PRD's release gate is the thing that moves.
+- **The registered recall target has the same interval problem as precision, and it is not recorded upstream (likelihood: medium, impact: medium).** `specs/prd.md` sets identity-resolution recall at "≥ 0.80, explicitly secondary to precision". At roughly 20 true pairs in a balanced labeled set, a 95% Wilson interval around 0.80 spans approximately 0.58–0.92. Read as an interval lower bound the target is unreachable, exactly as the precision target is. This specification reads it as a point estimate (SC-018) on the same basis. **Amendment need — recorded here, not performed**: `specs/prd.md` and `specs/sad.md` should state whether 0.80 is a point estimate or a bound. Governance reserves that to the default branch.
+
+- **This feature depends on E002 and the registered plan does not say so (likelihood: high, impact: low).** `specs/project-plan.md` records E009 as depending on E005 and E006. Clarification established that the alias table derives from E002's committed manufacturer catalogue (FR-040), which makes E002 a real dependency. **Amendment need — recorded here, not performed**: add the E002 edge to E009's dependency contract in the project plan. Nothing on this branch writes it.
+
+- **The MVP slice did not carry the registered gate's evidence — resolved at clarification (likelihood: medium, impact: medium).** `specs/prd.md` gates merge precision and recall at "P1 release", while every publication requirement for those figures sat in US3 at P2. P1 therefore resolves identities and withholds correctly but publishes no quality evidence. Recorded rather than resolved by promoting US3: the evidence is only computable once merges exist, and re-priorit­ising it would make P1 depend on the frozen labeled set that E014 owns. **Resolved**: US3 was raised to P1, and FR-017 makes E009 the author of the frozen labeled set that E014 then consumes — which also breaks the circular dependency, since the project plan gives E014 the LabeledPair entity while E014 depends on E009. The MVP slice now carries the gate's evidence.
 
 ## Implementation Signals
 
@@ -213,8 +225,8 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 
 ### Measurable Outcomes
 
-- **SC-001** [US1]: A known specification/submittal/purchase-order triple for one material resolves to a single ResolvedEntity, with all three members present.
-- **SC-002** [US1]: Records naming the same manufacturer through different aliases — full legal name, common abbreviation, and a known misspelling — resolve to one canonical manufacturer.
+- **SC-001** [US1]: A known submittal/purchase-order pair for one material resolves to a single ResolvedEntity with both members present. The specification member is associated at equipment-category granularity rather than merged, because the specification layer is real, verbatim-vendored text carrying no synthetic manufacturer or part number to match on — published as a limitation, not as a shortfall.
+- **SC-002** [US1]: Records naming the same manufacturer through the alias spellings E002's catalogue guarantees — canonical name and at least one alternate — resolve to one canonical manufacturer. A misspelling class is matched where present in the catalogue and is not required to exist.
 - **SC-003** [US1]: Two records whose part numbers differ only in a suffix encoding a material property are not merged, and the differing attribute is recorded on the pair.
 - **SC-004** [US1]: A record carrying no part number, where at least one other record shares its canonical manufacturer, appears in at least one candidate pair.
 - **SC-005** [US1]: Every pair induced by an emitted ResolvedEntity's membership carries a recorded score, and that score exceeds the merge threshold. A pair present in a cluster with no recorded score is a failure.
@@ -243,13 +255,25 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 - **SC-028** [US4]: An alias table containing an alias mapped to two canonical manufacturers fails to load, and the error names the alias.
 - **SC-029** [US4]: Every merge records the alias rule that fired and the alias-table version in force.
 - **SC-030** [US4]: Every manufacturer string matching no alias is recorded and retrievable after the run.
+- **SC-031** [US3]: Recall and blocking pair completeness are published with Wilson 95% intervals; coverage, reduction ratio and the withheld share are published as exact counts with denominators and no interval.
+- **SC-032** [US3]: The frozen labeled set records its sampling frame and its balance of true to false pairs, and no true pair in it is derived from a blocking key.
+- **SC-033** [US2]: A second resolution run leaves the first run's resolved entities and review items unaltered, and the active-run pointer identifies which run a consumer reads.
+- **SC-034** [US1]: No ResolvedEntity contains more than one specification-section record; clusters containing several purchase-order lines are emitted without error.
+- **SC-035** [US2]: A score exactly at the merge threshold is withheld and a score exactly at the reject threshold is rejected, demonstrated at both cutoffs.
+- **SC-036** [US4]: The run manifest records the E002 manufacturer-catalogue digest from which the alias table derives, alongside the alias-table version.
 
 ## Clarifications
 
-| # | Question | Options | Implication |
-|---|---|---|---|
-| 1 | What is the composition of the 40 hand-labeled pairs — how many true, how many false, and how sampled? | (a) Balanced ~20/20, sampled from blocked candidates; (b) balanced, sampled independently of blocking keys; (c) all-true pairs with negatives drawn separately | Precision's denominator is merged pairs and recall's is true pairs, so neither metric has a defined denominator until this is fixed. Option (a) makes FR-010's blocking pair completeness 1.0 by construction and unmeasurable. Highest-value open question in the feature. |
-| 2 | May a ResolvedEntity contain more than one purchase-order line, or more than one specification section? | (a) One spec section + one submittal + many PO lines; (b) any cardinality; (c) at most one record per document type | Determines whether a cardinality constraint is available as a second guard against over-merging, and whether a multi-PO cluster is correct or is itself the defect. Option (c) would make SC-005's guard cheap to enforce; option (b) removes the guard entirely. |
+### Session 2026-07-29
+
+- Q: What is a "true pair", given that no upstream epic records a material-identity link? -> A: Annotator judgment on a labeled set sampled from the within-project pair space independently of the blocking keys. SC-001's triple is restated as the submittal-to-purchase-order link the data can carry; the specification member is reduced to a category-level association and the reduction is published as a limitation.
+- Q: What is the composition and sampling frame of the 40 hand-labeled pairs? -> A: Balanced, approximately 20 true and 20 false, sampled from the full within-project pair space independently of the blocking keys — the only frame under which blocking pair completeness measures anything.
+- Q: FR-025 mandates an interval on every published figure, but only merge precision has a named method. How are the rest handled? -> A: Wilson intervals for proportions estimated on the labeled set (recall, blocking pair completeness); census figures over the run's own candidate set (coverage, reduction ratio, withheld share) are reported as exact counts with their denominators rather than with intervals. Recall's 0.80 is a point estimate on the same reading applied to precision's 0.95.
+- Q: Who authors and freezes the labeled pair set, and does US3 rise to P1 with it? -> A: E009 authors and freezes it; E014 consumes that hash rather than minting a second. US3 rises to P1 so the registered "P1 release" gate has its evidence inside the MVP slice.
+- Q: What happens when resolution runs a second time and disagrees with the first? -> A: Runs are append-only and immutable, with an explicit active-run pointer that downstream consumers read — the contract E003 and E007 already establish and `specs/sad.md` mandates.
+- Q: Where does the alias table come from? -> A: Derived from E002's committed manufacturer catalogue, with the catalogue digest recorded as a run-manifest input alongside the alias-table version. E002 is added as a dependency, and SC-002 is weakened to the alias spellings E002 actually guarantees.
+- Q: May a ResolvedEntity hold more than one purchase-order line, or more than one specification section? -> A: At most one specification-section record per cluster; purchase-order lines unbounded, because partial shipments and change orders make multiple lines against one specified material ordinary.
+- Q: Which band owns each threshold's exact value? -> A: The more conservative neighbour — a score exactly at the merge threshold withholds, a score exactly at the reject threshold rejects.
 
 ## Glossary
 
@@ -261,7 +285,10 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 | **Reduction ratio** | The share of all possible pairs that blocking eliminates from consideration. |
 | **Withhold band** | The score range between the reject and merge thresholds, in which a pair is neither merged nor rejected but routed to review. |
 | **Coverage** | The share of candidate pairs the system decided automatically, rather than withholding. |
+| **True pair** | Two records an annotator judged to describe the same material, recorded in the frozen labeled set. Established by judgment over an independently sampled frame, never derived from a blocking key. |
+| **Attribute agreement** | The per-attribute comparison outcome — manufacturer, part number, description, quantity unit — contributing a recorded component to a pair's score. |
 | **Recall** | The share of true pairs in the frozen labeled set that were auto-merged. A true pair withheld, rejected, or never generated by blocking counts as a miss. |
+| **Census figure** | A figure computed over the whole of the run's own candidate set — coverage, reduction ratio, withheld share — carrying no sampling uncertainty and therefore no interval. |
 | **Induced pair set** | Every pair implied by a cluster's membership, including pairs whose records were never directly compared. |
 | **Rule of three** | An approximation giving a 95% upper bound of 3/n on an error rate when zero errors are observed in n trials. Applies only at zero errors, and is unreliable below n = 30. |
 | **Arbitrary unit** | A unit with no defined relation to any other — each, lot, lump sum — which cannot be converted or dimensionally compared. |
