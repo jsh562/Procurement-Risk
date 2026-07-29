@@ -188,3 +188,70 @@ def test_the_worklist_page_reaches_the_serving_boundary_and_nothing_else() -> No
             f"{forbidden!r} appears in the interface tier's data access — FR-024 makes 'the "
             "interface tier opens no datastore connection' the observable form of the rule"
         )
+
+
+def test_the_interface_origin_may_read_the_worklist(
+    frozen_run: dict[str, Any], client: Any
+) -> None:
+    """FR-024, FR-031. The two tiers are separate origins, so every client-side
+    re-query an adjustment triggers is cross-origin.
+
+    Without the headers the browser blocks it while the server-rendered first
+    paint still works — so the page loads, the ranking appears, and only the
+    adjustment silently fails. That reads as an interface bug and is a
+    deployment one, which is why it is asserted here rather than left to the
+    first coordinator who moves a date.
+    """
+    from api.main import ALLOWED_ORIGINS
+
+    origin = ALLOWED_ORIGINS[0]
+    response = client.get("/api/v1/worklist", headers={"Origin": origin})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_the_validator_header_is_readable_by_the_browser(
+    frozen_run: dict[str, Any], client: Any
+) -> None:
+    """FR-020a. `ETag` is not a simple response header, so a cross-origin client
+    cannot read it unless it is exposed — and a validator the client cannot read
+    is one it can never send back."""
+    from api.main import ALLOWED_ORIGINS
+
+    response = client.get("/api/v1/worklist", headers={"Origin": ALLOWED_ORIGINS[0]})
+    assert "etag" in response.headers["access-control-expose-headers"].lower()
+
+
+def test_the_worklist_does_not_admit_every_origin(frozen_run: dict[str, Any], client: Any) -> None:
+    """An explicit allowlist rather than `*`.
+
+    There is no authentication and no cookie to protect today (FR-056), so a
+    wildcard would leak nothing — but it would be a standing invitation for the
+    first credential this system gains to be readable by any page on the
+    internet, and that reversal is exactly the one FR-056 records.
+    """
+    from api.main import ALLOWED_ORIGINS
+
+    assert "*" not in ALLOWED_ORIGINS
+    response = client.get("/api/v1/worklist", headers={"Origin": "https://example.invalid"})
+    assert response.headers.get("access-control-allow-origin") != "https://example.invalid"
+
+
+def test_the_worklist_advertises_no_write_method_across_origins(
+    frozen_run: dict[str, Any], client: Any
+) -> None:
+    """FR-031. Permitting more than GET would advertise methods the route table
+    does not answer — a preflight that says POST is allowed and a handler that
+    returns 405 is a contradiction a client has no way to resolve."""
+    from api.main import ALLOWED_ORIGINS
+
+    response = client.options(
+        "/api/v1/worklist",
+        headers={
+            "Origin": ALLOWED_ORIGINS[0],
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    allowed = response.headers.get("access-control-allow-methods", "")
+    assert "POST" not in allowed

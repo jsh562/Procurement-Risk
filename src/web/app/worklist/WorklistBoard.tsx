@@ -56,7 +56,17 @@ export function WorklistBoard({ initial }: { readonly initial: WorklistResponse 
        * `aria-live="polite"` rather than `assertive`: the coordinator initiated
        * this, so it is confirmation rather than an interruption.
        */}
-      <div className={styles.acknowledgement} role="status" aria-live="polite">
+      <div
+        className={styles.acknowledgement}
+        role="status"
+        aria-live="polite"
+        // FR-046. Named, because the page-scope banners are also `role=status`
+        // and an unnamed region among several is one a coordinator cannot tell
+        // apart from the others — they hear "status" three times and have to
+        // infer which one just spoke. The name is also what makes this region
+        // addressable in a test, which is the same problem in a different form.
+        aria-label="Adjustment status"
+      >
         {acknowledgement ? (
           <>
             <span data-kind={acknowledgement.kind}>{acknowledgement.message}</span>

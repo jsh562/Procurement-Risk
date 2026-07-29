@@ -47,6 +47,12 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The benchmark tier is deselectable, because its 200-sample variants take
+# minutes and a developer running the unit suite should not wait for them. It is
+# not *excluded* by default: FR-040 makes a check that does not run evidence
+# nothing, and a tier opted into by a flag nobody passes is a tier that stopped
+# running the day someone forgot.
+markers = ["benchmark: p95 latency against the registered envelope (SC-017, SC-018)"]
 
 [tool.coverage.run]
 branch = true

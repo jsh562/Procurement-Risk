@@ -119,9 +119,13 @@ describe("adjusting a need-by date", () => {
     await adjust(A, "2026-08-05");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/applied/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /applied/i,
+      );
     });
-    expect(screen.getByRole("status")).toHaveTextContent(/order is unchanged/i);
+    expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+      /order is unchanged/i,
+    );
   });
 
   it("acknowledges a reorder and names the new position", async () => {
@@ -133,9 +137,13 @@ describe("adjusting a need-by date", () => {
     await adjust(A, "2026-07-01");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/order changed/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /order changed/i,
+      );
     });
-    expect(screen.getByRole("status")).toHaveTextContent(/position 2/i);
+    expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+      /position 2/i,
+    );
   });
 
   it("makes the two acknowledgements distinguishable from each other", async () => {
@@ -145,17 +153,27 @@ describe("adjusting a need-by date", () => {
     stubNext(response(INITIAL.ranked, "sha256:first"));
     const view = render(<WorklistBoard initial={INITIAL} />);
     await adjust(A, "2026-08-05");
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/unchanged/i));
-    const unchanged = screen.getByRole("status").textContent;
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /unchanged/i,
+      ),
+    );
+    const unchanged = screen.getByRole("status", { name: "Adjustment status" }).textContent;
 
     view.unmount();
     vi.unstubAllGlobals();
     stubNext(response([row(B, 1, "2026-09-10"), row(A, 2, "2026-08-10")], "sha256:second"));
     render(<WorklistBoard initial={INITIAL} />);
     await adjust(A, "2026-07-01");
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/changed/i));
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /changed/i,
+      ),
+    );
 
-    expect(screen.getByRole("status").textContent).not.toBe(unchanged);
+    expect(screen.getByRole("status", { name: "Adjustment status" }).textContent).not.toBe(
+      unchanged,
+    );
   });
 
   it("keeps focus on the adjusted control after the list reorders", async () => {
@@ -166,7 +184,11 @@ describe("adjusting a need-by date", () => {
     render(<WorklistBoard initial={INITIAL} />);
 
     const input = await adjust(A, "2026-07-01");
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/applied/i));
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /applied/i,
+      ),
+    );
     expect(document.activeElement).toBe(input);
   });
 
@@ -178,12 +200,18 @@ describe("adjusting a need-by date", () => {
       stubNext(response(INITIAL.ranked, "sha256:first"));
       render(<WorklistBoard initial={INITIAL} />);
       await adjust(A, "2026-08-05");
-      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/applied/i));
+      await waitFor(() =>
+        expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+          /applied/i,
+        ),
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(120_000);
       });
-      expect(screen.getByRole("status")).toHaveTextContent(/applied/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /applied/i,
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -195,12 +223,16 @@ describe("adjusting a need-by date", () => {
     stubNext(response(INITIAL.ranked, "sha256:first"));
     render(<WorklistBoard initial={INITIAL} />);
     await adjust(A, "2026-08-05");
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/applied/i));
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /applied/i,
+      ),
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     });
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status", { name: "Adjustment status" })).toBeEmptyDOMElement();
   });
 
   it("reports an adjustment the server did not apply, with its cause", async () => {
@@ -217,9 +249,13 @@ describe("adjusting a need-by date", () => {
     await adjust(A, "2026-08-05");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/not applied/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /not applied/i,
+      );
     });
-    expect(screen.getByRole("status")).toHaveTextContent(/already been delivered/i);
+    expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+      /already been delivered/i,
+    );
   });
 
   it("says so rather than leaving a stale order on screen when the request fails", async () => {
@@ -237,7 +273,9 @@ describe("adjusting a need-by date", () => {
     await adjust(A, "2026-08-05");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/could not be applied/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /could not be applied/i,
+      );
     });
   });
 
@@ -255,7 +293,11 @@ describe("adjusting a need-by date", () => {
     render(<WorklistBoard initial={INITIAL} />);
 
     await adjust(A, "2026-08-05");
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/applied/i));
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /applied/i,
+      ),
+    );
     await adjust(B, "2026-09-05");
 
     await waitFor(() => {
@@ -276,7 +318,9 @@ describe("adjusting a need-by date", () => {
     await adjust(A, "2030-01-01");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/not ranked/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /not ranked/i,
+      );
     });
   });
 
@@ -296,7 +340,7 @@ describe("adjusting a need-by date", () => {
     await adjust(A, "");
 
     expect(spy).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status", { name: "Adjustment status" })).toBeEmptyDOMElement();
   });
 
   it("keeps the active scope and sort when re-querying after an adjustment", async () => {
@@ -474,7 +518,9 @@ describe("scoping and sorting", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/could not be reloaded/i);
+      expect(screen.getByRole("status", { name: "Adjustment status" })).toHaveTextContent(
+        /could not be reloaded/i,
+      );
     });
   });
 
@@ -496,6 +542,6 @@ describe("scoping and sorting", () => {
     });
 
     await waitFor(() => expect(spy).toHaveBeenCalled());
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status", { name: "Adjustment status" })).toBeEmptyDOMElement();
   });
 });

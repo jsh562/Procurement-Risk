@@ -237,6 +237,7 @@ def test_more_than_one_line_may_be_adjusted_at_once(
     """FR-031 admits a set, which is why the parameter repeats: a coordinator
     comparing two lines needs both dates moved together."""
     lines = [item for item in frozen_run["lines"] if item["case"] in {"nominal", "exact_harm_tie"}]
+
     def pulled(item: dict[str, Any]) -> str:
         adjusted = date.fromisoformat(item["need_by_date"]) - timedelta(days=3)
         return f"{item['po_line_id']}:{adjusted.isoformat()}"

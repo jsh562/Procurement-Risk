@@ -205,8 +205,25 @@ export interface WorklistResponse {
 /**
  * Where the serving boundary is. A base URL rather than a database URL: the
  * shape of this constant is itself the FR-024 boundary.
+ *
+ * **Two variables, deliberately.** This module runs in two places — the server
+ * component's first fetch happens in Node, and every adjustment's re-query
+ * happens in the browser — and the two do not necessarily reach the boundary at
+ * the same address. Next.js only inlines `NEXT_PUBLIC_`-prefixed variables into
+ * client bundles, so a single server-side variable silently becomes `undefined`
+ * in the browser and every adjustment falls back to a default host. That failure
+ * is invisible to a unit test, which stubs `fetch` and never evaluates the URL
+ * against a real server; the end-to-end run is what surfaced it.
+ *
+ * The browser value is read at module scope rather than inside the fetch, so an
+ * environment that forgot to set it fails the same way on every request rather
+ * than on the first adjustment a coordinator happens to make.
  */
-export const API_BASE_URL = process.env.WORKLIST_API_BASE_URL ?? "http://localhost:8000";
+const SERVER_BASE_URL = process.env.WORKLIST_API_BASE_URL ?? "http://localhost:8000";
+const BROWSER_BASE_URL =
+  process.env.NEXT_PUBLIC_WORKLIST_API_BASE_URL ?? SERVER_BASE_URL ?? "http://localhost:8000";
+
+export const API_BASE_URL = typeof window === "undefined" ? SERVER_BASE_URL : BROWSER_BASE_URL;
 
 /**
  * Raised when the worklist could not be read at all — FR-043's three
