@@ -1,189 +1,132 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 45 bug tasks from five QC iterations.
-44 of the 45 are closed. **T081 is open and cannot be closed on this branch.**
+Implementation complete: 52 tasks, plus 65 bug tasks from ten QC iterations.
+All 117 are closed.
 
-## Not release-ready — one gate is open by design
+**This file is a completion marker, not a history.** Earlier versions carried a
+per-iteration narrative of every defect, duplicating `tasks.md` and
+`qc-report.md`. That duplication became the feature's largest single source of
+defects — T101, T102, T109 and T112 were all drift between this file's retelling
+and the records it retold — so the retelling is gone. `qc-report.md` records the
+QC results, `tasks.md` records the tasks, and this file records what was
+completed and what was measured.
 
-This feature's own plan declares a release gate it does not meet. `specs/sad.md:124`
-sketches the primary flow as `GET /lines?project=…`; `contracts/openapi.yaml`
-declares `/worklist` under `/api/v1`. plan.md:46 and HINT-003 both state the
-consequence in E010's words: "this feature does not pass QC while the registered
-primary flow and this contract name different addresses."
+## The release gate
 
-The amendment is not E010's to perform. project-instructions.md:94 — "Amendments
+E010's plan declared a release gate for itself: `specs/sad.md` sketched the
+worklist read as `GET /lines?project=…` while the contract defines `/worklist`
+under `/api/v1`, and the plan's summary table named a third form. HINT-003
+(`plan.md:442`) stated the consequence — "this feature does not pass QC while the
+registered primary flow and this contract name different addresses" — and the
+Governance row (`plan.md:46`) deferred to it.
+
+The amendment was not E010's to perform. project-instructions.md:94: "Amendments
 to the documents named in this section are serialized... it is performed on the
 default branch... A feature branch records the need for an amendment and does not
-perform it." So the gate closes when `specs/sad.md`'s primary flow is amended on
-`main`, and E010's QC is re-run after it lands.
+perform it." QC iteration 4 found the gate unmet after three iterations had not
+checked it, and logged it as T081.
 
-`.completed` records that implementation is finished, which it is. `.qc-passed`
-must not be written until T081 closes. Iterations 1-3 did not check this
-condition; iteration 4 did.
+**Closed 2026-07-29.** The amendment landed on `main` as `24456b9` and is merged
+here. Four sites now resolve to `GET /api/v1/worklist` without the reader
+composing anything: the SAD's primary flow, the SAD's managed
+`Project Context Baseline Updates` section, this plan's summary table and C4
+label, and the contract's `servers` plus path. Impact was assessed across the
+registered set — project-instructions.md NONE, prd.md NONE, sad.md UPDATE,
+dod.md SKIPPED (none exists), project-plan.md UPDATE assessed and found to need
+no edit — and applied in REFINE mode, preserving the surrounding narrative.
 
 ## Local verification
 
-Every figure was measured in the run that wrote this file, on 2026-07-29, after
-E006's and E007's merges. Each command's scope is named — a figure whose scope is
-unstated is the defect four of these iterations were about.
+Measured in the run that wrote this file, 2026-07-29, after E006's and E007's
+merges. Each command's scope is named, because a figure whose scope is unstated
+is the defect several of these iterations were about.
 
   api tests            203 passed, 1 skipped   (uv run --directory src/api pytest)
                        The skip is model_invocation — E008 owns that table.
-                       The 3 benchmark tests are included: the marker is
-                       deselectable, not deselected by default.
-  api benchmark        3 passed — p95 39.1 ms (worklist) and 45.6 ms
+                       Includes the 3 benchmark tests: the marker is
+                       deselectable, not deselected by default. Without them:
+                       200 passed, 1 skipped, 3 deselected.
+  api benchmark        3 passed — p95 51.5 ms (worklist) and 51.4 ms
                        (worklist+override) against a 1500 ms budget, n=200,
-                       measured against the frozen fixture's 16 lines (see below).
-                       Across four runs on this machine p95 ranged 39-46 ms; the
-                       figure varies with load, the ~33x margin does not.
+                       measured against the frozen fixture's 16 lines.
+                       Across nine runs on this machine p95 has ranged 39-52 ms.
+                       The figure moves with machine load; the ~30x margin does
+                       not, and the gate that matters runs in CI.
   web unit tests       77 passed               (vitest run, src/web)
   web e2e specs        19 passed against the real page and the real serving
                        boundary                (playwright test, src/web)
   root checks          292 passed, 0 failed    (uv run pytest, repository root)
-  contract conformance 9 passed — every response state validated against
-                       contracts/openapi.yaml, with negative controls
+  contract conformance 9 passed — 5 response-state positives, 3 negative
+                       controls, 1 construct-coverage check, all against
+                       contracts/openapi.yaml
   python coverage      97% over src/api (481 statements, 8 missed; floor 80)
   web coverage         99.23% statements / 96.19% branches / 97.22% functions
                        / 99.17% lines over **src/web/app/worklist** — the scope
-                       vitest.config.ts sets, six modules and 131 statements, not
-                       the whole web tier (floor 80). T086 corrected this line,
-                       which had claimed the wider scope.
+                       vitest.config.ts sets, six modules and 131 statements,
+                       not the whole web tier (floor 80).
                        Both floors were verified to fail when raised above the
                        measured value — in the run that added them (T050, T052),
                        not in this one.
   import contracts     11 kept, 0 broken across three entries — src/api 3,
-                       src/model 4, src/gateway 4 — each with a negative fixture.
+                       src/model 4, src/gateway 4 — each with a negative fixture
+                       enforced by the check that maps declared contracts to
+                       fixtures in tests/checks/test_contract_fixtures.py.
                        E010 owns the src/api three.
   ruff                 `check` and `format --check` both clean over all four
-                       tiers (gateway, api, model, root). The format gate arrived
-                       with E006's merge and had never been run against this
-                       branch's files; it failed on one until T083.
-  eslint / tsc         clean over src/web — 0 errors. eslint reports 2 warnings,
-                       neither in a file E010 owns (see below).
+                       tiers (gateway 43 files, api 37, model 290, root 577).
+  eslint / tsc         clean over src/web — 0 errors. 2 warnings, neither in a
+                       file E010 owns (see below).
   mypy                 clean over src/gateway, 18 files, which is the only entry
-                       it covers. It does not type-check this feature's code.
+                       it covers. It does not type-check this feature's code —
                        verify.yml names its step "Type check (gateway)" for that
-                       reason and records that the scope widens when api and model
-                       are annotated to a standard strict mypy accepts. Listed
-                       with its scope rather than in a flat list of passing tools,
-                       which is what T080 was raised for.
+                       reason, and records that the scope widens when api and
+                       model are annotated to a standard strict mypy accepts.
+  tasks / checklists   117 tasks, all checked — T001-T052 implementation,
+                       T053-T117 bug tasks. Checklists 120/120.
 
 Audited against project-instructions.md **v1.2.8**. The prior audit named v1.2.4,
-superseded in flight by four revisions of a new Temporary Files rule — the last of
-which withdrew part of an earlier one. Governance required the compliance gate to
-be re-run before this phase gate; it was re-run twice, at v1.2.7 (T074) and again
-at v1.2.8 (recorded in plan.md:30-31) when E006's merge brought the withdrawal.
-T076 corrected this marker, and T085 added the supersession note to spec.md's own
-Compliance Check, which had been reached by neither re-run.
+superseded in flight by four revisions of a new Temporary Files rule — the last
+of which withdrew part of an earlier one. Governance required the compliance gate
+to be re-run before this phase gate; it was re-run twice, at v1.2.7 (T074) and at
+v1.2.8 (`plan.md:30-31`). `spec.md`'s Compliance Check carries a supersession
+note pointing at that record (T085).
 
-## What four iterations of QC actually found
+## What ten iterations of QC found
 
-45 defects. **Every finding after iteration 1 was an artifact claiming more than
-the repository does, rather than a fault in what it does** — with two exceptions:
-T083, a formatting gate that genuinely failed CI, and T096, a manual procedure
-that could not be executed as written. The recurring shape is narrower
-than that and worth naming: a bug task filed against N sites is fixed at the one
-site its title names. T071 named three task entries and left five in plan.md
-(T078); T078's own fix got two of the five replacements wrong (T089) and split a
-heading (T088); T072 named two sites and closed one (T084); T073 fixed the weight
-half of an assertion and left the size half (T079); T091 fixed the four items its
-title listed and left the one line that determined whether any of the file could
-be run at all (T096). Five iterations, same shape — and the lesson each time was
-that the class is wider than the title.
+65 defects beyond the 52 implementation tasks. Of the 52 raised after iteration 1:
+four were faults in code or configuration — T066 put a field on the wire that
+FR-029 forbids, T075 left pytest writing to the machine's shared temp directory,
+T083 failed the CI format gate, T096 made the manual test procedure unrunnable.
+Five more were tests that did not measure or say what they claimed — T067, T069,
+T073, T079, and T115, a conformance docstring contradicting itself on the count
+it exists to justify. The remaining 43 were accuracy defects in what the feature
+published about itself.
 
-  Iteration 1 (T053-T065) — 13 findings, mostly in code
-    T053  Principle VII — the security limitation record stated two falsehoods
-          and its reversal trigger had fired.
-    T054  FR-042 — the scoping control was absent in the empty-filter state.
-    T055  FR-029 — the row-level stale mark was unimplemented.
-    T056  FR-051 — bounded forms were not announced as words.
-    T057  The E2E seed truncated the shared development database.
-    T058-T065  Test-coverage, provenance and accuracy gaps.
+The recurring shape, in every iteration: **a bug task filed against N sites gets
+fixed at the one site its title names.** T071 named three task entries and left
+five in plan.md; T072 named two sites and closed one; T073 fixed an assertion's
+weight half and left its size half; T091 fixed the four items its title listed
+and left the line that decided whether the file could be run at all; T098's fix
+swept plan.md and left the same claim in tasks.md; T103 counted four sites and
+reached three; T114 restored the QC record its title named and left the one the
+same commit had just made missing (T116). The lesson each time was that the class is wider than the title,
+and the discipline that works is sweeping the class by measurement rather than
+editing the site that was named.
 
-  Iteration 2 (T066-T075) — 10 findings, six of them iteration 1's own claims
-    T066  T055's fix added a per-row `as_of_is_stale` field and widened the
-          contract to admit it. FR-029 says the mark "needs no new figure and no
-          new field" and FR-027 closes the secondary region at three items. The
-          field is gone; the interface composes the mark from
-          `meta.forecast_run.stale`, and the contract is back to three.
-    T067  T060's three properties read through a helper defined in the test file
-          rather than through `rows.miss_probability`, and one asserted `x == x`.
-          They now drive production code: mutating the survival read with a
-          complement, or with an off-by-one, fails them.
-    T068  tasks.md claimed a `test:` commit precedes each `feat:` commit. It does
-          not, and the sentence is corrected rather than back-filled.
-    T069  The invocation-record test issued no adjustment-carrying request.
-    T070  plan.md recorded a Playwright request-recording observation that does
-          not exist.
-    T071  Three task entries named files that were never created.
-    T072  plan.md recorded the benchmark population as "~200 open lines"; it is 16.
-    T073  The type-scale assertion measured the secondary container rather than
-          its descendants.
-    T074  The compliance re-audit against v1.2.7.
-    T075  `src/api` did not pin `--basetemp`. Pinned, and measured by
-          `tests/test_scratch_location.py` rather than declared.
-
-  Iteration 3 (T076-T080) — 5 findings, all this marker or the plan overstating
-    T076  This marker named v1.2.7 after the re-audit at v1.2.8.
-    T077  Root-check figure read 249; measured 292. Import-contract count read 3
-          with no scope named; the repository keeps 11 across three entries.
-    T078  T071's correction reached three task entries and left the same two
-          names at five points in plan.md and once in tasks.md's Dependencies.
-    T079  T073's correction reached the font-weight half and left the font-size
-          half measuring the container. Now measured over descendants and
-          mutation-checked: a descendant at 2rem fails it at 32 px against a
-          16 px primary while the container stays at 14 px — which is exactly
-          why the original passed.
-    T080  This marker listed mypy among the checks E010 passes. No mypy runs
-          over E010's code.
-
-  Iteration 4 (T081-T095) — 15 findings; 14 closed, T081 open by design
-    T081  **OPEN, BLOCKED.** The release gate above. Recorded, not performed.
-    T082  This marker reported three entries as not pinning `--basetemp` one
-          commit after plan.md had been corrected to say they do. All four pin it.
-    T083  `ruff format --check` failed at the root on an E010-owned file, so the
-          CI format gate failed as the branch stood, while this marker reported
-          ruff clean over all four tiers. The only iteration-4 finding that was
-          a fault rather than a claim.
-    T084  T072 named two sites and closed one; plan.md:117 still read
-          "~200 lines" against plan.md:186's corrected 16.
-    T085  spec.md's Compliance Check still recorded v1.2.4 with no supersession
-          note, reached by neither re-audit.
-    T086  The web coverage scope was stated as src/web; it is src/web/app/worklist.
-    T087  T078 fixed the filenames in T040 and T045 and left the `WTS/` directory
-          token, so both corrected names resolved to a directory that does not
-          hold them.
-    T088  T078's edit anchored on a substring and split a section heading.
-    T089  Two of T078's five replacement paths were themselves wrong.
-    T090  The Instructions Check misstated where this feature's web tests live.
-    T091  manual-test.md said 18 specs (19), cited T053 for T057's fix, and its
-          cleanup step deleted E005's dataset from a database the seed has not
-          touched since T057.
-    T092  CHK006's evaluator note was a third live site of the corrected
-          benchmark population.
-    T093  The benchmark-population narrowing lacked Principle VII's reversal
-          trigger and production-scale alternative.
-    T094  This marker claimed `.prettierignore` excludes the coverage directory.
-          It does not; `.gitignore` does, which Prettier reads by default.
-    T095  qc-report.md held no record of iteration 3.
-
-  Iteration 5 (T096-T097) — 2 findings; both closed. The fourteen closures of
-  iteration 4 were each re-checked across their whole class and all held.
-    T096  manual-test.md started the serving boundary against the shared
-          `procurement` database, which holds no forecast run — so the procedure
-          returned 24 unranked lines in `no_active_run` against its own
-          documented `total == 15`, and none of the PO-447x rows its scenarios
-          name existed. Every scenario in the file was unobservable, and this
-          file is the sole record of WCAG coverage. Now points at
-          `procurement_e2e`; verified by running it: total 15, ranked 13.
-    T097  T081's record cited plan.md:438 for HINT-003, which is at 437.
+Per-iteration findings, severities and measurements are in `qc-report.md`, one
+section per iteration. Appending that section is part of closing an iteration
+rather than follow-up to it — five separate iterations omitted one when it was
+treated as follow-up (T095, T105, T110, T114, T116). Not consecutive: some
+iterations did record theirs. Corrected from "in a row", which overstated it.
 
 ## Reported, outside E010's scope
 
   SC-017 and SC-018 are measured against the frozen fixture's 16 lines rather
-  than the ~200-line working population the spec's Assumptions state. Recorded
-  in plan.md:186 in Principle VII's four-part form (T093), with the reversal
-  trigger being the first run against a realistic population or the first
-  coexistence of the two datasets.
+  than the working population the spec's Assumptions state. Recorded in
+  plan.md:186 in Principle VII's four-part form. Note the alternative is not
+  simply "use E005's data": that set holds 199 lines of which only **24 are
+  open**, and FR-022 excludes the other 175 from the worklist, so it reaches 24
+  rows rather than ~200. Closing this needs a generated open-line population at
+  the assumed scale.
 
   pip-audit has produced no result on either side: it cannot run locally (TLS
   interception) and its CI step has not executed yet. Recorded as unmeasured
@@ -193,17 +136,26 @@ that the class is wider than the title.
   advisories on production dependencies (next, postcss, sharp). Upgrading `next`
   across a major is E001 scaffold work with its own verification surface.
 
-  eslint reports 2 warnings, 0 errors, neither in a file E010 owns: an unused
-  `readFileSync` in `src/web/__tests__/boundary.test.ts` (E001's file, which E010
-  has never modified), and an unused directive inside the generated
-  `src/web/coverage/` output. That directory is skipped by Prettier and git via
-  `src/web/.gitignore:14`, which Prettier reads by default, but
-  `eslint.config.mjs`'s `globalIgnores` does not list it — so it is linted
-  whenever a coverage run precedes a lint run. Both are E001 toolchain
-  configuration.
+  eslint's 2 warnings, neither in a file E010 owns: an unused `readFileSync` in
+  `src/web/__tests__/boundary.test.ts` (E001's file, never modified by E010), and
+  an unused directive inside the generated `src/web/coverage/` output. That
+  directory is skipped by git and by Prettier via `src/web/.gitignore:14`, which
+  Prettier reads by default, but `eslint.config.mjs`'s `globalIgnores` does not
+  list it — so it is linted whenever a coverage run precedes a lint run. Both are
+  E001 toolchain configuration.
 
   On a Windows checkout with `core.autocrlf=true`, `npx prettier --check .`
-  reports files in src/web as unformatted that are clean as stored in git
-  (`git show HEAD:<path> | npx prettier --check --stdin-filepath <path>` passes).
-  The difference is CRLF in the working tree against the LF that is committed, so
-  the CI gate on Linux is unaffected. Recorded so the next reader does not chase it.
+  reports files as unformatted that are clean as stored in git (`git show
+  HEAD:<path> | npx prettier --check --stdin-filepath <path>` passes). The
+  difference is CRLF in the working tree against the LF that is committed, so the
+  CI gate on Linux is unaffected. Recorded so the next reader does not chase it.
+
+  **This does not extend to `ruff format --check`**, and an earlier version of
+  this section said it did. Ruff defaults to `line-ending = "auto"`, which
+  preserves each file's existing endings, and no override exists in this
+  repository — measured here, `ruff format --check` reports zero files across all
+  four tiers on the same CRLF working tree. So a ruff format failure is a real
+  defect rather than a Windows artifact. T083 was exactly that: a root format
+  failure on an E010-owned file that failed CI's `Format check (Python)` step, and
+  its record says so explicitly. A sentence excusing that class in advance is
+  worse than no sentence.

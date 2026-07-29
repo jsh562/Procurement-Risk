@@ -19,7 +19,7 @@
 **Project Mode**: brownfield — four entries exist; this adds the first interface surface and the first API route
 **Performance Goals**: Worklist p95 ≤ 1.5 s on one shared vCPU, adopted from `specs/sad.md` rather than chosen here
 **Constraints**: No request-time model call; no write path; the interface tier opens no datastore connection; probabilities never render as 0% or 100%
-**Scale/Scope**: ~200 open lines across 5 projects, 59 requirements, 4 user stories
+**Scale/Scope**: ~200 lines across 5 projects — 199 seeded, of which 24 are open and therefore rankable (FR-022 excludes terminal lines); the spec's Assumptions state roughly two hundred lines as the *domain* working scale, which is the figure this row inherits. 59 requirements, 4 user stories
 
 ## Instructions Check
 
@@ -35,7 +35,7 @@
 | IV. Agent Output Style | N/A — governs agent communication | N/A |
 | V. The Model Extracts, Code Computes | All arithmetic in the serving boundary; no model call on the read path; override is a server re-query, not a client recompute | PASS |
 | VI. Evaluate Before You Tune | N/A — no evaluation set in this feature | N/A |
-| VII. Publish the Miss | Staleness basis travels in the payload; STF-001 recorded and dated. The adopted p95 is verified by a benchmark tier rather than asserted — with fixed measurement conditions, a named `Performance benchmark (api)` execution site, and SC-017 / SC-018 as the criteria that fail when it is missed — and both recorded limitations carry their four parts: security scanning reported rather than gated, and the contract's absence of a deprecation mechanism, each with its reversal trigger and production-scale alternative | PASS |
+| VII. Publish the Miss | Staleness basis travels in the payload; STF-001 recorded and dated. The adopted p95 is verified by a benchmark tier rather than asserted — with fixed measurement conditions, a named `Performance benchmark (api)` execution site, and SC-017 / SC-018 as the criteria that fail when it is missed — and three limitations now carry their four parts: security scanning reported rather than gated, the contract's absence of a deprecation mechanism, and — added by T093 — the benchmark's line population, each with its reversal trigger and production-scale alternative | PASS |
 | VIII. Honest Opponents | N/A — no model claim or baseline | N/A |
 | Technology Stack | Matches `specs/sad.md` exactly; no field overridden | PASS |
 | Testing & Quality Policy | Strict test-first is mandatory for `compute/ranking.py` and `compute/probability.py`, carried as FR-039 rather than as a hint alone and sequenced in HINT-005. The 80% gate does **not** currently measure `/src/api` or `/src/web` — extending it is scoped work in this plan, not an assumption, and FR-040 is what makes it gating | DEVIATION (owned — closes with T-tasks below) |
@@ -43,7 +43,7 @@
 | Development Workflow / CI | `verify.yml` has no `Unit tests (api)` step, runs no Playwright, and has no benchmark step, so as it stands **none of this feature's api tests, rendered-page tests, or performance measurements would execute**. Adding all three is scoped work in this plan; FR-040 states that a check which does not run in the merge gate evidences nothing, and the Check inventory below names which six of ten obligations need a new step | DEVIATION (owned — closes with T-tasks below) |
 | Development Workflow / Temporary Files | **New since the prior audit** (v1.2.5, revised through v1.2.8). Scratch belongs in the checkout's gitignored `.tmp/`, with `--basetemp` pinned in each entry's pytest configuration. `src/api` — the entry E010 owns and whose pytest configuration it wrote — did not pin it, and was writing to the machine's shared temp directory. Now pinned, and *measured* rather than declared: `tests/test_scratch_location.py` resolves `tmp_path` at runtime and fails if it lands outside `.tmp/`, which is the check the rule's own history argues for — it was declared proven at v1.2.5 and v1.2.6 and was false both times, and v1.2.8 then withdrew v1.2.6's absolute-path requirement as itself the cause of a directory committed to `main`. E010 never carried the withdrawn `PYTENSOR_FLAGS` clause: the worklist tier does not use PyTensor, so nothing here had to be undone. The root and the `model` and `gateway` entries pin their own suffixed basetemp, landed on `main` independently — the suffix is load-bearing, since pytest clears its basetemp at the start of every run and two tiers sharing one directory would wipe each other's `tmp_path` if they ever ran concurrently | PASS |
 | Data Provenance | Reads synthetic data E005 generated; adds none | PASS |
-| Governance | AD-001…AD-006 feature-local; no ADR required. One registered-document conflict: `specs/sad.md:124` sketches `GET /lines?project=…`, the contract defines `/worklist`. Recorded as an amendment this branch does **not** perform, per the governance rule that the registered document wins. **Release-gating**: the deviation closes only when the SAD's primary flow names the same address the contract does, and this feature is not release-ready while three artifacts name three addresses — QC checks the condition, and HINT-003 states it | DEVIATION (recorded, not performed — gates release) |
+| Governance | AD-001…AD-006 feature-local; no ADR required. One registered-document conflict, now **closed**: `specs/sad.md:124` sketched `GET /lines?project=…` while the contract defines `/worklist` under `/api/v1`. Recorded as an amendment this branch did **not** perform, per the governance rule that places amendments on the default branch. QC iteration 4 found the gate unmet after three iterations had not checked it, and logged it as T081 — the one task this branch could not close. The amendment landed on `main` on 2026-07-29 (`24456b9`) and is merged here. All three artifacts now resolve to `GET /api/v1/worklist`: the SAD's primary flow, this plan's summary table, and the contract's `servers` plus path | PASS (deviation closed by amendment, not by exception) |
 | Security / access | No authentication, **inherited** from `specs/sad.md` § Security, which records the absence as a deliberate project-level scope decision with its reversal condition and production-scale alternative. FR-056 states what the inheritance obliges of this surface — no scheme, no coordinator identity, no per-reader rule — so the contract no longer leaves it as an open decision for this plan | PASS (inherited, not decided here) |
 
 ## Architecture
@@ -59,7 +59,7 @@ C4Container
     }
     ContainerDb(db, "Postgres", "PostgreSQL 16", "Lines and posteriors")
     Rel(coord, web, "Reads, adjusts need-by")
-    Rel(web, api, "GET /worklist")
+    Rel(web, api, "GET /api/v1/worklist")
     Rel(api, risk, "Ranks")
     Rel(risk, db, "Reads")
 ```
@@ -87,7 +87,7 @@ N/A — no persistent data. This feature reads `purchase_order_line`, `forecast_
 
 | Endpoint | Method | Purpose | Contract |
 |---|---|---|---|
-| `/worklist` | GET | Ranked open lines with figures, degraded states, and page-scope status | [contracts/openapi.yaml](contracts/openapi.yaml) |
+| `/api/v1/worklist` | GET | Ranked open lines with figures, degraded states, and page-scope status | [contracts/openapi.yaml](contracts/openapi.yaml) |
 
 One operation, GET only — so FR-031's "no write path" is a property of the document rather than a
 convention. Parameters: `project_id` (FR-025), `sort` (FR-026's four keys), `need_by_override`
@@ -183,7 +183,7 @@ comparable only if the conditions are fixed, so they are fixed here.
 | Condition | Value |
 |---|---|
 | Hardware | One vCPU, applied as a container CPU limit of 1.0 on the api service, so a runner with more cores cannot silently pass a single-vCPU target |
-| Line population | **The frozen fixture's 16 lines**, not the E005 seeded set. This row originally recorded "the E005 seeded set — ~200 open lines across 5 projects" and the benchmark never used it: `test_worklist_benchmark.py` takes the `frozen_run` fixture, which truncates and seeds 16 lines with a posterior each at `draw_count` 4000 and `horizon_days` 365. QC found the mismatch after two iterations had reported SC-017 and SC-018 as met "under the plan's recorded conditions". Corrected to the population actually measured rather than left as an aspiration the figures do not support. The measured p95 is roughly 30x under budget, so the criteria very likely hold at 200 lines — but "very likely holds" is a different claim from the one that was published, and Principle VII is about that difference. Widening the benchmark to the E005 set is recorded as follow-up work rather than performed here, because it needs the two datasets to coexist and T057 has just separated them. **Recorded as a limitation in the four-part form Principle VII requires** — *scope decision*: measure the registered p95 against the frozen fixture's 16 lines rather than the working population the spec's Assumptions state; *supporting evidence*: measured p95 39-45 ms against a 1500 ms budget across four runs, a margin of roughly 33x, and the endpoint's cost is dominated by one indexed query whose plan does not change shape with row count; *reversal trigger*: the first benchmark run against a population a coordinator would actually see, or the first time the E005 and frozen datasets can coexist in one checkout — whichever comes first, and either one closes it; *production-scale alternative*: run the benchmark against the E005 seeded set in a database the frozen fixture does not own, which is what E005's own tier already provisions and what T057's separation makes possible. |
+| Line population | **The frozen fixture's 16 lines**, not the E005 seeded set. This row originally recorded "the E005 seeded set — ~200 open lines across 5 projects" and the benchmark never used it: `test_worklist_benchmark.py` takes the `frozen_run` fixture, which truncates and seeds 16 lines with a posterior each at `draw_count` 4000 and `horizon_days` 365. QC found the mismatch after two iterations had reported SC-017 and SC-018 as met "under the plan's recorded conditions". Corrected to the population actually measured rather than left as an aspiration the figures do not support. The measured p95 is roughly 30x under budget, so the criteria very likely hold at 200 lines — but "very likely holds" is a different claim from the one that was published, and Principle VII is about that difference. Widening the benchmark to the E005 set is recorded as follow-up work rather than performed here, because it needs the two datasets to coexist and T057 has just separated them. **Recorded as a limitation in the four-part form Principle VII requires** — *scope decision*: measure the registered p95 against the frozen fixture's 16 lines rather than the working population the spec's Assumptions state; *supporting evidence*: measured p95 39-45 ms against a 1500 ms budget across four runs, a margin of roughly 33x, and the endpoint's cost is dominated by one indexed query whose plan does not change shape with row count; *reversal trigger*: the first benchmark run against a population a coordinator would actually see, or the first time the E005 and frozen datasets can coexist in one checkout — whichever comes first, and either one closes it; *production-scale alternative*: **not the E005 seeded set alone.** That was this record's first answer and QC iteration 7 measured it: E005 holds 199 lines across 5 projects but only **24 open**, and FR-022 excludes terminal lines from the worklist — so benchmarking against it moves the population from 16 to 24, not to the working scale the row is hedging about. The alternative that reaches production scale is a generated open-line population at the assumed scale — E005's generator parameterised to hold ~200 lines *open* rather than ~200 lines of which 175 are delivered — run in a database the frozen fixture does not own, which is what T057's separation makes possible. Running against E005 as it stands is still worth doing as an intermediate step, and is a 1.5x population change rather than the 12x one the row's framing implied. |
 | Cache state | Warm: 20 discarded warm-up requests, connection pool established, no restart between samples. A cold-start figure is reported alongside and is explicitly not the gated number |
 | Sample count | 200 timed requests per variant; p95 by nearest rank over the sample |
 | Measurement point | Server-side at `GET /api/v1/worklist`, from request receipt to the last byte of the serialized response. The interface tier is excluded, because the registered envelope is a container benchmark over the serving boundary — no criterion claims the rendered page is inside this budget |
@@ -395,23 +395,28 @@ adopt rather than re-choose:
 
 ## Recorded Amendment Request — endpoint address
 
-**Raised by**: E010, 2026-07-28. **Target**: `specs/sad.md:124`. **Status**: recorded, not performed.
+**Raised by**: E010, 2026-07-28. **Target**: `specs/sad.md:124`.
+**Status**: **PERFORMED** on the default branch as `24456b9` (2026-07-29), merged here. Closed.
 
-`specs/sad.md:124` sketches the worklist read as `W->>A: GET /lines?project=…`. This feature's contract
+`specs/sad.md:124` sketched the worklist read as `W->>A: GET /lines?project=…`. This feature's contract
 defines `GET /api/v1/worklist`. Governance says the registered document wins and a feature branch
-records the need for an amendment rather than performing it, so this branch does neither of the two
-things that would settle it: it does not rename the endpoint to match the sketch, and it does not edit
-`specs/sad.md`.
+records the need for an amendment rather than performing it, so this branch did neither of the two
+things that would have settled it here: it did not rename the endpoint to match the sketch, and it did
+not edit `specs/sad.md`. QC iteration 4 found the gate unmet after three iterations had not checked it
+and logged it as T081; the amendment was then performed where governance places it, and merged back.
 
-**The case for `/worklist`**, for whoever resolves it: the resource is a ranked projection carrying
-page-scope state and two disjoint groups — not a collection of lines. A caller asking for `/lines`
-would reasonably expect line resources back, and would not expect `no_active_run` to be a successful
-response. E010's own Implementation Signals call it "a worklist endpoint". Against it: `/lines` is
-what the architecture document says today, and the sketch predates the contract.
+**The case for `/worklist`**, which is the one that prevailed: the resource is a ranked projection
+carrying page-scope state and two disjoint groups — not a collection of lines. A caller asking for
+`/lines` would reasonably expect line resources back, and would not expect `no_active_run` to be a
+successful response. E010's own Implementation Signals call it "a worklist endpoint". The argument
+against it was that `/lines` was what the architecture document said, and the sketch predated the
+contract — which is exactly why the fix was to amend the sketch rather than to rename the endpoint.
 
-**Consequence if unresolved**: the two documents disagree in writing, and E012, E013 and E017 all build
-against this surface. Whichever name survives, it should be settled before the endpoint ships rather
-than discovered by the first consumer.
+**Resolution**: `specs/sad.md`'s primary flow now reads `GET /api/v1/worklist?project_id=…`, and the
+decision is recorded in that document's managed `Project Context Baseline Updates` section so it is
+discoverable from where project-level decisions live rather than only from a diagram. All three
+artifacts resolve to one address without composition — the SAD's primary flow, this plan's summary
+table, and the contract's `servers` plus path. E012, E013 and E017 build against a settled name.
 
 ## Story Phasing Note
 
@@ -434,7 +439,7 @@ entire purpose is refusing to show figures it cannot stand behind.
 - **[HINT-002]** `survival` is one-based over `k = 1..horizon_days` with no `k = 0`, so `need_by == as_of_date` has no offset to read and resolves to already-late. E003's clamp says `d <= as_of_date`, and FR-030 now says the same in its own words — the earlier divergence, where the requirement's prose read "earlier than" while the clamp read `<=`, is closed in the spec rather than only here.
   Also: The probability of lateness is `survival[k]` with **no complement**. E003's data model carried the inverted form until 2026-07-28 (STF-001); if a stale copy is consulted, the worklist will rank the safest lines first and look plausible doing it.
 - **[HINT-004]** Round once, in `probability.py`, and derive the complement as `100 − displayed`; rounding both directions independently produces pairs summing to 101%. The same rule is why the expected-harm score is not published on the row at all — a second figure from the same draws, rounded by the interface, is the defect AD-001 exists to prevent.
-- **[HINT-003]** `specs/sad.md:124` sketches the flow as `GET /lines?project=…` while the contract defines `/worklist` under `/api/v1`, and the plan's API Surface Summary names a third form. Governance says the registered document wins and a feature branch records the amendment without performing it — so this plan records it here and the endpoint name is **not** settled by implementation. The gate is stated rather than implied: this feature does not pass QC while the registered primary flow and this contract name different addresses. The closing condition is a single comparison — `specs/sad.md`'s primary flow, this plan's summary table and `contracts/openapi.yaml`'s `servers` plus path all resolve to one address — and the SAD amendment lands on the default branch, not here.
+- **[HINT-003]** **CLOSED 2026-07-29.** All three artifacts now name `GET /api/v1/worklist`; the amendment landed on `main` as `24456b9` and is merged here. The record below is left as written, because a hint states the condition it was raised under. — `specs/sad.md:124` sketched the flow as `GET /lines?project=…` while the contract defines `/worklist` under `/api/v1`, and the plan's API Surface Summary named a third form. Governance says the registered document wins and a feature branch records the amendment without performing it — so this plan records it here and the endpoint name is **not** settled by implementation. The gate is stated rather than implied: this feature does not pass QC while the registered primary flow and this contract name different addresses. The closing condition is a single comparison — `specs/sad.md`'s primary flow, this plan's summary table and `contracts/openapi.yaml`'s `servers` plus path all resolve to one address — and the SAD amendment lands on the default branch, not here.
 - **[HINT-005]** Two boundary obligations this feature inherits and must not skip. `compute/ranking.py` and `compute/probability.py` are deterministic computation modules, so strict test-first is mandatory rather than preferred: the failing property test first, then the function, sequenced before their consumers. FR-039 carries it as a requirement so the obligation is gated by an artifact rather than by this hint. And `src/api/pyproject.toml` forbids only `api.llm -> api.compute` — the new `api.risk_read` package holds date arithmetic and state logic, so it must be added to `forbidden_modules`, alongside the contract FR-035 needs keeping `api.risk_read`, `api.routes.worklist` and `api.compute` away from `gateway`. Without both, the boundary this project exists to enforce gains a hole the size of the package this feature adds.
 - **[HINT-006]** `today` is a request-scoped input, never a `date.today()` call inside `risk_read` or `compute` (FR-038). Resolve it once at the boundary from the configured time zone, pass it down, and echo that same value in `meta.today`. A frozen fixture is stated in absolute dates, so a clock read inside the computation makes FR-029's age, FR-030's calendar-passed flag and the staleness banner drift as wall-clock time advances — an acceptance run that passed in July fails in August with no change to the code or the fixture. Tests supply the value; production supplies the configured clock.
 
