@@ -22,6 +22,15 @@ info:
     The reversal trigger is a request that stops being flat: a structured filter object, or a query
     routinely past the 1000-character cap declared on `query`. Neither exists today.
 
+    **Safe and idempotent are properties of the method, not of the ordering** *(stated 2026-07-29)*.
+    RFC 9110 defines both over what the client requests, and neither says anything about what a second
+    call returns: a request can be idempotent and still come back in a different order. Nothing in this
+    document discharges FR-020's repeatable-ordering guarantee by appealing to `GET` being a safe read.
+    That guarantee is witnessed by `ordering_digest` and by the determinism assertions the plan names
+    (§ Testing Strategy: the same statement twice, again under flipped planner settings, again after a
+    rebuild on the exact path), and it would be owed in exactly the same terms if this operation were a
+    `POST`.
+
     **Refuse and degrade are different behaviours and do not share a shape.**
 
     | Behaviour | Requirement | Condition | Shape |
@@ -149,6 +158,66 @@ info:
     problem `type` identifier. Changes land with the update to every recorded consumer in one commit and
     bump `info.version`; no deprecation or sunset mechanism is defined, because with every consumer
     in-repo there is no window in which an old and a new consumer both call this endpoint.
+
+    **Requirements this contract cannot express** *(section written 2026-07-29; four places above and
+    below deferred to it by name while it did not exist, so four obligations pointed at empty text).*
+    An interface can carry a value and still not be the thing that discharges a requirement. Each
+    deferral below states what is deferred, why a schema cannot carry it, and **who carries it
+    instead** — a deferral that resolves to an owner rather than to silence.
+
+      1. **FR-002 — "no ranking arithmetic outside the deterministic computation boundary."** This
+         document withholds the fusion and reranker scores, which removes the material a client would
+         need to re-rank the list itself. That *supports* FR-002 and does not establish it: a payload
+         cannot observe how many statements produced it. It is established by the plan's
+         § Requirement Coverage Map — a statement capture asserting **exactly one** ranking statement
+         executed on the connection with no accompanying `SET`
+         (`src/api/tests/retrieval/test_single_statement.py`), together with the `import-linter`
+         forbidden contract extended to name `api.retrieval` as the third computation package, which is
+         what discharges SC-004. AD-005 names the one carve-out: sorting a list by scores the reranker
+         already returned is ordering, not ranking arithmetic.
+      2. **FR-020 — the scope of the repeatable-ordering guarantee across an index rebuild.** This
+         document states the property and reports `ordering_digest`; it cannot state the *scope*,
+         because the narrowing is a plan-phase decision over a specify-phase requirement. `plan.md`
+         § Testing Strategy owns it, records it in the four-part limitation format Principle VII
+         mandates, and declares it normative over FR-020 under {SAD:ADR-0017}; spec FR-020 carries the
+         narrowing on its own side so a reader of the spec alone does not read a guarantee the plan
+         does not assert. Verification: `src/api/tests/retrieval/test_determinism.py`. **Still open
+         there, and not resolved here**: the approximate path's substitute assertion names candidate
+         overlap and a recall delta with no threshold for either, so that path's rebuild behaviour is
+         a reported figure and not a criterion anything can fail.
+      3. **The query encoder's word-piece truncation.** A query at or under the 1000-character cap
+         declared on `query` may still exceed the encoder's own word-piece limit and be embedded from
+         its prefix. This surface does not report that, and the omission is a gap rather than a
+         decision: FR-019 obliges truncation reporting for the **reranker** — which is why
+         `reranking.candidates_truncated` and `RetrievalResult.reranker_truncated` exist — and **no
+         requirement obliges the query-side equivalent**. What exists instead is an implementation
+         constraint, `plan.md` HINT-004: the encoder session is fed from the *truncating* tokenizer
+         instance, the repository's second non-truncating instance being for counting word pieces, so
+         the behaviour is at least consistent and is owned by `gateway.inference.encoder`
+         (`src/gateway/tests/test_inference.py`). A caller cannot currently tell that a long query was
+         embedded from its prefix.
+      4. **FR-010's measured pattern coverage.** `deterministic_route.pattern` and
+         `diagnostics.deterministic_route_pattern` publish the declared pattern as a readable value.
+         The **coverage** of that pattern against the enumerated set of part numbers the corpus prints
+         is a figure about a corpus and a build, not about a request, and this surface declines to
+         serve it. It is carried by `src/api/tests/retrieval/test_part_number_coverage.py`, which reads
+         the enumeration from the source AD-009 fixes — the generator's pre-render document model,
+         already E006's FR-067 reference set — because neither `chunk.part_numbers` (null on every row)
+         nor `extracted_value` (empty while extraction is fixture-blocked) can supply it. SC-005 is the
+         gate the figure is read against.
+      5. **FR-006's prohibition on naming BM25 in a published figure, label or description.**
+         `ranking_parameters.lexical.uses_corpus_wide_term_statistics` is the machine-readable half and
+         is `const: false` on every response. The other half binds **emitted figures and labels**,
+         which are artifacts this document does not govern. Owner:
+         `src/api/src/api/retrieval/report.py`, asserted over the emitted artifacts rather than over
+         intent (`src/api/tests/retrieval/test_report.py`).
+      6. **FR-036's comparator obligation.** `fused` is offered as an arm because the ablation needs
+         it, and any figure drawn against it must be labelled as drawn against the weak comparator.
+         Selecting the strongest single arm by FR-036's rule, computing the paired per-query
+         difference, and applying that label are operations over a query *set*; this surface answers
+         one query. Owner: `src/api/src/api/retrieval/metrics.py` with `report.py`
+         (`src/api/tests/retrieval/test_metrics.py`) — explicitly **not** `arms.py`, which makes arms
+         runnable and computes nothing.
   contact:
     name: E008 Hybrid Retrieval and Reranking
   x-epic: E008
@@ -237,7 +306,7 @@ x-configuration:
       controls: ONNX Runtime inter-op threads. One, under the default sequential execution mode.
     - name: RETRIEVAL_RERANKER_MEMORY_BUDGET_BYTES
       requirement: FR-033
-      controls: The declared budget the session's resident memory is reported against. An overage is published, never omitted.
+      controls: The declared budget the **serving process's** resident set is reported against — a container total covering the query encoder and both reranker graphs, not a per-session allowance. An overage is published, never omitted.
 
 paths:
 
@@ -349,9 +418,9 @@ paths:
 
         **What this endpoint cannot observe.** The framework's lifespan hook completes before the
         application receives any request, so no client can reach this endpoint while warm-up is still
-        running. `reranker.warmup.completed` is therefore a report that warm-up finished, not a gate a
-        caller can catch open. FR-017's gate is enforced by the lifespan hook; this field evidences it
-        after the fact.
+        running. `reranker.sessions[].warmup.completed` is therefore a report that warm-up finished, not
+        a gate a caller can catch open. FR-017's gate is enforced by the lifespan hook; these fields
+        evidence it after the fact, once per graph AD-011 commits to rather than once for both.
       responses:
         '200':
           description: In service. `ready` or `ready_degraded`, distinguished by `status`.
@@ -381,12 +450,21 @@ paths:
                   state: warm
                   model_id: cross-encoder/ms-marco-MiniLM-L6-v2
                   model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
-                  precision: int8
-                  warmup:
-                    completed: true
-                    completed_at: '2026-07-29T09:12:04Z'
-                    batch_shape: '50 x 512'
-                  failure: null
+                  sessions:
+                    - precision: int8
+                      loaded: true
+                      warmup:
+                        completed: true
+                        completed_at: '2026-07-29T09:12:04Z'
+                        batch_shape: '50 x 512'
+                      failure: null
+                    - precision: fp32
+                      loaded: true
+                      warmup:
+                        completed: true
+                        completed_at: '2026-07-29T09:12:09Z'
+                        batch_shape: '50 x 512'
+                      failure: null
                 encoder:
                   model_id: sentence-transformers/all-MiniLM-L6-v2
                   model_revision: 'c9745ed1d9f207416be6d2e6f8de32d1f16199bf'
@@ -660,6 +738,41 @@ components:
                   - not_an_offered_arm
                   - malformed_project_id
                   - limit_out_of_range
+        encoder_model_id:
+          type: string
+          minLength: 1
+          description: |
+            *(declared 2026-07-29)* FR-007's refusal detail, as a declared extension member rather than
+            as a field visible only inside the `InternalError` example. RFC 9457 admits extension
+            members and this object is `additionalProperties: true`, so an undeclared member is not part
+            of what a consumer validates against — and "which side to change" is the only actionable
+            fact a refusal carries. This member and the three that follow it are therefore declared, and
+            are **required** on `encoder-identity-mismatch` by the conditional at the foot of this
+            schema.
+
+            The identity this build embeds queries with.
+        encoder_model_revision:
+          type: string
+          minLength: 1
+          description: The revision this build embeds queries with.
+        corpus_model_id:
+          type: [string, 'null']
+          description: The model identity recorded on the chunks. Null where the corpus records none, which is itself a mismatch against a build that has one.
+        corpus_model_revision:
+          type: [string, 'null']
+          description: The model revision recorded on the chunks.
+      allOf:
+        - if:
+            properties:
+              type:
+                const: 'https://procurement-risk.local/problems/encoder-identity-mismatch'
+            required: [type]
+          then:
+            required:
+              - encoder_model_id
+              - encoder_model_revision
+              - corpus_model_id
+              - corpus_model_revision
 
     Arm:
       type: string
@@ -1144,6 +1257,7 @@ components:
         tie_break_key:
           type: string
           minLength: 1
+          pattern: '^[a-z][a-z0-9_]*$'
           description: |
             The key applied when two candidates fuse to the same score. FR-004.
 
@@ -1152,13 +1266,28 @@ components:
             inside each arm's candidate cut, ties at the fiftieth position make the candidate *set* vary
             between runs rather than merely its ordering. FR-020's identical-ordering guarantee fails at
             the candidate stage, not the ranking stage, if this is omitted from either place.
-          example: chunk_id ascending
+
+            **A stable identifier token, not prose** *(constrained 2026-07-29)*. FR-004 requires this
+            recorded alongside every result so that two runs can be compared; a free-form sentence makes
+            that comparison a string match over prose, where `chunk_id ascending` and
+            `ascending by chunk_id` name one rule and compare unequal, and no machine can tell a
+            re-wording from a re-tuning. The value is a lowercase identifier emitted from the single
+            source in force (`src/api/src/api/retrieval/parameters.py`), and **equality of the token is
+            the check FR-004 exists for**. The vocabulary is deliberately not closed as an `enum` here:
+            FR-004 keeps the *choice* of value outside this contract so that fixing it is not a contract
+            revision. What this member fixes is the **form**, which is what makes the comparison
+            machine-checkable.
+          example: chunk_id_ascending
         missing_arm_convention:
           type: string
           minLength: 1
+          pattern: '^[a-z][a-z0-9_]*$'
           description: |
             What happens to a candidate appearing in only one arm's list. FR-004. The formula does not
             fix it and the choice changes the output.
+
+            A stable identifier token on the same terms as `tie_break_key` above, and for the same
+            reason: FR-004's cross-run comparison is an equality test over the recorded value.
           example: zero_contribution_from_the_absent_arm
         fetch_depth:
           type: integer
@@ -1245,8 +1374,18 @@ components:
         statement:
           type: [string, 'null']
           description: |
-            FR-022. The sentence a response produced without reranking must carry, stating plainly that
-            the result is fusion-only and unreranked and why. Null exactly when `reranked` is true.
+            FR-022. The sentence every response produced without reranking must carry, stating plainly
+            what it is and why. Null exactly when `reranked` is true.
+
+            **It states fusion-only only where the response *is* fusion-only** *(clarified 2026-07-29,
+            with spec FR-022)*: on `reranker_unavailable` and `reranker_failed_during_request` it says
+            the result is fusion-only and unreranked, which is FR-022's obligation. On
+            `arm_excludes_reranking` it says which arm ran and that reranking was never part of it — a
+            `lexical` response is one arm's ordering and not a fusion of two, so a fusion-only sentence
+            attached to it would be false. On `no_candidates_to_score` it says nothing was retrieved and
+            the empty result is the answer. The member is required in all three cases because an
+            unreranked response must never be silent about being unreranked; what varies is the claim it
+            is entitled to make.
 
             A sentence rather than only a flag, because the flag says *that* the result is worse and the
             sentence says *what* it is — and a consumer rendering the response to a person needs the
@@ -1356,6 +1495,17 @@ components:
             The final ordering. Deterministic identifier matches first, in the tie-break key's order;
             then the ranked-relevance results in reranked order, or in fused order where reranking did
             not run. Array position is authoritative and `rank` restates it.
+
+            **`maxItems` is a contract-originated bound and only half of it is derived** *(disclosed
+            2026-07-29)*. The ranked-relevance portion is bounded at 50 by `limit`. FR-037 bounds the
+            *fused candidate set* at 100 — two arms of 50 fuse to at most 100 distinct candidates — but
+            that is not this array: `limit` cuts the ranked portion before it is returned, and the
+            deterministic route's additions are counted outside `limit` by design (`info` § Recorded
+            interface decisions, item 2). **No requirement bounds the route's match count**, so the
+            residual 50 is a number this contract chose. Either the route's contribution acquires a
+            stated ceiling with a stated behaviour when it is reached, or this bound is dropped and the
+            array is declared unbounded above `limit`. That is a decision nobody has made; it is
+            recorded in `plan.md` § Contract Decisions Confirmed at Plan rather than settled here.
           maxItems: 100
           items:
             $ref: '#/components/schemas/RetrievalResult'
@@ -1442,43 +1592,80 @@ components:
             and unimplemented.
         reranker:
           type: object
+          description: |
+            *(made per-session 2026-07-29; this block previously carried one `precision`, one `warmup`
+            and one `failure`)*. FR-017 loads and warms **both** graphs AD-011 commits to before
+            readiness is reported, because AD-006 makes arm selection a request parameter and a per-arm
+            load would be a load on a request path. A single-session shape here could report that the
+            INT8 graph warmed while saying nothing about the graph FR-025's full-precision arm needs.
           additionalProperties: false
-          required: [available, state, model_id, model_revision, precision, warmup, failure]
+          required: [available, state, model_id, model_revision, sessions]
           properties:
             available:
               type: boolean
+              description: |
+                True exactly when **every** session AD-011 commits to is loaded and warmed. FR-017
+                requires both before readiness, so one graph warm and one absent is not availability.
             state:
               type: string
-              enum: [warm, unavailable]
+              enum: [warm, partially_available, unavailable]
+              description: |
+                `warm` — every committed session loaded and warmed. `unavailable` — none did, which is
+                FR-021's degraded state: fusion-only ordering is served and every response says so.
+
+                `partially_available` — one graph loaded and the other not, which AD-011's two-graph
+                configuration makes reachable and which a single-session schema could not express.
+                **Which `status` this state reports is not settled by any requirement and is not decided
+                here**: FR-021 speaks of "the reranker" being unavailable, and a process that can serve
+                `fused_reranked` but not `fused_reranked_full_precision` is neither plainly ready nor
+                plainly degraded. Recorded as an open interface point in `plan.md` § Contract Decisions
+                Confirmed at Plan rather than chosen in a schema.
             model_id:
               type: string
+              description: One model identity; the two graphs are two precisions of it, enumerated per session below.
             model_revision:
               type: string
-            precision:
-              type: string
-              enum: [int8, fp32]
-            warmup:
-              type: object
-              additionalProperties: false
-              required: [completed, completed_at, batch_shape]
-              properties:
-                completed:
-                  type: boolean
-                completed_at:
-                  type: [string, 'null']
-                  format: date-time
-                batch_shape:
-                  type: [string, 'null']
-                  description: |
-                    FR-017 requires warm-up at the **maximum** batch shape, so the shape is reported
-                    rather than the fact of warming alone. Warming at a smaller shape and reporting
-                    "warm" would leave the first full-depth query paying the arena growth this gate
-                    exists to move off the request path.
-                  example: '50 x 512'
-            failure:
-              oneOf:
-                - $ref: '#/components/schemas/RerankerFailure'
-                - type: 'null'
+            sessions:
+              type: array
+              description: |
+                One entry per reranker graph this build ships. Empty exactly when no session could be
+                created at all.
+              minItems: 0
+              maxItems: 2
+              uniqueItems: true
+              items:
+                type: object
+                additionalProperties: false
+                required: [precision, loaded, warmup, failure]
+                properties:
+                  precision:
+                    type: string
+                    enum: [int8, fp32]
+                  loaded:
+                    type: boolean
+                  warmup:
+                    type: object
+                    additionalProperties: false
+                    required: [completed, completed_at, batch_shape]
+                    properties:
+                      completed:
+                        type: boolean
+                      completed_at:
+                        type: [string, 'null']
+                        format: date-time
+                      batch_shape:
+                        type: [string, 'null']
+                        description: |
+                          FR-017 requires warm-up at the **maximum** batch shape, so the shape is
+                          reported rather than the fact of warming alone. Warming at a smaller shape and
+                          reporting "warm" would leave the first full-depth query paying the arena
+                          growth this gate exists to move off the request path.
+                        example: '50 x 512'
+                  failure:
+                    oneOf:
+                      - $ref: '#/components/schemas/RerankerFailure'
+                      - type: 'null'
+                    description: Why this session is unavailable. Null when it loaded and warmed.
         encoder:
           type: object
           description: |
@@ -1530,13 +1717,137 @@ components:
           minLength: 1
           description: Repository-relative path to the artifact, so a published figure resolves to the bytes in the checkout.
 
+    RerankerArtifactRecord:
+      type: object
+      description: |
+        *(added 2026-07-29)* One vendored reranker graph, with the precision it serves. AD-011 commits
+        to **two** graphs — the INT8 serving graph and the full-precision graph FR-025 makes an arm —
+        and FR-016 demands identity, revision, licence basis, source and digest of *every* artifact
+        entering this repository. A single `reranker_artifact` object could carry one of them, and the
+        other arm's provenance would have nowhere to be reported from, so this is a collection.
+      additionalProperties: false
+      required: [precision, artifact]
+      properties:
+        precision:
+          type: string
+          enum: [int8, fp32]
+        artifact:
+          oneOf:
+            - $ref: '#/components/schemas/VendoredArtifact'
+            - type: 'null'
+          description: |
+            Null only when the artifact for this precision could not be identified at all — a digest
+            mismatch still reports the artifact it rejected, because a rejected artifact and an absent
+            one are different facts.
+
+    RerankerSession:
+      type: object
+      description: |
+        *(added 2026-07-29)* FR-033's process half for **one** reranker graph. AD-013 keeps both graphs
+        resident in the one serving process — AD-006 makes arm selection a request parameter and FR-017
+        forbids a load on a request path, so a per-arm load is not available — and FR-033 requires the
+        resident memory reported for every model session the process holds. The budget is **not**
+        apportioned between sessions: it is the container total in `process_memory`, and these figures
+        are the itemization that makes that one total attributable.
+      additionalProperties: false
+      required: [precision, loaded, resident_memory_bytes, sequence_limit_tokens, intra_op_threads, inter_op_threads]
+      properties:
+        precision:
+          type: string
+          enum: [int8, fp32]
+          description: |
+            `int8` is the serving arm the budgets bind (FR-033 § Arms); `fp32` is FR-025's
+            full-precision arm, measured and reported against the same budgets with any overage
+            published, because {SAD:ADR-0006} obliges the quantized-versus-full-precision difference to
+            be measured rather than assumed and no separate budget has ever been declared for it.
+        loaded:
+          type: boolean
+        resident_memory_bytes:
+          type: [integer, 'null']
+          minimum: 0
+          description: Resident set attributable to this session. Null when the session is not loaded.
+        sequence_limit_tokens:
+          type: integer
+          minimum: 1
+          description: |
+            FR-019 requires the sequence limit published **as a number**, being the denominator of the
+            truncation fraction, the sequence half of FR-017's warm-up shape, and the per-candidate
+            anchor of the latency budget.
+        intra_op_threads:
+          type: integer
+          minimum: 1
+          description: FR-038. Set explicitly from the container's CPU quota in whole vCPUs, because the runtime reads the host's core count and not the container's quota.
+        inter_op_threads:
+          type: integer
+          minimum: 1
+          description: FR-038. One, the default sequential execution mode requiring no more.
+
+    ProcessMemory:
+      type: object
+      description: |
+        *(added 2026-07-29)* The one figure the compute envelope is declared against, taken by the
+        method FR-033 fixes so that two runs cannot report the same quantity differently and neither be
+        wrong.
+
+          - **Counter**: the serving process's resident set size.
+          - **Occasion**: read after the service reported ready — so FR-017's load-and-warm cost is
+            excluded by rule rather than by convention — and again after the run's queries have been
+            served, with the peak observed during the run reported beside it.
+          - **Budget**: a **container total** (`specs/sad.md` § Quality Attributes, "Compute envelope").
+            FR-033 does not apportion it between the model sessions and the rest of the process, which
+            is why no per-session budget appears in `RerankerSession`.
+          - **Qualifier**: the corpus size the reading was taken at, so a number taken at 6,391 chunks
+            is not read as holding across the 5,000–15,000 design band.
+      additionalProperties: false
+      required: [counter, resident_memory_bytes, peak_resident_memory_bytes, budget_bytes, over_budget, corpus_chunk_count]
+      properties:
+        counter:
+          type: string
+          const: resident_set_size
+          description: Constant. Named in the payload so a figure cannot be read as a working-set or a heap number by a consumer that assumed one.
+        resident_memory_bytes:
+          type: integer
+          minimum: 0
+        peak_resident_memory_bytes:
+          type: [integer, 'null']
+          minimum: 0
+          description: |
+            The peak observed since readiness was reported. Null before any peak has been observed.
+            `specs/sad.md`'s benchmark job prints peak RSS while its target names steady state; the two
+            are different readings of the same run and both are reported rather than one standing in
+            for the other.
+        budget_bytes:
+          type: integer
+          minimum: 1
+          description: The declared envelope, 400 MB. Owned by `specs/sad.md`; no feature-level decision may relax it.
+        over_budget:
+          type: boolean
+          description: |
+            True when `resident_memory_bytes` exceeds `budget_bytes`. FR-033 requires the overage
+            published rather than the figure omitted, and SC-016 makes an overage a **failure** rather
+            than a satisfied criterion — publishing it discharges the disclosure obligation and does not
+            discharge the criterion.
+        corpus_chunk_count:
+          type: integer
+          minimum: 0
+
     DiagnosticsResponse:
       type: object
       description: |
         Process-level facts. Nothing here varies per query; everything that does is on the search
         response.
       additionalProperties: false
-      required: [generated_at, degraded, ranking_parameters, encoder_artifact, reranker_artifact, reranker_session, deterministic_route_pattern, arms]
+      required:
+        - generated_at
+        - degraded
+        - ranking_parameters
+        - encoder_artifact
+        - reranker_artifacts
+        - encoder_session
+        - reranker_sessions
+        - process_memory
+        - deterministic_route_pattern
+        - arms
       properties:
         generated_at:
           type: string
@@ -1551,43 +1862,47 @@ components:
             disagreement between the two is a provenance defect, not a display choice.
         encoder_artifact:
           $ref: '#/components/schemas/VendoredArtifact'
-        reranker_artifact:
-          oneOf:
-            - $ref: '#/components/schemas/VendoredArtifact'
-            - type: 'null'
-          description: Null only when no reranker artifact could be identified at all — a digest mismatch still reports the artifact it rejected.
-        reranker_session:
+        reranker_artifacts:
+          type: array
+          description: |
+            *(was a single `reranker_artifact` until 2026-07-29)* FR-016 for **every** vendored reranker
+            graph. AD-011 commits to two and this build ships both, so one record per precision. Empty
+            only where no reranker artifact could be identified at all.
+          minItems: 0
+          maxItems: 2
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/RerankerArtifactRecord'
+        encoder_session:
           type: object
           description: |
-            FR-033's process half. The session's resident memory against the container's declared budget,
-            and the thread configuration that had to be set explicitly because the runtime reports the
-            host's core count under a CPU quota rather than the container's.
+            The query encoder's session, itemized alongside the reranker graphs because FR-033's counter
+            names all three — query encoder, INT8 reranker, FP32 reranker — against the one container
+            total. Its artifact provenance is `encoder_artifact` above; this is its resident cost.
           additionalProperties: false
-          required: [loaded, resident_memory_bytes, memory_budget_bytes, over_budget, sequence_limit_tokens, intra_op_threads, inter_op_threads]
+          required: [loaded, resident_memory_bytes]
           properties:
             loaded:
               type: boolean
             resident_memory_bytes:
               type: [integer, 'null']
               minimum: 0
-            memory_budget_bytes:
-              type: integer
-              minimum: 1
-            over_budget:
-              type: boolean
-              description: |
-                True when `resident_memory_bytes` exceeds `memory_budget_bytes`. FR-033: a run exceeding
-                the budget MUST publish the overage rather than omitting the figure, so this field is
-                required and the memory figure is never withheld because it is unflattering.
-            sequence_limit_tokens:
-              type: integer
-              minimum: 1
-            intra_op_threads:
-              type: integer
-              minimum: 1
-            inter_op_threads:
-              type: integer
-              minimum: 1
+        reranker_sessions:
+          type: array
+          description: |
+            *(was a single `reranker_session` until 2026-07-29)* FR-033's process half, per session.
+            AD-013 keeps both graphs resident, so a single object would have reported one session's
+            memory and thread configuration while the other arm's had nowhere to go — which is how a
+            400 MB envelope written for one session comes to be published against a process holding
+            three. Empty exactly when no reranker session loaded, the degraded state, where the cause is
+            reported on `GET /readyz`.
+          minItems: 0
+          maxItems: 2
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/RerankerSession'
+        process_memory:
+          $ref: '#/components/schemas/ProcessMemory'
         deterministic_route_pattern:
           type: string
           description: |
@@ -1640,7 +1955,7 @@ components:
           fell_through: false
         ranking_parameters:
           fusion_constant: 60
-          tie_break_key: chunk_id ascending
+          tie_break_key: chunk_id_ascending
           missing_arm_convention: zero_contribution_from_the_absent_arm
           fetch_depth: 50
           vector_search:
@@ -1754,7 +2069,7 @@ components:
           fell_through: false
         ranking_parameters:
           fusion_constant: 60
-          tie_break_key: chunk_id ascending
+          tie_break_key: chunk_id_ascending
           missing_arm_convention: zero_contribution_from_the_absent_arm
           fetch_depth: 50
           vector_search:
@@ -1847,7 +2162,7 @@ components:
           fell_through: false
         ranking_parameters:
           fusion_constant: 60
-          tie_break_key: chunk_id ascending
+          tie_break_key: chunk_id_ascending
           missing_arm_convention: zero_contribution_from_the_absent_arm
           fetch_depth: 50
           vector_search:
@@ -1914,7 +2229,7 @@ components:
           fell_through: false
         ranking_parameters:
           fusion_constant: 60
-          tie_break_key: chunk_id ascending
+          tie_break_key: chunk_id_ascending
           missing_arm_convention: zero_contribution_from_the_absent_arm
           fetch_depth: 50
           vector_search:
@@ -1948,12 +2263,21 @@ components:
           state: warm
           model_id: cross-encoder/ms-marco-MiniLM-L6-v2
           model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
-          precision: int8
-          warmup:
-            completed: true
-            completed_at: '2026-07-29T09:12:04Z'
-            batch_shape: '50 x 512'
-          failure: null
+          sessions:
+            - precision: int8
+              loaded: true
+              warmup:
+                completed: true
+                completed_at: '2026-07-29T09:12:04Z'
+                batch_shape: '50 x 512'
+              failure: null
+            - precision: fp32
+              loaded: true
+              warmup:
+                completed: true
+                completed_at: '2026-07-29T09:12:09Z'
+                batch_shape: '50 x 512'
+              failure: null
         encoder:
           model_id: sentence-transformers/all-MiniLM-L6-v2
           model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
@@ -1972,15 +2296,27 @@ components:
           state: unavailable
           model_id: cross-encoder/ms-marco-MiniLM-L6-v2
           model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
-          precision: int8
-          warmup:
-            completed: false
-            completed_at: null
-            batch_shape: null
-          failure:
-            reason: load_failed
-            detail: 'ONNX Runtime could not create an inference session from data/reranker/model-int8.onnx.'
-            occurred_at: '2026-07-29T09:11:58Z'
+          sessions:
+            - precision: int8
+              loaded: false
+              warmup:
+                completed: false
+                completed_at: null
+                batch_shape: null
+              failure:
+                reason: load_failed
+                detail: 'ONNX Runtime could not create an inference session from data/reranker/model-int8.onnx.'
+                occurred_at: '2026-07-29T09:11:58Z'
+            - precision: fp32
+              loaded: false
+              warmup:
+                completed: false
+                completed_at: null
+                batch_shape: null
+              failure:
+                reason: load_failed
+                detail: 'ONNX Runtime could not create an inference session from data/reranker/model-fp32.onnx.'
+                occurred_at: '2026-07-29T09:11:59Z'
         encoder:
           model_id: sentence-transformers/all-MiniLM-L6-v2
           model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
