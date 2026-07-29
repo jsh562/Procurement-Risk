@@ -310,7 +310,7 @@
 
 - [ ] T081 [BUG:CRITICAL] {FR-040} [governance] **BLOCKED — cannot be closed on this branch.** The release gate this plan declares for itself is unmet: three artifacts name three addresses — specs/sad.md:124
   > `specs/sad.md:124` reads `W->>A: GET /lines?project=…` on this branch and on `main`. `contracts/openapi.yaml` declares `servers: /api/v1` with path `/worklist`. `plan.md:90` names a third form.
-  > plan.md:46 and HINT-003 (plan.md:438) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
+  > plan.md:46 and HINT-003 (plan.md:437) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
   > project-instructions.md:94 is why it lands elsewhere: "Amendments to the documents named in this section are serialized. At most one amendment is in flight at a time, **it is performed on the default branch**, and it lands before the next begins. **A feature branch records the need for an amendment and does not perform it.**"
   > So this task is recorded and left open by design. Closing it here would violate the rule that makes it a CRITICAL in the first place. QC iterations 1-3 never checked the condition; iteration 4 did.
   > Fix hint: amend `specs/sad.md`'s primary flow to `GET /api/v1/worklist` on `main` via the project amendment procedure, then re-run E010's QC. Until then `.qc-passed` must not be written, and `.completed` must carry the open gate rather than presenting the feature as done.
@@ -381,6 +381,19 @@
 - [X] T095 [BUG:WARNING] {FR-040} [process] qc-report.md holds no record of iteration 3 — specs/00010-risk-ranked-coordinator-worklist/qc-report.md:1
   > AGENTS.md: "`qc-report.md` records QC results." The file is headed "(iteration 2)" and closes with "tasks.md now holds 75 checked tasks"; the repository is at 95. Iteration 3's five findings exist in `tasks.md` and `.completed` but no QC record was written for them.
   > Fix hint: append iteration 3 and iteration 4 sections. Leave iteration 2's point-in-time figures as written.
+
+
+- [X] T096 [BUG:ERROR] {FR-040} [accuracy] The manual test procedure serves from the database that holds none of the rows its scenarios name — specs/00010-risk-ranked-coordinator-worklist/manual-test.md:39
+  > T091 was filed against this file for a spec count, a bug-task citation, a stale warning and a destructive cleanup step, and closed all four. The class was not those four items — it was *which database this document tells you to use* — and it had a fifth member the title did not name.
+  > The Startup block started the serving boundary against the shared `procurement` database. Measured, by running the procedure exactly as written: `counts.total` is **24** with `page_states: ['no_active_run']` and zero ranked rows, because the shared database holds 199 lines and **no forecast run**. The file's own readiness check asserts `counts.total == 15`.
+  > Scenarios A1-A7 name `PO-4473-1`, `PO-4474-1/2`, `PO-4475-1`, `PO-4476-1/2`. The shared database holds **0** rows matching `PO-447%`; `procurement_e2e` holds 16. So every scenario in the file was unobservable, and `manual-test.md` is the sole record of WCAG coverage (qc-report.md:45).
+  > The note three lines above the block already said the seed "writes only to `procurement_e2e` … and prints that URL when it finishes", and `playwright.config.ts:44-48` warns against this exact substitution. The document contradicted itself across four lines.
+  > Note the two URLs are *not* both wrong: the seed at line 27 is handed the shared URL and derives the dedicated name from it (`seed.py:60-66`), so that line is correct and must not be "fixed" to match.
+  > Fix hint: point the boundary at `procurement_e2e`, and say why the two URLs differ so the next reader does not reconcile them the wrong way. Verified after the fix: `counts.total == 15`, ranked 13, unranked 2, 13 PO-447x rows.
+
+- [X] T097 [BUG:WARNING] {FR-040} [accuracy] T081's record cites the wrong line for the gate it quotes — specs/00010-risk-ranked-coordinator-worklist/tasks.md:313
+  > The record reads "plan.md:46 and HINT-003 (plan.md:438)". `plan.md:437` is HINT-003; `plan.md:438` is HINT-005. Off by one, in the only open task, in the sentence that quotes the release gate it exists to hold.
+  > Fix hint: `plan.md:437`.
 
 
 ---

@@ -1,6 +1,6 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 43 bug tasks from four QC iterations.
-42 of the 43 are closed. **T081 is open and cannot be closed on this branch.**
+Implementation complete: 52 tasks, plus 45 bug tasks from five QC iterations.
+44 of the 45 are closed. **T081 is open and cannot be closed on this branch.**
 
 ## Not release-ready — one gate is open by design
 
@@ -77,14 +77,18 @@ Compliance Check, which had been reached by neither re-run.
 
 ## What four iterations of QC actually found
 
-43 defects. **Every finding after iteration 1 was an artifact claiming more than
-the repository does, rather than a fault in what it does** — with one exception,
-T083, a formatting gate that genuinely fails CI. The recurring shape is narrower
+45 defects. **Every finding after iteration 1 was an artifact claiming more than
+the repository does, rather than a fault in what it does** — with two exceptions:
+T083, a formatting gate that genuinely failed CI, and T096, a manual procedure
+that could not be executed as written. The recurring shape is narrower
 than that and worth naming: a bug task filed against N sites is fixed at the one
 site its title names. T071 named three task entries and left five in plan.md
 (T078); T078's own fix got two of the five replacements wrong (T089) and split a
 heading (T088); T072 named two sites and closed one (T084); T073 fixed the weight
-half of an assertion and left the size half (T079). Four iterations, same shape.
+half of an assertion and left the size half (T079); T091 fixed the four items its
+title listed and left the one line that determined whether any of the file could
+be run at all (T096). Five iterations, same shape — and the lesson each time was
+that the class is wider than the title.
 
   Iteration 1 (T053-T065) — 13 findings, mostly in code
     T053  Principle VII — the security limitation record stated two falsehoods
@@ -161,6 +165,17 @@ half of an assertion and left the size half (T079). Four iterations, same shape.
     T094  This marker claimed `.prettierignore` excludes the coverage directory.
           It does not; `.gitignore` does, which Prettier reads by default.
     T095  qc-report.md held no record of iteration 3.
+
+  Iteration 5 (T096-T097) — 2 findings; both closed. The fourteen closures of
+  iteration 4 were each re-checked across their whole class and all held.
+    T096  manual-test.md started the serving boundary against the shared
+          `procurement` database, which holds no forecast run — so the procedure
+          returned 24 unranked lines in `no_active_run` against its own
+          documented `total == 15`, and none of the PO-447x rows its scenarios
+          name existed. Every scenario in the file was unobservable, and this
+          file is the sole record of WCAG coverage. Now points at
+          `procurement_e2e`; verified by running it: total 15, ranked 13.
+    T097  T081's record cited plan.md:438 for HINT-003, which is at 437.
 
 ## Reported, outside E010's scope
 

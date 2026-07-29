@@ -32,11 +32,21 @@ DATABASE_URL='postgresql://procurement:local-development-only@localhost:5434/pro
 > prints that URL when it finishes. The shared `procurement` database is never
 > touched. It did truncate the shared database once — T057 fixed that, and this
 > warning is what the old behaviour looked like.
+>
+> The URL above is the **shared** one on purpose: the seed derives the dedicated
+> database's name from it. Every command after this point takes the derived URL
+> the seed prints. The two differ, and the difference is load-bearing.
 
 ```bash
-# Serving boundary
+# Serving boundary — note `procurement_e2e`, which is NOT the URL two blocks up.
+# The seed is handed the shared URL and derives the dedicated database from it
+# (seed.py:60-66); the boundary is handed the database it reads. Pointing it at
+# `procurement` instead gives a page in `no_active_run` with 24 unranked lines
+# and none of the PO-447x rows the scenarios below name, because the shared
+# database holds no forecast run. playwright.config.ts:44-48 says the same thing
+# about the same mistake.
 PYTHONUTF8=1 UV_NATIVE_TLS=1 \
-DATABASE_URL='postgresql://procurement:local-development-only@localhost:5434/procurement' \
+DATABASE_URL='postgresql://procurement:local-development-only@localhost:5434/procurement_e2e' \
 WORKLIST_TIMEZONE=UTC WORKLIST_ALLOWED_ORIGINS=http://127.0.0.1:3000 \
   uv run --directory src/api uvicorn api.main:app --host 127.0.0.1 --port 8000
 

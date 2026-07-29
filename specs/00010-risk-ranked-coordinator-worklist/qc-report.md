@@ -339,3 +339,66 @@ clean over `src/gateway`, its only scope.
 14 of 15 closed. **T081 remains open and blocks `.qc-passed`.** It closes when
 `specs/sad.md`'s primary flow is amended on the default branch to name the address
 the contract defines, after which E010's QC is re-run.
+
+
+---
+
+# QC Report — iteration 5
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T096-T097
+
+Audited at `ed4faf4`. Scoped to verifying iteration 4's fourteen closures across
+their whole class rather than at the site each task named — the failure mode of
+every prior iteration — plus a re-measurement of every figure `.completed`
+publishes.
+
+## Iteration 4's closures
+
+All fourteen verified **complete**, each against the class rather than the named
+instance. The path sweep was exhaustive: all 65 shorthand tokens in `tasks.md`
+and `plan.md` expanded through the table at `tasks.md:20-27` and resolved, plus
+76 root-relative tokens. Sixty-one of the 65 resolve to existing files; the four
+that do not are inside bug-task blockquotes describing the historical defect,
+which is what those records are for. All 24 headings well-formed, no stranded
+fragments. `ruff check` and `ruff format --check` clean at the root and in all
+three entries.
+
+## Every published figure re-measured
+
+No published figure is wrong. api 203/1; benchmark p95 39.2 / 45.0 ms against
+1500, inside the 39-46 ms band the marker states; root 292; web unit 77; e2e 19;
+conformance 9, of which 3 are negative controls; python coverage 97% (481/8, floor
+80); web coverage 99.23 / 96.19 / 97.22 / 99.17 over six modules and 131
+statements in `src/web/app/worklist`; import contracts 11 kept 0 broken; eslint 0
+errors / 2 warnings, neither in an E010 file; tsc clean; mypy clean over
+`src/gateway`, 18 files; checklists 120/120; task counts 52 + 45.
+
+## Findings
+
+| ID | Severity | Finding |
+|---|---|---|
+| T096 | ERROR | `manual-test.md:39` started the serving boundary against the shared `procurement` database. Measured by executing the procedure as written: `counts.total` 24, `page_states ['no_active_run']`, zero ranked rows, zero `PO-447%` rows — against the file's own readiness assertion of 15 and scenarios naming six PO-447x lines. Every scenario was unobservable, and this file is the sole record of WCAG coverage. |
+| T097 | WARNING | T081's record cited `plan.md:438` for HINT-003, which is at `:437`. |
+
+T096 is the fifth instance of the loop's recurring shape and the clearest: T091's
+title listed three stale counts and a destructive cleanup step and the fix closed
+exactly those, but the class was "which database does this document tell you to
+use" and it had five members. The one that was missed was the line that decided
+whether any of the rest could run.
+
+Both fixed. The corrected procedure was executed rather than reasoned about:
+`counts.total == 15`, ranked 13, unranked 2, 13 `PO-447x` rows, `page_states
+['stale_run']` — matching the file's readiness check.
+
+## T081
+
+Verified still correctly open. `git diff origin/main -- specs/sad.md` is empty —
+this branch performs no amendment. `.qc-passed` does not exist. `tasks.md` carries
+T081 as the single unchecked task, and `.completed` leads with the open gate
+before any figure.
+
+## Disposition
+
+**FAIL**, on T081 alone once T096 and T097 are closed. T081 does not close on this
+branch: `specs/sad.md`'s primary flow must be amended on the default branch to name
+the address the contract defines, after which E010's QC is re-run.
