@@ -42,16 +42,21 @@ SCRATCH = ".tmp"
 #: on the other platform would fall back to the system directory silently.
 PROCESS_VARIABLES = ("TMPDIR", "TEMP", "TMP")
 
-#: The caches `TMPDIR` does not reach, pinned by name (v1.2.6). PyTensor and
-#: Numba each keep their own compile cache and consult neither `tempfile` nor
-#: these three variables — measured on the machine that raised this,
-#: `tempfile.gettempdir()` resolved inside the checkout while
-#: `pytensor.config.base_compiledir` resolved to `%LOCALAPPDATA%\PyTensor`. They
-#: are listed separately from `PROCESS_VARIABLES` because they are a different
-#: claim: those three are honoured by one library, `tempfile`, and these name
-#: two libraries that ignore it. Any third library with a private cache belongs
-#: here too, and the only way to find it is to measure rather than assume.
-CACHE_VARIABLES = ("PYTENSOR_FLAGS", "NUMBA_CACHE_DIR")
+#: The *scratch* a library keeps outside `tempfile`, pinned by name (v1.2.6,
+#: narrowed by v1.2.8). Listed separately from `PROCESS_VARIABLES` because it is
+#: a different claim: those three are honoured by one library, `tempfile`, and
+#: this names one that ignores it.
+#:
+#: **`PYTENSOR_FLAGS` was here and was removed.** `base_compiledir` is not
+#: scratch — it holds a C++ extension compiled against the interpreter, keyed by
+#: platform and Python version, and shared correctly between checkouts.
+#: Redirecting it made every checkout rebuild the same binary, and on the
+#: machine that raised this the rebuild failed: the forecast tier went from 793
+#: passing to a `CompileError`. Asserting a redirect here would have re-imposed
+#: it. A library with private *scratch* belongs in this tuple; a library with a
+#: private *build cache* does not, and telling them apart needs a measurement of
+#: what breaks, not of where the path resolves.
+CACHE_VARIABLES = ("NUMBA_CACHE_DIR",)
 
 #: What a job's value must resolve to. `github.workspace` is the checkout root,
 #: which is what makes the path per-checkout rather than machine-wide.

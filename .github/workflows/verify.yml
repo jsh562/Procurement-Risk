@@ -113,11 +113,10 @@ jobs:
       TMPDIR: ${{ github.workspace }}/.tmp
       TEMP: ${{ github.workspace }}/.tmp
       TMP: ${{ github.workspace }}/.tmp
-      # v1.2.6: PyTensor and Numba keep private compile caches and consult
-      # neither `tempfile` nor the three above, so they are pinned by name.
-      # Absolute, because PyTensor flattens a path it cannot parse into a
-      # directory created relative to the working directory rather than failing.
-      PYTENSOR_FLAGS: base_compiledir=${{ github.workspace }}/.tmp/pytensor
+      # v1.2.6, narrowed by v1.2.8: Numba keeps private scratch that `tempfile`
+      # and the three above never reach. PyTensor's `base_compiledir` is
+      # deliberately NOT redirected — it holds a compiled C++ extension, not
+      # scratch, and pinning it made every checkout rebuild the same binary.
       NUMBA_CACHE_DIR: ${{ github.workspace }}/.tmp/numba
 
     # The model entry's schema tests assert constraint rejection, index presence,
@@ -662,11 +661,10 @@ jobs:
       TMPDIR: ${{ github.workspace }}/.tmp
       TEMP: ${{ github.workspace }}/.tmp
       TMP: ${{ github.workspace }}/.tmp
-      # v1.2.6: PyTensor and Numba keep private compile caches and consult
-      # neither `tempfile` nor the three above, so they are pinned by name.
-      # Absolute, because PyTensor flattens a path it cannot parse into a
-      # directory created relative to the working directory rather than failing.
-      PYTENSOR_FLAGS: base_compiledir=${{ github.workspace }}/.tmp/pytensor
+      # v1.2.6, narrowed by v1.2.8: Numba keeps private scratch that `tempfile`
+      # and the three above never reach. PyTensor's `base_compiledir` is
+      # deliberately NOT redirected — it holds a compiled C++ extension, not
+      # scratch, and pinning it made every checkout rebuild the same binary.
       NUMBA_CACHE_DIR: ${{ github.workspace }}/.tmp/numba
 
     steps:
