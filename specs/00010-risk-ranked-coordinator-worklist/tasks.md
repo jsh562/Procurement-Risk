@@ -477,6 +477,22 @@
   > Fix hint: name T100.
 
 
+- [X] T113 [BUG:ERROR] {FR-040} [accuracy] The marker's CRLF caveat named ruff, which is not affected, pre-excusing the exact failure class T083 was — specs/00010-risk-ranked-coordinator-worklist/.completed:141
+  > The rewritten marker said "`npx prettier --check .` and `ruff format --check` report files as unformatted that are clean as stored in git". The prettier half is measured and true. The ruff half is false: ruff defaults to `line-ending = "auto"`, which preserves each file's existing endings, and no override exists in this repository. Measured on this CRLF working tree, `ruff format --check` reports **zero** files across all four tiers.
+  > The same file says so 67 lines above — "ruff `check` and `format --check` both clean over all four tiers". Both cannot be true.
+  > Material rather than cosmetic: T083 was a genuine root `ruff format --check` failure on an E010-owned file that failed CI's `Format check (Python)` step, and T083's own record says "**Not a CRLF artifact**". This sentence tells the next reader to dismiss that class as environmental — the only claim in the marker whose consequence is a merge-gate failure being ignored.
+  > Fix hint: drop ruff from the caveat and state the measurement, so the distinction is recorded rather than merely removed.
+
+- [X] T114 [BUG:WARNING] {FR-040} [process] qc-report.md carried seven of eight iterations while the marker said it carried all of them — specs/00010-risk-ranked-coordinator-worklist/qc-report.md:1
+  > `.completed` rests its whole structure on the division of labour "qc-report.md records the QC results" and states "Per-iteration findings, severities and measurements are in `qc-report.md`". Measured: the file held iterations 2-8. Iteration 1's report existed at `4edb348` (274 lines) and was **overwritten in place** by iteration 2's at `906dfb4`. Its measurements survived in the Changes-from-Prior-Run table; its 13 findings and severities did not.
+  > Fourth instance of the class T095, T105 and T110 were each filed for — at the one iteration none of them checked, because each was filed about the iteration that had just finished.
+  > Fix hint: restore iteration 1 verbatim from `4edb348` rather than re-deriving it, and record that later iterations append rather than replace.
+
+- [X] T115 [BUG:WARNING] {FR-039} [test-quality] A conformance docstring contradicts itself on the count it exists to justify — src/api/tests/test_contract_conformance.py:140
+  > "The check that keeps **the four** above from being vacuous", then two sentences later "would accept anything and report **five** green tests". Measured: five positive response-state tests precede it, which is also the figure `.completed` publishes.
+  > Fix hint: "the five above".
+
+
 ---
 
 ## Dependencies
