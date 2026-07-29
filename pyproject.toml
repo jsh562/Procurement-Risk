@@ -49,10 +49,18 @@ testpaths = ["tests"]
 #
 # The path is relative to the invocation directory rather than to rootdir,
 # which is what pytest does with `--basetemp`; every step that runs this tier
-# runs from the repository root. The entries spell it `../../.tmp/pytest`
-# because they run from `src/<entry>`, and all four therefore name one
-# directory.
-addopts = "--basetemp=.tmp/pytest"
+# runs from the repository root. The entries spell theirs `../../.tmp/pytest-*`
+# because they run from `src/<entry>`.
+#
+# **One subdirectory per tier, not one shared directory.** All four originally
+# named `.tmp/pytest`, and pytest *clears its basetemp at start of every run* —
+# correct in CI, where the four tiers are sequential steps, and destructive
+# anywhere they overlap. Two tiers started concurrently on a developer's machine
+# wipe each other's `tmp_path` mid-run, which surfaces as an unrelated test
+# failing on a file that existed a moment earlier. That happened twice while
+# this epic was being worked on. The suffix is the tier, so the directory names
+# its owner.
+addopts = "--basetemp=.tmp/pytest-checks"
 
 [tool.coverage.run]
 branch = true

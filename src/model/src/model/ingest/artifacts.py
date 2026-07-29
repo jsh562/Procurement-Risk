@@ -42,7 +42,6 @@ __all__ = [
     "ArtifactError",
     "EncoderArtifact",
     "artifact_path",
-    "encoder_identity",
     "verified_encoder",
 ]
 
@@ -191,7 +190,7 @@ def verified_encoder() -> EncoderArtifact:
     return artifact
 
 
-def encoder_identity() -> tuple[str, str]:
-    """FR-020's `(model id, revision)`, verified before it is returned."""
-    artifact = verified_encoder()
-    return artifact.model_id, artifact.revision
+# FR-020's `(model id, revision)` pair is `embed.embedding_identity`, and only
+# there. An `encoder_identity()` here returned the same two fields off the same
+# verified artifact and nothing called it — one accessor per identity, on the
+# module that owns the encoder session.

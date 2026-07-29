@@ -11,6 +11,7 @@ in the coverage denominator, on the same reasoning as `entries.py`.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,68 @@ def run_steps(document: dict[Any, Any]) -> list[dict[str, Any]]:
 def steps_running(document: dict[Any, Any], fragment: str) -> list[dict[str, Any]]:
     """Steps whose `run:` body contains `fragment`."""
     return [step for step in run_steps(document) if fragment in step["run"]]
+
+
+#: How a step names the tier it runs a tool against. `uv run --directory
+#: src/model ruff …` runs from that directory; a bare `uv run ruff …` runs from
+#: the checkout root, which is the tier the per-entry loops keep omitting.
+ROOT_TIER = "."
+
+_FOR_LOOP = re.compile(r"\bfor\s+(\w+)\s+in\s+([^;]+);\s*do\b")
+_DONE = re.compile(r"(^|;|\s)done\b")
+_DIRECTORY = re.compile(r"--directory[=\s]+\"?([^\s\"]+)\"?")
+
+
+def _expand(raw: str, bindings: dict[str, list[str]]) -> set[str]:
+    """Every directory a `--directory` argument names under the loops in scope.
+
+    `"src/$entry"` inside `for entry in gateway api model` names three
+    directories, and a check reading the literal would see one that does not
+    exist.
+    """
+    expansions = {raw}
+    for name, words in bindings.items():
+        expansions = {
+            candidate.replace(f"${{{name}}}", word).replace(f"${name}", word)
+            for candidate in expansions
+            for word in words
+        }
+    return expansions
+
+
+def tiers_running(document: dict[Any, Any], invocation: str) -> set[str]:
+    """Every tier some step runs `invocation` against, across every job.
+
+    Args:
+        document: a parsed workflow.
+        invocation: the command as it is spelled in the step, e.g. `ruff check`
+            or `ruff format`.
+
+    Returns:
+        Directory strings relative to the checkout — `src/model` for an entry,
+        `ROOT_TIER` for a step with no `--directory`.
+
+    The shell is read rather than executed, and the only construct interpreted
+    is the `for … in …; do` these steps are written with. That is enough to
+    resolve `"src/$entry"`, and it is deliberately not a shell: a check that
+    needed one to establish which tiers a lint step covers would be reporting on
+    its own emulator.
+    """
+    tiers: set[str] = set()
+    for step in run_steps(document):
+        bindings: dict[str, list[str]] = {}
+        for line in str(step["run"]).splitlines():
+            opener = _FOR_LOOP.search(line)
+            if opener is not None:
+                bindings[opener.group(1)] = opener.group(2).split()
+            if invocation in line:
+                directory = _DIRECTORY.search(line)
+                tiers |= (
+                    _expand(directory.group(1), bindings) if directory is not None else {ROOT_TIER}
+                )
+            if _DONE.search(line):
+                bindings = {}
+    return tiers
 
 
 def unconditional(step: dict[str, Any]) -> bool:

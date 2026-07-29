@@ -20,9 +20,11 @@ them per chunk would make the failure table *chunks × 22*, dominated by
 structural absences, and buy a dozen impossible model calls per chunk. The
 subset is **declared**, with each exclusion's reason stated beside it, rather
 than discovered from an empty result: `EXCLUDED_TERMS` is the record FR-058
-requires, and `printed_but_unattempted` is what lets a printed field falling
-outside the subset be published as unattempted-but-printed rather than absorbed
-into the miss total.
+requires. Publishing a printed field that falls outside the subset as
+unattempted-but-printed, rather than absorbing it into the miss total, is
+`ingest/reference.py`'s `printed_without_term` and report item 14 — it works
+over the generator's printed keys, which is the population that includes the
+seven keys the vocabulary has no term for at all.
 
 **The bound is applied in code, not in the schema, and that is deliberate.** A
 `Literal` over the attempted names would make one mis-named field fail the whole
@@ -68,7 +70,6 @@ __all__ = [
     "attempted_terms",
     "output_schema_digest",
     "bound_field_names",
-    "printed_but_unattempted",
     "term",
 ]
 
@@ -428,20 +429,15 @@ def bound_field_names(
     return tuple(accepted), tuple(refused)
 
 
-def printed_but_unattempted(printed: Collection[str]) -> tuple[str, ...]:
-    """Vocabulary terms the generator recorded as printed and nobody attempted.
-
-    FR-058's escape hatch, and the reason the subset is safe to declare in
-    advance: if the declaration is wrong — if a later corpus prints a term this
-    module excluded — the mistake is **published as a count of unattempted-but-
-    printed fields** rather than absorbed into the miss total, where it would
-    read as the model failing to find something nobody looked for.
-
-    Sorted, so the published list does not depend on the order the reference set
-    happened to enumerate.
-    """
-    attempted = {entry.name for entry in TRANSMITTAL_FIELD_SUBSET}
-    return tuple(sorted(set(printed) - attempted))
+# FR-058's escape hatch — the printed fields nobody attempted — is
+# `ingest/reference.py`'s `printed_without_term`, published through report item
+# 14. A `printed_but_unattempted` here took a set of *vocabulary term names* and
+# subtracted the attempted subset, which is the narrow reading QC F6 corrected:
+# the population FR-058 most needs to reach is the seven printed generator keys
+# the vocabulary has no term for at all, and those never appear in this
+# function's input, so it returned () on a corpus with 170 of them. It had no
+# caller, and keeping a superseded and wrong second answer beside the right one
+# is worse than having only the right one.
 
 
 class ExtractedField(BaseModel):

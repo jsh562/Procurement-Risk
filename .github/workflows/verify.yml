@@ -250,11 +250,21 @@ jobs:
           for entry in gateway api model; do uv run --directory "src/$entry" ruff check .; done
           uv run ruff check .
 
+      # The root is listed alongside the loop for the same reason the Lint step
+      # above lists it: it is not one of the three entries, so a per-entry loop
+      # silently omits it. It was omitted — root linting was enforced and root
+      # formatting was not, leaving everything under `/tests` format-unchecked:
+      # the 22 modules of `tests/checks` and the 41 import-linter negative
+      # fixtures under `tests/fixtures`, 403 files at the root against the
+      # entries' 243. `tests/checks/test_lint_and_format_cover_the_same_tiers.py` now
+      # asserts the two steps cover the same set, so the class of omission fails
+      # a build rather than waiting for the next reader.
       - name: Format check (Python)
         run: |
           for entry in gateway api model; do
             uv run --directory "src/$entry" ruff format --check .
           done
+          uv run ruff format --check .
 
       - name: Lint and format check (web)
         working-directory: src/web

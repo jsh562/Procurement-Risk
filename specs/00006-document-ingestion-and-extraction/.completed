@@ -1,9 +1,19 @@
 Implementation complete: 2026-07-28
 Feature: 00006-document-ingestion-and-extraction
 Branch: 00006-document-ingestion-and-extraction
-Final implementation revision: 2fd211f
+Implementation revision when this marker was first written: 2fd211f
 
-95 of 97 tasks complete. Two are blocked and are recorded, not hidden.
+**101 of 103 tasks complete.** Two are blocked and are recorded, not hidden.
+
+This marker first said "95 of 97" and named `2fd211f` as final. Both numbers
+were right when written and neither survived: two QC iterations added six tasks
+(T098-T103) closing findings the decomposition never contained, and `2fd211f`
+stopped being the final revision the moment the first of those landed. The
+count above is the current one, read from `tasks.md` at head; the
+`## Verification at 2fd211f` section below is left labelled with its own
+revision, because those figures are a measurement of that tree and re-labelling
+them would be a claim about a tree they were never taken on. The current
+figures are in `qc-report.md`.
 
 ## What was delivered
 
@@ -26,16 +36,26 @@ behaviour and are published by the disposition ledger rather than inferred.
 
 ## Task count, stated exactly
 
-- T001-T080, T082-T088, T090-T097: complete.
+- T001-T080, T082-T088, T090-T103: complete. That is 101 of 103.
 - **T081 - extraction fixtures: BLOCKED.** Not complete, and deliberately not
   marked complete. Its runbook half is done; zero fixtures are committed.
 - **T089 - regenerated ingestion report: BLOCKED**, transitively on T081.
 
-Five tasks were added during implementation rather than deferred by the
-decomposition: T093-T096 closed assembly gaps the task list never contained
-(nothing invoked `extract_fields`; report items 8, 14 and 21 had no builder
-against a closed 21-item list), and T097 drove the write and extraction stages
-from the console entry, which was nobody's task. Recorded in tasks.md Phase 8.
+Eleven tasks were added after the decomposition rather than deferred by it, and
+the two batches have different causes.
+
+Five during implementation: T093-T096 closed assembly gaps the task list never
+contained (nothing invoked `extract_fields`; report items 8, 14 and 21 had no
+builder against a closed 21-item list), and T097 drove the write and extraction
+stages from the console entry, which was nobody's task.
+
+Six after QC iteration 1: T098 assembled all twenty-one report items and wrote
+both artifacts, closing a ~4,900-line publish layer that had no production
+caller at all; T099 scored the model path and the baseline in production rather
+than only inside a test; T100 routed every run-level abort through the
+constructor for its kind; T101 added FR-069's third resolution, the correct
+negative; T102 published the printed fields with no vocabulary term; T103
+narrowed the page-split contributor rule. All recorded in tasks.md Phase 8.
 
 ## Why the two blocked tasks cannot be closed here
 
@@ -62,7 +82,31 @@ resolves relative to the installed package and lands inside `.venv` when
 reached through the model entry, and the gateway rejects the
 `postgresql+psycopg://` spelling that `ingest.writer` normalizes before use.
 
+## Verification at head, after QC iteration 2
+
+Measured on the merged tree, `main` merged in at 7652e9d plus the iteration-2
+fixes. The full account is in qc-report.md; these are the headline numbers.
+
+- Model suite: 2,410 passed, 0 skipped, 0 failed
+- Repository checks: 252 passed
+- Gateway suite: 405 passed, 5 skipped — the tier iteration 1 found red and
+  unrun. It must be invoked as `python -m pytest`
+- Web: 3 passed; npm run lint exit 0; tsc --noEmit and prettier clean
+- ruff check and ruff format --check: clean at all four sites — gateway 43
+  files, api 4, model 196, repository root 403. The root format check is new
+  since iteration 2; it was the one site CI never ran
+- lint-imports: 8 contracts kept, 0 broken across the three entries.
+  mypy --strict on the gateway: no issues, 18 source files
+- Per-package coverage, each measured alone under --fail-under=80:
+  ingest 90%, llm 95%, compute 92%; combined 92%; corpus 93%
+- ingest --mode replay from an empty migrated database: 51 enumerated,
+  26 ingested, 0 skipped_unchanged, 1 rolled_back, 24 not_reached, 6,391
+  chunks written, exit 3 on fixture_missing, 16 of 21 report items built and
+  the other 5 refused by name
+
 ## Verification at 2fd211f
+
+Retained as taken. These figures measure that tree, not this one.
 
 - Model suite: 2,392 passed, 0 skipped, 0 failed
 - Repository checks: 238 passed

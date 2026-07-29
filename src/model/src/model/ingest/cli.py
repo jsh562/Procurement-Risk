@@ -24,11 +24,15 @@ values were extracted. Both are recorded below, because a reader asking "why is
 this corpus half-extracted" should not have to reconstruct the argument.
 
 **One trace identifier per run** (FR-070). `RunTrace` mints it once, before the
-first document, and `reconcile_invocations` compares what the run attempted
-against what the gateway recorded under it. The identifier is explicit on every
-call into `model.llm.extraction` because the gateway reads no ambient context —
-which is exactly what makes the reconciliation meaningful: a per-call identifier
-would reconcile trivially against itself.
+first document; `attempted_invocation_count` derives what the run issued from the
+partition, `count_recorded_invocations` counts what the gateway wrote under the
+identifier, and `report.reconciliation_section` compares and publishes the two.
+The comparison lives in the report and not here, deliberately: FR-070's rule is
+that both counts are *published*, so the one module that can publish them is the
+one that should state the invariant. The identifier is explicit on every call
+into `model.llm.extraction` because the gateway reads no ambient context — which
+is exactly what makes the reconciliation meaningful: a per-call identifier would
+reconcile trivially against itself.
 
 **The run aborts through this module, and the record it leaves is a run-level
 failure** (FR-056, T077). The per-document handler catches *outside*
@@ -98,7 +102,6 @@ from model.ingest.extract import (
 from model.ingest.publish import PublicationOutcome, RunEvidence, publish_report
 from model.ingest.report import (
     ATTEMPT_UNIT,
-    COUNTING_UNITS,
     DISPOSITION_INGESTED,
     DISPOSITION_MEANINGS,
     DISPOSITION_NOT_REACHED,
@@ -141,7 +144,6 @@ from model.llm.schemas import FieldTerm, attempted_terms, output_schema_digest
 
 __all__ = [
     "ATTEMPT_UNIT",
-    "COUNTING_UNITS",
     "DISPOSITIONS",
     "EXIT_ABORTED",
     "EXIT_OK",
@@ -171,7 +173,6 @@ __all__ = [
     "DispositionLedger",
     "ExtractionScope",
     "InvocationLedger",
-    "InvocationReconciliation",
     "OrchestrationError",
     "PublicationOutcome",
     "RunEvidence",
@@ -194,7 +195,6 @@ __all__ = [
     "oversized_sentence",
     "provider_unreachable",
     "publish_report",
-    "reconcile_invocations",
     "require_price_table_pin",
     "resolve_resolution_mode",
     "run_ingestion",
@@ -440,60 +440,15 @@ class RunTrace:
             )
 
 
-@dataclass(frozen=True)
-class InvocationReconciliation:
-    """FR-070's two counts and the verdict, published rather than asserted.
-
-    `attempted` is what the run issued — one per chunk sent to
-    `model.llm.extraction`, which is FR-069's invocation unit. `recorded` is what
-    `llm_invocation` holds under the run's trace identifier. **Both counts are
-    published whether or not they agree** (SC-011): a reconciliation that
-    published only the verdict would be a claim about itself.
-    """
-
-    trace_id: str
-    attempted: int
-    recorded: int
-
-    @property
-    def agrees(self) -> bool:
-        return self.attempted == self.recorded
-
-    @property
-    def difference(self) -> int:
-        return self.recorded - self.attempted
-
-
-def reconcile_invocations(
-    *, trace_id: str, attempted: int, recorded: int
-) -> InvocationReconciliation:
-    """Compare invocations attempted against invocations recorded (FR-070).
-
-    Raises:
-        OrchestrationError: either count is negative, or `attempted` is zero on a
-            run that reached extraction at all. A zero-attempt reconciliation
-            agrees trivially with a zero-recorded one, which is the reconciliation
-            passing because nothing happened — FR-068's empty-population rule
-            reaching the one figure that would otherwise be vacuously true.
-
-    The **inequality is not raised here.** SC-011 requires the two counts to be
-    published and required equal; publication is the report's and the equality
-    verdict is `agrees`. Raising would prevent the counts from ever being
-    published, which is the one outcome the requirement rules out.
-    """
-    if attempted < 0 or recorded < 0:
-        raise OrchestrationError(
-            f"FR-070: invocation counts are non-negative; got attempted={attempted}, "
-            f"recorded={recorded}"
-        )
-    if attempted == 0:
-        raise OrchestrationError(
-            "FR-070: the reconciliation was asked to compare zero attempted invocations, "
-            "which agrees with zero recorded ones for no reason at all. A run that "
-            "attempted no invocation has no reconciliation to publish; a run that "
-            "attempted some and counted none has a defect in its ledger."
-        )
-    return InvocationReconciliation(trace_id=trace_id, attempted=attempted, recorded=recorded)
+# FR-070's comparison itself is `report.reconciliation_section`, not a second
+# copy here. This module derives the `attempted` side (`attempted_invocation_count`)
+# and reads the `recorded` side (`count_recorded_invocations`) and hands both to
+# the report, because SC-011's requirement is that the two counts are *published*
+# — so the module that can publish them is the module that owns the invariant.
+# An `InvocationReconciliation` value and a `reconcile_invocations` function did
+# live here, restating the same zero-attempt and non-negative rules; nothing
+# called them, and two copies of one rule with only one of them reachable is
+# worse than either copy alone.
 
 
 #: Counts the rows the gateway wrote under one trace identifier. Parameterized

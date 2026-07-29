@@ -75,12 +75,16 @@ def _inside_the_checkout(manifest: Path, basetemp: str) -> bool:
 
     Resolved against the manifest's own directory, because that is the working
     directory every step running that tier uses — `uv run --directory src/model`
-    is why the entries spell it `../../.tmp/pytest` and the root spells it
-    `.tmp/pytest`. Comparing the strings instead would accept
+    is why the entries spell it `../../.tmp/pytest-model` and the root spells it
+    `.tmp/pytest-checks`. Comparing the strings instead would accept
     `../../../elsewhere/.tmp` and reject a correct absolute path.
     """
-    resolved = (manifest.parent / basetemp).resolve()
-    return resolved == REPO_ROOT / SCRATCH or REPO_ROOT / SCRATCH in resolved.parents
+    return _resolved(manifest, basetemp).is_relative_to(REPO_ROOT / SCRATCH)
+
+
+def _resolved(manifest: Path, basetemp: str) -> Path:
+    """The absolute directory a manifest's pin names, from that tier's cwd."""
+    return (manifest.parent / basetemp).resolve()
 
 
 @pytest.mark.parametrize("manifest", MANIFESTS, ids=lambda p: str(p.relative_to(REPO_ROOT)))
@@ -96,6 +100,38 @@ def test_every_pytest_tier_pins_its_basetemp_inside_the_checkout(manifest: Path)
     assert _inside_the_checkout(manifest, basetemp), (
         f"{manifest.relative_to(REPO_ROOT)} pins --basetemp={basetemp!r}, which resolves "
         f"to {(manifest.parent / basetemp).resolve()} — outside {REPO_ROOT / SCRATCH}"
+    )
+
+
+def test_no_two_pytest_tiers_share_a_basetemp() -> None:
+    """Inside the checkout is necessary and not sufficient: the directory must
+    also be the tier's own.
+
+    **pytest clears its basetemp at the start of every run.** All four manifests
+    once named `.tmp/pytest`, which is correct in CI — the four tiers are
+    sequential steps there, so each clears a directory the previous one is done
+    with — and destructive anywhere they overlap. Two tiers started concurrently
+    on a developer's machine delete each other's `tmp_path` trees mid-run, and
+    the symptom is an unrelated test failing on a file that existed a moment
+    earlier, in the tier that did *not* do anything wrong. That happened twice
+    while this epic was being worked on, which is why the property is asserted
+    rather than left to whoever adds the fifth manifest.
+    """
+    pinned = {manifest: _basetemp(manifest) for manifest in MANIFESTS}
+    resolved: dict[Path, list[Path]] = {}
+    for manifest, basetemp in pinned.items():
+        assert basetemp is not None, manifest  # the test above owns this failure
+        resolved.setdefault(_resolved(manifest, basetemp), []).append(manifest)
+
+    shared = {
+        str(directory): sorted(str(m.relative_to(REPO_ROOT)) for m in manifests)
+        for directory, manifests in resolved.items()
+        if len(manifests) > 1
+    }
+    assert not shared, (
+        f"{shared} — pytest clears its basetemp at start of run, so two tiers pointed at "
+        f"one directory wipe each other's `tmp_path` whenever they run concurrently. Give "
+        f"each tier its own subdirectory of {REPO_ROOT / SCRATCH}"
     )
 
 

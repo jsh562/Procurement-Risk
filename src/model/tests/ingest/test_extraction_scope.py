@@ -5,6 +5,12 @@ documents extraction reaches, and under which trace identifier it reaches them.
 Both are published rather than inferred, so both are asserted here as
 *publication* rather than as behaviour — the requirement in each case is that a
 reader can see the fact, not merely that the code did the right thing.
+
+FR-070's comparison is asserted against `report.reconciliation_section`, which
+is the path the run takes (`publish.py` calls it). `ingest/cli.py` briefly
+carried a second, unreachable copy of the same invariant; it was deleted, and
+the assertions that were only ever made against it — the signed difference, and
+the refusal of a negative count — are made here against the live path instead.
 """
 
 from __future__ import annotations
@@ -23,7 +29,6 @@ from model.ingest.cli import (
     count_recorded_invocations,
     documents_by_layer,
     exclusion_section,
-    reconcile_invocations,
     select_extraction_documents,
 )
 from model.ingest.documents import DocumentRecord
@@ -173,27 +178,6 @@ def test_a_document_with_no_chunk_count_stops_the_ledger() -> None:
         attempted_invocation_count(scope, {})
 
 
-def test_the_reconciliation_reports_agreement_without_hiding_the_counts() -> None:
-    result = reconcile_invocations(trace_id=TRACE_ID, attempted=120, recorded=120)
-    assert result.agrees
-    assert result.difference == 0
-
-
-def test_a_disagreement_is_reported_rather_than_raised() -> None:
-    """SC-011 requires both counts published and required equal. Raising would
-    prevent the counts from ever being published, which is the one outcome the
-    requirement rules out."""
-    result = reconcile_invocations(trace_id=TRACE_ID, attempted=120, recorded=118)
-    assert not result.agrees
-    assert result.difference == -2
-
-
-def test_a_zero_attempt_reconciliation_is_refused() -> None:
-    """It agrees with zero recorded for no reason at all."""
-    with pytest.raises(OrchestrationError, match="FR-070"):
-        reconcile_invocations(trace_id=TRACE_ID, attempted=0, recorded=0)
-
-
 def test_the_reconciliation_section_publishes_both_counts_and_the_verdict() -> None:
     section = reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=120, recorded=120)
     assert section.item == 15
@@ -203,18 +187,41 @@ def test_the_reconciliation_section_publishes_both_counts_and_the_verdict() -> N
 
 
 def test_a_failing_reconciliation_still_publishes_both_counts() -> None:
-    """The failure is published, not suppressed: a report that omitted the
-    counts when they disagreed would only ever show reconciliations that
-    worked."""
-    section = reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=120, recorded=7)
-    assert [figure.value for figure in section.figures] == [120, 7]
-    assert "disagree" in section.body
+    """The failure is published, not raised: SC-011 requires both counts
+    published *and* required equal, and raising would prevent the counts from
+    ever being published — the one outcome the requirement rules out. A report
+    that omitted them when they disagreed would only ever show reconciliations
+    that worked.
+
+    The signed difference is asserted rather than only the word "disagree": a
+    reader has to be able to tell "more recorded than attempted" — a request
+    issued outside the run's ledger — from "fewer" — an attempted invocation
+    that left no row. The two are different defects and the sign is what
+    separates them.
+    """
+    section = reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=120, recorded=118)
+    assert [figure.value for figure in section.figures] == [120, 118]
+    assert "disagree by -2" in section.body
     assert section.total_checks[0].outcome == "FAILED"
+
+    surplus = reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=120, recorded=127)
+    assert "disagree by +7" in surplus.body
 
 
 def test_the_reconciliation_section_refuses_a_zero_attempt_run() -> None:
+    """It agrees with zero recorded for no reason at all."""
     with pytest.raises(ReportError, match="FR-070"):
         reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=0, recorded=0)
+
+
+def test_the_reconciliation_section_refuses_a_negative_count() -> None:
+    """The other half of the same guard. A negative `recorded` is not a
+    reconciliation that failed, it is a count that was computed wrongly, and
+    publishing it as a figure would put a nonsense number in the report."""
+    with pytest.raises(ReportError, match="non-negative"):
+        reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=120, recorded=-1)
+    with pytest.raises(ReportError, match="non-negative"):
+        reconciliation_section(run_id="run-1", trace_id=TRACE_ID, attempted=-1, recorded=0)
 
 
 # ---------------------------------------------------------------------------

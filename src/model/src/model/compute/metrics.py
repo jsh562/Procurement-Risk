@@ -49,7 +49,6 @@ from dataclasses import dataclass
 from typing import Final
 
 __all__ = [
-    "CONFIDENCE_LEVEL",
     "F1_OMISSION_REASON",
     "INTERVAL_METHOD",
     "PRECISION_DENOMINATOR",
@@ -80,11 +79,12 @@ class MetricsError(ValueError):
 #: decimal of a bound, which is inside the range these intervals are printed to.
 Z_95: Final[float] = 1.959963984540054
 
-CONFIDENCE_LEVEL: Final[str] = "95%"
-
 #: Named with every figure (FR-060). A constant rather than a literal at each
 #: call site so the report and the module cannot disagree about which variant
-#: produced the numbers.
+#: produced the numbers. The confidence level is *inside* this string rather
+#: than beside it in a second constant: a `CONFIDENCE_LEVEL = "95%"` existed
+#: here, nothing read it, and two places to state one level is one place for
+#: them to disagree.
 INTERVAL_METHOD: Final[str] = "continuity-corrected Wilson 95%"
 
 #: FR-060's two denominators, stated once. Carried onto every `Proportion` so a

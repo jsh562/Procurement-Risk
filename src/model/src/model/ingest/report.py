@@ -83,7 +83,6 @@ __all__ = [
     "CHUNK_ESTIMATE_MAXIMUM",
     "CHUNK_ESTIMATE_MINIMUM",
     "CORRECT_NEGATIVE_MEANING",
-    "COUNTING_UNITS",
     "DECLARED_BASELINE_CRITERION",
     "DECLARED_BASELINE_LABEL",
     "DECLARED_BOUND_KEYS",
@@ -169,11 +168,13 @@ __all__ = [
 #: restricted to these — a chunk-length figure counts leaves and a cluster count
 #: counts clusters — but the ledger figures below are, because the whole point
 #: of FR-069 is that an attempt-level and an invocation-level number never share
-#: a table.
+#: a table. A `COUNTING_UNITS` tuple of the three sat here and was imported and
+#: never read: nothing validates a unit against the set, precisely because
+#: `FigureScope.unit` is deliberately open, so the tuple named a closed set that
+#: does not exist.
 ATTEMPT_UNIT: str = "attempt"
 INVOCATION_UNIT: str = "invocation"
 DOCUMENT_UNIT: str = "document"
-COUNTING_UNITS: tuple[str, ...] = (ATTEMPT_UNIT, INVOCATION_UNIT, DOCUMENT_UNIT)
 
 #: FR-071: one artifact, at a fixed path, regenerated in full. Relative to the
 #: repository root, which is where the caller resolves it — this module writes

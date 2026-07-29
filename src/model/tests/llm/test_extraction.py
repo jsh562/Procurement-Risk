@@ -204,12 +204,6 @@ def test_bound_field_names_splits_rather_than_raising() -> None:
     assert refused == ("unit_price", "invented")
 
 
-def test_printed_but_unattempted_reports_a_term_outside_the_subset() -> None:
-    """FR-058: published as unattempted-but-printed, not absorbed into misses."""
-    assert schemas.printed_but_unattempted({"manufacturer", "unit_price"}) == ("unit_price",)
-    assert schemas.printed_but_unattempted({"manufacturer"}) == ()
-
-
 def test_document_scoped_terms_are_declared_not_inferred() -> None:
     """FR-059: ordinal 0 is a named group, so its members are declared."""
     scoped = {

@@ -90,7 +90,12 @@ testpaths = ["tests"]
 # pytest clears its own basetemp at start, so nothing else may live there.
 # Belt and braces with the TMPDIR rule in AGENTS.md: this holds even when a
 # command is run without it.
-addopts = "--basetemp=../../.tmp/pytest"
+#
+# Suffixed with the tier's own name because pytest clears its basetemp at the
+# start of every run: four tiers sharing one directory is safe only while they
+# are sequential, and two run concurrently wipe each other's `tmp_path`
+# mid-run. See the root manifest for the full note.
+addopts = "--basetemp=../../.tmp/pytest-gateway"
 # Registered so an unknown-marker warning cannot hide a typo. `slow` marks the
 # one test that reaches the provider (OBJ6); it is already gated on
 # GATEWAY_ALLOW_PROVIDER_CALLS, so the marker is a label rather than a control.
