@@ -673,12 +673,12 @@ well-defined to consume.
 - **FR-044**: System MUST NOT begin implementation until the amendment against
   `project-instructions.md` §Source Code Layout has landed on the default branch, verified by citing
   the amending revision. That clause reads that the gateway package carries neither a web framework
-  nor the modeling stack, and ADR-0022 places an inference runtime there which pulls NumPy — so
+  nor the modeling stack, and ADR-0023 places an inference runtime there which pulls NumPy — so
   until it lands, the design contradicts the governing document. *(Added 2026-07-29: FR-034 and
   FR-035 covered two of the four blocking amendments and this one, the most consequential, was
   traceable by prose alone.)*
 - **FR-045**: System MUST NOT begin implementation until `specs/sad.md`'s decision-record catalog
-  carries ADR-0022's row, verified by citing the amending revision. A registered index that omits an
+  carries ADR-0023's row, verified by citing the amending revision. A registered index that omits an
   accepted record disagrees with the record set it indexes. *(Added 2026-07-29, same reason as
   FR-044.)*
 - **FR-046**: System MUST bound the returned result array by a stated rule rather than a fixed
@@ -897,8 +897,8 @@ Statement names, applied to its own gate.
   amendments** have landed on the default branch before implementation begins — FR-034 against
   `specs/prd.md`, FR-035 against `specs/project-plan.md`, the two the Plan phase added and gated
   (`plan.md` §Pending Amendments): item 3, `project-instructions.md` §Source Code Layout **and**
-  §Testing & Quality Policy, without which ADR-0022's placement of inference in the gateway
-  contradicts two governing clauses, and item 4, `specs/sad.md`'s ADR catalog row for ADR-0022 — and
+  §Testing & Quality Policy, without which ADR-0023's placement of inference in the gateway
+  contradicts two governing clauses, and item 4, `specs/sad.md`'s ADR catalog row for ADR-0023 — and
   the two Analyze added: item 9 (FR-048) against `specs/sad.md`'s Wilson-on-MRR row, and item 10
   (FR-047) against §Technology Stack's INT8 qualifier. **The verifier is named and the gate is
   decidable at this epic's own boundary**: each is checked by reading the default branch for the

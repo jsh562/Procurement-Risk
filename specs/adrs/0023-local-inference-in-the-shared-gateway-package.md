@@ -1,5 +1,5 @@
 ---
-adr_id: ADR-0022
+adr_id: ADR-0023
 status: accepted
 date: 2026-07-29
 tags: [retrieval, embeddings, reranking, layout, dependency-isolation, compute-envelope]
@@ -9,7 +9,7 @@ related_artifacts: ["specs/prd.md", "CAP-003", "project-instructions.md", "ADR-0
 deciders: ["Project owner", "Solution architect"]
 ---
 
-# ADR-0022: Local Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime
+# ADR-0023: Local Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime
 
 ## Status
 
@@ -19,7 +19,7 @@ The encoder and the reranker session live in `/src/gateway`, the package both Py
 
 Raised by E008, which is the first epic to need a query embedding at request time and therefore the first to hit the two constraints described below at once.
 
-The number is claimed rather than inherited. ADR-0022 was verified free at the time of writing against both `specs/adrs/` — where the highest allocated number on disk was `0021` — and `specs/sad.md`'s catalog, which runs to the same number and reserves nothing beyond it.
+The number is claimed rather than inherited. ADR-0023 was verified free at the time of writing against both `specs/adrs/` — where the highest allocated number on disk was `0021` — and `specs/sad.md`'s catalog, which runs to the same number and reserves nothing beyond it.
 
 The corresponding `specs/sad.md` catalog row is **not written by this record**. It is recorded as a pending amendment, because `sad.md` is a registered document whose amendments Governance serializes onto the default branch.
 

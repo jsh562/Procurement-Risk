@@ -43,12 +43,12 @@ while this epic was in flight, and a compliance record that names no version can
 | VIII. Honest Opponents | PASS | Reranking is reported against the strongest single arm, not only against fusion-only, which the spec itself calls weak |
 | Technology Stack | **CONDITIONAL — amendment required** | No new datastore. The stack names "ONNX Runtime **for INT8 CPU inference**"; this epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the INT8 one. E006 raised the same conflict **in its PR body**, which is not the amendment queue: nothing on that record obliges anyone to perform it, and FR-025 and FR-007 both depend on it. Raised here as **amendment 10**, blocking, with FR-047 and T096 as its verifier — by this plan's own standard, an obligation recorded only in prose has no verifier and nothing fails when it is skipped |
 | Testing & Quality Policy | PASS with three obligations | **The clause names risk arithmetic, fusion ranking and scoring functions, and it has two limbs — strict test-first and property tests — which are answered separately.** Fusion ranking's *property* limb is discharged by a **pseudo-oracle**, recorded in §VII's four-part limitation format with its independence assumption stated as empirically falsified rather than assumed (§Testing Strategy). Its *red-green* limb is **not** covered by that argument — SQL-residence removes the pure function a property test would target, and removes nothing about writing a test before the code it fails against. `tasks.md` therefore emits three ordered pairs for `fusion.py` (T027→T024, T029→T025, T030→T026), each completing on an observed failure. An earlier draft of this row extended the SQL argument across both limbs and emitted no pair. **`metrics.py` is a separate obligation and an easier one** — Wilson intervals, percentile bootstrap and the overlap verdict are pure scoring functions with no SQL obstacle, so they carry the mandatory test-first cycle and property tests directly. **That obligation is now carried by spec FR-042**, which names the properties and the generated input domains, rather than by this row and a table cell: a policy obligation recorded only in a plan has no verifier, and nothing fails when it is skipped. Ruff is the named lint and format gate and is in the Testing Strategy table |
-| Source Code Layout | **CONDITIONAL — amendment required** | New code under `/src/gateway` and `/src/api`; artifacts under `data/`. **But the clause reads "The gateway package carries neither a web framework nor the modeling stack", and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.** `onnxruntime` pulls NumPy transitively, so ADR-0022's decision contradicts this clause directly. Recorded as **amendment 3** and cited from ADR-0022; the design does not proceed on the strength of an ADR overriding a governing clause. **Amendment 3 covers both breached clauses, not only this one** — §Testing & Quality Policy separately asserts that the request-serving image contains no modeling-stack packages, and admitting NumPy to `SHARED_INFRASTRUCTURE` breaches that sentence too. An amendment naming §Source Code Layout alone would let T003 pass green with the image assertion still contradicted |
+| Source Code Layout | **CONDITIONAL — amendment required** | New code under `/src/gateway` and `/src/api`; artifacts under `data/`. **But the clause reads "The gateway package carries neither a web framework nor the modeling stack", and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.** `onnxruntime` pulls NumPy transitively, so ADR-0023's decision contradicts this clause directly. Recorded as **amendment 3** and cited from ADR-0023; the design does not proceed on the strength of an ADR overriding a governing clause. **Amendment 3 covers both breached clauses, not only this one** — §Testing & Quality Policy separately asserts that the request-serving image contains no modeling-stack packages, and admitting NumPy to `SHARED_INFRASTRUCTURE` breaches that sentence too. An amendment naming §Source Code Layout alone would let T003 pass green with the image assertion still contradicted |
 | Development Workflow | PASS with a scheduled check | Branch matches workspace matches epic. **§Temporary Files gains a verifier**: this is the one epic that downloads a model and runs a native toolchain, and `test_scratch_location.py` exists only under `src/api/tests/` — the tier that does neither. T017 carries the obligation and T098 extends the check to the gateway tier |
 | Data Provenance | PASS | FR-016 requires identity, revision, licence basis, source and digest for the vendored model, and — extended at Analyze — the quantization record for the *generated* INT8 graph plus a separate licence basis per graph, since a derived artifact does not inherit its source's licence by default |
-| Governance | **CONDITIONAL** | **Ten** amendments recorded and not performed, of which **six block implementation**: the `specs/prd.md` MRR interval (item 1, FR-034), the `specs/project-plan.md` `part_numbers` owner (item 2, FR-035), `project-instructions.md` §Source Code Layout and §Testing & Quality Policy (item 3, FR-044 — the one this design cannot proceed without), ADR-0022's `specs/sad.md` catalog row (item 4, FR-045), the `specs/sad.md` Wilson-on-MRR twin of item 1 (item 9, FR-048), and §Technology Stack's INT8 qualifier (item 10, FR-047). Four more are non-blocking. All land on the default branch; §Pending Amendments carries the queue and its order |
+| Governance | **CONDITIONAL** | **Ten** amendments recorded and not performed, of which **six block implementation**: the `specs/prd.md` MRR interval (item 1, FR-034), the `specs/project-plan.md` `part_numbers` owner (item 2, FR-035), `project-instructions.md` §Source Code Layout and §Testing & Quality Policy (item 3, FR-044 — the one this design cannot proceed without), ADR-0023's `specs/sad.md` catalog row (item 4, FR-045), the `specs/sad.md` Wilson-on-MRR twin of item 1 (item 9, FR-048), and §Technology Stack's INT8 qualifier (item 10, FR-047). Four more are non-blocking. All land on the default branch; §Pending Amendments carries the queue and its order |
 
-**Re-check after design**: PASS. The two boundary crossings design introduced — inference in the gateway, and the serving image admitting its runtime — are recorded in ADR-0022 rather than waved through.
+**Re-check after design**: PASS. The two boundary crossings design introduced — inference in the gateway, and the serving image admitting its runtime — are recorded in ADR-0023 rather than waved through.
 
 ## Architecture
 
@@ -83,11 +83,11 @@ C4Component
 
 The encoder sits in the gateway rather than in either boundary because both call it and neither may
 import the other — the property {SAD:ADR-0010} exists to protect. One session type, two callers, one
-vector space. See **ADR-0022**.
+vector space. See **ADR-0023**.
 
 ## Architecture Decisions
 
-Feature-local tradeoffs only. The project-wide decision this epic required is **ADR-0022 — Local
+Feature-local tradeoffs only. The project-wide decision this epic required is **ADR-0023 — Local
 Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime**.
 
 | ID | Decision | Options Considered | Chosen | Rationale |
@@ -414,7 +414,7 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 | Encoder identity (E006) | `data/encoder/` | Same pinned identity and revision as the chunks; asserted before search | ADR-0019 |
 | Retrieval module (E011) | Grounded answering | Consumes `SearchResponse` including the degraded flag | `contracts/` |
 | Ablation arms (E014) | Evaluation harness | Per-request arm selection; ranking parameters emitted for the manifest | `contracts/` |
-| Shared inference (this epic) | `/src/gateway` | Encoder and reranker sessions, one implementation, two callers | ADR-0022 |
+| Shared inference (this epic) | `/src/gateway` | Encoder and reranker sessions, one implementation, two callers | ADR-0023 |
 
 ## Risk Mitigation
 
@@ -556,7 +556,7 @@ invocation.
 
 **Tests to extend**: `tests/checks/test_dependency_isolation.py` and
 `tests/checks/helpers/image_contents.py` both hold a `SHARED_INFRASTRUCTURE` constant with the same
-value; ADR-0022 requires them to move together. `tests/checks/test_image_contents.py` asserts the
+value; ADR-0023 requires them to move together. `tests/checks/test_image_contents.py` asserts the
 serving image's contents and will need the admitted runtime reflected.
 
 **Naming conventions**: modules are nouns, functions are verbs, and every non-obvious constant
@@ -574,7 +574,7 @@ carries the reason it holds that value at its declaration site rather than in a 
   precondition that AD-003's whole filtered-recall design rests on cannot live only in a hint,
   because a hint has no verifier and nothing fails when it is skipped.
 - **[HINT-003]** **Admit only `numpy` to `SHARED_INFRASTRUCTURE` — not the runtime, not the
-  tokenizer.** ADR-0022 says "the inference runtime, its tokenizer, and NumPy", and implemented
+  tokenizer.** ADR-0023 says "the inference runtime, its tokenizer, and NumPy", and implemented
   literally that fails the build. The denylist derives from `model`'s **direct** declarations, so
   once those move to the gateway `onnxruntime` and `tokenizers` leave it on their own; adding them
   to the exclusion then trips `stale = SHARED_INFRASTRUCTURE - declared`, which asserts every member
@@ -626,21 +626,21 @@ extends the gate to 3, 4, 9 and 10):
 3. **`project-instructions.md` §Source Code Layout** — **new at Plan, and the one this design cannot
    proceed without.** The clause reads *"The gateway package carries neither a web framework nor the
    modeling stack"*, and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.
-   ADR-0022 places inference in the gateway, and `onnxruntime` pulls NumPy transitively — so the
+   ADR-0023 places inference in the gateway, and `onnxruntime` pulls NumPy transitively — so the
    decision contradicts the governing document. An ADR cannot override a `project-instructions.md`
    clause; the clause is amended to except a shared inference runtime, or the decision is wrong.
-   ADR-0022's related artifacts must cite it. **The amendment must reach two clauses, not one.**
+   ADR-0023's related artifacts must cite it. **The amendment must reach two clauses, not one.**
    §Testing & Quality Policy separately asserts that the request-serving image contains no
    modeling-stack packages, and T007's admission of NumPy to `SHARED_INFRASTRUCTURE` breaches that
    sentence by the same reasoning that breaches §Source Code Layout. An amendment naming only the
    layout clause would let T003 close green while the image assertion stayed contradicted — the
    failure mode this queue exists to prevent. FR-044 and T003 verify both clauses.
-4. **`specs/sad.md`** — the ADR catalog needs ADR-0022's row, appended after ADR-0021. Gated because
+4. **`specs/sad.md`** — the ADR catalog needs ADR-0023's row, appended after ADR-0021. Gated because
    merging with the catalog missing an `accepted` record is the registered index disagreeing with
    the record set it indexes:
 
    ```
-   | ADR-0022 | Local Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime | accepted | 2026-07-29 | — | [0022-local-inference-in-the-shared-gateway-package.md](adrs/0022-local-inference-in-the-shared-gateway-package.md) |
+   | ADR-0023 | Local Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime | accepted | 2026-07-29 | — | [0023-local-inference-in-the-shared-gateway-package.md](adrs/0023-local-inference-in-the-shared-gateway-package.md) |
    ```
 
 **Non-blocking — raised here, fixable by whichever epic next touches the file:**
@@ -700,7 +700,7 @@ Four rounds, each landing before the next begins:
 | 1 | `specs/prd.md` | 1 | The MRR row's Wilson interval replaced by a percentile bootstrap |
 | 2 | `specs/project-plan.md` | 2 | An owner for populating `chunk.part_numbers` |
 | 3 | `project-instructions.md` | 3, 10 | §Source Code Layout **and** §Testing & Quality Policy except a shared inference runtime; §Technology Stack drops the INT8-only qualifier |
-| 4 | `specs/sad.md` | 4, 9 | ADR-0022's catalog row; the retrieval-quality row's Wilson-on-MRR |
+| 4 | `specs/sad.md` | 4, 9 | ADR-0023's catalog row; the retrieval-quality row's Wilson-on-MRR |
 
 Then 7 and 8, then 5 and 6 whenever. **E006 holds nothing ahead of this queue**: its outstanding
 amendment was the INT8 qualifier, recorded in a PR body and never performed — verified against the
@@ -880,8 +880,8 @@ test — are carried in §Testing Strategy, which owns both remedies. They are n
 ## Inherited from E010, checked after its merge
 
 E010 merged (PR #17) while this epic was in planning. All four surfaces that collided with E007 were
-checked and none collided here: decision-record numbers still top out at 0021 so ADR-0022 stands,
-`specs/sad.md` still lacks the ADR-0022 row so amendment 4 is still owed, `project-instructions.md`
+checked and none collided here: decision-record numbers still top out at 0021 so ADR-0023 stands,
+`specs/sad.md` still lacks the ADR-0023 row so amendment 4 is still owed, `project-instructions.md`
 is still v1.2.8 so this plan's compliance audit names the current version, and none of
 `pyproject.toml`, `image_contents.py`, `test_dependency_isolation.py` or `verify.yml` was touched.
 First clean merge with a sibling epic.
