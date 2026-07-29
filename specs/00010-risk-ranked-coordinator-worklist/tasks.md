@@ -148,7 +148,7 @@
 - [X] T049 [P] {FR-028,FR-031,FR-056} [COMPLETES FR-031] No write path, no criticality mutation, no adjusted date persisted, no authentication scheme — TST/test_worklist_endpoint.py
 - [X] T050 [P] {FR-040,FR-039} [COMPLETES FR-039] Both p95 variants under the plan's recorded conditions — one vCPU limit, warm, 200 samples — in TST/test_worklist_benchmark.py
 - [X] T051 {FR-034} Named observables for SC-001, SC-004 and SC-008 in TST/test_worklist_endpoint.py and E2E/worklist.spec.ts
-- [ ] T052 {FR-040} [COMPLETES FR-040] Verify every check this feature adds runs in the merge gate and that both coverage floors fail independently below 80%
+- [X] T052 {FR-040} [COMPLETES FR-040] Verify every check this feature adds runs in the merge gate and that both coverage floors fail independently below 80%
 
 ---
 
