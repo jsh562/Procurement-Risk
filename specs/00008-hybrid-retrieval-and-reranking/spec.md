@@ -646,6 +646,33 @@ well-defined to consume.
     reflexivity — an interval compared with itself is unresolvable; and agreement with FR-032's
     closed-interval rule at the touching-endpoint boundary.
 
+- **FR-043**: System MUST commit its own evaluation query set with its relevance judgements, hash it
+  before any figure is measured against it, and MUST abort rather than report when the harness finds
+  the digest does not match. Judgements are derived from the generator's pre-render document model,
+  so every query is answerable by construction and the resulting recall is an **upper bound on
+  real-world performance**, which MUST be published as such rather than as an estimate. *(Added
+  2026-07-29. The set was committed to by AD-010 and depended on by SC-001 and SC-002, and no
+  requirement obliged it — so a deliverable that two published figures rest on could have been
+  skipped without any requirement failing. Principle VI is the source; this makes it enforceable.)*
+- **FR-044**: System MUST NOT begin implementation until the amendment against
+  `project-instructions.md` §Source Code Layout has landed on the default branch, verified by citing
+  the amending revision. That clause reads that the gateway package carries neither a web framework
+  nor the modeling stack, and ADR-0022 places an inference runtime there which pulls NumPy — so
+  until it lands, the design contradicts the governing document. *(Added 2026-07-29: FR-034 and
+  FR-035 covered two of the four blocking amendments and this one, the most consequential, was
+  traceable by prose alone.)*
+- **FR-045**: System MUST NOT begin implementation until `specs/sad.md`'s decision-record catalog
+  carries ADR-0022's row, verified by citing the amending revision. A registered index that omits an
+  accepted record disagrees with the record set it indexes. *(Added 2026-07-29, same reason as
+  FR-044.)*
+- **FR-046**: System MUST bound the returned result array by a stated rule rather than a fixed
+  ceiling: at most `limit` ranked results plus at most one deterministic match per part-number token
+  recognised in the query, with the query length capped. *(Added 2026-07-29. The contract declared a
+  fixed maximum of 100 that nothing derived — `limit` cuts the ranked portion to 50 before return
+  and route additions are counted outside it, so the cap silently assumed the route contributes at
+  most 50. The rule was resolved at checklist and recorded in `plan.md`, and no requirement or task
+  carried it.)*
+
   The generated input domains MUST reach the cases those properties are stated for: query-set sizes
   from one upward, all-hit and all-miss sets, ties in reciprocal rank, and per-query values at both
   ends of their range — so a property is neither reported as holding on inputs the harness never
