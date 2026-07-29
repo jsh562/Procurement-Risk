@@ -310,7 +310,7 @@
 
 - [X] T081 [BUG:CRITICAL] {FR-040} [governance] **CLOSED by amendment on the default branch.** The release gate this plan declares for itself was unmet: three artifacts named three addresses — specs/sad.md:124
   > `specs/sad.md:124` reads `W->>A: GET /lines?project=…` on this branch and on `main`. `contracts/openapi.yaml` declares `servers: /api/v1` with path `/worklist`. `plan.md:90` names a third form.
-  > plan.md:46 and HINT-003 (plan.md:442) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
+  > HINT-003 (plan.md:442) states the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses". plan.md:46's Governance row defers to it rather than restating it — "QC checks the condition, and HINT-003 states it". And "the SAD amendment lands on the default branch, not here."
   > project-instructions.md:94 is why it lands elsewhere: "Amendments to the documents named in this section are serialized. At most one amendment is in flight at a time, **it is performed on the default branch**, and it lands before the next begins. **A feature branch records the need for an amendment and does not perform it.**"
   > So this task is recorded and left open by design. Closing it here would violate the rule that makes it a CRITICAL in the first place. QC iterations 1-3 never checked the condition; iteration 4 did.
   > **Closed 2026-07-29.** The amendment was performed on `main` as `24456b9` and merged here. Impact was assessed across the registered set per the amendment procedure: project-instructions.md NONE, prd.md NONE, sad.md UPDATE, dod.md SKIPPED (none exists), project-plan.md UPDATE assessed and found to need no edit. Applied in REFINE mode — the one contradicting line corrected, surrounding narrative and diagram preserved, and the decision recorded in the SAD's managed `Project Context Baseline Updates` section. `specs/sad.md` was the only registered document naming the endpoint; `prd.md` and `project-plan.md` name none.
@@ -446,6 +446,35 @@
   > T093 gave the benchmark-population limitation its four parts, and named as the production-scale alternative "run the benchmark against the E005 seeded set". Measured against the shared database: E005 holds **199 lines across 5 projects, of which 24 are open**; 175 are terminal and FR-022 excludes them from the worklist. So the named alternative moves the benchmark from 16 rows to 24, not to the ~200 the record calls the working scale.
   > Two further sites asserted the stronger figure directly: `plan.md:22` "~200 **open** lines across 5 projects" and `contracts/openapi.yaml:192` "The working scale is roughly two hundred **open** lines". Both add "open" to `spec.md:296`'s "Roughly two hundred lines", which is a domain assumption the dataset does support and these two restatements do not.
   > Fix hint: name a route that reaches the scale — E005's generator parameterised for ~200 *open* lines — and correct the two restatements to distinguish the domain assumption from the seeded set.
+
+
+- [X] T107 [BUG:WARNING] {FR-040} [accuracy] T103 counted four sites and its fix reached three — specs/00010-risk-ranked-coordinator-worklist/qc-report.md:391
+  > T103's own record says "Four sites claimed `PO-4479-1` is closed and excluded per SC-008", and its fix corrected `tasks.md:393`, `tasks.md:408` and `.completed:228`. `qc-report.md:391` was left, in the artifact AGENTS.md names as the record of QC results.
+  > A task that counts its own sites and then misses one of them is the loop's recurring shape reduced to its smallest form.
+  > Fix hint: `under FR-022`.
+
+- [X] T108 [BUG:WARNING] {FR-040} [accuracy] The iteration-7 block was inserted between iteration 6's two entries — specs/00010-risk-ranked-coordinator-worklist/.completed:207
+  > The insertion anchored on the T099 entry's neighbour and placed `Iteration 7 (T100-T106)` above it, so T099 read as iteration 7's eighth finding under a heading announcing seven, while `Iteration 6 (T098-T099) — 2 findings` was followed by one.
+  > Same failure as T088: an edit anchored on a substring, stranding content that was already there.
+  > Fix hint: move the T099 block above the iteration-7 heading.
+
+- [X] T109 [BUG:ERROR] {FR-040} [accuracy] The marker contradicts the split T102 installed one iteration earlier — specs/00010-risk-ranked-coordinator-worklist/.completed:140
+  > The iteration-3 header read "5 findings, all this marker or the plan overstating". The split at `.completed:91` — added by T102, for exactly this class of claim — lists T079 among "four that were tests that did not measure what they claimed", and T079's site is `src/web/e2e/worklist.spec.ts`, which is neither this marker nor the plan. `qc-report.md:262` carried the same claim.
+  > T102 was filed for a universal that the feature's own records disproved, and the fix left a second universal two sections below it.
+  > Fix hint: state the composition — four artifact overclaims and one test-quality defect — at both sites.
+
+- [X] T110 [BUG:WARNING] {FR-040} [process] qc-report.md holds no record of iteration 7 — specs/00010-risk-ranked-coordinator-worklist/qc-report.md
+  > Third recurrence of the same omission: T095 filed it for iteration 3, T105 for iteration 6, and T105's own fix hint said "append iteration 6, **and iteration 7 when it completes**". The commit appended iteration 6 only, so the file's last verdict on the release gate remained iteration 5's "FAIL... T081 does not close on this branch" — a reader of the canonical QC artifact alone would conclude the gate is still open.
+  > Fix hint: append iterations 7 and 8, and treat the record as part of closing an iteration rather than as follow-up.
+
+- [X] T111 [BUG:WARNING] {FR-040} [accuracy] A quotation attributed to a site that never carried it — specs/00010-risk-ranked-coordinator-worklist/tasks.md:313
+  > Two sites read that "plan.md:46 and HINT-003 both state the gate in E010's own words: 'this feature does not pass QC while the registered primary flow and this contract name different addresses.'" That sentence occurs once in `plan.md`, at :442 (HINT-003). The Governance row deferred to it rather than restating it: "QC checks the condition, and HINT-003 states it."
+  > Same class as T097, T103 and T104 — a citation that does not support the text quoting it.
+  > Fix hint: attribute to HINT-003 alone and record what the Governance row actually says.
+
+- [X] T112 [BUG:WARNING] {FR-040} [accuracy] The marker calls T100 "T099's sibling finding" — specs/00010-risk-ranked-coordinator-worklist/.completed:104
+  > T099 is an iteration-6 finding about a mis-stated row count. The finding described — the T098 fix sweeping plan.md and leaving the same claim in tasks.md — is T100, which the same file names correctly 100 lines below.
+  > Fix hint: name T100.
 
 
 ---

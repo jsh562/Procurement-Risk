@@ -258,8 +258,8 @@ Recorded retrospectively by T095, which found this iteration had produced tasks
 and fixes but no report. The findings are reproduced from `tasks.md`; the figures
 are those measured in the run that closed them.
 
-All five findings were artifacts overstating what the repository does. No
-executable gate failed.
+Four of the five were artifacts overstating what the repository does; the fifth,
+T079, was a test that did not measure what it claimed. No executable gate failed.
 
 | ID | Severity | Finding |
 |---|---|---|
@@ -388,7 +388,7 @@ whether any of the rest could run.
 
 Both fixed. The corrected procedure was executed rather than reasoned about:
 `counts.total == 15`, ranked 13, unranked 2, all 15 response rows `PO-447x`
-(16 in the database — `PO-4479-1` is closed and excluded, per SC-008), `page_states
+(16 in the database — `PO-4479-1` is closed and excluded under FR-022), `page_states
 ['stale_run']` — matching the file's readiness check.
 
 ## T081
@@ -437,3 +437,62 @@ argument that a class sweep should not stop at what was filed.
 Closed by `07fa810`. Iteration 7 then found the T098 fix had swept `plan.md` and
 left the same claim in `tasks.md:52` — the seventh consecutive instance of the
 same shape.
+
+
+---
+
+# QC Report — iteration 7
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T100-T106
+
+Audited at `07fa810`. Every executable gate passed and every published figure
+re-measured correct; all seven findings were in what the feature publishes about
+itself.
+
+| ID | Severity | Finding |
+|---|---|---|
+| T100 | ERROR | `tasks.md:52`'s gotcha still read "The endpoint address is not settled by implementation… the branch records the amendment and does not perform it" — present tense, no closure marker, all three clauses false. T098 was filed because the T081 fix missed a fourth site in `plan.md`; T098's own fix then swept `plan.md` and missed this one, in a different file. |
+| T101 | ERROR | `.completed`'s heading read "What four iterations of QC actually found" above six enumerated blocks, in a file whose second line said "six QC iterations". |
+| T102 | ERROR | `.completed` claimed *every* post-iteration-1 finding was an artifact overclaim rather than a fault. This file disproves it at `rows.py:305` (T066, a field on the wire FR-029 forbids) and in a pyproject (T075, pytest writing to the machine's shared temp directory). Replaced with the measured split. |
+| T103 | WARNING | Four sites cited SC-008 for `PO-4479-1`'s exclusion. SC-008 governs a line the run does not *cover* and requires it be visible; `PO-4479-1` is covered, terminal, and in neither group. The rule is FR-022, which `test_worklist_ranked.py:330` measures. |
+| T104 | WARNING | T097's citation of HINT-003 broke a second time — the hint moved from `plan.md:437` to `:442` when T098's fix grew the section above it. |
+| T105 | WARNING | This file held no record of iteration 6 — the same omission T095 was filed for at iteration 3. |
+| T106 | WARNING | Principle VII's production-scale alternative named "the E005 seeded set". Measured: E005 holds 199 lines across 5 projects of which **24 are open**, FR-022 excluding the other 175 — so it moved the benchmark from 16 rows to 24, not to the ~200 the record calls the working scale. Two further sites asserted "~200 open lines" directly. |
+
+**Measured**: api 203/1; benchmark 3 passed; root 292; web unit 77; e2e 19;
+conformance 9; python coverage 97%; web coverage 99.23/96.19/97.22/99.17;
+contracts 11 kept 0 broken; ruff/eslint/tsc/mypy clean; E005 199 lines, 24 open.
+
+Closed by `03254ac`.
+
+---
+
+# QC Report — iteration 8
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T107-T112
+
+Audited at `03254ac`. The auditor's summary is worth recording verbatim: "The
+software is sound and I found nothing wrong with it." Every executable gate
+passed and every re-measurable figure was exact. All six findings were in the
+record.
+
+| ID | Severity | Finding |
+|---|---|---|
+| T107 | WARNING | T103 counted four sites and its fix corrected three; `qc-report.md:391` still cited SC-008 for the terminal line. |
+| T108 | WARNING | The commit closing iteration 7 inserted its own block between iteration 6's two entries, stranding T099 under the iteration-7 heading — the same anchored-edit failure as T088. |
+| T109 | ERROR | `.completed` described iteration 3 as "5 findings, all this marker or the plan overstating", contradicting the split T102 installed one iteration earlier, which classes T079 as a test-quality defect. Same rubric T102 was filed under. |
+| T110 | WARNING | This file held no record of iteration 7 — the third recurrence of T095/T105, whose own fix hint named it. |
+| T111 | WARNING | Two sites attributed a quotation to `plan.md:46` that only HINT-003 ever carried; the Governance row deferred to it rather than restating it. |
+| T112 | WARNING | `.completed` called T100 "T099's sibling finding"; T099 is an iteration-6 finding about a different subject. |
+
+**Measured**: api 203/1 (200+3 deselected without benchmarks); benchmark 3 passed,
+p95 45.4/49.7 ms against 1500; root 292; web unit 77; e2e 19; conformance 9
+(5 positives, 3 negative controls, 1 construct coverage); python coverage 97%
+(481/8); web coverage 99.23/96.19/97.22/99.17 over six modules; contracts 11 kept
+0 broken; ruff check and format clean over four tiers; mypy 18 files; tsc clean;
+eslint 0 errors 2 warnings; 106 tasks all checked; checklists 120/120; E005 199
+lines / 24 open; frozen fixture 16 lines / 15 open.
+
+The auditor re-resolved 150+ `file:line` citations across every artifact and found
+one wrong (T111). The T102 split was independently recounted and confirmed
+arithmetically correct with defensible membership.

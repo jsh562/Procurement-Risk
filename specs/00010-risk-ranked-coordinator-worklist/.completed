@@ -1,15 +1,15 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 54 bug tasks from seven QC iterations.
-All 54 are closed.
+Implementation complete: 52 tasks, plus 60 bug tasks from eight QC iterations.
+All 60 are closed.
 
 ## The release gate, and how it closed
 
 This feature's own plan declared a release gate it did not meet. `specs/sad.md:124`
 sketched the primary flow as `GET /lines?project=…`; `contracts/openapi.yaml`
 declares `/worklist` under `/api/v1`; and this plan's summary table named a third
-form. plan.md:46 and HINT-003 both stated the consequence in E010's words: "this
-feature does not pass QC while the registered primary flow and this contract name
-different addresses."
+form. HINT-003 stated the consequence in E010's words: "this feature does not pass
+QC while the registered primary flow and this contract name different addresses."
+plan.md:46's Governance row deferred to it rather than restating it.
 
 The amendment was not E010's to perform. project-instructions.md:94 — "Amendments
 to the documents named in this section are serialized... it is performed on the
@@ -81,16 +81,16 @@ at v1.2.8 (recorded in plan.md:30-31) when E006's merge brought the withdrawal.
 T076 corrected this marker, and T085 added the supersession note to spec.md's own
 Compliance Check, which had been reached by neither re-run.
 
-## What seven iterations of QC actually found
+## What eight iterations of QC actually found
 
-54 defects. Of the 41 after iteration 1, **most were artifacts claiming more than
+60 defects. Of the 47 after iteration 1, **most were artifacts claiming more than
 the repository does rather than faults in what it does — but not all, and an
 earlier version of this line said "every" and was wrong.** The measured split:
 four were faults in code or configuration — T066 put a field on the wire that
 FR-029 forbids, T075 left pytest writing to the machine's shared temp directory,
 T083 failed the CI format gate, T096 made the manual procedure unrunnable. Four
 more were tests that did not measure what they claimed — T067, T069, T073, T079.
-The remaining 33 were accuracy defects in what the feature published about
+The remaining 39 were accuracy defects in what the feature published about
 itself. QC iteration 7 disproved the "every" by pointing at this feature's own
 qc-report.md, which locates T066 at `rows.py:305` and T075 in a pyproject. The recurring shape is narrower
 than that and worth naming: a bug task filed against N sites is fixed at the one
@@ -101,8 +101,7 @@ half of an assertion and left the size half (T079); T091 fixed the four items it
 title listed and left the one line that determined whether any of the file could
 be run at all (T096); and the commit closing T081 changed three sites in plan.md
 and left the fourth, the one whose only job is to state the amendment's status
-(T098) — then that fix swept plan.md and left the same claim in tasks.md (T099's
-sibling finding). Seven iterations, same shape — and the lesson each time was
+(T098) — then that fix swept plan.md and left the same claim in tasks.md (T100). Seven iterations, same shape — and the lesson each time was
 that the class is wider than the title.
 
   Iteration 1 (T053-T065) — 13 findings, mostly in code
@@ -137,7 +136,8 @@ that the class is wider than the title.
     T075  `src/api` did not pin `--basetemp`. Pinned, and measured by
           `tests/test_scratch_location.py` rather than declared.
 
-  Iteration 3 (T076-T080) — 5 findings, all this marker or the plan overstating
+  Iteration 3 (T076-T080) — 5 findings: four this marker or the plan overstating,
+  and one test-quality defect (T079, in worklist.spec.ts)
     T076  This marker named v1.2.7 after the re-audit at v1.2.8.
     T077  Root-check figure read 249; measured 292. Import-contract count read 3
           with no scope named; the repository keeps 11 across three entries.
@@ -204,6 +204,13 @@ that the class is wider than the title.
           contradicted itself about the gate in the same commit that closed
           it. Also corrected the C4 label at plan.md:62, a fourth address
           site, on the same argument the commit itself had made.
+    T099  The PO-447x figure published for T096 was the ranked count written
+          twice. All 15 response rows are PO-447x; the database holds 16, and
+          the difference is `PO-4479-1`, which is closed and excluded under
+          FR-022 — not the posterior-less line, which is a different one under a
+          different rule. The first correction cited SC-008 for the terminal
+          line; SC-008 governs the uncovered one.
+
   Iteration 7 (T100-T106) — 7 findings, six of them in artifacts about the work
     T100  T098's fix swept plan.md and left the same claim in tasks.md:52.
     T101  The marker's own section heading said "four iterations" above six.
@@ -222,12 +229,22 @@ that the class is wider than the title.
           the record calls the working scale. Two further sites asserted "~200
           open lines" directly and are corrected.
 
-    T099  The PO-447x figure published for T096 was the ranked count written
-          twice. All 15 response rows are PO-447x; the database holds 16, and
-          the difference is `PO-4479-1`, which is closed and excluded under
-          FR-022 — not the posterior-less line, which is a different one under a
-          different rule. The first correction cited SC-008 for the terminal
-          line; SC-008 governs the uncovered one.
+  Iteration 8 (T107-T112) — 6 findings, every one in the record rather than the
+  work. The auditor's own summary: "The software is sound and I found nothing
+  wrong with it." Four of the six were introduced by the previous iteration's
+  own edits.
+    T107  T103 counted four sites and its fix reached three.
+    T108  The iteration-7 block was inserted between iteration 6's two entries,
+          stranding T099 under the wrong heading — the T088 failure again.
+    T109  The iteration-3 header said "all this marker or the plan overstating",
+          contradicting the split T102 had installed one iteration earlier for
+          exactly this class of claim.
+    T110  qc-report.md held no record of iteration 7 — third recurrence, and
+          T105's own fix hint had named it.
+    T111  A quotation attributed to plan.md:46, which never carried it; only
+          HINT-003 did.
+    T112  T100 called "T099's sibling finding".
+
 
 ## Reported, outside E010's scope
 
