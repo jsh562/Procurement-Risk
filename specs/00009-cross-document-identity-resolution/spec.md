@@ -6,7 +6,7 @@ spec_type: "product"
 spec_maturity: "clarified"
 epic_id: "E009"
 epic_sources: "{PRD:CAP-004}"
-instructions_version: "1.2.7"
+instructions_version: "1.2.8"
 ---
 
 # Feature Specification: Cross-Document Identity Resolution
@@ -58,7 +58,7 @@ A coordinator looking at a purchase-order line can see which submittal proposed 
 
 **Why the specification is not a member, on delivered evidence**: E006 is merged, and its Excluded section states that the 26 real UFGS specifications yield "requirement prose, not item records: no manufacturer, part number, or quantity". Its own success criterion asserts those 26 documents finish the run with "chunks and embeddings and **zero extracted values**". Line items come from the 25 submittal transmittals alone. A specification section therefore carries nothing to block or score on, and no three-member merge is achievable from the delivered corpus at any implementation quality.
 
-**And no association either**: an earlier revision of this story promised an equipment-category association in place of the merge. That has no source. E006's seeded `field_vocabulary` contains `manufacturer`, `part_number` and `quantity` — nothing carrying an equipment category or a specification-section reference reaches this feature. The association was asserted, not verified, and is withdrawn. The specification leg of CAP-004 is recorded as an amendment need in Risks rather than claimed here.
+**The association is an open question, not a settled withdrawal**: an earlier revision promised an equipment-category association in place of the merge, and a later one withdrew it on the claim that E006's `field_vocabulary` holds only `manufacturer`, `part_number` and `quantity`. **That claim was false.** `field_vocabulary` is E003-owned and migration `0005` seeds far more, including `specification_section` and `material_category`. Whether E006 in fact *populates* those two for the 25 submittals is unverified — its spec names "manufacturer, part number, quantity, dates and descriptor codes". So the association is neither established nor refuted, and is carried as an open question rather than asserted in either direction. `[NEEDS CLARIFICATION: does E006 populate specification_section or material_category for submittal line items?]`
 
 **Independent Test**: Run resolution over a project's records and demonstrate that a known submittal/purchase-order pair appears as one resolved entity with both members traceable to their source records, and that no resolved entity asserts a specification association.
 
@@ -225,7 +225,7 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 ## Implementation Signals
 
 - `NEW-ENTITY` — ResolvedEntity, CandidatePair, ReviewQueueItem, ManufacturerAlias, ResolutionRun.
-- `MIGRATION` — new tables for resolved entities, candidate pairs, review items, and the run manifest. **Migration block `0400`–`0499` is claimed at epic start** per `project-instructions.md` § Governance, by scanning the highest block already declared: E003 `0001`–`0099`, E004 `0100`–`0199`, E005 `0200`–`0299`, E007 `0300`–`0399`. Wave 4 runs E007, E008 and E009 from one baseline and E006 is unstarted, which is exactly the collision the clause exists to prevent — the claim is recorded here so a later allocation scans against it.
+- `MIGRATION` — new tables for candidate pairs, review items, and the run manifest. **Not `resolved_entity`**: E003 delivered it in `0010_resolved_entity.py`, and `specs/project-plan.md` registers ownership as "ResolvedEntity | E003 (schema), E009 (populated)". This epic populates that table and does not author it. An earlier revision claimed it as new. **Migration block `0500`–`0599` is claimed at epic start** per `project-instructions.md` § Governance, by scanning the highest block already in use: E003 `0001`–`0099`, E004 `0100`–`0199`, E005 `0200`–`0299`, E007 `0300`–`0399`, **E006 `0400`–`0499`** — five shipped revisions, `0400_ingestion_run` through `0404_ingestion_privileges`. An earlier revision of this line claimed `0400`–`0499` on a scan that treated E006 as unstarted; E006 was merged at the time, and that is precisely the collision this clause exists to prevent. Corrected against the delivered chain rather than against the plan.
 - `NEW-CONFIG` — threshold constants and the alias-table version identifier, both committed rather than tuned at runtime. **Decision-record number `0022` is claimed at epic start**, scanning above ADR-0021, the highest in `specs/adrs/`. Anticipated to go unused; the claim stands regardless so a later need cannot collide.
 - `NEW-WORKER` — an offline resolution job, consistent with the project's model-owned one-shot job pattern.
 
@@ -267,7 +267,7 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 - **SC-032** [US3]: The frozen labeled set records its sampling frame and its balance of true to false pairs, and no true pair in it is derived from a blocking key.
 - **SC-033** [US2]: A second resolution run leaves the first run's resolved entities and review items unaltered, and the active-run pointer identifies which run a consumer reads.
 - **SC-034** [US1]: No ResolvedEntity contains more than one specification-section record; clusters containing several purchase-order lines are emitted without error.
-- **SC-035** [US2]: A score exactly at the merge threshold is withheld and a score exactly at the reject threshold is rejected, demonstrated at both cutoffs.
+- **SC-035** [US2]: A score exactly at the merge threshold is withheld and a score exactly at the reject threshold is **withheld**, demonstrated at both cutoffs. *(Corrected to match FR-042, which STF-005 restated; this criterion still certified the auto-rejection the finding removed.)*
 - **SC-036** [US4]: The run manifest records the E002 manufacturer-catalogue digest from which the alias table derives, alongside the alias-table version.
 - **SC-037** [US3]: The frozen labeled set carries two strata with separate frames and separate hashes, and every published figure names the stratum it draws on. No published figure is computed across the union of the two.
 - **SC-038** [US3]: Every labeled pair records its annotation provenance, so its stratum is verifiable from the artifact rather than asserted.
@@ -291,7 +291,7 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 ### Session 2026-07-29 (third pass — re-grounded on merged E006)
 
 - Q: E006 merged while this spec was being written. Does its delivered extraction support the specification member US1 originally required? -> A: No, and it says so directly — the 26 real specifications finish with chunks and embeddings and zero extracted values, and line items come from the 25 submittal transmittals alone. The two-member decision was reached by inference from E002 and is now evidenced from a delivered epic.
-- Q: Does the equipment-category association promised in its place have a source? -> A: No. E006's seeded `field_vocabulary` is `manufacturer`, `part_number` and `quantity`. Nothing reaching this feature carries an equipment category or specification-section reference, so the association is withdrawn from SC-001, FR-041 and US1, and CAP-004's specification leg is recorded as an amendment need against `specs/prd.md` and `specs/project-plan.md`.
+- Q: Does the equipment-category association promised in its place have a source? -> A: No. the withdrawal rested on a false reading of `field_vocabulary`, which is E003-owned and seeds `specification_section` and `material_category` among others; whether E006 populates them is unverified, so the association is now an open question, and CAP-004's specification leg is recorded as an amendment need against `specs/prd.md` and `specs/project-plan.md`.
 - Q: Where does the E006/E009 seam actually fall? -> A: E006 stores manufacturer and part number exactly as printed and asserts no identity between two spellings (its FR-027, FR-028). Normalization and identity are wholly this feature's. Recorded in Assumptions as a verified fact rather than an assumption.
 
 ### Session 2026-07-29 (second pass — stress-test findings)
