@@ -79,4 +79,7 @@ def test_no_artifact_filename_suggests_a_split(emitted) -> None:
 def test_the_datasheet_states_that_no_split_is_emitted(emitted) -> None:
     text = paths.datasheet_path(emitted).read_text(encoding="utf-8")
     assert "No train/evaluation split is emitted" in text
-    assert "unassigned" in text
+    # Second assertion was a bare `"unassigned" in text` until 2026-07-28. FR-028
+    # now requires the owning epics to be named instead, and a bare substring over
+    # the whole datasheet would have passed on any incidental use of the word.
+    assert "constructed by E007 and frozen and hashed by E014" in text
