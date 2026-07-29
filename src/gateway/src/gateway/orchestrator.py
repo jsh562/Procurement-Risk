@@ -102,7 +102,21 @@ OPERATION_NAME: Final[str] = "chat"
 
 DEFAULT_MAX_TOKENS: Final[int] = 4096
 
-#: Where committed fixtures live, relative to the entry root.
+#: Where the *gateway's own* committed fixtures live, relative to the entry root.
+#:
+#: **Correct in this checkout and wrong everywhere else, which is why
+#: `GATEWAY_FIXTURE_ROOT` exists.** The walk goes up from this module to the
+#: gateway entry root, which holds in an editable install. Resolved from an
+#: ordinary install it goes up from `…/site-packages/gateway/` and lands on
+#: `…/.venv/Lib/fixtures` — measured, and it does not exist. So a consumer
+#: driving the gateway from its own entry got a store rooted at a missing
+#: directory, `replay` missed on every request, and each miss reported itself as
+#: an unrecorded request rather than as a misconfigured root.
+#:
+#: Left as the default rather than repaired in place because there is nothing to
+#: repair: a consumer with its own fixtures wants its own root, not a better
+#: guess at this package's. `Resolution.from_environment` prefers the configured
+#: one and falls back here.
 DEFAULT_FIXTURE_ROOT: Final[Path] = Path(__file__).resolve().parents[2] / "fixtures"
 
 
@@ -367,12 +381,19 @@ class Resolution:
         `resolve_mode` raises when nothing is selected — no default and no
         fallback (TR-021) — so an unconfigured process fails here, before
         anything is built and before anything is billed.
+
+        The fixture root is the one value here with a *default* rather than no
+        default, and the distinction is TR-021's: mode selection decides whether
+        money is spent, so guessing is forbidden, while the fixture root decides
+        only where an offline lookup reads. An unset `GATEWAY_FIXTURE_ROOT`
+        therefore keeps the gateway's own store, which is what every caller had
+        before the variable existed.
         """
         config = load_config()
         return cls(
             config=config,
             mode=resolve_mode(),
-            store=FixtureStore(DEFAULT_FIXTURE_ROOT),
+            store=FixtureStore(config.fixture_root or DEFAULT_FIXTURE_ROOT),
             writer=RecordWriter(config.database_url),
             spool=InvocationSpool(config.spool_path),
         )
