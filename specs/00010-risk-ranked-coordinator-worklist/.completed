@@ -114,8 +114,9 @@ editing the site that was named.
 
 Per-iteration findings, severities and measurements are in `qc-report.md`, one
 section per iteration. Appending that section is part of closing an iteration
-rather than follow-up to it — five iterations in a row omitted one when it was
-treated as follow-up (T095, T105, T110, T114, T116).
+rather than follow-up to it — five separate iterations omitted one when it was
+treated as follow-up (T095, T105, T110, T114, T116). Not consecutive: some
+iterations did record theirs. Corrected from "in a row", which overstated it.
 
 ## Reported, outside E010's scope
 

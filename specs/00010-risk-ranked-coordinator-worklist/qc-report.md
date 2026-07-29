@@ -847,3 +847,69 @@ because the record was treated as follow-up to closing an iteration rather than
 as part of it. From iteration 9 onward the record is appended in the same commit
 that logs the bug tasks, before the fixes are made — which is why iterations 9 and
 10 are both present above.
+
+
+---
+
+# QC Report — iteration 11
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **PASS** | **Bug tasks**: none
+
+Audited at `7b954d1`. **Zero findings at ERROR or WARNING.** Every executable gate
+green and every published figure re-derived from a command rather than from a
+prior report.
+
+## What was verified
+
+- **T116/T117 closed, and the process change holds structurally.** `qc-report.md`
+  carries one section per iteration for 1-10, no duplicate and no gap. The marker
+  no longer publishes a count that must be bumped in lockstep. Iterations 9 and 10
+  were both appended in the commit that logged their bug tasks, which is the
+  behaviour the change describes.
+- **Bug-task ranges reconcile to the sections**: 13+10+5+15+2+2+7+6+3+2 = 65
+  (T053-T117). No task claimed by two iterations, none by none.
+- **The classification split — wrong twice — is now exact.** 65 bug tasks, 13 in
+  iteration 1, 52 after. 4 + 5 + 43 = 52, and set arithmetic over T066-T117
+  confirms the membership. Every `[governance]` and `[process]` member was checked
+  to be an artifact defect rather than a code one.
+- **Release gate holds.** `24456b9` is `origin/main`'s head and is contained in
+  this branch; `git diff origin/main -- specs/sad.md` empty; T081 checked; four
+  address sites resolve to `GET /api/v1/worklist` with no composition required.
+- **Principles I, II, III, V, VII** each re-checked against the live payload and
+  the contract, not against prior reports.
+- **manual-test.md re-executed**: `counts.total == 15`, and every row identity its
+  scenarios name resolves and carries the named state.
+
+## Measured
+
+api 203 passed / 1 skipped (200 + 3 deselected without benchmarks); benchmark 3
+passed, p95 46.0 / 52.1 ms against 1500; web unit 77; e2e 19 against the real page
+and real boundary; root checks 292; conformance 9 (5 positives, 3 negative
+controls, 1 construct coverage); python coverage 97% (481 statements, 8 missed);
+web coverage 99.23 / 96.19 / 97.22 / 99.17 over six modules and 131 statements;
+import contracts 11 kept 0 broken with a negative fixture each; ruff check and
+format clean over four tiers (43/37/290/577); mypy 18 files; tsc clean; eslint 0
+errors 2 warnings, neither in an E010 file; 117 tasks all checked; checklists
+120/120; E005 199 lines / 24 open; npm audit 3 high on production dependencies.
+
+## Observations recorded, not filed
+
+The auditor raised two accuracy points below the finding bar and declined to file
+them. Both were corrected in the commit that wrote `.qc-passed`, because shipping
+a sentence known to be inaccurate is the defect class this feature spent eleven
+iterations on:
+
+- `.completed` said five iterations "in a row" omitted a QC record. The five are
+  real and correctly enumerated but were not consecutive. Corrected.
+- `plan.md:38` said "both recorded limitations carry their four parts"; there are
+  now three in that form, the third added by T093. Corrected.
+
+A third observation is recorded as **not E010's**: the root tier's
+`tests/checks/test_ports.py::test_the_substitute_is_actually_bindable` failed on
+one of three runs and passed on the other two and in isolation. It is E002's file,
+and the failure is a port-availability race against TIME_WAIT sockets left by the
+Playwright and uvicorn runs the audit had just performed.
+
+## Disposition
+
+**PASS.** `.qc-passed` written at the commit that carries these two corrections.

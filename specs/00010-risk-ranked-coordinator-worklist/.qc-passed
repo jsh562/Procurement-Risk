@@ -1,0 +1,53 @@
+E010 — Risk-Ranked Coordinator Worklist
+QC passed at iteration 11, 2026-07-29.
+
+Eleven iterations. 65 bug tasks beyond the 52 implementation tasks; all closed.
+The final audit returned zero findings at ERROR or WARNING, with every published
+figure re-derived from a command rather than from a prior report.
+
+Measured in the run that passed:
+  api tests            203 passed, 1 skipped (200 + 3 deselected without the
+                       benchmark marker). The skip is model_invocation — E008
+                       owns that table.
+  api benchmark        3 passed — p95 46.0 ms (worklist) and 52.1 ms
+                       (worklist+override) against a 1500 ms budget, n=200,
+                       against the frozen fixture's 16 lines
+  web unit tests       77 passed
+  web e2e specs        19 passed against the real page and the real serving
+                       boundary
+  root checks          292 passed
+  contract conformance 9 passed — 5 response-state positives, 3 negative
+                       controls, 1 construct-coverage check
+  python coverage      97% over src/api (481 statements, 8 missed; floor 80)
+  web coverage         99.23 / 96.19 / 97.22 / 99.17 over src/web/app/worklist
+                       — six modules, 131 statements (floor 80)
+  import contracts     11 kept, 0 broken across three entries, each with a
+                       negative fixture the gate enforces
+  ruff                 check and format --check clean over all four tiers
+  eslint / tsc         0 errors; 2 warnings, neither in a file E010 owns
+  mypy                 clean over src/gateway, 18 files, its only scope
+  tasks / checklists   117 tasks all checked; checklists 120/120
+
+Audited against project-instructions.md v1.2.8. Principles I, II, III, V and VII
+each re-checked against the live payload and the contract.
+
+The release gate is closed by amendment, not by exception. E010's plan declared
+that the feature could not pass QC while specs/sad.md, the plan's summary table
+and contracts/openapi.yaml named three addresses. Governance places amendments to
+registered documents on the default branch, so the branch recorded the need and
+did not act on it. The amendment landed on main as 24456b9 and is merged here;
+four sites now resolve to GET /api/v1/worklist without the reader composing
+anything. QC iterations 1-3 never checked the condition; iteration 4 found it.
+
+Not release-blocking, and carried forward rather than closed here:
+  - SC-017 and SC-018 are measured against 16 lines rather than the working
+    population. Recorded in plan.md:186 in Principle VII's four-part form, with
+    the note that E005's set is not the answer — it holds 199 lines of which only
+    24 are open.
+  - pip-audit has produced no result on either side and is recorded as
+    unmeasured rather than as a null result.
+  - The security limitation's reversal trigger has fired for /src/web: 3 high
+    advisories on production dependencies. E001 scaffold work.
+
+Per-iteration findings, severities and measurements are in qc-report.md, one
+section per iteration.
