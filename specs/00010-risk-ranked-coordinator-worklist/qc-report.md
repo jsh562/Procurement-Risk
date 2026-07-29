@@ -1,6 +1,6 @@
 # QC Report: E010 — Risk-Ranked Coordinator Worklist
 
-> **Iteration 1's record was restored 2026-07-29 (T113).** It was written at
+> **Iteration 1's record was restored 2026-07-29 (T114).** It was written at
 > `4edb348` and overwritten in place by iteration 2's report at `906dfb4`, so the
 > file carried seven of eight iterations while `.completed` said it carried all of
 > them. Iteration 1's measurements had survived in the Changes-from-Prior-Run
@@ -783,3 +783,67 @@ lines / 24 open; frozen fixture 16 lines / 15 open.
 The auditor re-resolved 150+ `file:line` citations across every artifact and found
 one wrong (T111). The T102 split was independently recounted and confirmed
 arithmetically correct with defensible membership.
+
+
+---
+
+# QC Report — iteration 9
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T113-T115
+
+Audited at `0e2bcda`, the commit that rewrote `.completed` from 278 lines to 146
+by moving the per-iteration narrative here. Every executable gate passed and every
+re-measurable figure was exact — including the four ruff file counts, the
+131-statement coverage denominator, the 5/3/1 conformance split and the 3/4/4
+contract split.
+
+| ID | Severity | Finding |
+|---|---|---|
+| T113 | ERROR | The rewrite's CRLF caveat read "`npx prettier --check .` **and `ruff format --check`** report files as unformatted that are clean as stored in git". The prettier half is measured and true; the ruff half is false — ruff defaults to `line-ending = "auto"`, preserving each file's existing endings, and measured on this CRLF tree `ruff format --check` reports zero files across all four tiers. The same file said so 67 lines above. Material because T083 was a genuine root format failure that failed CI's `Format check (Python)` step, and its record says "Not a CRLF artifact" — this sentence pre-excused that class. |
+| T114 | WARNING | `qc-report.md` carried seven of eight iterations. Iteration 1's report was written at `4edb348` and **overwritten in place** by iteration 2's at `906dfb4`; its measurements survived in the Changes-from-Prior-Run table, its 13 findings and severities did not. Restored verbatim. Fourth instance of the class T095, T105 and T110 were filed for. |
+| T115 | WARNING | `test_contract_conformance.py:140` read "the four above" then "five green tests" two sentences later. Five is correct. |
+
+**Measured**: api 203/1 (200 + 3 deselected without benchmarks); benchmark 3
+passed, p95 42.6 / 43.5 ms against 1500; root 292; web unit 77; e2e 19;
+conformance 9; python coverage 97% (481/8); web coverage 99.23/96.19/97.22/99.17
+over six modules and 131 statements; contracts 11 kept 0 broken; ruff check and
+format clean over four tiers (43/37/290/577); mypy 18 files; tsc clean; eslint 0
+errors 2 warnings; 112 tasks all checked; checklists 120/120; E005 199 lines / 24
+open.
+
+The auditor re-resolved 157 `file:line` citations with none out of range, and
+independently recounted the classification split.
+
+Closed by `a3da202`.
+
+---
+
+# QC Report — iteration 10
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T116-T117
+
+Audited at `a3da202`. Every executable gate green; every published figure except
+one re-measured exactly, several to the digit.
+
+| ID | Severity | Finding |
+|---|---|---|
+| T116 | ERROR | `.completed:115` published "Per-iteration findings … are in `qc-report.md`, which carries all **nine**" against a measured **eight**. The omitted one was iteration 9 — the most recent, and the one a reader deciding on release would most want. The claim was made *stronger* by the same commit that failed to append the record. Fifth instance of the class filed as T095, T105, T110 and T114, and T114 was therefore closed at the site its title named rather than across its class. |
+| T117 | WARNING | `qc-report.md:3` attributed iteration 1's restoration to T113; T114 owns it. T113 is the CRLF caveat. The `(TNNN)` convention elsewhere in these artifacts names the owning task. |
+
+**Measured**: api 203/1; benchmark 3 passed, p95 45.8 / 50.4 ms against 1500;
+root 292; web unit 77; e2e 19; conformance 9; python coverage 97% (481/8), floor
+verified non-inert (`--fail-under=99` exits 2); web coverage
+99.23/96.19/97.22/99.17 over six modules, 131 statements; contracts 11 kept 0
+broken; ruff clean 43/37/290/577; mypy 18 files; tsc clean; eslint 0 errors 2
+warnings; 115 tasks all checked; checklists 120/120; E005 199 lines / 24 open;
+frozen fixture 16 lines / 15 open; npm audit 3 high production, 12 total.
+
+Principles I, II, III, V and VII re-checked and passing; phase gates satisfied;
+size budgets met; 59 FR IDs matched between `spec.md` and the coverage map with 0
+orphaned; `manual-test.md` verified runnable against `procurement_e2e`.
+
+**Process change adopted here.** Five iterations in a row omitted a QC record
+because the record was treated as follow-up to closing an iteration rather than
+as part of it. From iteration 9 onward the record is appended in the same commit
+that logs the bug tasks, before the fixes are made — which is why iterations 9 and
+10 are both present above.

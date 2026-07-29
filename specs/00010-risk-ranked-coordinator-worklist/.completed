@@ -1,6 +1,6 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 63 bug tasks from nine QC iterations.
-All 115 are closed.
+Implementation complete: 52 tasks, plus 65 bug tasks from ten QC iterations.
+All 117 are closed.
 
 **This file is a completion marker, not a history.** Earlier versions carried a
 per-iteration narrative of every defect, duplicating `tasks.md` and
@@ -80,8 +80,8 @@ is the defect several of these iterations were about.
                        verify.yml names its step "Type check (gateway)" for that
                        reason, and records that the scope widens when api and
                        model are annotated to a standard strict mypy accepts.
-  tasks / checklists   115 tasks, all checked — T001-T052 implementation,
-                       T053-T115 bug tasks. Checklists 120/120.
+  tasks / checklists   117 tasks, all checked — T001-T052 implementation,
+                       T053-T117 bug tasks. Checklists 120/120.
 
 Audited against project-instructions.md **v1.2.8**. The prior audit named v1.2.4,
 superseded in flight by four revisions of a new Temporary Files rule — the last
@@ -90,16 +90,15 @@ to be re-run before this phase gate; it was re-run twice, at v1.2.7 (T074) and a
 v1.2.8 (`plan.md:30-31`). `spec.md`'s Compliance Check carries a supersession
 note pointing at that record (T085).
 
-## What nine iterations of QC found
+## What ten iterations of QC found
 
-63 defects beyond the 52 implementation tasks. Of the 50 raised after iteration 1:
+65 defects beyond the 52 implementation tasks. Of the 52 raised after iteration 1:
 four were faults in code or configuration — T066 put a field on the wire that
 FR-029 forbids, T075 left pytest writing to the machine's shared temp directory,
 T083 failed the CI format gate, T096 made the manual test procedure unrunnable.
 Five more were tests that did not measure or say what they claimed — T067, T069,
-T073,
-T079, and T115 — a conformance docstring contradicting itself on the count it
-exists to justify. The remaining 41 were accuracy defects in what the feature
+T073, T079, and T115, a conformance docstring contradicting itself on the count
+it exists to justify. The remaining 43 were accuracy defects in what the feature
 published about itself.
 
 The recurring shape, in every iteration: **a bug task filed against N sites gets
@@ -108,12 +107,15 @@ five in plan.md; T072 named two sites and closed one; T073 fixed an assertion's
 weight half and left its size half; T091 fixed the four items its title listed
 and left the line that decided whether the file could be run at all; T098's fix
 swept plan.md and left the same claim in tasks.md; T103 counted four sites and
-reached three. The lesson each time was that the class is wider than the title,
+reached three; T114 restored the QC record its title named and left the one the
+same commit had just made missing (T116). The lesson each time was that the class is wider than the title,
 and the discipline that works is sweeping the class by measurement rather than
 editing the site that was named.
 
-Per-iteration findings, severities and measurements are in `qc-report.md`, which
-carries all nine.
+Per-iteration findings, severities and measurements are in `qc-report.md`, one
+section per iteration. Appending that section is part of closing an iteration
+rather than follow-up to it — five iterations in a row omitted one when it was
+treated as follow-up (T095, T105, T110, T114, T116).
 
 ## Reported, outside E010's scope
 

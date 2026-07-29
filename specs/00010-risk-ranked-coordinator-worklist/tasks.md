@@ -493,6 +493,19 @@
   > Fix hint: "the five above".
 
 
+- [X] T116 [BUG:ERROR] {FR-040} [accuracy] The marker published a checkable count of QC records that the same commit made false — specs/00010-risk-ranked-coordinator-worklist/.completed:115
+  > The marker read "Per-iteration findings, severities and measurements are in `qc-report.md`, which carries all **nine**". Measured: eight. The omitted one was **iteration 9** — the most recent, and the one a reader deciding on release would most want.
+  > The commit that made the claim specific and checkable is the same commit that failed to append the record it refers to. The weaker earlier wording would have been true.
+  > Fifth instance of a class filed four times — T095 (iteration 3), T105 (iteration 6), T110 (iteration 7), T114 (iteration 1) — and T110's own fix hint said "treat the record as part of closing an iteration rather than as follow-up". So T114 was closed at the site its title named while the class recurred at the unnamed one, which is the shape this marker documents as the feature's recurring failure.
+  > Fix hint: append the missing records, and stop publishing a count that must be bumped in lockstep. The durable fix is the process one — append the record in the commit that logs the bug tasks, before the fixes.
+
+- [X] T117 [BUG:WARNING] {FR-040} [accuracy] The restoration note credits the wrong task — specs/00010-risk-ranked-coordinator-worklist/qc-report.md:3
+  > The note reads "Iteration 1's record was restored 2026-07-29 (**T113**)". T114 owns that restoration — its title is "qc-report.md carried seven of eight iterations" and its fix hint is "restore iteration 1 verbatim from `4edb348`". T113 is the CRLF caveat, an unrelated defect at `.completed:141`.
+  > The `(TNNN)` convention elsewhere in these artifacts names the owning task, so the reading "the commit that also closed T113" is not available.
+  > Same class as T097, T103, T104, T107 and T111 — a citation that does not resolve to what it names.
+  > Fix hint: `(T114)`.
+
+
 ---
 
 ## Dependencies
