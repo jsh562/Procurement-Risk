@@ -25,14 +25,14 @@ The delivered store cannot hold the second population, and not by preference —
 
 The two populations also carry genuinely different quantities, which is the deeper reason they are not interchangeable rows. An open line stores the **conditional remaining** duration given survival to the as-of date. A held-out delivered line stores the **total** duration from its own order date — the only quantity its observed outcome can be graded against.
 
-That difference is invisible to the read path. E010 computes `1 - survival[d - as_of_date]` and has no column to consult that would tell an as-of-anchored row from an order-date-anchored one. A single mixed table would therefore mis-score every held-out row silently, with nothing anywhere reporting a problem.
+That difference is invisible to the read path. E010 computes `survival[d - as_of_date]` and has no column to consult that would tell an as-of-anchored row from an order-date-anchored one. A single mixed table would therefore mis-score every held-out row silently, with nothing anywhere reporting a problem.
 
 A decision is needed now because E007 is claiming a migration block and the shape of the store is the thing every consuming epic reads against.
 
 ## Decision Drivers
 
 - The evaluation harness must have gradeable stored predictions for lines whose outcome is already observed
-- The existing read contract, `1 - survival[d - as_of_date]`, must remain literally true rather than true-by-convention, with no class of row that silently violates it
+- The existing read contract, `survival[d - as_of_date]`, must remain literally true rather than true-by-convention, with no class of row that silently violates it
 - Two different duration semantics must be distinguishable by a reader from the record itself, never inferred
 - Posterior draws stay in the single Postgres instance, and the write-atomicity guarantee must have a mechanism that actually exists
 - The delivered `line_posterior` contract and the published anchor convention that the serving boundary reads must not change
@@ -65,7 +65,7 @@ Keep a single store, add an anchor date and an anchor-convention column per row,
   - The artifact hash orders one population
   - A future third anchor would be a row value rather than a table
 - **Cons**:
-  - Every existing reader becomes wrong on the day the second population lands. E010's `1 - survival[d - as_of_date]` would silently mis-score order-date-anchored rows, and correctness would depend on every current and future consumer remembering to filter — the failure mode with no detector
+  - Every existing reader becomes wrong on the day the second population lands. E010's `survival[d - as_of_date]` would silently mis-score order-date-anchored rows, and correctness would depend on every current and future consumer remembering to filter — the failure mode with no detector
   - Relaxing `ck_schema_constants__anchor_convention` changes a published constant that `/src/api` serves, so a serving-boundary contract is widened to accommodate an offline job
   - `survival NOT NULL` and `ck_line_posterior__draws_non_negative` would both have to be weakened to admit the new population, removing checks from the delivered rows they currently protect
   - The two duration semantics would still differ per row, so a per-row semantic column would be needed anyway — the merge saves a table, not the discriminator
@@ -112,7 +112,7 @@ The accepted cost is duplication of the array invariants across two tables, and 
 
 ### Positive
 
-- E010's `1 - survival[d - as_of_date]` remains correct for every row in the table it reads, with no filter and no discriminator required of it.
+- E010's `survival[d - as_of_date]` remains correct for every row in the table it reads, with no filter and no discriminator required of it.
 - The evaluation harness has stored, gradeable predictions for lines with observed outcomes, joinable to exactly one run.
 - Each population carries its own anchor and its own duration semantic on the record, so no downstream reader infers either.
 - The held-out anchor is enforced by a foreign key, so grading against the wrong origin is unrepresentable rather than merely tested.

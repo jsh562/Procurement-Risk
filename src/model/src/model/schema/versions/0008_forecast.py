@@ -451,7 +451,7 @@ def upgrade() -> None:
             -- large is a line the grid does not cover, and that is the reversal
             -- trigger recorded for SURVIVAL_HORIZON_DAYS. Truncating instead would
             -- silently renormalise the distribution and the beyond-horizon answer
-            -- `1 - residual_tail_mass` (TR-053) would be unavailable.
+            -- `residual_tail_mass` as an upper bound (TR-053) would be unavailable.
             residual_tail_mass double precision NOT NULL,
 
             -- TR-040, TR-068. 32 raw bytes over the serialized draws, in the
