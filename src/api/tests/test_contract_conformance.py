@@ -137,7 +137,7 @@ def test_the_validator_rejects_an_undeclared_member(
     monkeypatch: Any,
     contract: dict[str, Any],
 ) -> None:
-    """The check that keeps the four above from being vacuous.
+    """The check that keeps the five above from being vacuous.
 
     `additionalProperties: false` is the contract's whole closure mechanism, and
     a validator wired up wrongly — an unresolvable `$ref`, a registry the schema
