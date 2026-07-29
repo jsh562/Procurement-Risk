@@ -145,6 +145,11 @@ FIXTURE_FOR_CONTRACT = {
     "The public entry point does not import the provider module directly": (
         "gateway_public_surface"
     ),
+    # E010's two. The read path is barred from the gateway so that "the worklist
+    # renders when the provider is unreachable" is a property of what is
+    # imported rather than a claim about what is called.
+    "Model-facing code does not reach the read-side computation package": "read_side_boundary",
+    "The worklist read path does not reach the model-provider gateway": "read_path_gateway",
 }
 
 # The step in verify.yml that executes this file.
