@@ -11,6 +11,10 @@ import styles from "./page.module.css";
  * Enter and Space without any script, and its content is in the accessibility
  * tree whether open or closed.
  *
+ * The panel floats over the row rather than expanding it — see `.explainBody`.
+ * Opening one moves nothing, which matters on a 24-row list where an inline
+ * expansion would displace every row below it.
+ *
  * It also keeps the row honest against FR-019 and FR-050, both of which require
  * that something be reachable *without* hover or expansion. Nothing here is the
  * sole carrier of anything: every figure these panels describe is already
@@ -21,10 +25,20 @@ import styles from "./page.module.css";
  * name is the entry's title, so each toggle on a row announces distinctly
  * instead of twenty identical "more information" buttons.
  */
+/**
+ * Groups every panel into one exclusive set, so opening one closes any other.
+ *
+ * The panels overlay the row and are positioned identically within it, so two
+ * open at once would stack on top of each other. `name` on `<details>` is the
+ * platform's own answer — an accordion group with no script — and it also means a
+ * reader never has to close a panel before opening the next.
+ */
+const EXPLAIN_GROUP = "worklist-explain";
+
 export function Explain({ of }: { readonly of: ExplanationKey }) {
   const entry = EXPLANATIONS[of];
   return (
-    <details className={styles.explain}>
+    <details className={styles.explain} name={EXPLAIN_GROUP}>
       <summary className={styles.explainToggle}>
         <span aria-hidden="true">ⓘ</span>
         <span className={styles.visuallyHidden}>{entry.title}</span>
