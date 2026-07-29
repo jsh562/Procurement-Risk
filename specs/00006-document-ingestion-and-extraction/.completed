@@ -17,7 +17,7 @@ figures are in `qc-report.md`.
 
 ## What was delivered
 
-Six user stories across 97 tasks. The corpus becomes citable chunks through
+Six user stories across 103 tasks. The corpus becomes citable chunks through
 one committed page reader and a three-class boundary ladder; every extracted
 value carries the page it was printed on; an untrustworthy value is absent
 rather than wrong; a value split across a page break keeps both pages; every

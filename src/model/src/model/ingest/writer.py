@@ -759,13 +759,11 @@ class MultiChunkCounts:
     def single_chunk_values(self) -> int:
         return self.values - self.multi_chunk_values
 
-    def merged(self, other: MultiChunkCounts) -> MultiChunkCounts:
-        """The two documents' counts as one, for the corpus-wide figure."""
-        return MultiChunkCounts(
-            values=self.values + other.values,
-            multi_chunk_values=self.multi_chunk_values + other.multi_chunk_values,
-            contributing_rows=self.contributing_rows + other.contributing_rows,
-        )
+    # `merged` stood here and was deleted at QC iteration 3: it had no caller.
+    # Its docstring offered "the two documents' counts as one, for the
+    # corpus-wide figure", but `publish.py` computes that figure by calling
+    # `multi_chunk_counts` once over the whole run, so a pairwise merge never
+    # had a role. `single_chunk_values` above is live -- `report.py`.
 
 
 def multi_chunk_counts(values: Sequence[PreparedValue]) -> MultiChunkCounts:

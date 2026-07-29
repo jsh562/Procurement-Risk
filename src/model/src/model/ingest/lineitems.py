@@ -157,10 +157,9 @@ class LineItemGrouping:
     memberships: tuple[LineItemMembership, ...]
     refusals: tuple[RefusedGrouping, ...]
 
-    @property
-    def item_ordinals(self) -> tuple[int, ...]:
-        """Every group present, ascending, document-scoped group included."""
-        return tuple(sorted({member.item_ordinal for member in self.memberships}))
+    # `item_ordinals` stood here and was deleted at QC iteration 3: no caller.
+    # `grouped_by_item` below already exposes the ordinals as its keys, which
+    # is the form SC-046's second clause is read in.
 
     def grouped_by_item(self) -> Mapping[int, tuple[int, ...]]:
         """Value positions per item ordinal — SC-046's second clause, readable.

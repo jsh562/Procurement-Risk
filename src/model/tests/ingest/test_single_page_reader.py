@@ -125,8 +125,8 @@ def test_no_module_defines_a_second_normalization(path: Path) -> None:
     Two directions, because a second normalization can be written either way.
     `unicodedata` is not imported anywhere in the package — that is the module
     the operation lives in — and no call target is the bare name `normalize`.
-    `normalize_page_text` and `normalized_page_text` are different names and are
-    the sanctioned route, so neither is caught by this.
+    `normalize_page_text` and `page_text` are `derive`'s own names and are the
+    sanctioned route, so neither is caught by this.
     """
     tree = _tree(path)
     assert "unicodedata" not in _imported_modules(tree), f"{path.name} imports unicodedata"

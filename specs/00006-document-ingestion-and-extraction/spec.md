@@ -529,7 +529,7 @@ Each limitation carries its scope decision and evidence, the condition that woul
 | Source Code Layout | PASS (repaired at QC) | Modeling-entry console entry point, gateway-mediated provider access; `/tools` moved to `src/model/tools/` — the repository root is outside `ENFORCE_SRC_ROOT` and `/tests` is its one exception (A-24) |
 | Development Workflow | PASS (repaired at QC) | Workspace `00006-…` matches epic E006; branch cut to match. **Temporary Files (new in v1.2.5)**: the root `pyproject.toml` pinned no `--basetemp` and `verify.yml`'s `verify` job set no `TMPDIR`/`TEMP`/`TMP`; both fixed (A-23) |
 | Data Provenance | PASS | FR-004, SC-033 — layer, license basis, provenance carried unchanged; no fabricated retrieval provenance |
-| Governance | PASS | FR-040 claims block `0300`–`0399` and ratifies the E005 reservation; FR-051 claims ADR-0018–0020; FR-065 holds the E003 boundary; FR-047 records an amendment rather than performing it |
+| Governance | PASS (repaired at QC) | FR-040 claims block `0300`–`0399` and ratifies the E005 reservation; FR-051 claims ADR-0018–0020; FR-065 holds the E003 boundary; FR-047 records an amendment rather than performing it. **A-26**: ADR-0018/0019/0020 and their `sad.md` rows were authored on this branch instead of on `main`, which two audits marked PASS without checking; landed on `main` in `e8bc1ff` and merged at `7652e9d`. See `plan.md` §Instructions Check |
 
 **Two conditions carried into Plan, both sequencing rather than defects:**
 

@@ -2,10 +2,21 @@
 
 **Run 3 · 2026-07-28 · verdict: PASS with two blocked tasks disclosed**
 Governing document: `project-instructions.md` v1.2.5.
-Measured on the branch `00006-document-ingestion-and-extraction` at `7652e9d`
-plus the iteration-2 fixes described below, with `main` already merged in — so
-this describes what a merge would produce rather than what the branch produced
-in isolation.
+Measured on the branch `00006-document-ingestion-and-extraction`, with `main`
+already merged in — so this describes what a merge would produce rather than
+what the branch produced in isolation.
+
+**How this verdict was reached, because the first version of this line was
+wrong.** This file was authored during the iteration-2 *fix* commit `ccd9c23`
+and already carried "verdict: PASS" before iteration 3 had run. That is a
+simulated pass state, which the Continuous Execution Policy forbids in the same
+breath as simulated test results, and iteration 3 caught it (F-D3). Every
+figure in the file was subsequently reproduced by that audit statement for
+statement, so nothing here was fabricated — but the verdict was issued by the
+implementer for an audit that had not happened, and a correct answer arrived at
+in the wrong order is still the wrong order. The PASS now recorded is
+iteration 3's, run at `ccd9c23` against all five tiers, and the findings it
+raised are in §Run 3 below.
 
 **This epic did not pass QC first time, and this report does not present it as
 though it did.** Two prior iterations produced nineteen findings between them.
@@ -212,7 +223,7 @@ because every individual piece is green.
 | ID | Sev | Finding | Disposition |
 |---|---|---|---|
 | I2-1 | **CRITICAL** | **Governance violation.** ADR-0018, ADR-0019 and ADR-0020 and their `sad.md` catalog rows were authored **on this feature branch**. Governance serializes amendments to the documents it names onto the default branch: a feature branch records the need and does not perform it | **Fixed**, by the procedure E003 used for ADR-0017: landed on `main` in `e8bc1ff` and merged back at `7652e9d`. The branch now *contains* them by merge rather than *authoring* them |
-| I2-2 | HIGH | **A fourth orphaned component.** `reconcile_invocations` and `InvocationReconciliation` (`ingest/cli.py`) were exported and had zero production call sites. They duplicated the live path, `report.reconciliation_section`, which `publish.py` calls — both restating FR-070's zero-attempt invariant independently, one of them unreachable | **Fixed.** The unreachable copy deleted with its `__all__` entries. The two assertions it alone carried were **moved onto the live path** rather than lost: the signed difference between the counts, and the refusal of a negative count |
+| I2-2 | HIGH | **A fourth orphaned component.** `reconcile_invocations` and `InvocationReconciliation` (`ingest/cli.py`) were exported and had zero production call sites. They duplicated the live path, `report.reconciliation_section`, which `publish.py` calls — both restating FR-070's zero-attempt invariant independently, one of them unreachable | **Fixed.** The unreachable copy deleted with its `__all__` entries. **Correction, from iteration 3 (F-D1):** an earlier version of this row said two assertions were "moved onto the live path". They were not — `report.reconciliation_section` already carried both the signed count difference and the negative-count refusal before the fix, and `ccd9c23`'s diff of `report.py` touches only the `COUNTING_UNITS` removal. What was added is **tests** for live behaviour that had none on either copy |
 | I2-3 | MEDIUM | **`ruff format --check` never ran at the repository root in CI.** The Lint step ran `ruff check .` at root; the Format step looped the three entries only. 403 files against 243 — everything under `/tests` is in the difference | **Fixed**, and closed structurally: a new check asserts every tier ruff lints is a tier ruff format-checks. Same root cause as A-23 — the root is not an entry, so it falls out of a per-entry loop — and this is the third instance, so the class was made detectable rather than the instance patched |
 | I2-4 | MEDIUM | **No `qc-report.md`.** All five prior features have one; this workspace had none after two iterations and nineteen findings | **Fixed.** This file |
 | I2-5 | LOW | **Four fully dead exports**: `artifacts.encoder_identity()` (byte-identical to the live `embed.embedding_identity`), `metrics.CONFIDENCE_LEVEL` (the level is carried by `INTERVAL_METHOD`), `schemas.printed_but_unattempted()` (superseded by `reference.printed_without_term`, and still wrong — it is the narrow vocabulary-only view that iteration 1's F6 corrected), `report.COUNTING_UNITS` (imported and never read) | **Fixed.** All four removed, each verified to have no reference in `src`, `tests` or `specs` first, and each with a comment at the deletion site saying what the live answer is. See §Reviewed and kept for the eleven test-only exports, which were **not** deleted |
@@ -228,10 +239,11 @@ because every individual piece is green.
 
 Iteration 2 listed eleven of these separately from the four dead ones, and
 correctly: a test-only caller is legitimate for a declared domain constant or a
-seam that exists so a property can be asserted. Nine were named to this review
-and are the nine below; the remaining two were not enumerated in the finding and
-are not guessed at here. Each of the nine was checked against `src` rather than
-assumed.
+seam that exists so a property can be asserted. **Eight** are listed below —
+an earlier version of this paragraph said nine twice while the table held eight
+(iteration 3, F-D5). The remaining names were not enumerated in the finding and
+are not guessed at here. Each of the eight was checked against `src` rather
+than assumed.
 
 | Export | Verdict |
 |---|---|
@@ -242,7 +254,7 @@ assumed.
 | `runs.RUN_STATES` | **Keep.** A declared domain, asserted against the database's own check constraint |
 | `runs.GENERATION_STATUSES` | **Keep.** Same — a declared domain |
 | `failures.REQUIRED_FIELDS` | **Keep.** Same — FR-035's required diagnostic content, declared once and asserted |
-| `parse.normalized_page_text` | **Genuinely dead — and not deleted here.** Iteration 2 classified it as test-only; it is not. Its one mention outside its own definition is a *docstring* in `test_single_page_reader.py` explaining that `normalize_page_text` and `normalized_page_text` are different names. There is no call, from production or from a test. Reported rather than removed because iteration 2 scoped this list to review and not deletion. Recommend deleting it, or giving it a caller, in whichever epic next touches `parse.py` |
+| `parse.normalized_page_text` | **Deleted at iteration 3.** This row previously read "genuinely dead — and not deleted here", and between writing it and acting on it the deletion was attempted, reverted on a mistaken argument, and then made properly. The mistaken argument, recorded because it is the instructive part: removing the wrapper orphaned `parse.py`'s imports of `normalize_page_text` and `page_text`, which was read as evidence that it was a load-bearing seam. It is the opposite — those imports existed *only* to implement this function, so they are orphaned **by** the deletion rather than evidence against it, and a normalization route no code takes normalizes nothing. SC-037 asserts the *absence* of a second normalization, which deleting a zero-caller wrapper cannot create. Original text follows.<br><br>**Genuinely dead.** Iteration 2 classified it as test-only; it is not. Its one mention outside its own definition is a *docstring* in `test_single_page_reader.py` explaining that `normalize_page_text` and `normalized_page_text` are different names. There is no call, from production or from a test. Reported rather than removed because iteration 2 scoped this list to review and not deletion. Recommend deleting it, or giving it a caller, in whichever epic next touches `parse.py` |
 
 ---
 
@@ -287,8 +299,14 @@ comment.
 
 ## Verdict
 
-**PASS.** Both required categories green. All four suites green — model 2,410,
-checks 252, gateway 405 with 5 opt-in skips, web 3. Five coverage gates exit 0.
+**PASS.** Both required categories green. Four suites green — model 2,410,
+checks 252, gateway 405 with 5 opt-in skips, web 3 — and the **fifth Python
+entry, `src/api`, has no tests at all** (iteration 3, F-D6). It ships three
+empty `__init__.py` files and no runtime code, `verify.yml` has no api test
+step, and `src/api/pyproject.toml`'s `testpaths = ["tests"]` matches nothing,
+so pytest warns and exits 0. Zero tests over zero code is defensible; leaving
+it unnamed is not, because iteration 1's own HIGH finding was that four of five
+tiers green is a statement about four tiers. Five coverage gates exit 0.
 Eight import contracts kept, zero broken. 73 of 74 functional requirements cited
 in code or tests, the 74th discharged by artifacts on `main`.
 

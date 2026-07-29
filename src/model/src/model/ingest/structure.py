@@ -150,9 +150,10 @@ class StructuralUnit:
         parts.extend(child.text for child in self.children if child.text)
         return "\n".join(part for part in parts if part)
 
-    @property
-    def is_leaf(self) -> bool:
-        return not self.children
+    # `is_leaf` stood here and was deleted at QC iteration 3: no caller. The
+    # chunker descends by testing `children` directly at the one site that
+    # needs it, and a second name for `not self.children` is a second place to
+    # keep correct.
 
 
 @dataclass(frozen=True)

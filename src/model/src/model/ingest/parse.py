@@ -5,8 +5,10 @@ requirement rather than a style preference. E002's `model.corpus.derive` already
 pins the word-extraction tolerances, the line grouping, and the comparison
 normalization, and `plan.md` records that a second normalization would be a
 second answer. So the ingestion package obtains page text by **calling**
-`read_document`, `PageContent.text`, `page_text` and `normalize_page_text` — it
-does not configure a second assembly that resembles them.
+`read_document` and `PageContent.text` — it does not configure a second
+assembly that resembles them. A caller needing the comparison form calls
+`derive`'s `page_text` or `normalize_page_text` directly; this module wrapped
+them until QC iteration 3, when the wrapper was found to have no caller.
 
 What that rules out, concretely, is what `src/model/tests/ingest/test_single_page_reader.py`
 asserts over this whole package (SC-037): no call to `extract_words`, no
@@ -33,15 +35,12 @@ from pathlib import Path
 from model.corpus.derive import (
     DeriveError,
     PageContent,
-    normalize_page_text,
-    page_text,
     read_document,
 )
 
 __all__ = [
     "ParseError",
     "ParsedPage",
-    "normalized_page_text",
     "page_by_number",
     "read_pages",
 ]
@@ -114,19 +113,18 @@ def read_pages(path: Path) -> tuple[ParsedPage, ...]:
     return pages
 
 
-def normalized_page_text(page: ParsedPage | PageContent) -> str:
-    """A page's text in the committed comparison form (FR-008, FR-010).
-
-    Delegates to `derive`'s normalization in both branches. The `ParsedPage`
-    branch passes the already-assembled page text through `normalize_page_text`,
-    which is the same function `page_text` applies to a `PageContent` — one
-    normalization, reached two ways, never two normalizations.
-    """
-    if isinstance(page, PageContent):
-        return page_text(page)
-    return normalize_page_text(page.text)
-
-
+# `normalized_page_text` stood here and was deleted at QC iteration 3. It
+# delegated to `derive`'s `page_text` / `normalize_page_text` and had no caller
+# in production or in a test. An earlier round kept it on the argument that
+# deleting it orphaned those two imports, and therefore that it was a
+# load-bearing seam rather than dead code. That inverted cause and evidence:
+# the two imports existed only to implement this function, so they are orphaned
+# *by* the deletion rather than evidence against it, and a normalization route
+# nothing takes normalizes nothing. SC-037 asserts the *absence* of a second
+# normalization — `test_single_page_reader.py` — and removing a zero-caller
+# wrapper cannot create one. Containment compares chunk text against the page
+# text `derive` already assembled; whichever module next needs the comparison
+# form should call `derive` directly, as this one did.
 def page_by_number(pages: Sequence[ParsedPage], number: int) -> ParsedPage:
     """The page a chunk's recorded page number names.
 
