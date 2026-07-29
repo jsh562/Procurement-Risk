@@ -136,9 +136,23 @@
   gap: 0.5rem;
 }
 
+/*
+ * The column budget follows the reading order's weight, which an earlier
+ * revision inverted. `1fr` for the primary column against `auto`-maxed trailing
+ * columns let the two short ones size to max-content and starve the one holding
+ * everything: measured at a 912px row, primary took 243px while the state label
+ * — three words — took 279px. Inside 243px the quantile pair's own grid
+ * resolved to a 36px value column and broke "36 days — 50 in 100 land later"
+ * to one word per line, making a single row 686px tall.
+ *
+ * So the trailing columns are bounded by fr rather than by `auto`, and the
+ * primary column is given the largest share. The minmax floors keep the
+ * secondary region and the state label from collapsing before the breakpoint
+ * below switches the row to a single column.
+ */
 .row {
   display: grid;
-  grid-template-columns: 3rem 1fr minmax(14rem, auto) minmax(12rem, auto);
+  grid-template-columns: 3rem minmax(22rem, 2.4fr) minmax(11rem, 1fr) minmax(9rem, 0.9fr);
   gap: 0.75rem;
   align-items: start;
   padding: 0.75rem 1rem;
@@ -191,6 +205,12 @@
   font-size: var(--scale-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  /*
+   * A figure and its unit are one token to a reader. "36 days" broken across
+   * two lines reads as a bare 36 with an orphaned unit, which under Principle
+   * II is exactly the bare number the pair exists to avoid presenting.
+   */
+  white-space: nowrap;
 }
 
 /* FR-004, FR-049. One labelled unit, never two adjacent bare numbers. */
@@ -203,11 +223,23 @@
   font-weight: 600;
 }
 
+/*
+ * Label above figure, not beside it. The labels carry the frequency framing
+ * FR-005 requires — "Half of comparable orders land by" is thirty-three
+ * characters, and its figure line another thirty — so a two-column grid needs
+ * roughly 500px to set both on one line. The column holding them is about half
+ * that even after the rebalance above, and at the single-column breakpoint it
+ * is narrower still. Side by side, the label's `auto` track simply took the
+ * width and left the figure to wrap a word at a time.
+ *
+ * Stacked, each line sets on its own at any width the row survives, and the
+ * figure still leads its line in the primary scale, so the number stays the
+ * scannable thing rather than the sentence around it.
+ */
 .pairFigures {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.15rem 0.5rem;
-  margin: 0.25rem 0 0;
+  grid-template-columns: 1fr;
+  margin: 0.3rem 0 0;
   font-size: var(--scale-primary);
   font-weight: 400;
 }
@@ -215,10 +247,21 @@
 .pairFigures dt {
   font-size: var(--scale-secondary);
   font-weight: 400;
+  line-height: 1.3;
 }
 
 .pairFigures dd {
-  margin: 0;
+  margin: 0.05rem 0 0;
+  line-height: 1.35;
+}
+
+/*
+ * The gap belongs *between* the two quantiles, not between a label and the
+ * figure it labels — FR-004 binds each pair into one unit, and even spacing
+ * would read as four independent statements.
+ */
+.pairFigures dd + dt {
+  margin-top: 0.45rem;
 }
 
 .unsaved {
@@ -331,7 +374,20 @@
   border: 0;
 }
 
-@media (max-width: 40rem) {
+/*
+ * The breakpoint is where the four-column row stops fitting, so it moved with
+ * the columns. Their floors sum to 3rem + 22rem + 11rem + 9rem plus three gaps
+ * and the row's padding — about 49rem — and below that the grid overflows its
+ * container rather than degrading. It used to sit at 40rem because the primary
+ * column was `1fr` and could be squeezed to nothing, which is the same
+ * squeezing that broke the quantile pair at full width.
+ *
+ * Between 40rem and 52rem the four-column form is technically representable and
+ * not worth having: the primary column lands near 200px, which is where the
+ * pair's figures begin wrapping mid-sentence again. Stacking earlier is the
+ * better of the two.
+ */
+@media (max-width: 52rem) {
   .row {
     grid-template-columns: 1fr;
     gap: 0.25rem;
