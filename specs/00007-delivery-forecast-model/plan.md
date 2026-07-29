@@ -410,6 +410,10 @@ Success criteria also map through `data-model.md` § Validation Rules (`DV-001`�
 
 Recorded here because each is a statement in **another epic's** delivered artifact that this epic's design makes false. None is performed on this branch where the artifact belongs elsewhere.
 
+**Disposition as of 2026-07-29, after the merge.** Six have since been performed on `main`, where Governance requires them: `P-4` and `P-9` in `4431b6f`, `P-10` and `P-11` in `bcfc424`, `P-5` in `af40196`, `P-3` in `1d703a5`. `P-6` is retired — its premise did not hold. Four remain open: `P-1` and `P-2`, which are the same physical line of E003's data model and discharge together; `P-7`, whose E003 half is actionable and whose `/src/api` half has nowhere to land until E010 builds the constants-serving read path; and `P-8`, structurally blocked until a `specs/00010-*` workspace exists. Recorded here rather than by editing the rows, so the obligation as raised stays legible next to what became of it.
+
+`P-3` is worth reading before its row. Performing it surfaced a larger defect than the stale sentence it names: E005's FR-010 derived its pre-split event floor as `120 ÷ (1 − 0.25) = 160`, treating the PRD's ~120 as the *training* remainder, when the PRD spends that figure on calibration precision measured on the *held-out* side. The floor implied is `120 ÷ 0.25 = 480`. This epic's realized ~44 held-out uncensored events is `0.25 × ~175` delivered lines — exactly what a floor of 160 was always going to yield, not a shortfall against a reachable target. `L-3` and the PRD amendment are both restated around that.
+
 | # | Obligation | Owner | Trigger |
 |---|---|---|---|
 | P-1 | E003's data model states "only two constants are duplicated as DDL literals". A third and fourth occurrence land in `0302`. The sentence is E003's to correct | E003 | This epic's `0302` |

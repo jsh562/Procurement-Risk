@@ -43,7 +43,7 @@ E001 scaffolded the four entries and the toolchain; E002 established the `model.
 
   This list read "eight `P-1`–`P-8`" until 2026-07-28. `P-9`–`P-11` were appended to `plan.md` by the analyze gate in `636e9f0` and this file was never refreshed, so it undercounted from that commit onward. Corrected against `plan.md` rather than re-derived.
 
-  **Four have since been performed**, on `main` after the merge, where Governance requires them: `P-4` and `P-9` in `4431b6f`, `P-10` and `P-11` in `bcfc424`. They remain out of scope for this epic — performing them here is exactly what the branch was forbidden to do, and the record of that restraint is the point.
+  **Six have since been performed**, on `main` after the merge, where Governance requires them: `P-4` and `P-9` in `4431b6f`, `P-10` and `P-11` in `bcfc424`, `P-5` in `af40196`, `P-3` in `1d703a5`. `P-6` is retired; `P-1`, `P-2`, `P-7` and `P-8` remain open, and `plan.md` § Propagation Obligations carries the standing disposition. They remain out of scope for this epic — performing them here is exactly what the branch was forbidden to do, and the record of that restraint is the point.
 - **Two criteria are discharged by nothing this list can check.** SC-032's prohibition half is verified by **review of the commit history** of `PKG/config.py` (AD-005, G-11) — T077 asserts the mechanism half and records the prohibition half as uncovered rather than letting a green suite read as covering it. SC-022's tie-breaking half is discharged by argument (G-13); only the recorded serialization label is checkable.
 
 ## Design constants — quoted, never re-derived
