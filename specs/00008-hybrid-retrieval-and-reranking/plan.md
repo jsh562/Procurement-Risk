@@ -690,12 +690,33 @@ extends the gate to 3, 4, 9 and 10):
     this plan's own standard is that an obligation recorded only in prose fails silently. Raised here
     with an owner and a verifier rather than depended on (spec FR-047, task T096).
 
-**Sequencing.** E006 holds at least one amendment outstanding ahead of these, so the queue is
-E006's, then 1–4 and 9–10 in the order above, then 7 and 8, then 5 and 6 whenever. This plan does not
-assert they will land; it asserts implementation does not begin until 1–4, 9 and 10 have, that
-SC-016's latency half is measured against the never-exceed settled at spec §Decisions Taken at
-Checklist and item 7 records rather than gates it, and it names the verifier: the amending revision
-on the default branch, cited in the task that closes each.
+**Sequencing** *(settled 2026-07-29 at Analyze)*. Governance serializes these: *"At most one amendment
+is in flight at a time, it is performed on the default branch, and it lands before the next begins."*
+An amendment is **one version bump**, so items amending the same document land together in one round.
+Four rounds, each landing before the next begins:
+
+| Round | Document | Items | What lands |
+|---|---|---|---|
+| 1 | `specs/prd.md` | 1 | The MRR row's Wilson interval replaced by a percentile bootstrap |
+| 2 | `specs/project-plan.md` | 2 | An owner for populating `chunk.part_numbers` |
+| 3 | `project-instructions.md` | 3, 10 | §Source Code Layout **and** §Testing & Quality Policy except a shared inference runtime; §Technology Stack drops the INT8-only qualifier |
+| 4 | `specs/sad.md` | 4, 9 | ADR-0022's catalog row; the retrieval-quality row's Wilson-on-MRR |
+
+Then 7 and 8, then 5 and 6 whenever. **E006 holds nothing ahead of this queue**: its outstanding
+amendment was the INT8 qualifier, recorded in a PR body and never performed — verified against the
+default branch at Analyze, where `project-instructions.md` still reads "ONNX Runtime for INT8 CPU
+inference". It is now item 10 and lands in round 3.
+
+This plan does not assert they will land; it asserts implementation does not begin until rounds 1–4
+have, that SC-016's latency half is measured against the never-exceed settled at spec §Decisions
+Taken at Checklist and item 7 records rather than gates it, and it names the verifier: the amending
+revision on the default branch, cited in the task that closes each.
+
+**Round 3 invalidates this plan's compliance audit.** §Instructions Check names `project-instructions.md`
+v1.2.8; round 3 bumps past it, and Governance requires that *"a feature whose recorded compliance
+audit names a superseded version of this document MUST re-run its compliance gate before passing its
+next phase gate."* The gate re-runs after round 3 and before `/sddp-implement` — not as a formality:
+rounds 3's whole content is the two clauses this design was found to breach.
 
 **On the workflow's own shared-document steps.** Steps 4.3 and 5.6 instruct an epic to write the
 `specs/sad.md` catalog row and to rewrite its managed baseline section directly. Those steps and the
