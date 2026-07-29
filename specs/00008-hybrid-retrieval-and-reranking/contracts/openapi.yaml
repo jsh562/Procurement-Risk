@@ -1,0 +1,1989 @@
+openapi: 3.1.0
+
+info:
+  title: Hybrid Retrieval and Reranking API
+  version: 1.0.0
+  summary: Ranked passages from a fused lexical and dense retrieval path, reranked by a local cross-encoder.
+  description: |
+    Request-serving boundary for E008. Three operations: one retrieval query, one readiness probe, one
+    diagnostics report. Two consumers, neither of them a browser — E011 (grounded chat) calls
+    `GET /retrieval/search` for passages to answer from, and E014 (evaluation) calls the same operation
+    once per arm to build an ablation table, reading the ranking parameters this surface returns with
+    every result.
+
+    **No write path.** E008 reads the chunk store and writes nothing to it — that exclusion is stated in
+    the specification's Scope and includes `chunk.part_numbers`. This contract therefore defines no POST,
+    PUT, PATCH or DELETE anywhere, which makes the read-only property a fact about the route table
+    rather than a discipline someone maintains.
+
+    **`GET` rather than `POST` for the query.** The request is a pure read with a flat scalar parameter
+    set — a query string, an arm selection, an optional project filter, a result bound. The one existing
+    endpoint on this boundary (`GET /api/v1/worklist`) established the convention and this follows it.
+    The reversal trigger is a request that stops being flat: a structured filter object, or a query
+    routinely past the 1000-character cap declared on `query`. Neither exists today.
+
+    **Refuse and degrade are different behaviours and do not share a shape.**
+
+    | Behaviour | Requirement | Condition | Shape |
+    |---|---|---|---|
+    | **Refuse** | FR-007 | the query encoder's identity or revision differs from the identity recorded on the chunks | `500` `application/problem+json`, `type` = `…/problems/encoder-identity-mismatch`. No results. Readiness reports `not_ready`. |
+    | **Degrade** | FR-021, FR-022 | the reranker is unavailable | `200` carrying results in fusion-only order, `mode.reranked` false, `mode.degraded` true, `mode.statement` naming the cause. Readiness reports `ready_degraded`. |
+
+    A refusal is the system declining to answer because any answer it produced would be computed across
+    two vector spaces and wrong in a way no reader could see. A degradation is the system answering
+    worse and saying so. Collapsing them into one shape would let a caller treat a wrong answer and a
+    weaker answer alike, which is the one reading neither requirement wants.
+
+    **Ready-degraded is a success response carrying a state field, never a status code.** `research.md`
+    § Graceful degradation records that HTTP has no suitable status code for "these results are
+    degraded" and that the `Warning` header is deprecated; `research-implementation.md` § Readiness
+    gating records that the closest precedent is an expired Internet-Draft, which is mirrored in shape
+    and must not be cited as a standard. `GET /readyz` therefore answers `200` for both `ready` and
+    `ready_degraded` and distinguishes them in `status`. `503` is reserved for `not_ready`, which means
+    the instance must be taken out of service, not that its results are weaker.
+
+    **Authentication: none, and stated rather than left unspecified.** `specs/sad.md` § Security records
+    the absence of authentication as a deliberate project-level scope decision for a single-user local
+    demonstration, and the deployment view has no auth tier. This contract declares no
+    `securitySchemes` and no `security` requirement, at the document level or on any operation. There is
+    no caller identity, no per-caller visibility rule and no rate limit: every caller that can reach the
+    deployment retrieves the same passages for the same query, and a response is scoped by `project_id`
+    and by the configured vector-search mode and by nothing about who is asking. The reversal condition
+    is the first deployment reachable by a party who should not read the whole corpus, at which point a
+    scheme is added here and the project-level decision is amended first.
+
+    **Which figures live where, and why.** FR-019 (truncation) and FR-033 (reranking latency and
+    resident memory) do not belong on one surface, because they are not one kind of fact:
+
+      - **Per query, on the search response** — `reranking.candidates_scored`,
+        `reranking.candidates_truncated`, `reranking.candidate_token_lengths` and
+        `reranking.latency_ms`. These vary with the query and are true only of the response that
+        carries them. Emitting them here is what lets E014 build FR-019's census over *the enumerated
+        candidate set* by summing what it already receives, with no second call per query and no
+        sampling.
+      - **Per process, on `GET /retrieval/diagnostics`** — the reranker session's resident memory
+        against the container's budget, the sequence limit, the intra-op and inter-op thread counts, the
+        artifact identities, revisions, digests, license bases and sources, and the declared
+        part-number pattern. None of these varies per query. Repeating a constant on every one of fifty
+        evaluation responses would state it fifty times and make it fifty times harder to notice when it
+        changed mid-run.
+
+    Latency is the boundary case and it is split deliberately: FR-033's *per-query* half is a per-query
+    fact and travels with the response; its *memory against budget* half is a session property and does
+    not.
+
+    **The exact-versus-approximate flag is service configuration, not a request parameter.** FR-026
+    calls it a configuration flag and ADR-0005 accepts two code paths only on condition that they cannot
+    drift. Admitting a request field would make the served path and the measured path diverge per
+    request — the served response and the measured response could differ in vector-search strategy while
+    every other observable stayed equal, which is precisely the drift the ADR conditions its acceptance
+    on preventing. The flag is therefore read from `RETRIEVAL_VECTOR_SEARCH_MODE` at process start and
+    **reported** in `ranking_parameters.vector_search` on every response, because FR-029 requires the
+    index settings to be recorded with any result an evaluation consumes.
+
+    The consequence, stated rather than hidden: E014 constructs SC-012's sixth arm — the
+    exact-versus-approximate delta — by running the same query set against two differently configured
+    processes, not by sending two requests. That is the cost ADR-0005 buys drift-prevention with.
+
+    **Recorded interface decisions.** Two choices this contract had to make that the specification
+    leaves open. Both are decisions the plan may overturn; neither may be left undecided, because a
+    contract that does not decide them is one each consumer decides differently.
+
+      1. **The deterministic route does not fire on the `lexical` and `dense` arms.** Those two arms
+         exist so the contribution of one retrieval arm can be measured (specification § Risks: the
+         sparse-only arm is a first-class published row rather than an assumed positive). A deterministic
+         identifier hit is a contribution of neither arm, so letting the route fire would attribute it to
+         whichever arm was under measurement and overstate that arm. On those arms
+         `deterministic_route.fired` is `false` with `skipped_reason` = `arm_excludes_route`. The route
+         fires on `fused`, `fused_reranked` and `fused_reranked_full_precision`.
+      2. **`limit` bounds the ranked-relevance portion only.** Deterministic identifier matches are
+         additional to it and are never displaced by it. Bounding the whole list would let a route hit
+         at position 1 push a fused candidate past `limit`, which is FR-012's "the route MUST NOT
+         remove" violated by an interaction rather than by a rule. See `RetrievalResponse` for the
+         resulting invariant.
+
+    **What is deliberately absent, and why.**
+
+      - **No fusion score and no reranker score on a result.** The specification's `RetrievalResult`
+        entity enumerates what a result carries — the chunk, its document and page, the arm or arms that
+        produced it, its fused rank, its reranked rank where reranking ran, and whether it was a
+        deterministic identifier match or a relevance judgement. Ranks, not scores. Withholding the
+        scores also removes the material a client would need to re-rank the list itself, which supports
+        FR-002's rule that no ranking arithmetic occurs outside the deterministic computation boundary —
+        supports, and does not establish it; see § Requirements this contract cannot express.
+      - **No `document_type` filter parameter.** No requirement asks for one and the chunk store carries
+        no index for it (`specs/00003-core-data-schema/data-model.md` names `ix_chunk__project` for
+        per-project filtering in fusion and nothing else). `document_type` is *returned* on every result
+        because FR-008 obliges it; it is not offered as a filter.
+      - **No `ETag` and no conditional request.** Both consumers are server-side and neither revalidates.
+        E010's worklist carries a validator because FR-020a there requires one; nothing here does.
+        FR-020's determinism claim is witnessed instead by `ordering_digest`, which is assertable from
+        two responses without a caching protocol.
+      - **No pagination.** Fetch depth is fixed at 50 per arm by FR-003 and the reranked count equals it
+        by FR-018, so the candidate set is bounded by the ranking definition rather than by a page size.
+        A `limit` parameter truncates the returned list and cannot change either.
+      - **No route-disable parameter.** SC-006 ("zero queries return fewer results with the
+        deterministic route enabled than with it disabled") looks as though it needs one. It does not:
+        FR-012 makes the property checkable inside a single response, because every result fusion
+        produced carries a non-null `fused_rank` and the route's additions carry `null`. Adding a
+        request-level switch would create a second served path for no measurement that this one does not
+        already supply.
+
+    **Versioning.** Three counters, and they are not the same counter:
+      - the `/api/v1` path segment is the interface version a consumer binds to. Every consumer the
+        project plan records for this surface — E011, E014 — lives in this repository and ships from the
+        same commit, so the segment moves only if a consumer outside this repository is ever introduced;
+      - `info.version` is this document's own revision, bumped on every change to the contract whether
+        breaking or not;
+      - the encoder and reranker model revisions in `ranking_parameters` are properties of the vendored
+        artifacts, never of this interface. A revision this build does not expect is a refusal under
+        FR-007, not an interface version mismatch.
+
+    **Compatibility and change.** A change is **breaking** if it removes or renames a member, changes a
+    member's type or admitted values, changes the meaning of an existing member, adds a member to an
+    object declared `additionalProperties: false`, adds a value to a closed `enum`, adds a required
+    parameter, or moves an existing condition to a different status. Every response object here is
+    closed, so almost any payload change is breaking for a strict consumer — that is deliberate, because
+    FR-008's "MUST NOT synthesise" is only enforceable if a field cannot arrive by accident. A change is
+    **compatible** only if it adds an optional query parameter with a server-side default, or adds a new
+    problem `type` identifier. Changes land with the update to every recorded consumer in one commit and
+    bump `info.version`; no deprecation or sunset mechanism is defined, because with every consumer
+    in-repo there is no window in which an old and a new consumer both call this endpoint.
+  contact:
+    name: E008 Hybrid Retrieval and Reranking
+  x-epic: E008
+  x-spec: specs/00008-hybrid-retrieval-and-reranking/spec.md
+
+servers:
+  - url: /api/v1
+    description: Request-serving boundary (FastAPI, Python 3.12), mounted under a version prefix.
+
+tags:
+  - name: retrieval
+    description: The retrieval surface consumed by E011 and E014. Read-only.
+  - name: operations
+    description: Readiness and diagnostics. Consumed by an orchestrator probe and by E014's run manifest.
+
+x-arms:
+  - name: lexical
+    requirement: FR-025
+    lexical_arm: true
+    dense_arm: false
+    fused: false
+    reranked: false
+    reranker_precision: null
+    deterministic_route: false
+  - name: dense
+    requirement: FR-025
+    lexical_arm: false
+    dense_arm: true
+    fused: false
+    reranked: false
+    reranker_precision: null
+    deterministic_route: false
+  - name: fused
+    requirement: FR-025
+    lexical_arm: true
+    dense_arm: true
+    fused: true
+    reranked: false
+    reranker_precision: null
+    deterministic_route: true
+  - name: fused_reranked
+    requirement: FR-025
+    lexical_arm: true
+    dense_arm: true
+    fused: true
+    reranked: true
+    reranker_precision: int8
+    deterministic_route: true
+  - name: fused_reranked_full_precision
+    requirement: FR-025
+    lexical_arm: true
+    dense_arm: true
+    fused: true
+    reranked: true
+    reranker_precision: fp32
+    deterministic_route: true
+
+x-configuration:
+  description: |
+    FR-026 and the `NEW-CONFIG` implementation signal. Read at process start, never from a request.
+    Reported on every search response under `ranking_parameters` and on `GET /retrieval/diagnostics`,
+    so a served result and a measured result each name the configuration that produced them.
+  keys:
+    - name: RETRIEVAL_VECTOR_SEARCH_MODE
+      values: [exact, approximate]
+      requirement: FR-026
+      controls: Whether the HNSW index is used. Nothing else. Filters, fusion constant, tie-break, fetch depth and reranking are shared code on both paths.
+    - name: RETRIEVAL_HNSW_EF_SEARCH
+      requirement: FR-027
+      controls: Index search breadth on the approximate path. MUST be at least the fetch depth; the extension default of 40 is below it.
+    - name: RETRIEVAL_HNSW_ITERATIVE_SCAN
+      values: ['off', strict_order]
+      requirement: FR-028
+      controls: Filtered-vector-search recall. Relaxed order is excluded — it returns results out of distance order, against FR-020.
+    - name: RETRIEVAL_FUSION_CONSTANT
+      requirement: FR-004
+      controls: The reciprocal-rank-fusion constant. Fixed before any figure is measured against the evaluation set; a change is a recorded decision requiring re-measurement.
+    - name: RETRIEVAL_FETCH_DEPTH
+      requirement: FR-003
+      controls: Candidates per arm. Part of the ranking definition, not a tuning parameter.
+    - name: RETRIEVAL_RERANKER_INTRA_OP_THREADS
+      requirement: FR-033
+      controls: ONNX Runtime intra-op threads. Set explicitly because the runtime reports the host's core count under a CPU quota, not the container's.
+    - name: RETRIEVAL_RERANKER_INTER_OP_THREADS
+      requirement: FR-033
+      controls: ONNX Runtime inter-op threads. One, under the default sequential execution mode.
+    - name: RETRIEVAL_RERANKER_MEMORY_BUDGET_BYTES
+      requirement: FR-033
+      controls: The declared budget the session's resident memory is reported against. An overage is published, never omitted.
+
+paths:
+
+  /retrieval/search:
+    get:
+      tags: [retrieval]
+      operationId: searchRetrieval
+      summary: Ranked passages for a query, with their provenance, arms, and the ranking parameters in force.
+      description: |
+        The whole retrieval path in one response: the deterministic route, the fused lexical and dense
+        arms, and reranking, with every result carrying the document identity, document type, project
+        and page number **read from the chunk** (FR-008).
+
+        **Order of execution**, and it is load-bearing: the deterministic route resolves part-number
+        shaped tokens first (FR-010) and falls through on a miss (FR-011); the lexical and dense arms are
+        fetched and fused inside one database statement (FR-002); the fused candidate set is reranked in
+        full (FR-018). Nothing here re-orders on the application side using a score this response does
+        not carry.
+
+        **Determinism.** For an identical query against an unchanged corpus and an unchanged
+        configuration the ordering is identical (FR-020) and `ordering_digest` is equal. On the
+        approximate path that guarantee is scoped to a fixed index: graph construction is randomized, so
+        a rebuild can legitimately change which approximate candidates are returned. This contract states
+        the property; the plan owns the scoping (see § Requirements this contract cannot express).
+      parameters:
+        - $ref: '#/components/parameters/QueryText'
+        - $ref: '#/components/parameters/Arm'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: |
+            Ranked passages, possibly none. An empty result is a fully successful answer: `results` is
+            `[]`, `result_count` is `0`, and no low-scoring filler is added to reach a count (FR-009).
+            A degraded response — fusion-only because the reranker is unavailable — is also a `200`,
+            distinguished by `mode`, never by a status code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrievalResponse'
+              examples:
+                reranked:
+                  $ref: '#/components/examples/RerankedSearch'
+                deterministicRoute:
+                  $ref: '#/components/examples/DeterministicRouteSearch'
+                degraded:
+                  $ref: '#/components/examples/DegradedSearch'
+                empty:
+                  $ref: '#/components/examples/EmptySearch'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatastoreUnavailable'
+
+  /retrieval/diagnostics:
+    get:
+      tags: [operations]
+      operationId: getRetrievalDiagnostics
+      summary: Process-level facts about the retrieval path — artifacts, budgets, threads, and the fixed ranking parameters.
+      description: |
+        Everything FR-016, FR-029 and FR-033 oblige that does not vary per query. E014 reads this once
+        per run and records it beside the run's results; an orchestrator never needs it.
+
+        It carries no per-query figure. Reranking latency and truncation counts are on the search
+        response, because they are properties of a query rather than of a process — see
+        `info` § Which figures live where.
+      responses:
+        '200':
+          description: |
+            The diagnostics report. Returned in the degraded state as well, where the reranker block
+            reports the load failure that caused it rather than being omitted — a missing block and a
+            failed load are different facts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticsResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatastoreUnavailable'
+
+  /readyz:
+    servers:
+      - url: /
+        description: |
+          Deliberately outside the `/api/v1` prefix. A readiness probe is consumed by an orchestrator,
+          not by a versioned consumer, and version-binding a probe would mean an interface revision could
+          take an otherwise healthy instance out of service.
+    get:
+      tags: [operations]
+      operationId: getReadiness
+      summary: Readiness, including the degraded state.
+      description: |
+        Three states and two statuses (FR-021, FR-022).
+
+        | `status` | HTTP | Meaning |
+        |---|---|---|
+        | `ready` | `200` | The reranker loaded and warmed at the maximum batch shape before readiness was reported (FR-017), and the query encoder's identity matches the identity recorded on the chunks. |
+        | `ready_degraded` | `200` | The reranker is unavailable. Queries are answered in fusion-only order and every response says so (FR-021, FR-022). The instance stays in service — this is a worse answer, not an absent one. |
+        | `not_ready` | `503` | The instance cannot answer correctly at all: the query encoder's identity differs from the identity recorded on the chunks (FR-007), or the datastore is unreachable. Take it out of service. |
+
+        **`ready_degraded` is a `200`.** FR-021 requires ready-degraded rather than not-ready, and no
+        status code carries "successful but degraded" — the research is explicit that none exists and
+        that the deprecated `Warning` header is not an option. The state is therefore a field. A probe
+        reading only the status code sees a healthy instance, which is the correct orchestration
+        outcome; a consumer reading the body sees why the answers are weaker.
+
+        **What this endpoint cannot observe.** The framework's lifespan hook completes before the
+        application receives any request, so no client can reach this endpoint while warm-up is still
+        running. `reranker.warmup.completed` is therefore a report that warm-up finished, not a gate a
+        caller can catch open. FR-017's gate is enforced by the lifespan hook; this field evidences it
+        after the fact.
+      responses:
+        '200':
+          description: In service. `ready` or `ready_degraded`, distinguished by `status`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              examples:
+                ready:
+                  $ref: '#/components/examples/ReadyReadiness'
+                readyDegraded:
+                  $ref: '#/components/examples/ReadyDegradedReadiness'
+        '503':
+          description: |
+            `not_ready`. The body is the same schema, so a probe and a human read the same document —
+            an operator diagnosing a removed instance should not have to call a second endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: not_ready
+                degraded: false
+                statement: 'The query encoder identity does not match the identity recorded on the chunks; retrieval is refused.'
+                reranker:
+                  available: true
+                  state: warm
+                  model_id: cross-encoder/ms-marco-MiniLM-L6-v2
+                  model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
+                  precision: int8
+                  warmup:
+                    completed: true
+                    completed_at: '2026-07-29T09:12:04Z'
+                    batch_shape: '50 x 512'
+                  failure: null
+                encoder:
+                  model_id: sentence-transformers/all-MiniLM-L6-v2
+                  model_revision: 'c9745ed1d9f207416be6d2e6f8de32d1f16199bf'
+                  corpus_model_id: sentence-transformers/all-MiniLM-L6-v2
+                  corpus_model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+                  matches_corpus: false
+
+components:
+
+  parameters:
+
+    QueryText:
+      name: query
+      in: query
+      required: true
+      description: |
+        The coordinator's question, or a bare identifier, verbatim.
+
+        **No transformation of any kind is applied.** The specification excludes query rewriting,
+        expansion and hypothetical-document generation, with the measured evidence and the reversal
+        trigger recorded in Scope § Excluded. This string is what the lexical arm matches, what the
+        encoder embeds, and what the deterministic route scans for part-number-shaped tokens. A caller
+        must not pre-transform it either: a rewrite substitutes vocabulary in 95% of cases and damages
+        the arm carrying the part numbers hardest.
+
+        The 1000-character cap is set by this contract, not derived from a requirement. It keeps the
+        request well inside URL length limits and is the boundary at which the `GET`-versus-`POST`
+        decision above would be revisited. A query at or under the cap is still truncated by the encoder
+        at its own word-piece limit; see § Requirements this contract cannot express for why that
+        truncation is not reported here.
+
+        Empty or whitespace-only is a `422`, not an empty result: a query with nothing in it and a query
+        that matched nothing are different statements and FR-009 governs only the second.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1000
+      example: what does the spec require for galvanizing repair
+
+    Arm:
+      name: arm
+      in: query
+      required: false
+      description: |
+        FR-025. Which retrieval arm runs. Each returns results without requiring the others, which is
+        what makes E014's ablation table constructible: without a request-level selection there is no way
+        to obtain a lexical-only or a fusion-only ranking from a running service, and no other epic can
+        construct an arm this one did not make runnable.
+
+        Five values, enumerated machine-readably at the root `x-arms` extension. The sixth arm SC-012
+        names — approximate vector search — is **not** here: it is the FR-026 configuration flag, read at
+        process start and reported in `ranking_parameters.vector_search`. See `info` § The
+        exact-versus-approximate flag for why admitting it as a request field would be the drift ADR-0005
+        conditions its acceptance on preventing.
+
+        `fused_reranked` is the default and the served path, so E011 selects nothing.
+      schema:
+        $ref: '#/components/schemas/Arm'
+
+    ProjectId:
+      name: project_id
+      in: query
+      required: false
+      description: |
+        Scopes retrieval to one project. Both arms and the deterministic route are filtered alike; the
+        chunk store carries `ix_chunk__project` for exactly this.
+
+        FR-028 binds here: a filtered vector search MUST return the requested candidate count wherever
+        that many matching rows exist, rather than the smaller set the graph index returns when it
+        applies the filter after selecting candidates. A filtered query that yields fewer than
+        `ranking_parameters.fetch_depth` dense candidates while more matching rows exist is a defect
+        under SC-014, not a property of the corpus — which is why `fused_candidate_count` is returned.
+
+        A well-formed identifier matching no chunk returns `200` with an empty result, never `404`.
+        There is no project registry to consult; `project_id` is a format-checked column, so the system
+        cannot distinguish "no such project" from "a project with no chunks", and reporting a
+        distinction the data cannot support is the defect FR-009 refuses in the other direction.
+      schema:
+        type: string
+        pattern: '^PRJ-[0-9]{3}$'
+      example: PRJ-002
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        Bounds the number of **ranked-relevance** results returned. Deterministic identifier matches are
+        additional to this bound and are never displaced by it (`info` § Recorded interface decisions,
+        item 2), because bounding the whole list would let a route hit at position 1 push a fused
+        candidate out of the response — FR-012's "the route MUST NOT remove" violated by an interaction
+        rather than by a rule.
+
+        **It cannot change the ranking.** Fusion fetches 50 candidates per arm (FR-003) and reranking
+        scores exactly the fused candidate set (FR-018) whatever this value is; truncation happens after
+        both. `reranking.candidates_scored` therefore does not move with `limit`, and that is assertable
+        from the response.
+
+        **It is not padding.** FR-009 forbids padding a short result set to reach a target count, and
+        this is a ceiling, never a floor: `result_count` is what was found, up to this bound.
+
+        E014 must record it, because recall@k read from a response truncated at a smaller `k` is a
+        different figure. It is echoed in `request.limit` for that reason.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 50
+      example: 8
+
+  responses:
+
+    ValidationFailed:
+      description: |
+        A query parameter is malformed or semantically inadmissible: an empty or whitespace-only
+        `query`, a `query` past the declared cap, an `arm` outside the five, a `project_id` failing its
+        pattern, or a `limit` outside 1..50.
+
+        `422` rather than `400`, following the convention this boundary established in E010: it covers
+        the malformed and the semantically inadmissible alike, so a consumer needs one branch and not
+        two. FastAPI's default `RequestValidationError` body does not match this schema; the
+        implementation must register a handler rendering validation failures as
+        `application/problem+json`, or the contract is approximated rather than honoured.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/invalid-parameter'
+            title: Invalid query parameter
+            status: 422
+            detail: '`arm` must be one of lexical, dense, fused, fused_reranked, fused_reranked_full_precision.'
+            instance: '/api/v1/retrieval/search'
+            correlation_id: '7C1E4A93B0D2F8A65E30B7C914'
+            errors:
+              - parameter: arm
+                value: hybrid
+                reason: not_an_offered_arm
+
+    InternalError:
+      description: |
+        Two conditions, distinguished by `type`.
+
+          - **`encoder-identity-mismatch`** — FR-007's **refusal**. The query encoder's identity or
+            revision differs from the identity recorded on the chunks, so any distance this service
+            computed would be computed across two vector spaces. No results are returned, not even
+            lexical ones: FR-007 says refuse to retrieve, and serving the lexical arm alone under a
+            request for a fused arm would be a degradation the caller did not ask for and could not
+            distinguish from a weak corpus.
+
+            `500` rather than `503`, following the precedent this boundary set for
+            `unsupported-artifact-schema` in E010: the datastore is reachable and retrying changes
+            nothing. What changes it is a corpus embedded with this build's encoder, or a build carrying
+            the corpus's encoder. `E003`'s disclosed gap G-8 anticipates this exact refusal.
+
+            **This is not a degradation and does not share its shape.** `mode.degraded` never carries
+            it, and readiness reports `not_ready` rather than `ready_degraded`.
+          - **`internal-error`** — an unhandled fault in the request-serving boundary.
+
+        No partial result set is returned under either. A caller that received three passages from a
+        half-computed retrieval would cite them, and a citation drawn from a broken run is the silent
+        wrong answer the whole specification is written against.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/encoder-identity-mismatch'
+            title: Query encoder identity does not match the corpus
+            status: 500
+            detail: 'Chunks were embedded with sentence-transformers/all-MiniLM-L6-v2 @ 8b3219a; this build embeds queries with sentence-transformers/all-MiniLM-L6-v2 @ c9745ed. Retrieval is refused rather than served across two vector spaces.'
+            instance: '/api/v1/retrieval/search'
+            correlation_id: '7C1E4A93B0D2F8A65E30B7C914'
+            encoder_model_id: sentence-transformers/all-MiniLM-L6-v2
+            encoder_model_revision: 'c9745ed1d9f207416be6d2e6f8de32d1f16199bf'
+            corpus_model_id: sentence-transformers/all-MiniLM-L6-v2
+            corpus_model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+
+    DatastoreUnavailable:
+      description: |
+        PostgreSQL is unreachable, so neither arm can be fetched and no chunk can be read. Distinct from
+        an empty result, which is a `200`: one means the system could not look, the other means it
+        looked and found nothing, and FR-009's honest empty must not be reachable by an outage.
+
+        Distinct from degradation too. A degraded response still carries results; this carries none.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          example: 5
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/datastore-unavailable'
+            title: Cannot read the chunk store
+            status: 503
+            detail: 'The datastore is unreachable, so no candidate could be fetched from either arm.'
+            instance: '/api/v1/retrieval/search'
+            correlation_id: '7C1E4A93B0D2F8A65E30B7C914'
+
+  schemas:
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 problem details. The single error shape for this boundary, adopted from E010 rather than
+        re-chosen. The base URI matches `src/api/src/api/risk_read/failures.py`'s `PROBLEM_BASE`.
+      additionalProperties: true
+      required: [type, title, status, correlation_id]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            Stable identifier for the problem kind. The set a consumer of this surface may encounter is
+            closed at four. An identifier is never reused for a different condition and never renamed in
+            place; adding one is the only compatible change to this vocabulary.
+
+            | `type` | Status | Condition | Requirement |
+            |---|---|---|---|
+            | `…/problems/invalid-parameter` | 422 | a query parameter is malformed or semantically inadmissible | contract |
+            | `…/problems/encoder-identity-mismatch` | 500 | the query encoder's identity differs from the identity recorded on the chunks — a **refusal** | FR-007 |
+            | `…/problems/internal-error` | 500 | an unhandled fault in the request-serving boundary | contract |
+            | `…/problems/datastore-unavailable` | 503 | PostgreSQL is unreachable | contract |
+
+            **No problem type exists for reranker unavailability.** That is a degradation and travels as
+            a `200` carrying `mode` (FR-021, FR-022). A `type` for it would let a caller branch on it as
+            a failure, and the whole point of FR-021 is that it is not one.
+          enum:
+            - 'https://procurement-risk.local/problems/invalid-parameter'
+            - 'https://procurement-risk.local/problems/encoder-identity-mismatch'
+            - 'https://procurement-risk.local/problems/internal-error'
+            - 'https://procurement-risk.local/problems/datastore-unavailable'
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+        correlation_id:
+          type: string
+          minLength: 1
+          description: |
+            A short opaque identifier for this occurrence, so the thing a caller can quote is the thing
+            an engineer can find in the record. Required on every problem response including `422`.
+          example: '7C1E4A93B0D2F8A65E30B7C914'
+        errors:
+          type: array
+          description: Per-parameter detail. Present on `422`. The reason vocabulary is closed.
+          items:
+            type: object
+            additionalProperties: false
+            required: [parameter, reason]
+            properties:
+              parameter:
+                type: string
+              value:
+                type: [string, 'null']
+              reason:
+                type: string
+                enum:
+                  - empty_query
+                  - query_too_long
+                  - not_an_offered_arm
+                  - malformed_project_id
+                  - limit_out_of_range
+
+    Arm:
+      type: string
+      description: |
+        FR-025's five independently runnable arms, and no others.
+
+        | Value | Lexical | Dense | Fused | Reranked | Precision | Route |
+        |---|---|---|---|---|---|---|
+        | `lexical` | yes | no | no | no | — | no |
+        | `dense` | no | yes | no | no | — | no |
+        | `fused` | yes | yes | yes | no | — | yes |
+        | `fused_reranked` | yes | yes | yes | yes | `int8` | yes |
+        | `fused_reranked_full_precision` | yes | yes | yes | yes | `fp32` | yes |
+
+        `fused_reranked_full_precision` is required runnable because ADR-0006 obliges the
+        quantized-versus-full-precision difference to be measured and published rather than assumed
+        negligible, and no other epic can construct an arm this one did not expose.
+
+        `fused` is the weak comparator FR-036 names: at fetch depth 50 the top fused candidate carries
+        only 1.8 times the weight of the fiftieth, so the fused ordering is nearly unordered within its
+        window. It is offered because the ablation needs it, and any figure drawn against it must be
+        labelled as drawn against a weak comparator — an obligation on the emitted figures, which this
+        contract cannot enforce.
+      enum:
+        - lexical
+        - dense
+        - fused
+        - fused_reranked
+        - fused_reranked_full_precision
+      default: fused_reranked
+
+    MatchKind:
+      type: string
+      description: |
+        FR-013. Whether this result is an exact identifier hit or a relevance judgement, so a caller can
+        tell the two apart rather than reading a ranked guess as a lookup.
+
+        `deterministic_identifier` — the deterministic route matched a part-number-shaped token in the
+        query against this chunk by direct lookup (FR-010). It takes precedence: a chunk the route
+        matched **and** fusion also returned carries `deterministic_identifier` with a non-null
+        `fused_rank`, because how it was found is the stronger fact and its presence in the fused list is
+        still recorded.
+
+        `ranked_relevance` — this chunk was ranked by the retrieval arms and, where reranking ran, by the
+        cross-encoder. It is a judgement about meaning, not an identifier match.
+      enum:
+        - deterministic_identifier
+        - ranked_relevance
+
+    RetrievalArm:
+      type: string
+      description: |
+        One retrieval arm that contributed this candidate. `lexical` is PostgreSQL's native `tsvector`
+        ranking over the chunk store's field-weighted search column; `dense` is nearest-neighbour search
+        over chunk embeddings produced by the pinned encoder.
+      enum: [lexical, dense]
+
+    WeightedFields:
+      type: object
+      description: |
+        FR-005. Which of the chunk store's weighted fields this chunk actually populates.
+
+        The search column weights heading above part numbers above specification section above body
+        prose, but on the 25 synthetic transmittals `part_numbers` is null on every row, `heading` is
+        null on field blocks, and `spec_section` is null because the code is printed as body text — so
+        the weighting reduces to unweighted body text on exactly the documents extraction targets.
+        FR-005 requires a run to publish, **per layer**, the proportion of retrieved chunks whose
+        heading, part-number and specification-section fields are all empty. That proportion is a
+        per-run figure, so this surface emits the per-result primitive it is computed from rather than
+        the proportion itself.
+
+        `all_empty` is the FR-005 predicate, carried explicitly rather than left to a consumer to
+        recompute from the three booleans, so two consumers cannot disagree about what "all empty"
+        means.
+      additionalProperties: false
+      required: [heading_present, part_numbers_present, spec_section_present, all_empty]
+      properties:
+        heading_present:
+          type: boolean
+        part_numbers_present:
+          type: boolean
+          description: |
+            False on every synthetic-layer chunk today. E003 defined the column, E006 records part
+            numbers as extracted values in a different table, and no requirement assigned the
+            denormalised copy to either — the gap FR-035 raises. E008 reads and does not write it.
+        spec_section_present:
+          type: boolean
+        all_empty:
+          type: boolean
+          description: True exactly when none of the three fields is present. The FR-005 predicate.
+
+    RetrievalResult:
+      type: object
+      description: |
+        One ranked passage. The members are exactly what the specification's `RetrievalResult` entity
+        enumerates — the chunk it came from, its document and page, the arm or arms that produced it, its
+        fused rank, its reranked rank where reranking ran, and whether it was a deterministic identifier
+        match or a relevance judgement — plus `rank`, `text`, and the two FR-005 reporting members.
+
+        **No fusion score and no reranker score.** The entity names ranks, not scores. Withholding them
+        also removes the material a client would need to re-rank, which supports FR-002 without
+        establishing it.
+
+        `additionalProperties: false` is what makes FR-008's "MUST NOT synthesise, infer, or accept a
+        page number from any other source" enforceable: there is no member here a page number could
+        arrive through except `page_number`, and that one is read off the chunk row.
+      additionalProperties: false
+      required:
+        - rank
+        - chunk_id
+        - document_id
+        - document_type
+        - project_id
+        - page_number
+        - text
+        - match_kind
+        - arms
+        - fused_rank
+        - reranked_rank
+        - reranker_truncated
+        - source_layer
+        - weighted_fields
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+          description: |
+            1-based position in this response's final ordering. Array position is authoritative and this
+            restates it.
+
+            Required as its own member because neither `fused_rank` nor `reranked_rank` determines the
+            final order on its own: the deterministic route may reorder (FR-012), so a response can hold
+            a route match with no fused rank above a reranked candidate with both. Without this field the
+            final order would be readable only from array position, and a consumer that re-sorted by
+            `reranked_rank` would silently discard the route's ordering.
+        chunk_id:
+          type: string
+          format: uuid
+          description: |
+            The chunk this passage is. E011 cites through `(chunk_id, page_number)`, which is the citation
+            foreign-key target E003 declares (`uq_chunk__chunk_page`).
+        document_id:
+          type: string
+          minLength: 1
+          description: FR-008. Read from `chunk.document_id`. Never derived from the text.
+        document_type:
+          type: string
+          minLength: 1
+          description: |
+            FR-008. Read from `chunk.document_type`, which E003's composite foreign key makes unable to
+            disagree with its document.
+        project_id:
+          type: string
+          pattern: '^PRJ-[0-9]{3}$'
+          description: FR-008. Read from `chunk.project_id`, under the same composite foreign key.
+        page_number:
+          type: integer
+          minimum: 1
+          description: |
+            FR-008 and SC-003. **The page number stored on the chunk**, and nothing else. Not inferred
+            from the passage text, not counted from a document offset, not taken from an extraction
+            record. SC-003 asserts identity with the stored value over every result returned rather than
+            a sample, and asserts identity rather than existence — an existing-but-wrong page is the
+            failure that assertion exists to catch, because it is indistinguishable from a correct one at
+            the interface.
+        text:
+          type: string
+          minLength: 1
+          description: |
+            The chunk's body text, verbatim. E011 answers from this. Not summarised, not trimmed, not
+            re-joined across chunks — one chunk is one page (`chunk.page_number` is NOT NULL), and a
+            passage assembled from two pages would have no single page to cite.
+        match_kind:
+          $ref: '#/components/schemas/MatchKind'
+        arms:
+          type: array
+          description: |
+            Which retrieval arms produced this candidate. Empty exactly when `match_kind` is
+            `deterministic_identifier` and `fused_rank` is null — a chunk the route found by direct
+            lookup that neither arm ranked. That combination is how FR-012's "the route adds" is visible
+            in the payload.
+          uniqueItems: true
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/RetrievalArm'
+        fused_rank:
+          type: [integer, 'null']
+          minimum: 1
+          description: |
+            1-based rank in the first-stage candidate list. Null exactly when the deterministic route
+            produced this result and neither arm returned it.
+
+            For the `lexical` and `dense` arms there is no fusion, and this is the rank in that single
+            arm's own ordered candidate list — fusing one list by reciprocal rank preserves its order, so
+            the name stays true rather than a second field being invented for the single-arm case.
+
+            **This member is what makes SC-006 checkable from one response.** Every candidate hybrid
+            retrieval returned carries a non-null value here; the route's additions carry null. A caller
+            can therefore confirm the route removed nothing without a route-disable switch and without a
+            second request.
+        reranked_rank:
+          type: [integer, 'null']
+          minimum: 1
+          description: |
+            1-based rank assigned by the cross-encoder. Null when reranking did not run for this
+            response — because the selected arm excludes it, or because the reranker was unavailable
+            (FR-021) — and null on a deterministic route addition that was not part of the fused
+            candidate set the reranker scored (FR-018 fixes the reranked set to exactly that set).
+        reranker_truncated:
+          type: [boolean, 'null']
+          description: |
+            FR-019. True when this candidate exceeded the reranker's sequence limit and was therefore
+            scored on its prefix. Null when the reranker did not score it.
+
+            Carried per result as well as counted per response because the two answer different
+            questions: the response-level count feeds the census, and this tells a caller reading *this*
+            passage that the score attached to it was computed from part of it. A truncated candidate is
+            otherwise invisible in the result, which is the reason FR-019 exists.
+        source_layer:
+          type: string
+          enum: [REAL, SYNTHETIC]
+          description: |
+            The provenance layer of the document this chunk belongs to, read from `document.source_kind`.
+
+            **The one member joined from `document` rather than read off the chunk.** It is here because
+            FR-005 requires its proportion reported *per layer*, and the layer is a property of the
+            document. It is read from the stored row like every other member — the join is where it comes
+            from, not an inference — so FR-008's prohibition on synthesising is not engaged.
+        weighted_fields:
+          $ref: '#/components/schemas/WeightedFields'
+
+    DeterministicRoute:
+      type: object
+      description: |
+        FR-010 through FR-014. What the pre-fusion identifier lookup did.
+
+        The route resolves part-number-shaped tokens by direct lookup **before** hybrid retrieval runs,
+        applies to tokens appearing anywhere in the query and not only to a query consisting of the token
+        alone (FR-014), and falls through to hybrid retrieval when the lookup matches nothing (FR-011).
+        It adds and reorders; it never removes (FR-012).
+      additionalProperties: false
+      required: [fired, skipped_reason, pattern, matched_tokens, match_count, added_count, fell_through]
+      properties:
+        fired:
+          type: boolean
+          description: True when at least one token in the query matched the declared pattern.
+        skipped_reason:
+          type: [string, 'null']
+          description: |
+            Why the route did not run at all. Null when it ran, whether or not it matched.
+
+            `arm_excludes_route` is the recorded interface decision: on the `lexical` and `dense` arms
+            the route is not run, because those arms exist to measure one retrieval arm's contribution
+            and a deterministic identifier hit is a contribution of neither. See `info` § Recorded
+            interface decisions.
+          enum: [arm_excludes_route, null]
+        pattern:
+          type: string
+          description: |
+            FR-010's **declared published pattern**, returned as the regular expression actually applied,
+            so the recognised form is a value a caller can read rather than a claim in prose. It covers
+            the form the corpus prints: an uppercase alphabetic manufacturer prefix, a hyphen, and a
+            digit run.
+
+            FR-010 also requires the pattern's coverage to be verified against the enumerated set of part
+            numbers the corpus contains, so coverage is a measured figure. That verification is not
+            served here — see § Requirements this contract cannot express.
+          example: '\b[A-Z]{2,6}-[0-9]{3,8}\b'
+        matched_tokens:
+          type: array
+          description: |
+            The tokens in the query the pattern recognised, in the order they appear. Empty when `fired`
+            is false. Returned so a caller can see *why* a result was a deterministic match rather than
+            trusting the flag.
+          items:
+            type: string
+          example: ['NRH-80347']
+        match_count:
+          type: integer
+          minimum: 0
+          description: Chunks the direct lookup resolved, before overlap with the fused set is considered.
+        added_count:
+          type: integer
+          minimum: 0
+          description: |
+            Of `match_count`, how many the fused candidate set did not already contain — the results
+            carrying `match_kind` `deterministic_identifier` with a null `fused_rank`. This is the
+            "adds" half of FR-012, stated as a number.
+        fell_through:
+          type: boolean
+          description: |
+            True when the pattern matched a token but the lookup resolved no chunk, so hybrid retrieval
+            answered the query alone (FR-011). A part-number-shaped string matching nothing MUST NOT
+            produce an empty result on the strength of the route.
+
+    RerankingReport:
+      type: object
+      description: |
+        FR-019 and FR-033's per-query half. Present exactly when the cross-encoder scored candidates for
+        this response; null when reranking did not run.
+
+        Every member is a fact about *this* query. The session's resident memory, its budget, its thread
+        counts and the artifact identity are process facts and live on `GET /retrieval/diagnostics`.
+      additionalProperties: false
+      required: [candidates_scored, candidates_truncated, sequence_limit_tokens, candidate_token_lengths, latency_ms, precision]
+      properties:
+        candidates_scored:
+          type: integer
+          minimum: 0
+          description: |
+            FR-018: exactly the fused candidate set, so this equals `fused_candidate_count` and does not
+            move with `limit`. Any change to the reranked count must be accompanied by a re-measured
+            ablation showing its effect, because reranking quality declines past a depth limit and a
+            larger candidate set can rank worse than a smaller one.
+        candidates_truncated:
+          type: integer
+          minimum: 0
+          description: |
+            How many of the scored candidates exceeded `sequence_limit_tokens` and were therefore scored
+            on their prefix. Summed across a run's queries against `candidates_scored`, this is FR-019's
+            fraction truncated — a census over the enumerated candidate set rather than a sample, which
+            is why SC-009 needs no interval on it.
+        sequence_limit_tokens:
+          type: integer
+          minimum: 1
+          description: The cross-encoder's maximum sequence length, in tokens.
+        candidate_token_lengths:
+          type: array
+          description: |
+            The token length of every scored candidate, in the reranker's own tokenization, ordered by
+            `fused_rank`. Length equals `candidates_scored`.
+
+            This is FR-019's **distribution** half. It is emitted per query rather than aggregated,
+            because the aggregate belongs to a run and E014 owns runs; emitting the raw lengths lets the
+            distribution be built exactly rather than from bucket counts chosen here.
+          items:
+            type: integer
+            minimum: 1
+        latency_ms:
+          type: number
+          minimum: 0
+          description: |
+            FR-033. Wall-clock milliseconds spent reranking this query at `candidates_scored`, measured
+            inside the serving process on the CPU allocation the container was given. A figure exceeding
+            the declared budget is reported here rather than omitted; the budget itself is on
+            `GET /retrieval/diagnostics`, because it is a configured constant and not a per-query fact.
+        precision:
+          type: string
+          enum: [int8, fp32]
+          description: |
+            Which reranker precision scored this response. ADR-0006 obliges the quantized-versus-full-
+            precision difference to be measured rather than assumed negligible, so the precision travels
+            with the result and is not inferred from the arm name by a consumer.
+
+    VectorSearchSettings:
+      type: object
+      description: |
+        FR-026 and FR-029's "index settings where the index was used". Reported, never requested.
+      additionalProperties: false
+      required: [mode, index]
+      properties:
+        mode:
+          type: string
+          enum: [exact, approximate]
+          description: |
+            `exact` scans every chunk embedding; `approximate` searches the tuned graph index. The flag
+            controls index usage and nothing else — filters, fusion constant, tie-break, fetch depth and
+            reranking are shared code on both paths, and that sharing is asserted by a test rather than
+            left to review (FR-026).
+        index:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [kind, ef_search, iterative_scan]
+              properties:
+                kind:
+                  type: string
+                  const: hnsw
+                ef_search:
+                  type: integer
+                  minimum: 1
+                  description: |
+                    FR-027. At least `fetch_depth`. The extension default is 40, below the fetch depth of
+                    50, and silently reduces recall — which is why the value is reported rather than
+                    assumed.
+                iterative_scan:
+                  type: string
+                  enum: ['off', strict_order]
+                  description: |
+                    FR-028's answer for filtered vector search, where the graph index otherwise applies
+                    the filter after selecting candidates and returns fewer rows than requested. Relaxed
+                    order is excluded from this enum: it improves filtered recall and returns results
+                    slightly out of distance order, which is FR-020 broken.
+          description: Null exactly when `mode` is `exact`. The index was not used, so there are no index settings to record.
+
+    LexicalArmSettings:
+      type: object
+      description: |
+        What the lexical arm actually is, carried on every response so a figure drawn from it cannot be
+        read against a benchmark it does not belong to.
+
+        FR-006 forbids naming BM25 in any published figure, label or accompanying description of this
+        arm, and requires any comparison against an external retrieval benchmark to state that this arm
+        uses no corpus-wide term statistics. `uses_corpus_wide_term_statistics` is the machine-readable
+        half of that obligation. The prohibition's other half binds emitted artifacts this contract does
+        not govern.
+      additionalProperties: false
+      required: [ranking_basis, uses_corpus_wide_term_statistics, weights]
+      properties:
+        ranking_basis:
+          type: string
+          description: PostgreSQL's native `tsvector` ranking over the chunk store's generated, field-weighted search column.
+          example: postgresql_tsvector_ranking
+        uses_corpus_wide_term_statistics:
+          type: boolean
+          const: false
+          description: |
+            Constant. There is no inverse document frequency and no corpus-wide term statistic anywhere
+            in this arm. A published BM25 result does not transfer to it, and no figure produced by this
+            project may imply that it does.
+        weights:
+          type: array
+          description: |
+            The `{D, C, B, A}` weight array applied at query time — body, specification section, part
+            number, heading. Relevance tuning here is a query-time weight change, never a migration.
+            Reported because it is part of the ranking definition: the same fused list under a different
+            weight array is a different ranking.
+          minItems: 4
+          maxItems: 4
+          items:
+            type: number
+          example: [0.1, 0.2, 0.4, 1.0]
+
+    ModelIdentity:
+      type: object
+      description: A pinned local artifact, identified well enough that a published figure resolves to the bytes that produced it.
+      additionalProperties: false
+      required: [model_id, model_revision]
+      properties:
+        model_id:
+          type: string
+          minLength: 1
+        model_revision:
+          type: string
+          minLength: 1
+
+    RankingParameters:
+      type: object
+      description: |
+        FR-029, and FR-004's "MUST record all three alongside every result". The parameters that define
+        the ranking, returned with **every** result set rather than only with results an evaluation
+        consumes — because whether a result is consumed by an evaluation is not knowable at the moment
+        it is produced, and a parameter recorded only sometimes is a parameter a run can be missing.
+
+        **The values are not fixed by this contract.** FR-004 requires the fusion constant, the tie-break
+        key and the missing-arm convention to be fixed *before any figure is measured against the
+        evaluation set*, and requires a later change to be recorded as a decision and re-measured. Fixing
+        them here would move that decision into a contract revision; declaring them as required members
+        with types and examples makes the recording obligation structural while leaving the choice where
+        it belongs. `fetch_depth` is likewise typed rather than `const: 50`, because FR-003 requires the
+        value recorded with any published figure, and a constant records nothing.
+      additionalProperties: false
+      required:
+        - fusion_constant
+        - tie_break_key
+        - missing_arm_convention
+        - fetch_depth
+        - vector_search
+        - lexical
+        - encoder
+        - reranker
+      properties:
+        fusion_constant:
+          type: integer
+          minimum: 1
+          description: |
+            The `k` in `1 / (k + rank)`. FR-004. The formula fixes none of the three parameters here and
+            each changes the output, so a constant left free while a target is measured on a frozen set
+            is the tune-to-the-test-set path Principle VI exists to close.
+          example: 60
+        tie_break_key:
+          type: string
+          minLength: 1
+          description: |
+            The key applied when two candidates fuse to the same score. FR-004.
+
+            It applies **per arm as well as to the fused result**: a row limit without an ordering that
+            constrains rows into a unique order yields an unpredictable subset, so without a tie-break
+            inside each arm's candidate cut, ties at the fiftieth position make the candidate *set* vary
+            between runs rather than merely its ordering. FR-020's identical-ordering guarantee fails at
+            the candidate stage, not the ranking stage, if this is omitted from either place.
+          example: chunk_id ascending
+        missing_arm_convention:
+          type: string
+          minLength: 1
+          description: |
+            What happens to a candidate appearing in only one arm's list. FR-004. The formula does not
+            fix it and the choice changes the output.
+          example: zero_contribution_from_the_absent_arm
+        fetch_depth:
+          type: integer
+          minimum: 1
+          description: |
+            Candidates taken from each arm before fusion. FR-003 fixes it at 50 and states plainly that
+            it is part of the ranking definition rather than a tuning parameter: changing it changes
+            published output, so it MUST be recorded with any published figure. That is what this member
+            is for.
+          example: 50
+        vector_search:
+          $ref: '#/components/schemas/VectorSearchSettings'
+        lexical:
+          $ref: '#/components/schemas/LexicalArmSettings'
+        encoder:
+          $ref: '#/components/schemas/ModelIdentity'
+          description: |
+            FR-007. The pinned identity and revision the query was embedded with, which is the identity
+            recorded on the chunks — a difference is a refusal, so a response carrying results is a
+            response in which these agreed.
+        reranker:
+          oneOf:
+            - $ref: '#/components/schemas/ModelIdentity'
+            - type: 'null'
+          description: Null when no reranker scored this response.
+
+    Mode:
+      type: object
+      description: |
+        FR-021, FR-022 and FR-023. What actually ran, as against what was asked for.
+
+        `arm_requested` and `arm_served` differ only under degradation, and that pair is what makes
+        FR-023 structural: an evaluation output claiming it ran `fused_reranked` while `arm_served` was
+        `fused` is caught by comparing two fields in the record, rather than by remembering to check a
+        flag. No figure produced in degraded mode can be read as reranked.
+      additionalProperties: false
+      required: [arm_requested, arm_served, reranked, degraded, unreranked_reason, statement]
+      properties:
+        arm_requested:
+          $ref: '#/components/schemas/Arm'
+        arm_served:
+          $ref: '#/components/schemas/Arm'
+          description: |
+            The arm that actually executed. Equal to `arm_requested` except when the reranker was
+            unavailable and a reranked arm was requested, in which case it is `fused` — the fusion-only
+            ordering FR-021 requires be served.
+        reranked:
+          type: boolean
+          description: Whether the cross-encoder scored the candidate set for this response.
+        degraded:
+          type: boolean
+          description: |
+            True exactly when the reranker is unavailable to this process. Mirrors
+            `GET /readyz`'s `status` being `ready_degraded`.
+
+            It is a property of the **service**, not of the arm: a `lexical` request answered while the
+            reranker is down carries `degraded: true` and `reranked: false` with
+            `unreranked_reason: arm_excludes_reranking`, because the lexical arm was never going to be
+            reranked and its results are not fusion-only. Conflating the two would attach a
+            fusion-only claim to a response that is not fusion-only.
+
+            **Never true for an encoder identity mismatch.** That is FR-007's refusal and never reaches a
+            `200`.
+        unreranked_reason:
+          type: [string, 'null']
+          description: |
+            Why the cross-encoder did not score this response. Null exactly when `reranked` is true.
+
+            `arm_excludes_reranking` — the selected arm does not rerank. Not a degradation.
+            `no_candidates_to_score` — the arms returned nothing, so the reranker had nothing to score.
+            Not a degradation either: FR-009's empty result is a complete answer, and `reranked: true`
+            must never mean "scored zero candidates" or the flag stops distinguishing a reranked
+            ordering from an absent one.
+            `reranker_unavailable` — FR-021. The reranker failed to load or failed to warm.
+            `reranker_failed_during_request` — the session was lost mid-request, an edge case the
+            specification names explicitly (killed under memory pressure). Results are still returned in
+            fusion-only order; the response is degraded exactly as a load failure is.
+          enum:
+            - arm_excludes_reranking
+            - no_candidates_to_score
+            - reranker_unavailable
+            - reranker_failed_during_request
+            - null
+        statement:
+          type: [string, 'null']
+          description: |
+            FR-022. The sentence a response produced without reranking must carry, stating plainly that
+            the result is fusion-only and unreranked and why. Null exactly when `reranked` is true.
+
+            A sentence rather than only a flag, because the flag says *that* the result is worse and the
+            sentence says *what* it is — and a consumer rendering the response to a person needs the
+            second. Both are present so a machine branches on the flag and never parses the prose.
+          example: 'Results are fusion-only and unreranked: the reranker is unavailable, so the ordering is the fused ordering, which is weak by construction at this fetch depth.'
+      allOf:
+        - if:
+            properties:
+              reranked:
+                const: false
+            required: [reranked]
+          then:
+            required: [unreranked_reason, statement]
+            properties:
+              unreranked_reason:
+                type: string
+              statement:
+                type: string
+                minLength: 1
+        - if:
+            properties:
+              reranked:
+                const: true
+            required: [reranked]
+          then:
+            properties:
+              unreranked_reason:
+                type: 'null'
+              statement:
+                type: 'null'
+
+    RequestEcho:
+      type: object
+      description: |
+        What was asked for, echoed so a stored result is self-describing. An evaluation record holding
+        the response alone must be able to state the query it answers; a record that needs the request
+        alongside it is one where the two can be separated.
+      additionalProperties: false
+      required: [query, arm, project_id, limit]
+      properties:
+        query:
+          type: string
+          description: The query as received, verbatim and untransformed.
+        arm:
+          $ref: '#/components/schemas/Arm'
+        project_id:
+          type: [string, 'null']
+          pattern: '^PRJ-[0-9]{3}$'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+
+    RetrievalResponse:
+      type: object
+      description: |
+        **Counting invariants**, all assertable from one response:
+
+          - `result_count == length(results)`;
+          - `result_count == min(limit, ranked_relevance_count) + deterministic_route.added_count`,
+            where `ranked_relevance_count` is the number of fused candidates the route did not promote —
+            `limit` bounds the ranked-relevance portion only (`info` § Recorded interface decisions);
+          - `fused_candidate_count <= ranking_parameters.fetch_depth * 2` and, where reranking ran,
+            `reranking.candidates_scored == fused_candidate_count` (FR-018);
+          - every result with a non-null `fused_rank` is a candidate hybrid retrieval produced, so
+            FR-012's "the route MUST NOT remove" is checkable without a route-disable switch;
+          - **`result_count` is never raised to reach a target.** FR-009: an empty result set is reported
+            as empty and a short one is not padded. `results: []` with `result_count: 0` is a complete,
+            successful answer.
+      additionalProperties: false
+      required:
+        - generated_at
+        - request
+        - mode
+        - deterministic_route
+        - ranking_parameters
+        - reranking
+        - results
+        - result_count
+        - fused_candidate_count
+        - ordering_digest
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          description: |
+            When this response was produced. The single member two responses to an identical query
+            against an unchanged corpus and configuration may differ in — it describes the act of
+            answering rather than what was answered, and takes no part in `ordering_digest` for that
+            reason.
+        request:
+          $ref: '#/components/schemas/RequestEcho'
+        mode:
+          $ref: '#/components/schemas/Mode'
+        deterministic_route:
+          $ref: '#/components/schemas/DeterministicRoute'
+        ranking_parameters:
+          $ref: '#/components/schemas/RankingParameters'
+        reranking:
+          oneOf:
+            - $ref: '#/components/schemas/RerankingReport'
+            - type: 'null'
+          description: Null exactly when `mode.reranked` is false.
+        results:
+          type: array
+          description: |
+            The final ordering. Deterministic identifier matches first, in the tie-break key's order;
+            then the ranked-relevance results in reranked order, or in fused order where reranking did
+            not run. Array position is authoritative and `rank` restates it.
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/RetrievalResult'
+        result_count:
+          type: integer
+          minimum: 0
+          description: |
+            `length(results)`, restated so a consumer storing a truncated record still holds the count
+            the response asserted. Zero is an honest, complete answer (FR-009).
+        fused_candidate_count:
+          type: integer
+          minimum: 0
+          description: |
+            Candidates the fusion statement produced, before promotion by the deterministic route and
+            before `limit`. Returned because it is the figure SC-014 is read against: a filtered query
+            yielding fewer candidates than `fetch_depth` while more matching rows exist is recall lost to
+            a retrieval setting rather than to the ranking design, and without this number that loss is
+            invisible.
+        ordering_digest:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: |
+            Digest over the ordered `chunk_id` sequence of `results`. FR-020 requires identical ordering
+            for identical queries against an unchanged corpus and configuration, and SC-012 requires each
+            arm to return identical results across two runs; this gives both a single assertable value
+            instead of an element-wise comparison.
+
+            **Domain.** Defined on every response, including one whose `results` is empty, where it is
+            the digest of the empty sequence. Two responses that return nothing therefore carry the same
+            digest however much else differs between them — equality of this value alone MUST NOT be read
+            as sameness of response. It is not a cache validator and this surface defines none.
+
+            On the approximate path the guarantee it witnesses holds against a fixed index. Graph
+            construction is randomized, so a rebuild can legitimately move this value; the plan owns
+            scoping FR-020's claim to the exact path and giving the approximate path an overlap and
+            recall-delta assertion instead.
+
+    RerankerFailure:
+      type: object
+      description: Why the reranker is unavailable. Present exactly when it is.
+      additionalProperties: false
+      required: [reason, detail, occurred_at]
+      properties:
+        reason:
+          type: string
+          enum: [load_failed, warmup_failed, digest_mismatch, session_lost]
+          description: |
+            `digest_mismatch` is a refusal in miniature: FR-016 requires the artifact's digest verified
+            **before the session is created**, so a mismatched artifact is never loaded. It degrades
+            rather than refusing outright, because the reranker is a ranking improvement and fusion-only
+            service is specified for its absence — unlike the encoder, whose mismatch makes every
+            distance meaningless.
+        detail:
+          type: string
+          minLength: 1
+        occurred_at:
+          type: string
+          format: date-time
+
+    ReadinessResponse:
+      type: object
+      description: |
+        FR-017, FR-021, FR-022. One schema for all three states and both statuses, so an operator
+        diagnosing a removed instance reads the same document a probe read.
+      additionalProperties: false
+      required: [status, degraded, statement, reranker, encoder]
+      properties:
+        status:
+          type: string
+          enum: [ready, ready_degraded, not_ready]
+          description: |
+            `ready` and `ready_degraded` are both `200`; `not_ready` is `503`. The state is a field
+            because no status code carries "successful but degraded" and the deprecated `Warning` header
+            is not an option — see the operation description.
+        degraded:
+          type: boolean
+          description: True exactly when `status` is `ready_degraded`. Mirrors `mode.degraded` on every search response.
+        statement:
+          type: string
+          minLength: 1
+          description: |
+            The sentence explaining this state. Always present, including when `ready` — a readiness
+            document that only speaks up when something is wrong makes silence ambiguous between healthy
+            and unimplemented.
+        reranker:
+          type: object
+          additionalProperties: false
+          required: [available, state, model_id, model_revision, precision, warmup, failure]
+          properties:
+            available:
+              type: boolean
+            state:
+              type: string
+              enum: [warm, unavailable]
+            model_id:
+              type: string
+            model_revision:
+              type: string
+            precision:
+              type: string
+              enum: [int8, fp32]
+            warmup:
+              type: object
+              additionalProperties: false
+              required: [completed, completed_at, batch_shape]
+              properties:
+                completed:
+                  type: boolean
+                completed_at:
+                  type: [string, 'null']
+                  format: date-time
+                batch_shape:
+                  type: [string, 'null']
+                  description: |
+                    FR-017 requires warm-up at the **maximum** batch shape, so the shape is reported
+                    rather than the fact of warming alone. Warming at a smaller shape and reporting
+                    "warm" would leave the first full-depth query paying the arena growth this gate
+                    exists to move off the request path.
+                  example: '50 x 512'
+            failure:
+              oneOf:
+                - $ref: '#/components/schemas/RerankerFailure'
+                - type: 'null'
+        encoder:
+          type: object
+          description: |
+            FR-007. The identity this build embeds queries with, and the identity recorded on the chunks,
+            both reported rather than only their agreement — a boolean alone tells an operator that
+            something is wrong and nothing about which side to change.
+          additionalProperties: false
+          required: [model_id, model_revision, corpus_model_id, corpus_model_revision, matches_corpus]
+          properties:
+            model_id:
+              type: string
+            model_revision:
+              type: string
+            corpus_model_id:
+              type: [string, 'null']
+            corpus_model_revision:
+              type: [string, 'null']
+            matches_corpus:
+              type: boolean
+              description: False forces `status` to `not_ready`. Retrieval is refused, never degraded.
+
+    VendoredArtifact:
+      type: object
+      description: |
+        FR-016. A third-party model artifact committed to this repository. License basis and source are
+        required of every artifact entering this repository and a vendored model is no exception; the
+        digest is verified before the session is created, and nothing here reaches the network at run
+        time.
+      additionalProperties: false
+      required: [model_id, model_revision, digest, license_basis, source, path]
+      properties:
+        model_id:
+          type: string
+          minLength: 1
+        model_revision:
+          type: string
+          minLength: 1
+        digest:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        license_basis:
+          type: string
+          minLength: 1
+        source:
+          type: string
+          minLength: 1
+        path:
+          type: string
+          minLength: 1
+          description: Repository-relative path to the artifact, so a published figure resolves to the bytes in the checkout.
+
+    DiagnosticsResponse:
+      type: object
+      description: |
+        Process-level facts. Nothing here varies per query; everything that does is on the search
+        response.
+      additionalProperties: false
+      required: [generated_at, degraded, ranking_parameters, encoder_artifact, reranker_artifact, reranker_session, deterministic_route_pattern, arms]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        degraded:
+          type: boolean
+        ranking_parameters:
+          $ref: '#/components/schemas/RankingParameters'
+          description: |
+            The same schema the search response carries, so an evaluation run can record the
+            configuration once from here and assert that every response it consumed matched it. A
+            disagreement between the two is a provenance defect, not a display choice.
+        encoder_artifact:
+          $ref: '#/components/schemas/VendoredArtifact'
+        reranker_artifact:
+          oneOf:
+            - $ref: '#/components/schemas/VendoredArtifact'
+            - type: 'null'
+          description: Null only when no reranker artifact could be identified at all — a digest mismatch still reports the artifact it rejected.
+        reranker_session:
+          type: object
+          description: |
+            FR-033's process half. The session's resident memory against the container's declared budget,
+            and the thread configuration that had to be set explicitly because the runtime reports the
+            host's core count under a CPU quota rather than the container's.
+          additionalProperties: false
+          required: [loaded, resident_memory_bytes, memory_budget_bytes, over_budget, sequence_limit_tokens, intra_op_threads, inter_op_threads]
+          properties:
+            loaded:
+              type: boolean
+            resident_memory_bytes:
+              type: [integer, 'null']
+              minimum: 0
+            memory_budget_bytes:
+              type: integer
+              minimum: 1
+            over_budget:
+              type: boolean
+              description: |
+                True when `resident_memory_bytes` exceeds `memory_budget_bytes`. FR-033: a run exceeding
+                the budget MUST publish the overage rather than omitting the figure, so this field is
+                required and the memory figure is never withheld because it is unflattering.
+            sequence_limit_tokens:
+              type: integer
+              minimum: 1
+            intra_op_threads:
+              type: integer
+              minimum: 1
+            inter_op_threads:
+              type: integer
+              minimum: 1
+        deterministic_route_pattern:
+          type: string
+          description: |
+            FR-010's declared published pattern, in one authoritative place. The search response echoes
+            it per query; this is where a run manifest records it once.
+
+            FR-010 additionally requires the pattern's coverage verified against the enumerated set of
+            part numbers the corpus contains. That figure is **not** here — see § Requirements this
+            contract cannot express.
+        arms:
+          type: array
+          description: |
+            The arms this build can run, enumerated by the server rather than hard-coded by a consumer,
+            so SC-012's "all six arms return results independently" is checkable against the running
+            service. Five request-selectable arms; the sixth, approximate vector search, is the
+            configuration in `ranking_parameters.vector_search`.
+          minItems: 5
+          maxItems: 5
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Arm'
+
+  examples:
+
+    RerankedSearch:
+      summary: >-
+        Nominal — fused and reranked, both arms contributing, route did not fire.
+        `candidate_token_lengths` is abridged; in a real response its length equals `candidates_scored`.
+      value:
+        generated_at: '2026-07-29T10:22:41Z'
+        request:
+          query: what does the spec require for galvanizing repair
+          arm: fused_reranked
+          project_id: null
+          limit: 3
+        mode:
+          arm_requested: fused_reranked
+          arm_served: fused_reranked
+          reranked: true
+          degraded: false
+          unreranked_reason: null
+          statement: null
+        deterministic_route:
+          fired: false
+          skipped_reason: null
+          pattern: '\b[A-Z]{2,6}-[0-9]{3,8}\b'
+          matched_tokens: []
+          match_count: 0
+          added_count: 0
+          fell_through: false
+        ranking_parameters:
+          fusion_constant: 60
+          tie_break_key: chunk_id ascending
+          missing_arm_convention: zero_contribution_from_the_absent_arm
+          fetch_depth: 50
+          vector_search:
+            mode: approximate
+            index:
+              kind: hnsw
+              ef_search: 100
+              iterative_scan: strict_order
+          lexical:
+            ranking_basis: postgresql_tsvector_ranking
+            uses_corpus_wide_term_statistics: false
+            weights: [0.1, 0.2, 0.4, 1.0]
+          encoder:
+            model_id: sentence-transformers/all-MiniLM-L6-v2
+            model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          reranker:
+            model_id: cross-encoder/ms-marco-MiniLM-L6-v2
+            model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
+        reranking:
+          candidates_scored: 50
+          candidates_truncated: 6
+          sequence_limit_tokens: 512
+          candidate_token_lengths: [318, 512, 604, 289, 441]
+          latency_ms: 284.7
+          precision: int8
+        results:
+          - rank: 1
+            chunk_id: 1c3f6a20-91bb-4e7d-9a02-5f8e13c47d61
+            document_id: nrh-spec-05-51-00-metal-fabrications
+            document_type: specification
+            project_id: PRJ-002
+            page_number: 14
+            text: 'Repair galvanizing damaged by cutting or welding in accordance with ASTM A780 using zinc-rich paint applied to a dry film thickness not less than that of the adjacent coating.'
+            match_kind: ranked_relevance
+            arms: [lexical, dense]
+            fused_rank: 1
+            reranked_rank: 1
+            reranker_truncated: false
+            source_layer: REAL
+            weighted_fields:
+              heading_present: true
+              part_numbers_present: false
+              spec_section_present: true
+              all_empty: false
+          - rank: 2
+            chunk_id: 7b0a94de-2c11-4f38-8ad5-6e21c0f4b9a7
+            document_id: nrh-spec-05-51-00-metal-fabrications
+            document_type: specification
+            project_id: PRJ-002
+            page_number: 15
+            text: 'Surfaces to be touched up shall be cleaned of weld flux and spatter before application. Do not use aerosol products for repairs exceeding one square inch.'
+            match_kind: ranked_relevance
+            arms: [dense]
+            fused_rank: 7
+            reranked_rank: 2
+            reranker_truncated: false
+            source_layer: REAL
+            weighted_fields:
+              heading_present: true
+              part_numbers_present: false
+              spec_section_present: true
+              all_empty: false
+          - rank: 3
+            chunk_id: e21d5f08-4a67-4c92-b3ee-08c5d7a19f34
+            document_id: ashvale-transmittal-0117
+            document_type: transmittal
+            project_id: PRJ-002
+            page_number: 2
+            text: 'All hot-dip galvanized assemblies are supplied with a touch-up kit; field repair shall follow the referenced standard.'
+            match_kind: ranked_relevance
+            arms: [lexical]
+            fused_rank: 3
+            reranked_rank: 3
+            reranker_truncated: true
+            source_layer: SYNTHETIC
+            weighted_fields:
+              heading_present: false
+              part_numbers_present: false
+              spec_section_present: false
+              all_empty: true
+        result_count: 3
+        fused_candidate_count: 50
+        ordering_digest: 'sha256:2f8c1a4b6d90e3572c48b1f0a97d63e5148c2b70f9d3a615ce802b47d915f6a3'
+
+    DeterministicRouteSearch:
+      summary: >-
+        A part number inside a sentence (FR-014) — the route fires and adds, fusion still returns
+        everything it would have. `limit` is 1 and the response carries 2 results, because the route's
+        addition is not counted against the bound. `candidate_token_lengths` is abridged.
+      value:
+        generated_at: '2026-07-29T10:24:03Z'
+        request:
+          query: which transmittal proposed NRH-80347 and when was it submitted
+          arm: fused_reranked
+          project_id: null
+          limit: 1
+        mode:
+          arm_requested: fused_reranked
+          arm_served: fused_reranked
+          reranked: true
+          degraded: false
+          unreranked_reason: null
+          statement: null
+        deterministic_route:
+          fired: true
+          skipped_reason: null
+          pattern: '\b[A-Z]{2,6}-[0-9]{3,8}\b'
+          matched_tokens: ['NRH-80347']
+          match_count: 1
+          added_count: 1
+          fell_through: false
+        ranking_parameters:
+          fusion_constant: 60
+          tie_break_key: chunk_id ascending
+          missing_arm_convention: zero_contribution_from_the_absent_arm
+          fetch_depth: 50
+          vector_search:
+            mode: approximate
+            index:
+              kind: hnsw
+              ef_search: 100
+              iterative_scan: strict_order
+          lexical:
+            ranking_basis: postgresql_tsvector_ranking
+            uses_corpus_wide_term_statistics: false
+            weights: [0.1, 0.2, 0.4, 1.0]
+          encoder:
+            model_id: sentence-transformers/all-MiniLM-L6-v2
+            model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          reranker:
+            model_id: cross-encoder/ms-marco-MiniLM-L6-v2
+            model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
+        reranking:
+          candidates_scored: 50
+          candidates_truncated: 4
+          sequence_limit_tokens: 512
+          candidate_token_lengths: [201, 377, 512]
+          latency_ms: 279.1
+          precision: int8
+        results:
+          - rank: 1
+            chunk_id: b48c7e12-0d55-4a91-9f6b-3c02e7d81a55
+            document_id: norhelm-transmittal-0342
+            document_type: transmittal
+            project_id: PRJ-001
+            page_number: 1
+            text: 'Item 4 — Pad-mounted transformer, manufacturer part NRH-80347, 1500 kVA, 13.8 kV primary. Submitted for approval 2026-03-11.'
+            match_kind: deterministic_identifier
+            arms: []
+            fused_rank: null
+            reranked_rank: null
+            reranker_truncated: null
+            source_layer: SYNTHETIC
+            weighted_fields:
+              heading_present: false
+              part_numbers_present: false
+              spec_section_present: false
+              all_empty: true
+          - rank: 2
+            chunk_id: 9d2e08c4-77af-4b30-a1c8-5e6b94f02d17
+            document_id: norhelm-transmittal-0342
+            document_type: transmittal
+            project_id: PRJ-001
+            page_number: 3
+            text: 'Transformer schedule and nameplate data for the pad-mounted units proposed under this submittal.'
+            match_kind: ranked_relevance
+            arms: [lexical, dense]
+            fused_rank: 1
+            reranked_rank: 1
+            reranker_truncated: false
+            source_layer: SYNTHETIC
+            weighted_fields:
+              heading_present: true
+              part_numbers_present: false
+              spec_section_present: false
+              all_empty: false
+        result_count: 2
+        fused_candidate_count: 50
+        ordering_digest: 'sha256:9a41c07b2e58d3f6019c4ab7d25e83f40b61c9d7a8523ef04cb1720d6835ae9f'
+
+    DegradedSearch:
+      summary: Reranker unavailable — fusion-only ordering, served with the statement FR-022 requires
+      value:
+        generated_at: '2026-07-29T10:31:52Z'
+        request:
+          query: what does the spec require for galvanizing repair
+          arm: fused_reranked
+          project_id: null
+          limit: 1
+        mode:
+          arm_requested: fused_reranked
+          arm_served: fused
+          reranked: false
+          degraded: true
+          unreranked_reason: reranker_unavailable
+          statement: 'Results are fusion-only and unreranked: the reranker could not be loaded, so the ordering is the fused ordering, which at this fetch depth is weak by construction. No figure produced from this response may be read as reranked.'
+        deterministic_route:
+          fired: false
+          skipped_reason: null
+          pattern: '\b[A-Z]{2,6}-[0-9]{3,8}\b'
+          matched_tokens: []
+          match_count: 0
+          added_count: 0
+          fell_through: false
+        ranking_parameters:
+          fusion_constant: 60
+          tie_break_key: chunk_id ascending
+          missing_arm_convention: zero_contribution_from_the_absent_arm
+          fetch_depth: 50
+          vector_search:
+            mode: approximate
+            index:
+              kind: hnsw
+              ef_search: 100
+              iterative_scan: strict_order
+          lexical:
+            ranking_basis: postgresql_tsvector_ranking
+            uses_corpus_wide_term_statistics: false
+            weights: [0.1, 0.2, 0.4, 1.0]
+          encoder:
+            model_id: sentence-transformers/all-MiniLM-L6-v2
+            model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          reranker: null
+        reranking: null
+        results:
+          - rank: 1
+            chunk_id: 1c3f6a20-91bb-4e7d-9a02-5f8e13c47d61
+            document_id: nrh-spec-05-51-00-metal-fabrications
+            document_type: specification
+            project_id: PRJ-002
+            page_number: 14
+            text: 'Repair galvanizing damaged by cutting or welding in accordance with ASTM A780 using zinc-rich paint applied to a dry film thickness not less than that of the adjacent coating.'
+            match_kind: ranked_relevance
+            arms: [lexical, dense]
+            fused_rank: 1
+            reranked_rank: null
+            reranker_truncated: null
+            source_layer: REAL
+            weighted_fields:
+              heading_present: true
+              part_numbers_present: false
+              spec_section_present: true
+              all_empty: false
+        result_count: 1
+        fused_candidate_count: 50
+        ordering_digest: 'sha256:c70a4e18b9d2536f8a41027ce9b35d648f01a2c7b3e945d0286fa137cb50e4d2'
+
+    EmptySearch:
+      summary: Nothing matched — reported as empty, never padded (FR-009)
+      value:
+        generated_at: '2026-07-29T10:33:08Z'
+        request:
+          query: seismic base isolation bearings for the turbine hall
+          arm: fused_reranked
+          project_id: PRJ-003
+          limit: 8
+        mode:
+          arm_requested: fused_reranked
+          arm_served: fused_reranked
+          reranked: false
+          degraded: false
+          unreranked_reason: no_candidates_to_score
+          statement: 'No candidate was retrieved, so there was nothing for the reranker to score. The empty result is the answer, not a shortfall to be filled.'
+        deterministic_route:
+          fired: false
+          skipped_reason: null
+          pattern: '\b[A-Z]{2,6}-[0-9]{3,8}\b'
+          matched_tokens: []
+          match_count: 0
+          added_count: 0
+          fell_through: false
+        ranking_parameters:
+          fusion_constant: 60
+          tie_break_key: chunk_id ascending
+          missing_arm_convention: zero_contribution_from_the_absent_arm
+          fetch_depth: 50
+          vector_search:
+            mode: approximate
+            index:
+              kind: hnsw
+              ef_search: 100
+              iterative_scan: strict_order
+          lexical:
+            ranking_basis: postgresql_tsvector_ranking
+            uses_corpus_wide_term_statistics: false
+            weights: [0.1, 0.2, 0.4, 1.0]
+          encoder:
+            model_id: sentence-transformers/all-MiniLM-L6-v2
+            model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          reranker: null
+        reranking: null
+        results: []
+        result_count: 0
+        fused_candidate_count: 0
+        ordering_digest: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+
+    ReadyReadiness:
+      summary: Warm and matched
+      value:
+        status: ready
+        degraded: false
+        statement: 'The reranker loaded and warmed at the maximum batch shape before readiness was reported, and the query encoder matches the identity recorded on the chunks.'
+        reranker:
+          available: true
+          state: warm
+          model_id: cross-encoder/ms-marco-MiniLM-L6-v2
+          model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
+          precision: int8
+          warmup:
+            completed: true
+            completed_at: '2026-07-29T09:12:04Z'
+            batch_shape: '50 x 512'
+          failure: null
+        encoder:
+          model_id: sentence-transformers/all-MiniLM-L6-v2
+          model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          corpus_model_id: sentence-transformers/all-MiniLM-L6-v2
+          corpus_model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          matches_corpus: true
+
+    ReadyDegradedReadiness:
+      summary: Reranker failed to load — in service, answering in fusion-only order, and saying so
+      value:
+        status: ready_degraded
+        degraded: true
+        statement: 'The reranker could not be loaded, so queries are answered in fusion-only order. Results are returned and every response states that it is unreranked. This instance stays in service.'
+        reranker:
+          available: false
+          state: unavailable
+          model_id: cross-encoder/ms-marco-MiniLM-L6-v2
+          model_revision: 'ce0834f22110de6d9222af7a7a03628121708969'
+          precision: int8
+          warmup:
+            completed: false
+            completed_at: null
+            batch_shape: null
+          failure:
+            reason: load_failed
+            detail: 'ONNX Runtime could not create an inference session from data/reranker/model-int8.onnx.'
+            occurred_at: '2026-07-29T09:11:58Z'
+        encoder:
+          model_id: sentence-transformers/all-MiniLM-L6-v2
+          model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          corpus_model_id: sentence-transformers/all-MiniLM-L6-v2
+          corpus_model_revision: '8b3219a92973c328a8e22fadcfa821b5dc75636a'
+          matches_corpus: true
