@@ -389,7 +389,7 @@ All storage already exists; this feature adds none.
 
 ## Compliance Check
 
-Audited against `project-instructions.md` v1.2.4 by the Policy Auditor on 2026-07-28. **Result: PASS —
+Audited against `project-instructions.md` v1.2.4 by the Policy Auditor on 2026-07-28. **That version is superseded.** v1.2.5 through v1.2.8 amended one new **Temporary Files** rule while this branch was in flight, and governance requires a feature whose recorded audit names a superseded version to re-run its compliance gate before its next phase gate. It was re-run twice — at v1.2.7 (T074) and at v1.2.8 — and both re-runs are recorded in `plan.md` § Instructions Check, which is the current record. This section states what was audited on 2026-07-28 and is left as written, because a compliance record states what was true when it was made. **Result at v1.2.4: PASS —
 no violation.** Principles I, II, III, V and VII assessed and met; VI and VIII are not engaged by this
 feature.
 

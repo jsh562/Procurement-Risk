@@ -1,6 +1,6 @@
 # Manual verification — E010 Risk-Ranked Coordinator Worklist
 
-Scope: only what automation did **not** cover. The Playwright tier (18 specs) already
+Scope: only what automation did **not** cover. The Playwright tier (19 specs) already
 asserts FR-032's presentation contract and the named FR-048–FR-051 obligations. What
 remains is the general WCAG surface no installed tool measures.
 
@@ -28,9 +28,10 @@ DATABASE_URL='postgresql://procurement:local-development-only@localhost:5434/pro
   uv run --directory src/api python tests/fixtures/frozen_run/seed.py
 ```
 
-> This truncates `purchase_order_line`, `lifecycle_event`, `forecast_run` and
-> `line_posterior`. See bug task T053 — it destroys E005's dataset and leaves
-> `src/model`'s forecast tier red until reloaded.
+> This writes only to `procurement_e2e`, which it creates and migrates itself, and
+> prints that URL when it finishes. The shared `procurement` database is never
+> touched. It did truncate the shared database once — T057 fixed that, and this
+> warning is what the old behaviour looked like.
 
 ```bash
 # Serving boundary
@@ -105,11 +106,17 @@ already-late row's absent probability is spoken as words, never as silence.
 ## Cleanup
 
 ```bash
-# Stop both servers (Ctrl-C), then restore E005's dataset — see bug task T053
-MSYS_NO_PATHCONV=1 docker compose exec -T db \
-  psql -U procurement -d procurement -c "DELETE FROM line_posterior; DELETE FROM forecast_run; DELETE FROM lifecycle_event; DELETE FROM purchase_order_line;"
+# Stop both servers (Ctrl-C). Nothing else is required: the seed owns
+# `procurement_e2e` and rebuilds it on each run, so leaving it in place is safe
+# and costs one small database.
 
-PYTHONUTF8=1 UV_NATIVE_TLS=1 \
-DATABASE_URL='postgresql://procurement:local-development-only@localhost:5434/procurement' \
-  uv run --directory src/model procurement-load
+# To reclaim it:
+MSYS_NO_PATHCONV=1 docker compose exec -T db \
+  psql -U procurement -d postgres -c "DROP DATABASE IF EXISTS procurement_e2e;"
 ```
+
+> An earlier version of this section deleted every row from `procurement` and
+> reloaded E005's dataset, because the seed used to truncate the shared database.
+> Since T057 it does not, so those commands destroyed E005's data for no reason.
+> Removed rather than corrected in place — a cleanup step that is more dangerous
+> than the thing it cleans up is worse than none.

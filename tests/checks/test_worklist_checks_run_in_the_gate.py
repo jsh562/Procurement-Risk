@@ -79,7 +79,7 @@ def test_the_api_tests_run_against_a_real_database(steps: list[dict[str, Any]]) 
 def test_the_unit_step_does_not_re_run_the_benchmark_tier(steps: list[dict[str, Any]]) -> None:
     """The benchmark has its own step under a CPU limit this one does not apply.
     Running it here too would take minutes and measure the wrong machine."""
-    assert 'not benchmark' in _named(steps, "Unit tests (api)")["run"]
+    assert "not benchmark" in _named(steps, "Unit tests (api)")["run"]
 
 
 def test_the_benchmark_runs_under_a_single_cpu(steps: list[dict[str, Any]]) -> None:
@@ -125,8 +125,7 @@ class TestBothCoverageFloors:
     ) -> None:
         commands = " ".join(step.get("run", "") for step in steps)
         assert "--fail-under=80" in commands, (
-            "a threshold in configuration that no step enforces is a threshold "
-            "nothing fails below"
+            "a threshold in configuration that no step enforces is a threshold nothing fails below"
         )
 
     def test_this_features_python_source_is_inside_the_measured_set(self) -> None:

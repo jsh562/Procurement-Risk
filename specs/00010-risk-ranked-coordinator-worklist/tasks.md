@@ -124,7 +124,7 @@
 - [X] T037 [US3] {FR-025,FR-042} P1 half of FR-025 — `project_id` parameter, its pattern validator and `WHERE` clause — plus the `empty_filter` page state, in API/routes/worklist.py
 - [X] T038 [US3] {FR-043} 500 `unsupported-artifact-schema` / `internal-error` and 503 `datastore-unavailable` with `correlation_id`, and the page-level failure state in WEB/page.tsx
 - [X] T039 [P] [US3] {FR-018a,FR-033} Jointly constructible co-occurrences and the precedence winner for each pair, in TST/test_states.py
-- [X] T040 [P] [US3] {FR-044} Copy-table distinctness — no entry a substring of another, each holding a phrase in no other — and region assignment, in WTS/stateCopy.test.ts (written as `worklist.test.tsx`; the assertions belong beside the table they pin, and colocation is what keeps the two from being moved apart)
+- [X] T040 [P] [US3] {FR-044} Copy-table distinctness — no entry a substring of another, each holding a phrase in no other — and region assignment, in WEB/stateCopy.test.ts (written as `worklist.test.tsx`; the assertions belong beside the table they pin, and colocation is what keeps the two from being moved apart)
 - [X] T041 [US3] {FR-018} [COMPLETES FR-018] All eight states reported as `200` outcomes, counts reconcile, no placeholder anywhere — TST/test_worklist_endpoint.py
 
 ---
@@ -136,7 +136,7 @@
 - [X] T042 [US4] {FR-025} `scope.available_projects` with `open_line_count`, the full set in every state including while a scope is active — API/routes/worklist.py
 - [X] T043 [US4] {FR-025,FR-051} [COMPLETES FR-025] Scoping control in WEB/page.tsx — full selectable set, keyboard-operable, active scope exposed to assistive technology
 - [X] T044 [US4] {FR-026} On-screen enumeration of FR-026's four keys with the active key and direction, in WEB/page.tsx after:T043
-- [X] T045 [P] [US4] {FR-026,FR-032} [COMPLETES FR-026] Offered key set holds no delivery-date or single-quantile key; scope reranks — WTS/WorklistBoard.test.tsx (written as `worklist.test.tsx`; the sort control lives in `WorklistBoard`, so its assertions do too)
+- [X] T045 [P] [US4] {FR-026,FR-032} [COMPLETES FR-026] Offered key set holds no delivery-date or single-quantile key; scope reranks — WEB/WorklistBoard.test.tsx (written as `worklist.test.tsx`; the sort control lives in `WorklistBoard`, so its assertions do too)
 - [X] T046 [P] [US4] {FR-045} Excluded-group order and scope invariance under all four keys, in TST/test_worklist_endpoint.py
 
 ---
@@ -306,6 +306,81 @@
   > The marker reads "ruff / mypy / eslint / tsc clean" as one flat list. Three of those four cover E010: ruff runs over `src/api`, eslint and tsc over `src/web`. mypy runs over **`src/gateway` only** — which E010 does not touch — and `mypy` is not in `src/api`'s dependency groups at all, so `uv run --directory src/api mypy src` resolves an out-of-environment interpreter and reports `Cannot find implementation or library stub for module named "psycopg"` against a declared dependency.
   > `verify.yml:287-290` already made this exact judgement and named the step `Type check (gateway)` rather than `Type check (Python)`, recording why: a step "that ran over one entry would read as covering all three". The marker then reproduced the reading that step name was written to prevent.
   > Fix hint: name each tool's scope in the marker. Do not add mypy to `src/api` — `verify.yml` states the scope widens when `api` and `model` are annotated to a standard strict mypy accepts, which is not this feature's work.
+
+
+- [ ] T081 [BUG:CRITICAL] {FR-040} [governance] **BLOCKED — cannot be closed on this branch.** The release gate this plan declares for itself is unmet: three artifacts name three addresses — specs/sad.md:124
+  > `specs/sad.md:124` reads `W->>A: GET /lines?project=…` on this branch and on `main`. `contracts/openapi.yaml` declares `servers: /api/v1` with path `/worklist`. `plan.md:90` names a third form.
+  > plan.md:46 and HINT-003 (plan.md:438) both state the gate in E010's own words: "this feature does not pass QC while the registered primary flow and this contract name different addresses", and "the SAD amendment lands on the default branch, not here."
+  > project-instructions.md:94 is why it lands elsewhere: "Amendments to the documents named in this section are serialized. At most one amendment is in flight at a time, **it is performed on the default branch**, and it lands before the next begins. **A feature branch records the need for an amendment and does not perform it.**"
+  > So this task is recorded and left open by design. Closing it here would violate the rule that makes it a CRITICAL in the first place. QC iterations 1-3 never checked the condition; iteration 4 did.
+  > Fix hint: amend `specs/sad.md`'s primary flow to `GET /api/v1/worklist` on `main` via the project amendment procedure, then re-run E010's QC. Until then `.qc-passed` must not be written, and `.completed` must carry the open gate rather than presenting the feature as done.
+
+- [X] T082 [BUG:ERROR] {FR-040} [accuracy] The completion marker reports three entries as unpinned that were pinned one commit earlier — specs/00010-risk-ranked-coordinator-worklist/.completed:105
+  > "Reported, outside E010's scope: The root, `src/model` and `src/gateway` pytest configurations do not pin `--basetemp`."
+  > Measured: all four pin it — root `.tmp/pytest-checks`, api `../../.tmp/pytest-api`, model `../../.tmp/pytest-model`, gateway `../../.tmp/pytest-gateway`.
+  > `bcf3fe0` — the commit immediately before the one that rewrote this marker — had already corrected `plan.md:44` to say they pin it. The marker rewrite restated the superseded claim on the next commit.
+  > Fix hint: delete the item.
+
+- [X] T083 [BUG:ERROR] {FR-040} [ci] `ruff format --check` fails at the root on an E010-owned file, while the marker reports ruff clean over all four tiers — tests/checks/test_worklist_checks_run_in_the_gate.py:81
+  > `uv run ruff format --check .` at the root: "1 file would be reformatted, 576 files already formatted". The file is E010's, added by `0c2a8a4` (T052), and is not on `main`. The root format gate arrived with E006's merge and nobody re-ran it against this branch's files.
+  > Not a CRLF artifact — the content as stored in git fails `ruff format --check --stdin-filename` too.
+  > CI runs this as the `Format check (Python)` step, so the merge gate fails as the branch stands. `.completed` reported "ruff clean over all four tiers".
+  > Fix hint: `uv run ruff format tests/checks/test_worklist_checks_run_in_the_gate.py`, then re-measure.
+
+- [X] T084 [BUG:ERROR] {FR-040} [accuracy] T072 was filed against two sites and closed on one; plan.md now contradicts itself on the benchmark population — specs/00010-risk-ranked-coordinator-worklist/plan.md:117
+  > plan.md:117 read "Real Postgres, ~200 lines" while plan.md:186 reads "**The frozen fixture's 16 lines**, not the E005 seeded set".
+  > T072's own record at tasks.md:261 names both sites explicitly: "plan.md:184 records the benchmark's line population as 'The E005 seeded set…'; **plan.md:115 repeats '~200 lines'**." Only the first was fixed.
+  > Measured: `test_worklist_benchmark.py:87,99,125` all take the `frozen_run` fixture; the seed prints "seeded 16 lines".
+  > Fix hint: correct the Mock Boundary cell and point it at the measurement-conditions section.
+
+- [X] T085 [BUG:ERROR] {FR-040} [governance] spec.md's Compliance Check still records an audit against v1.2.4 with no supersession note — specs/00010-risk-ranked-coordinator-worklist/spec.md:392
+  > Governance: "A feature whose recorded compliance audit names a superseded version of this document MUST re-run its compliance gate before passing its next phase gate."
+  > T074 corrected `plan.md:30`, T076 corrected `.completed:41`, and spec.md was reached by neither. Unlike plan.md:31 it carries no note that the version moved, so it reads as a current claim of compliance against a version four amendments old.
+  > Fix hint: leave the finding table as written — a compliance record states what was true when it was made — and add the supersession note naming where the current record lives.
+
+- [X] T086 [BUG:ERROR] {FR-040} [accuracy] The marker names the wrong scope for the web coverage figure, in the same sentence that promises scopes are named — specs/00010-risk-ranked-coordinator-worklist/.completed:24
+  > The marker reads "99.23% statements … over **src/web** (floor 80)". `vitest.config.ts:22` sets `coverage.include: ["app/worklist/**/*.{ts,tsx}"]`, commented "Scoped to the worklist rather than the whole boundary". `layout.tsx` and `page.tsx` are outside the denominator; the measured set is six worklist modules, 131 statements.
+  > `checklists/testing.md:54` (CHK037) already states the scope correctly as "Vitest v8 over src/web/app/worklist". The marker widened it.
+  > Fix hint: "over `src/web/app/worklist` (floor 80)".
+
+- [X] T087 [BUG:WARNING] {FR-040} [accuracy] T078 fixed the filenames in T040 and T045 and left the directory token, so both now resolve to files that do not exist — specs/00010-risk-ranked-coordinator-worklist/tasks.md:127,139
+  > tasks.md:25 defines `WTS/` as `src/web/__tests__/`. T040 named `WTS/stateCopy.test.ts` and T045 named `WTS/WorklistBoard.test.tsx`; neither exists at that path. `src/web/__tests__/` holds only E001's `boundary.test.ts`. Both files live in `src/web/app/worklist/`, which the same table defines as `WEB/`.
+  > This is the third consecutive iteration in which a path correction fixed the half that was named and left the half that was not.
+  > Fix hint: use `WEB/` for both.
+
+- [X] T088 [BUG:WARNING] {FR-040} [accuracy] T078's edit split a section heading in two — specs/00010-risk-ranked-coordinator-worklist/plan.md:229
+  > The heading was "### Check inventory — what runs today, what this feature must add". The T078 script anchored on the substring "## Check inventory", inserted its note after it, and left " — what runs today, what this feature must add" stranded as a body line below the blockquote.
+  > Fix hint: restore the full heading and place the note after it.
+
+- [X] T089 [BUG:WARNING] {FR-040} [accuracy] Two of T078's five replacement paths are themselves wrong — specs/00010-risk-ranked-coordinator-worklist/plan.md:240,465
+  > plan.md:240 named `app/worklist/{Row,WorklistBoard,stateCopy}.test.tsx`; `stateCopy.test.tsx` does not exist — the file is `stateCopy.test.ts`. plan.md:465's glob `app/worklist/*.test.tsx` does not match it either, and that is the file holding the copy-distinctness assertions the line describes.
+  > Fix hint: name the `.ts` file separately and widen the glob to `*.test.{ts,tsx}`.
+
+- [X] T090 [BUG:WARNING] {FR-040} [accuracy] The Instructions Check misstates where this feature's web tests live — specs/00010-risk-ranked-coordinator-worklist/plan.md:42
+  > The Source Code Layout row reads "Entry-local tests live in `src/api/tests/` and `src/web/__tests__/`". All five of E010's web test files are in `src/web/app/worklist/`; `src/web/__tests__/` holds only E001's boundary test. `vitest.config.ts` records the colocation as deliberate, so the row is stale rather than the code being wrong.
+  > Fix hint: name both locations and the reason for the split.
+
+- [X] T091 [BUG:WARNING] {FR-040} [accuracy] manual-test.md is stale on three counts and its cleanup step is destructive — specs/00010-risk-ranked-coordinator-worklist/manual-test.md:3,30,105
+  > Line 3 says "18 specs"; measured 19. Lines 30-32 warn that the seed truncates four shared tables and cite bug task T053; the seed writes only to `procurement_e2e` since **T057** (T053 is the security limitation), and T053 is the wrong citation besides.
+  > The Cleanup block instructs `DELETE FROM` against the shared `procurement` database and a full `procurement-load` reload. The seed never writes there, so following this step now destroys E005's dataset for no reason. `qc-report.md:222-224` flagged it in iteration 2 and it was not fixed.
+  > Fix hint: correct the count and the citation, replace the warning with what the seed actually does, and reduce the cleanup to dropping `procurement_e2e`.
+
+- [X] T092 [BUG:WARNING] {FR-040} [accuracy] CHK006's evaluator note is a third live site of the corrected benchmark population — specs/00010-risk-ranked-coordinator-worklist/checklists/testing.md:11
+  > The note records the measurement conditions as "CPU limit 1.0, **E005 seeded set**, warm with 20 discarded warm-ups, 200 samples". plan.md:186 now says the opposite. CHK006 is checked `[X]` on the strength of a condition set that matches neither the plan nor the benchmark.
+  > Fix hint: amend the note to the frozen fixture's 16 lines, naming T072 as the correction.
+
+- [X] T093 [BUG:WARNING] {FR-040} [governance] Principle VII: the benchmark-population narrowing is recorded without a reversal trigger or a production-scale alternative — specs/00010-risk-ranked-coordinator-worklist/plan.md:186
+  > Principle VII: "a limitation MUST be recorded as scope decision, supporting evidence, reversal trigger, and production-scale alternative." The two records formatted as "Recorded limitation" carry all four. This one — a registered target measured against 16 lines instead of the ~200-line working scale the spec's Assumptions state — carries a scope decision, supporting evidence and a follow-up sentence, but no reversal trigger and no production-scale alternative.
+  > Fix hint: give it the four-part form inline.
+
+- [X] T094 [BUG:WARNING] {FR-040} [accuracy] The marker's `.prettierignore` claim is false — specs/00010-risk-ranked-coordinator-worklist/.completed:127
+  > The marker says `src/web/coverage/` "is excluded by `.gitignore` and by `.prettierignore`". `src/web/.prettierignore` holds exactly `.next/`, `node_modules/` and `package-lock.json`. Prettier skips the directory because it reads `.gitignore` by default, which is a different mechanism. The `eslint.config.mjs` half of the claim is correct.
+  > A claim written in the same commit that was raised for unverified claims, and it took one `cat` to disprove.
+  > Fix hint: drop the `.prettierignore` clause and name the mechanism that does the work.
+
+- [X] T095 [BUG:WARNING] {FR-040} [process] qc-report.md holds no record of iteration 3 — specs/00010-risk-ranked-coordinator-worklist/qc-report.md:1
+  > AGENTS.md: "`qc-report.md` records QC results." The file is headed "(iteration 2)" and closes with "tasks.md now holds 75 checked tasks"; the repository is at 95. Iteration 3's five findings exist in `tasks.md` and `.completed` but no QC record was written for them.
+  > Fix hint: append iteration 3 and iteration 4 sections. Leave iteration 2's point-in-time figures as written.
 
 
 ---

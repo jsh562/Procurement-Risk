@@ -246,3 +246,96 @@ next touched.
 within this run: T066–T075.
 
 `tasks.md` now holds 75 checked tasks and 0 unchecked.
+
+
+---
+
+# QC Report — iteration 3
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T076-T080
+
+Recorded retrospectively by T095, which found this iteration had produced tasks
+and fixes but no report. The findings are reproduced from `tasks.md`; the figures
+are those measured in the run that closed them.
+
+All five findings were artifacts overstating what the repository does. No
+executable gate failed.
+
+| ID | Severity | Finding |
+|---|---|---|
+| T076 | ERROR | `.completed:22` named project-instructions v1.2.7 after the compliance gate had been re-run at v1.2.8. Same governance rule as T074, one artifact over. |
+| T077 | WARNING | `.completed:13` read "root checks 249 passed" against a measured 292, under a sentence promising every figure was measured in the run that wrote the file. Line 18's import-contract count read 3 with no scope; the repository keeps 11 across three entries. |
+| T078 | WARNING | T071 was filed for three task entries naming files that were never created and fixed exactly those three. The same two names stood at five points in `plan.md` and once in `tasks.md`'s Dependencies section. |
+| T079 | WARNING | T073 was filed for a type-scale assertion measuring a container rather than its descendants, and fixed the font-weight half only. The font-size half beside it was unchanged. |
+| T080 | WARNING | `.completed` listed mypy among the checks E010 passes. mypy is scoped to `src/gateway` and is not a dependency of `src/api` at all. |
+
+Measured: api 203 passed / 1 skipped, benchmark 3 passed (p95 39.2 / 39.8 ms
+against 1500), root 292 passed, web unit 77, e2e 19, conformance 9, python
+coverage 97%, web coverage 99.23 / 96.19 / 97.22 / 99.17, import contracts 11
+kept 0 broken, ruff / eslint / tsc clean.
+
+Closed by `85acd1d`.
+
+---
+
+# QC Report — iteration 4
+
+**Date**: 2026-07-29 | **Feature**: E010 | **Result**: **FAIL** | **Bug tasks**: T081-T095
+
+Audited at `85acd1d` against project-instructions.md v1.2.8.
+
+## Verification of iteration 3
+
+T076, T079 and T080 confirmed closed. T079 was mutation-checked in both
+directions — injecting `font-weight: 800` on a descendant fails at
+`worklist.spec.ts:74`, injecting `font-size: 2rem` fails at `:58`, and neither
+half can pass vacuously. T077 and T078 were **not** closed: two figures were
+still wrong and the path correction had missed a directory token, two of its own
+replacements, and a section heading.
+
+## Findings
+
+| ID | Severity | Finding |
+|---|---|---|
+| T081 | **CRITICAL** | The release gate E010's own plan declares — `specs/sad.md:124` names `GET /lines?project=…` while the contract names `/worklist` under `/api/v1`. Iterations 1-3 never checked it. **Open by design**: governance forbids a feature branch from performing the amendment. |
+| T082 | ERROR | `.completed` reported three entries as not pinning `--basetemp` one commit after `plan.md` had been corrected to say they do. All four pin it. |
+| T083 | ERROR | `ruff format --check` failed at the root on `tests/checks/test_worklist_checks_run_in_the_gate.py`, an E010 file, so the CI format gate failed as the branch stood. The gate arrived with E006's merge and had never been run against this branch's files. |
+| T084 | ERROR | T072 named two sites and closed one; `plan.md:117` still read "~200 lines" against `plan.md:186`'s corrected 16. |
+| T085 | ERROR | `spec.md:392`'s Compliance Check still recorded v1.2.4 with no supersession note. |
+| T086 | ERROR | The web coverage figure was scoped to `src/web`; `vitest.config.ts` scopes it to `src/web/app/worklist`. |
+| T087 | WARNING | T078 fixed the filenames in T040 and T045 and left the `WTS/` directory token, so both resolved to a directory that does not hold them. |
+| T088 | WARNING | T078's edit anchored on a substring and split the `### Check inventory` heading. |
+| T089 | WARNING | Two of T078's five replacement paths named files that do not exist. |
+| T090 | WARNING | `plan.md:42` misstated where this feature's web tests live. |
+| T091 | WARNING | `manual-test.md` said 18 specs, cited the wrong bug task, and its cleanup step destroyed E005's dataset from a database the seed no longer touches. Flagged in iteration 2 and not fixed. |
+| T092 | WARNING | `checklists/testing.md:11` was a third live site of the corrected benchmark population. |
+| T093 | WARNING | The benchmark-population narrowing lacked Principle VII's reversal trigger and production-scale alternative. |
+| T094 | WARNING | `.completed` claimed `.prettierignore` excludes the coverage directory. It does not. |
+| T095 | WARNING | This file held no record of iteration 3. |
+
+## Checked and not found defective
+
+Recorded so they are not re-investigated: Principle II holds — no point estimate
+is reachable, `expected_harm` is absent from every row, the four sort keys hold no
+quantile, and `as_of_date + median` yields a labelled quantile date, which FR-041
+explicitly admits and distinguishes from a date plus a mean overrun. The import
+contract count of 11 is accurate and each has a negative fixture enforced by
+`test_every_declared_contract_has_a_negative_fixture`. The web coverage
+denominator includes all six worklist modules. Benchmark p95 variance between
+runs (39-46 ms) is machine load, not regression. Prettier's local CRLF
+disagreement is a Windows checkout artifact — the same content passes as stored.
+
+## Measured
+
+api 203 passed / 1 skipped; benchmark 3 passed, p95 39.1 and 45.6 ms against
+1500; root checks 292 passed; web unit 77; e2e 19; conformance 9; python coverage
+97%; web coverage 99.23 / 96.19 / 97.22 / 99.17 over `src/web/app/worklist`;
+import contracts 11 kept 0 broken; ruff check and ruff format clean over four
+tiers; eslint 0 errors 2 warnings (neither in an E010 file); tsc clean; mypy
+clean over `src/gateway`, its only scope.
+
+## Disposition
+
+14 of 15 closed. **T081 remains open and blocks `.qc-passed`.** It closes when
+`specs/sad.md`'s primary flow is amended on the default branch to name the address
+the contract defines, after which E010's QC is re-run.
