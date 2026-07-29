@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from gateway.compute.hashing import canonical_json, digest, fixture_key
+from gateway.compute.hashing import fixture_key
 from gateway.config import (
     CREDENTIAL_ENV_VAR,
     MODE_ENV_VAR,
@@ -34,7 +34,7 @@ from gateway.fixtures import (
     FixtureProvenance,
     FixtureStore,
 )
-from gateway.models import InvocationRequest
+from gateway.models import InvocationRequest, generate_trace_id
 
 COMMITTED_ROOT = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -368,18 +368,66 @@ def test_the_committed_keys_are_the_digests_they_are_stored_under() -> None:
         )
 
 
+#: The request the committed exemplar was recorded for. Held here so the two
+#: tests below derive their key from one place rather than each restating it.
+EXEMPLAR_REQUEST = InvocationRequest(prompt="exemplar", model="claude-opus-5")
+
+
 def test_the_exemplar_key_is_reproducible() -> None:
     """The seeded fixture's key is derived, not typed. If the hashing changed,
     this fails rather than the store silently going cold — every replay would
-    miss and each miss would look like an unrecorded request."""
+    miss and each miss would look like an unrecorded request.
+
+    **Derived from a real `InvocationRequest`, not from a hand-built payload.**
+    It was written the other way and that is half of why the `trace_id` defect
+    survived this epic's QC: the hand-built dict named `prompt` and `model` and
+    no third key, so it asserted what the author believed `fixture_key` hashed
+    instead of what it hashed. The two had already diverged when this test was
+    written — `model_dump_json()` carried `trace_id: null`, so the real request
+    keyed to `sha256:fddb3574…` while the committed fixture and this test both
+    said `sha256:72a4e4a4…`. The committed exemplar was unreachable from the
+    invocation path from the day it landed, and the test that existed to catch
+    exactly that agreed with the fixture because it shared the mistake.
+
+    A key derived through the function under test cannot share a mistake with
+    it.
+    """
     if not COMMITTED_ROOT.is_dir():
         pytest.skip(f"no committed fixture store at {COMMITTED_ROOT}")
-    payload = {
-        "request": {"prompt": "exemplar", "model": "claude-opus-5"},
-        "schema_version": None,
-        "prompt_template_version": None,
-    }
-    assert digest(canonical_json(payload)) in FixtureStore(COMMITTED_ROOT).stored_keys()
+    assert fixture_key(EXEMPLAR_REQUEST) in FixtureStore(COMMITTED_ROOT).stored_keys()
+
+
+def test_the_exemplar_resolves_through_the_replay_lookup() -> None:
+    """The store answers the key the request derives, end to end.
+
+    `stored_keys` above proves the key is *listed*; this proves `load` resolves
+    it, which is the operation replay actually performs. They fail differently:
+    a layout that disagreed with the key derivation would pass the first and
+    raise `FixtureMissError` here.
+    """
+    if not COMMITTED_ROOT.is_dir():
+        pytest.skip(f"no committed fixture store at {COMMITTED_ROOT}")
+    fixture = FixtureStore(COMMITTED_ROOT).load(fixture_key(EXEMPLAR_REQUEST))
+    assert fixture.content
+    assert fixture.provenance.gen_ai_response_model == "claude-opus-5"
+
+
+def test_the_exemplar_resolves_for_a_caller_that_supplies_a_trace_id() -> None:
+    """The seam this fix exists for (FR-070).
+
+    E006 supplies one run-scoped identifier per run. Before the fix this lookup
+    missed on every run, with a different key each time, and each miss reported
+    itself as an unrecorded request — so the committed store looked empty to the
+    only consumer obliged to use it.
+    """
+    if not COMMITTED_ROOT.is_dir():
+        pytest.skip(f"no committed fixture store at {COMMITTED_ROOT}")
+    traced = InvocationRequest(
+        prompt="exemplar", model="claude-opus-5", trace_id=generate_trace_id()
+    )
+    store = FixtureStore(COMMITTED_ROOT)
+    untraced_content = store.load(fixture_key(EXEMPLAR_REQUEST)).content
+    assert store.load(fixture_key(traced)).content == untraced_content
 
 
 # --- AD-008: the fixture store's soft cap ------------------------------------

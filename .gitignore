@@ -27,9 +27,14 @@ __pycache__/
 # the source tree, and committed. A redirect that silently degrades to a
 # relative path is worse than none, because it looks like it worked.
 compiledir_*/
-*.tmppytensor/
 .pytensor/
 .numba_cache/
+# A flattened redirect lands as a directory named for the checkout path with its
+# separators stripped, so the suffix varies with whatever the caller passed:
+# `…Risk1.tmppytensor/` and `…Risk2.tmppt2/` have both occurred. Match the shape,
+# not the two instances — the first version of this rule named only the suffix
+# that had already happened and missed the next one four commits later.
+*.tmp*/
 
 # ADR-0015's local spool. It is a runtime artifact of a gateway invocation, one
 # per working copy, and was committed once by a `git add -A` that swept it up.

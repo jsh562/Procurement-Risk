@@ -22,6 +22,24 @@ That inversion is what makes the dangerous case impossible rather than merely
 unlikely: a request field that reached the provider without reaching the hash
 would give two genuinely different calls one fixture key, and the fixture store
 would answer both with whichever was recorded first.
+
+**The closure has exactly one stated exception, and it is named here**
+(`UNHASHED_REQUEST_FIELDS`). `trace_id` is a *correlation* identifier: it says
+which run observed the call, and it reaches neither the provider request nor the
+provider's answer. Hashing it inverts the first property above — two requests
+that would produce the identical provider call hash differently, once per run,
+so no recorded fixture is ever replayable by anyone who supplies one. That is
+not hypothetical: FR-070 obliges one run-scoped identifier per run, and six runs
+of one document produced six distinct keys.
+
+The exception is safe in the direction that matters, which is why it is stated
+rather than refused. The dangerous direction is a field that changes the
+provider call without changing the key; `trace_id` changes no part of the call,
+so removing it cannot make two different calls collide. It is enumerated as a
+frozen set rather than dropped inline so that adding a second exception is a
+visible edit to a named constant with this paragraph attached, instead of a
+second `del` nobody reviews — and so a reader who wonders why the closure has a
+hole finds the answer at the hole.
 """
 
 from __future__ import annotations
@@ -36,9 +54,11 @@ from pydantic import BaseModel
 __all__ = [
     "FIXTURE_KEY_PATTERN",
     "HASH_ALGORITHM",
+    "UNHASHED_REQUEST_FIELDS",
     "canonical_json",
     "digest",
     "fixture_key",
+    "hashed_request_payload",
     "prompt_template_version",
     "repair_fixture_key",
     "schema_version",
@@ -52,6 +72,25 @@ __all__ = [
 HASH_ALGORITHM: Final[str] = "sha256"
 
 FIXTURE_KEY_PATTERN: Final[re.Pattern[str]] = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+#: The stated exception to TR-020's closure. Every other declared field of the
+#: request model is hashed; these are not, because they identify the *run that
+#: observed* the call rather than the call itself.
+#:
+#: One member, and it is a correlation identifier. `trace_id` reaches neither
+#: the provider request nor the provider's answer, so two requests differing
+#: only in it would produce the same provider call — and TR-019 requires the
+#: same call to hash the same. Hashing it made that false once per run: FR-070
+#: obliges one run-scoped identifier per run, so every recorded fixture became
+#: unreplayable by any caller supplying one.
+#:
+#: **Do not add a field here to make a key stable.** The test is whether the
+#: field can change what the provider is asked or what it answers. If it can,
+#: excluding it gives two genuinely different calls one key, and the store
+#: answers both with whichever was recorded first — the failure that looks like
+#: everything working. A timing or correlation identifier passes the test; a
+#: sampling parameter never does.
+UNHASHED_REQUEST_FIELDS: Final[frozenset[str]] = frozenset({"trace_id"})
 
 #: Pinned rather than left to `json.dumps`'s defaults, which insert a space
 #: after each separator. A formatting default that changed in a future Python
@@ -124,6 +163,35 @@ def prompt_template_version(resolved_text: str) -> str:
     return digest(resolved_text)
 
 
+def hashed_request_payload(request: BaseModel) -> dict[str, Any]:
+    """The request's contribution to the fixture key, and nothing else.
+
+    Every declared field the model serializes, less `UNHASHED_REQUEST_FIELDS`.
+    Derived from the model rather than from a list of field names, so adding a
+    sampling parameter reaches the hash by adding a field — which is the
+    direction TR-020's closure runs and the reason it does not go stale.
+
+    **A separate function so the exception is assertable.** Folded into
+    `fixture_key` the exclusion would be one line inside a digest, and a test
+    could only observe it as "these two keys are equal" — which is also what a
+    hash that ignored the whole request would look like. Exposed, the field set
+    itself can be compared against the model's declared fields, so the closure
+    is a measured property with a named hole rather than a claim.
+
+    **The exclusion is by name, not by `Field(exclude=True)` on the model.**
+    That would remove `trace_id` from *every* serialization of a request — a log
+    line, a spooled payload, a debug dump — and the identifier a reader most
+    needs to trace back is the last one that should silently vanish from a dump
+    (Principle I). The exclusion belongs to the hash, so it lives with the hash.
+    `output_schema` is the opposite case and is excluded on the model correctly:
+    a class is not JSON, so no serialization can carry it at all.
+    """
+    serialized: dict[str, Any] = json.loads(request.model_dump_json())
+    return {
+        name: value for name, value in serialized.items() if name not in UNHASHED_REQUEST_FIELDS
+    }
+
+
 def fixture_key(
     request: BaseModel,
     *,
@@ -134,8 +202,15 @@ def fixture_key(
 
     Args:
         request: The gateway's own request model. **Its declared fields are the
-            hashed set** — the closure of TR-020 is this parameter's type, not a
-            list kept elsewhere.
+            hashed set, less `UNHASHED_REQUEST_FIELDS`** — the closure of TR-020
+            is this parameter's type with one stated exception, not a list kept
+            elsewhere. The exception is `trace_id`, and it is an exception
+            because a correlation identifier is not a semantic input: it says
+            which run observed the call, reaches neither the provider request
+            nor the provider's answer, and so cannot make two different calls
+            share a key. Hashing it made the *first* of TR-019's two properties
+            false instead — one call, one key per run — which is what left every
+            fixture unreplayable by a caller obliged to supply one (FR-070).
         schema: The caller's output schema, whose digest is a hashed input
             (TR-038). A schema change must change the key, or a validator edit
             leaves every earlier fixture matching.
@@ -149,7 +224,7 @@ def fixture_key(
     a key computed with them can never collide with one computed without.
     """
     payload: dict[str, Any] = {
-        "request": json.loads(request.model_dump_json()),
+        "request": hashed_request_payload(request),
         "schema_version": schema_version(schema) if schema is not None else None,
         "prompt_template_version": (
             prompt_template_version(template) if template is not None else None
