@@ -91,7 +91,7 @@ A technical evaluator can see how good the resolution is, with intervals on ever
 
 **Why this priority**: `specs/prd.md` gates both identity metrics at "P1 release", so the MVP slice must carry the registered gate's evidence or the gate is unmeetable at the release it names. Raised from P2 at clarification for that reason. It also breaks a circular dependency: `specs/project-plan.md` gives E014 the LabeledPair entity while E014 depends on E009, so the frozen set has to be authored here and consumed there.
 
-**Independent Test**: Run resolution against the frozen labeled set and demonstrate a report carrying merge precision, recall, coverage, blocking pair completeness and reduction ratio, and the withheld set's size — each with its interval.
+**Independent Test**: Run resolution against the frozen labeled set and demonstrate a report carrying merge precision, recall and blocking pair completeness with their intervals, and coverage, reduction ratio and the withheld set's size as exact counts with their denominators.
 
 **Acceptance Scenarios**:
 
@@ -99,7 +99,7 @@ A technical evaluator can see how good the resolution is, with intervals on ever
 2. **Given** a run with zero false merges among the merges made on labeled pairs, **When** the interval is computed, **Then** the rule of three is used with that merge count as its denominator, and the report discloses when that count falls below 30, where the approximation is not reliable.
 3. **Given** a run with one or more false merges among labeled pairs, **When** the interval is computed, **Then** a one-sided exact binomial interval is used instead, because the rule of three does not apply once an error is observed.
 4. **Given** a true pair the blocking stage never generated, **When** the report attributes the miss, **Then** it is counted against blocking pair completeness and against recall, and is not attributed to scoring.
-5. **Given** a completed run, **When** any published figure is read, **Then** it carries an interval, and a figure with no defined interval is reported as undefined rather than bare.
+5. **Given** a completed run, **When** any published figure is read, **Then** it carries either an interval or an explicit no-interval declaration with its denominator, per FR-038's classification, and a figure whose interval is undefined at the realized size is reported as undefined rather than bare.
 6. **Given** a run whose merge precision or recall falls below its registered target, **When** the report is written, **Then** the shortfall is published with its cause rather than omitted or adjusted for.
 
 ### User Story 4 - Maintain the alias table as an auditable, versioned artifact (Priority: P3)
@@ -149,7 +149,7 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 #### Clustering
 
 - **FR-018**: Every pair induced by a resolved entity's membership MUST carry a recorded score exceeding the merge threshold. A pair joined into a cluster without having been scored is a defect, not a weaker merge.
-- **FR-019**: System MUST measure merge precision over the labeled pairs the emitted clusters induce, and MUST state that population with the figure.
+- **FR-019**: System MUST measure merge precision over the **estimation stratum's** labeled pairs that the emitted clusters induce, MUST NOT compute it across the union with the hard-negative stratum, and MUST state that population with the figure.
 - **FR-020**: System MUST resolve identity within a project and MUST NOT merge records across projects, even where manufacturer and part number agree exactly.
 
 #### Withholding and review
@@ -217,6 +217,8 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 
 - **The registered recall target has the same interval problem as precision, and it is not recorded upstream (likelihood: medium, impact: medium).** `specs/prd.md` sets identity-resolution recall at "≥ 0.80, explicitly secondary to precision". At roughly 20 true pairs in a balanced labeled set, a 95% Wilson interval around 0.80 spans approximately 0.58–0.92. Read as an interval lower bound the target is unreachable, exactly as the precision target is. This specification reads it as a point estimate (SC-018) on the same basis. **Amendment need — recorded here, not performed**: `specs/prd.md` and `specs/sad.md` should state whether 0.80 is a point estimate or a bound. Governance reserves that to the default branch.
 
+- **E009 takes the frozen labeled set from E014, and that is a scope change (likelihood: high, impact: medium).** `specs/project-plan.md` registers `LabeledPair` as an E014 entity and states the separation deliberately — construction sits with the epic that reads the records, and the freeze-before-tuning guarantee sits with the harness that would otherwise tune against its own evaluation set. FR-016 and FR-017 move both to E009, which calibrates its thresholds against the set it froze. FR-044 and SC-040 close the mechanical hole by binding the thresholds to the verified hash and refusing on divergence, so Principle VI is not breached in practice — but the structural separation the registered plan mandates is removed by a downstream artifact. **Amendment need — recorded here, not performed**: the project plan's E014 entity row and the E009/E014 dependency contract both need to admit the move. Governance reserves it to the default branch. Resolved this way because the plan's own ordering is circular — it gives E014 the entity while making E014 depend on E009.
+
 - **This feature depends on E002 and the registered plan does not say so (likelihood: high, impact: low).** `specs/project-plan.md` records E009 as depending on E005 and E006. Clarification established that the alias table derives from E002's committed manufacturer catalogue (FR-040), which makes E002 a real dependency. **Amendment need — recorded here, not performed**: add the E002 edge to E009's dependency contract in the project plan. Nothing on this branch writes it.
 
 - **The MVP slice did not carry the registered gate's evidence — resolved at clarification (likelihood: medium, impact: medium).** `specs/prd.md` gates merge precision and recall at "P1 release", while every publication requirement for those figures sat in US3 at P2. P1 therefore resolves identities and withholds correctly but publishes no quality evidence. Recorded rather than resolved by promoting US3: the evidence is only computable once merges exist, and re-priorit­ising it would make P1 depend on the frozen labeled set that E014 owns. **Resolved**: US3 was raised to P1, and FR-017 makes E009 the author of the frozen labeled set that E014 then consumes — which also breaks the circular dependency, since the project plan gives E014 the LabeledPair entity while E014 depends on E009. The MVP slice now carries the gate's evidence.
@@ -242,21 +244,21 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 - **SC-008** [US1]: Two records for the same material whose quantities use different dimensional units are scored, and the unit difference appears as a scored attribute rather than excluding the pair.
 - **SC-009** [US1]: Two records whose quantities use non-dimensional units are compared for equality only, and no conversion factor is applied between them.
 - **SC-010** [US1]: The raw manufacturer string from each source record is retrievable alongside its normalized form.
-- **SC-011** [US2]: Every candidate pair scoring inside the withhold band produces exactly one ReviewQueueItem and no merge, where a candidate pair is counted once regardless of how many blocking keys generated it.
+- **SC-011** [US2]: Within a run, every candidate pair scoring inside the withhold band produces exactly one ReviewQueueItem and no merge, where a candidate pair is counted once regardless of how many blocking keys generated it. Across runs see SC-039.
 - **SC-012** [US2]: Every ReviewQueueItem carries both source records, the score, the band, the per-attribute agreements, and the alias-table version.
 - **SC-013** [US2]: A run in which all candidate pairs are withheld completes successfully, reports zero merges, writes a review item per pair, and reports merge precision as undefined with its zero denominator.
 - **SC-014** [US2]: Records in a withheld pair appear in separate ResolvedEntities.
 - **SC-015** [US2]: A run whose collision guard or labeled-set hash verification fails writes no resolved entities, no review items, and no manifest.
-- **SC-016** [US2]: Every threshold's exact value falls in exactly one band, demonstrated at both cutoffs.
+- **SC-016** [US2]: Every score across the full score range maps to exactly one of merge, withhold or reject — the bands are disjoint and exhaustive. The cutoff behaviour itself is SC-035.
 - **SC-017** [US3]: Merge precision on the estimation stratum is at least 0.95 as a point estimate, published together with its 95% interval and the interval's method and sidedness — **or reported undefined per FR-028** where no merge was made among labeled pairs.
-- **SC-018** [US3]: Recall is at least 0.80, published with its interval and its denominator, and reported as secondary to precision.
-- **SC-019** [US3]: With zero false merges among labeled pairs, the published interval uses the rule of three with the count of merges made among labeled pairs as its denominator; with one or more, it uses a one-sided exact binomial interval.
+- **SC-018** [US3]: Recall is at least 0.80 as a point estimate, published with its Wilson interval and its denominator and reported as secondary to precision — or, where the run auto-merged nothing, published as the measured value with the shortfall and its cause per FR-032 rather than omitted.
+- **SC-019** [US3]: Where at least one merge was made among labeled pairs: with zero false merges the published interval uses the rule of three with that merge count as its denominator; with one or more it uses a one-sided exact binomial interval. Where no merge was made, precision and its interval are reported undefined per FR-028 and neither estimator is applied.
 - **SC-020** [US3]: Where the count of merges among labeled pairs is below 30, the run discloses that the rule-of-three approximation is outside its reliable range.
-- **SC-021** [US3]: Merge precision is measured over the labeled pairs induced by emitted clusters, and that population is stated with the figure.
-- **SC-022** [US3]: Coverage is published in the same statement as merge precision, each with its interval.
-- **SC-023** [US3]: Blocking pair completeness and reduction ratio are published as figures distinct from merge precision, each with its interval and with the sampling frame stated.
+- **SC-021** [US3]: Merge precision is measured over the **estimation stratum's** labeled pairs induced by emitted clusters, never across the union with the hard-negative stratum, and that population is stated with the figure.
+- **SC-022** [US3]: Coverage is published in the same statement as merge precision — precision with its interval, coverage as an exact count with its denominator, per FR-038.
+- **SC-023** [US3]: Blocking pair completeness is published with its interval and its sampling frame; reduction ratio is published as an exact count with its denominator. Both are distinct figures from merge precision.
 - **SC-024** [US3]: A true pair absent from the candidate set is reported against blocking pair completeness and counted as a recall miss, and is not attributed to scoring.
-- **SC-025** [US3]: The withheld set's count and its share of candidate pairs are published with every run, with intervals on the share.
+- **SC-025** [US3]: The withheld set's count and its share of candidate pairs are published with every run as exact counts with their denominators, carrying no interval.
 - **SC-026** [US3]: A run whose merge precision or recall falls below its registered target publishes the shortfall together with its cause.
 - **SC-027** [US3]: Every run writes a manifest recording the alias-table version, threshold constants, labeled-set hash, and input record counts, and every published figure resolves to it.
 - **SC-028** [US4]: An alias table containing an alias mapped to two canonical manufacturers fails to load, and the error names the alias.
@@ -265,7 +267,7 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 - **SC-031** [US3]: Recall and blocking pair completeness are published with Wilson 95% intervals; coverage, reduction ratio and the withheld share are published as exact counts with denominators and no interval.
 - **SC-032** [US3]: The frozen labeled set records its sampling frame and its balance of true to false pairs, and no true pair in it is derived from a blocking key.
 - **SC-033** [US2]: A second resolution run leaves the first run's resolved entities and review items unaltered, and the active-run pointer identifies which run a consumer reads.
-- **SC-034** [US1]: No ResolvedEntity contains more than one specification-section record; clusters containing several purchase-order lines are emitted without error.
+- **SC-034** [US1]: A cluster containing several purchase-order lines is emitted without error. (The one-specification bound is SC-041.)
 - **SC-035** [US2]: A score exactly at the merge threshold is withheld and a score exactly at the reject threshold is **withheld**, demonstrated at both cutoffs. *(Corrected to match FR-042, which STF-005 restated; this criterion still certified the auto-rejection the finding removed.)*
 - **SC-036** [US4]: The run manifest records the E002 manufacturer-catalogue digest from which the alias table derives, alongside the alias-table version.
 - **SC-037** [US3]: The frozen labeled set carries two strata with separate frames and separate hashes, and every published figure names the stratum it draws on. No published figure is computed across the union of the two.
@@ -286,6 +288,18 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 - Q: Where does the alias table come from? -> A: Derived from E002's committed manufacturer catalogue, with the catalogue digest recorded as a run-manifest input alongside the alias-table version. E002 is added as a dependency, and SC-002 is weakened to the alias spellings E002 actually guarantees.
 - Q: May a ResolvedEntity hold more than one purchase-order line, or more than one specification section? -> A: At most one specification-section record per cluster; purchase-order lines unbounded, because partial shipments and change orders make multiple lines against one specified material ordinary.
 - Q: Which band owns each threshold's exact value? -> A: The more conservative neighbour — a score exactly at the merge threshold withholds, a score exactly at the reject threshold rejects.
+
+### Session 2026-07-29 (fifth pass — closing the validator residue)
+
+No new questions. Every item below applies a decision an earlier session already made; none was an open choice.
+
+- STF-001's interval residue closed at its last four sites — SC-022, SC-023, SC-025, US3's fifth acceptance scenario and US3's Independent Test now follow FR-038's estimate/census classification, which pass 1 settled and pass 2 recorded.
+- SC-011 scoped within a run, matching FR-021 and FR-043 from pass 2; SC-039 carries the cross-run case.
+- SC-018 gained the escape SC-017 was given in pass 2, and SC-019 gained the zero-denominator branch FR-028 already required.
+- SC-034 reduced to the purchase-order clause; the one-specification bound is SC-041's, and holding both restated the same rule twice.
+- SC-016 restated as the disjoint-and-exhaustive property it was written for, which STF-005 asked for; the cutoff behaviour is SC-035's.
+- Merge precision's stratum named in FR-019 and SC-021 — it was the one figure FR-037a's blanket rule left pointing at the union, and the union includes hard negatives chosen for blocking-key agreement, which are the pairs most likely to be falsely merged.
+- The LabeledPair ownership move from E014 is now recorded as an amendment need. Pass 1 decided E009 should own the frozen set and never recorded that the registered plan says otherwise.
 
 ### Session 2026-07-29 (fourth pass — validator findings)
 
@@ -312,7 +326,7 @@ Someone maintaining the system can add a manufacturer alias, see which merges it
 
 ### Session 2026-07-29
 
-- **STF-001** [CRITICAL, cross-requirement-contradiction] — FR-025 mandated an interval on every published figure while FR-038 forbids one on the three census figures, and SC-022, SC-023 and SC-025 inherit the contradiction against SC-031. Affects FR-025, FR-038, SC-022, SC-023, SC-025, SC-031, US3. **Resolved inline**: FR-025 restated to require an interval *or* an explicit no-interval declaration with denominator, per FR-038's classification. The three inherited criteria and US3's fifth acceptance scenario still say "each with its interval" and remain to be reworded — see STF-002's note on scope of the residual edit.
+- **STF-001** [CRITICAL, cross-requirement-contradiction] — FR-025 mandated an interval on every published figure while FR-038 forbids one on the three census figures, and SC-022, SC-023 and SC-025 inherit the contradiction against SC-031. Affects FR-025, FR-038, SC-022, SC-023, SC-025, SC-031, US3. **Resolved inline**: FR-025 restated to require an interval *or* an explicit no-interval declaration with denominator, per FR-038's classification. **Closed in the fourth pass**: SC-022, SC-023, SC-025, US3's fifth acceptance scenario and US3's Independent Test all now follow FR-038's classification.
 - **STF-002** [CRITICAL, cross-requirement-contradiction] — SC-001 demotes the specification record to a category-level association while US1's title, narrative, Independent Test, three acceptance scenarios and the Problem Statement all still require a three-member specification/submittal/purchase-order cluster. Affects SC-001, US1, FR-008, SC-004, SC-007. **Resolved, second pass.** US1 rewritten to the submittal-to-purchase-order link; FR-041 now mandates the equipment-category association, and SC-041 makes it falsifiable.
 - **STF-003** [CRITICAL, constraint-impossibility] — FR-037's balanced 20/20 labeled set and FR-036's sampling independent of the blocking keys are jointly unachievable at the 40-pair single-annotator budget, and FR-007's collision guard is then tested over negatives that by construction exclude the collisions it exists to catch. Affects FR-036, FR-037, FR-007, FR-010, FR-030, SC-032, SC-003, SC-015. **Resolved, second pass.** Two declared strata with separate frames and hashes (FR-037, FR-037a): an estimation stratum sampled off the blocking keys and sized from the interval width required, and a hard-negative stratum chosen for blocking-key agreement, used only by the collision guard and excluded from every published denominator. Publishing across the union is prohibited.
 - **STF-004** [HIGH, cross-requirement-contradiction] — FR-039's append-only runs collide with FR-021's "exactly one review item per withheld pair", so a second run re-withholding the same pair fails SC-011 and grows the review queue without bound. Affects FR-039, FR-021, FR-023, FR-031, SC-011, SC-033. **Resolved, second pass.** FR-021 scoped per run; FR-043 adds the run identifier and the stable unordered-pair identity, and points the active-run pointer at which run's items are open.
