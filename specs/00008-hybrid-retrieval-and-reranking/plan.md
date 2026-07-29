@@ -6,7 +6,7 @@
 
 **Goal**: A coordinator's question reaches the passage that answers it, with the page it was printed on.
 **Approach**: One SQL statement fuses a `tsvector` arm and a `pgvector` arm by reciprocal rank; a deterministic part-number route runs first and falls through; a quantized cross-encoder in the serving process reranks the fused set, and declares itself when it cannot.
-**Key Constraint**: Ranking is SQL-resident and single-statement, which removes the pure-function surface the quality policy would normally property-test — the compensating shape is prescribed by `specs/sad.md` and carried in §Testing Strategy.
+**Key Constraint**: Ranking is SQL-resident and single-statement, which removes the pure-function surface the quality policy would normally property-test — the compensating shape is prescribed by `specs/sad.md` and carried in §Testing Strategy. It does **not** remove the policy's test-first obligation, which `tasks.md` discharges with three ordered red-green pairs over `fusion.py`.
 
 ## Technical Context
 
@@ -17,7 +17,7 @@
 **Target Platform**: Linux container, one shared vCPU
 **Project Type**: web (serving API consumed by E011 and E014)
 **Project Mode**: brownfield
-**Performance Goals**: reranking 50 candidates within **150–400 ms** on one shared vCPU (`specs/sad.md`) — taken as spec FR-033 prescribes: one query at a time, 50 candidates (FR-037), an enforced CPU quota of one vCPU, timed across the reranker component's scoring call, after readiness. **The statistic is unresolved and this plan does not resolve it**: `specs/sad.md` states a range and names no mean, percentile or never-exceed, so as written any observation inside a 250 ms band satisfies it and no observation falsifies it. Raised as amendment 7 in §Pending Amendments
+**Performance Goals**: reranking 50 candidates within **150–400 ms** on one shared vCPU (`specs/sad.md`) — taken as spec FR-033 prescribes: one query at a time, 50 candidates (FR-037), an enforced CPU quota of one vCPU, timed across the reranker component's scoring call, after readiness. **The statistic was unresolved in `specs/sad.md` and is settled for this epic's measurements at §Decisions Taken at Checklist: a never-exceed 400 ms**, falsified by a single observation, with 150 ms a reported expectation rather than part of the requirement. As `specs/sad.md` writes it — a range with no mean, percentile or never-exceed — any observation inside a 250 ms band satisfies it and none falsifies it, which is why amendment 7 in §Pending Amendments asks the registered document to record a statistic. That amendment is non-blocking: it changes what `specs/sad.md` says, not what this epic measures
 **Constraints**: API container steady-state RSS **≤ 400 MB**, covering **every model session the serving process holds — the query encoder plus the two reranker graphs AD-011 commits to** (restated 2026-07-29; this line previously read "of which the reranker session is the dominant line item", written for a single-session configuration that AD-011 no longer ships). "Steady state" is defined: read after readiness and again after the run's queries have been served, as the serving process's resident set size, with the peak observed during the run reported beside it — `specs/sad.md`'s benchmark job prints peak RSS while its target names steady state, and the two are different readings of the same run. The 400 MB is **not apportioned** between sessions and the rest of the process; spec FR-033 requires the report itemize them against the one total instead. No network at query time; fusion executes as **one** statement
 **Owner of the numeric envelope**: `specs/sad.md` owns both values — §Technical Context "Performance Goals" (150–400 ms) and §Quality Attributes "Compute envelope" (≤ 400 MB, measured by a container benchmark job). Neither may be relaxed here: `project-instructions.md` §Governance names the request-time compute envelope an **architectural constraint** that a feature-level decision MUST NOT relax, and requires a **superseding decision record** to change one. Sharpening how a figure is *taken* is this plan's to do; changing what it must reach is not, which is why amendment 7 is raised rather than answered
 **Scale/Scope**: 6,391 chunks over 26 documents today; the design band is 5,000–15,000. Every performance figure carries the corpus size it was measured at (spec FR-033), so a number taken at 6,391 chunks is not read as holding across the band
@@ -36,17 +36,17 @@ while this epic was in flight, and a compliance record that names no version can
 | I. Traceable or It Does Not Ship | PASS | Every result projects document, type, project and page from the chunk row; SC-003 asserts identity with the stored value. The response type has no constructor that accepts a page from anywhere else (AD-004) |
 | II. Uncertainty Is the Product | PASS | Recall with a Wilson interval, MRR with a percentile bootstrap, and an explicit unresolvable verdict where intervals overlap |
 | III. Precision Over Recall Where a Mistake Is Silent | PASS | FR-007 refuses on encoder-identity mismatch rather than answering; FR-009 returns empty as empty; the route is additive |
-| IV. Agent Output Style | PASS | Template sections only |
+| IV. Agent Output Style | PASS with a recorded exception | Template sections, plus two the template does not name: §Pending Amendments, which Governance requires of a branch that records an amendment it may not perform, and §Decisions Taken at Checklist's plan-side counterpart folded into §Checklist Outcome. Both carry an obligation no template section owns. The three summary epilogues an earlier draft carried were removed at Analyze — §IV forbids restating finished work, and each duplicated a section above it |
 | V. The Model Extracts, Code Computes | PASS with a scheduled contract change | All ranking arithmetic is in one statement inside the deterministic boundary, and AD-005 settles where reranker score-sorting sits. **`api.retrieval` is the third computation package, so the forbidden contract must name it** — E010 recorded the precedent when it added the second: a boundary that guards one of two is a boundary in name. Scheduled in §Project Structure and mapped at FR-002 |
 | VI. Evaluate Before You Tune | PASS with a scheduled deliverable | The fusion constant is already fixed at 60 by `specs/sad.md`'s sequence diagram, so FR-004's pre-registration is discharged against a registered document. **That answered the wrong clause on its own**: the principle governs *evaluation sets*, which must be frozen, hashed and committed before any tuning run, with the harness aborting on mismatch. SC-001 and SC-002 are measured at this epic's own gate on its own query set, so that set is E008's deliverable — see AD-010 and §Project Structure |
 | VII. Publish the Miss | PASS | Degraded mode is declared in every response; the sparse arm's contribution is a published row rather than an assumption; three limitations carry reversal triggers |
 | VIII. Honest Opponents | PASS | Reranking is reported against the strongest single arm, not only against fusion-only, which the spec itself calls weak |
-| Technology Stack | PASS, riding on an unlanded amendment | No new datastore. The stack names "ONNX Runtime **for INT8 CPU inference**"; this epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the INT8 one. E006 already has an amendment outstanding against that same qualifier — recorded in its PR body — and E008 depends on it landing rather than raising a fourth |
-| Testing & Quality Policy | PASS with two obligations | The SQL-resident property-test surface is preserved as a **pseudo-oracle**, recorded in §VII's four-part limitation format with its independence assumption stated as empirically falsified rather than assumed (§Testing Strategy). **`metrics.py` is a separate obligation and an easier one** — Wilson intervals, percentile bootstrap and the overlap verdict are pure scoring functions with no SQL obstacle, so they carry the mandatory test-first cycle and property tests directly. **That obligation is now carried by spec FR-042**, which names the properties and the generated input domains, rather than by this row and a table cell: a policy obligation recorded only in a plan has no verifier, and nothing fails when it is skipped. Ruff is the named lint and format gate and is in the Testing Strategy table |
-| Source Code Layout | **CONDITIONAL — amendment required** | New code under `/src/gateway` and `/src/api`; artifacts under `data/`. **But the clause reads "The gateway package carries neither a web framework nor the modeling stack", and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.** `onnxruntime` pulls NumPy transitively, so ADR-0022's decision contradicts this clause directly. Recorded as amendment 4 and cited from ADR-0022; the design does not proceed on the strength of an ADR overriding a governing clause |
-| Development Workflow | PASS | Branch matches workspace matches epic |
-| Data Provenance | PASS | FR-016 requires identity, revision, licence basis, source and digest for the vendored model |
-| Governance | **CONDITIONAL** | Three amendments recorded and not performed: the `specs/prd.md` MRR interval (FR-034), the `specs/project-plan.md` `part_numbers` owner (FR-035), and ADR-0022's `specs/sad.md` catalog row. All three land on the default branch |
+| Technology Stack | **CONDITIONAL — amendment required** | No new datastore. The stack names "ONNX Runtime **for INT8 CPU inference**"; this epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the INT8 one. E006 raised the same conflict **in its PR body**, which is not the amendment queue: nothing on that record obliges anyone to perform it, and FR-025 and FR-007 both depend on it. Raised here as **amendment 10**, blocking, with FR-047 and T096 as its verifier — by this plan's own standard, an obligation recorded only in prose has no verifier and nothing fails when it is skipped |
+| Testing & Quality Policy | PASS with three obligations | **The clause names risk arithmetic, fusion ranking and scoring functions, and it has two limbs — strict test-first and property tests — which are answered separately.** Fusion ranking's *property* limb is discharged by a **pseudo-oracle**, recorded in §VII's four-part limitation format with its independence assumption stated as empirically falsified rather than assumed (§Testing Strategy). Its *red-green* limb is **not** covered by that argument — SQL-residence removes the pure function a property test would target, and removes nothing about writing a test before the code it fails against. `tasks.md` therefore emits three ordered pairs for `fusion.py` (T027→T024, T029→T025, T030→T026), each completing on an observed failure. An earlier draft of this row extended the SQL argument across both limbs and emitted no pair. **`metrics.py` is a separate obligation and an easier one** — Wilson intervals, percentile bootstrap and the overlap verdict are pure scoring functions with no SQL obstacle, so they carry the mandatory test-first cycle and property tests directly. **That obligation is now carried by spec FR-042**, which names the properties and the generated input domains, rather than by this row and a table cell: a policy obligation recorded only in a plan has no verifier, and nothing fails when it is skipped. Ruff is the named lint and format gate and is in the Testing Strategy table |
+| Source Code Layout | **CONDITIONAL — amendment required** | New code under `/src/gateway` and `/src/api`; artifacts under `data/`. **But the clause reads "The gateway package carries neither a web framework nor the modeling stack", and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.** `onnxruntime` pulls NumPy transitively, so ADR-0022's decision contradicts this clause directly. Recorded as **amendment 3** and cited from ADR-0022; the design does not proceed on the strength of an ADR overriding a governing clause. **Amendment 3 covers both breached clauses, not only this one** — §Testing & Quality Policy separately asserts that the request-serving image contains no modeling-stack packages, and admitting NumPy to `SHARED_INFRASTRUCTURE` breaches that sentence too. An amendment naming §Source Code Layout alone would let T003 pass green with the image assertion still contradicted |
+| Development Workflow | PASS with a scheduled check | Branch matches workspace matches epic. **§Temporary Files gains a verifier**: this is the one epic that downloads a model and runs a native toolchain, and `test_scratch_location.py` exists only under `src/api/tests/` — the tier that does neither. T017 carries the obligation and T098 extends the check to the gateway tier |
+| Data Provenance | PASS | FR-016 requires identity, revision, licence basis, source and digest for the vendored model, and — extended at Analyze — the quantization record for the *generated* INT8 graph plus a separate licence basis per graph, since a derived artifact does not inherit its source's licence by default |
+| Governance | **CONDITIONAL** | **Ten** amendments recorded and not performed, of which **six block implementation**: the `specs/prd.md` MRR interval (item 1, FR-034), the `specs/project-plan.md` `part_numbers` owner (item 2, FR-035), `project-instructions.md` §Source Code Layout and §Testing & Quality Policy (item 3, FR-044 — the one this design cannot proceed without), ADR-0022's `specs/sad.md` catalog row (item 4, FR-045), the `specs/sad.md` Wilson-on-MRR twin of item 1 (item 9, FR-048), and §Technology Stack's INT8 qualifier (item 10, FR-047). Four more are non-blocking. All land on the default branch; §Pending Amendments carries the queue and its order |
 
 **Re-check after design**: PASS. The two boundary crossings design introduced — inference in the gateway, and the serving image admitting its runtime — are recorded in ADR-0022 rather than waved through.
 
@@ -111,23 +111,27 @@ Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its 
 digest check is the whole of the discipline recorded until now, and it detects **modification** of
 the set. It does not detect **repeated measurement against it**, which is the mechanism that converts
 a frozen set into a training set — the failure Principle VI exists to close, and one a hash cannot
-see by construction. Three things about this set are therefore undecided, and are recorded as
-decisions rather than filled in here:
+see by construction. Three things about this set were therefore recorded as decisions rather than
+filled in here. **Two have since been settled at `spec.md` §Decisions Taken at Checklist and are
+restated below as decided; one remains open** *(restated 2026-07-29 at Analyze — this list read as
+three open decisions after two of them had been answered)*:
 
-- **A consultation budget** — how many measurement runs against the set are permitted before a figure
-  taken from it stops being evidence, and who is entitled to run them. No number is chosen here;
-  inventing one would be a decision wearing an amendment's clothes.
-- **The set's composition** — its size, how queries are drawn and from what (the generator's document
-  model, the corpus's own text, or written by hand), and **which difference it must be able to
-  resolve**. The spec's own risk records that fifty queries cannot separate arms differing by a few
-  points, and SC-001 and SC-002 are measured on this set, so a size chosen without stating the
-  difference it must resolve reproduces that risk silently.
-- **The source of the relevance judgements** — SC-001's recall at five needs a per-query
-  relevant-passage set, and no requirement names who produces it or against what evidence. AD-009's
-  precedent, the generator's pre-render document model, is the obvious candidate and is deliberately
-  **not** adopted by default: judgements derived from the generator make every query answerable by
-  construction and may measure an easier task than a coordinator's. That is a product decision, not a
-  drafting one.
+- **A consultation budget — settled, and the answer is that there is none.** Measurement against the
+  set is unlimited; what is disciplined is **tuning after measurement**. Any ranking-parameter change
+  made after a figure is measured is recorded as a decision, the set re-measured, and both the before
+  and after figures published together. A run budget was rejected because no artifact here can count
+  runs across machines and branches, so it would be a rule enforced by memory. Obliged by FR-043.
+- **The set's composition — still open.** Its size, how queries are drawn, and **which difference it
+  must be able to resolve**. The spec's own risk records that fifty queries cannot separate arms
+  differing by a few points, and SC-001 and SC-002 are measured on this set, so a size chosen without
+  stating the difference it must resolve reproduces that risk silently. This is the one item AD-010
+  still defers; it is CHK027 in §Checklist Outcome and is owned jointly with E014.
+- **The source of the relevance judgements — settled: the generator's pre-render document model.**
+  AD-009's precedent is adopted, with the consequence stated rather than absorbed — every query is
+  answerable by construction, so the resulting recall is an **upper bound on real-world performance**
+  and FR-043 requires it published as such rather than as an estimate. Chosen over hand-labelling
+  (unreproducible without the labeller) and pooled judgements (which still need a judge and must be
+  rebuilt whenever an arm is added).
 
 **What is settled.** *(a)* The harness's abort on digest mismatch is a **checkable obligation, not a
 description of a deliverable**: a test perturbs a copy of the committed set, runs the harness against
@@ -218,9 +222,19 @@ view has none. Stated rather than omitted, so its absence is a decision.
 | Security | `tests/checks` | Licence basis, source, quantization record and digest for both vendored graphs; no network at query time; no credential material | — | configured |
 | Coverage | `coverage` | **80% of what, stated**: the project-wide floor over the combined data — `coverage combine` then `coverage report --fail-under=80`, branch coverage, over the root manifest's `[tool.coverage.run] source` list, which already contains `src/api/src/api` and `src/gateway/src/gateway` so both new packages enter the denominator on their own — **plus `api.retrieval` and `gateway.inference` each asserted alone at 80%** through `coverage report --include=…` against that same combined data. The per-package floor is E006's precedent and the reason is arithmetic: an aggregate lets already-covered packages carry a new one across the threshold. Two new lines in the workflow's Coverage gate step, not a new tool | — | **configured for the aggregate; the two per-package lines are a workflow edit** — see the merge-gate note below |
 
-**The property-test obligation is met by a substituted oracle, and the substitution is named for
-what it is.** The quality policy names fusion ranking as requiring property-based tests over pure
-functions, and FR-002 puts all ranking in one SQL statement, leaving no such function.
+**The quality policy's clause has two limbs, and only one of them is affected by SQL-residence.**
+The clause names risk arithmetic, fusion ranking and scoring functions as requiring *both* strict
+red-green-refactor *and* property tests over pure functions. FR-002 puts all ranking in one SQL
+statement, which removes the pure function the **property** limb targets — and removes nothing at all
+about the **red-green** limb, which constrains the order in which a test and its subject are written.
+`tasks.md` therefore emits three ordered pairs over `fusion.py` — T027→T024, T029→T025, T030→T026 —
+each completing on an observed failure, and none of the three reds is merely the module's absence:
+the oracle fails to collect, then the plan-shape assertion finds nodes not yet reporting the fetch
+depth, then the candidate-set assertion finds the fiftieth position varying between runs because the
+per-arm tie-break is not yet inside each CTE. What follows answers the property limb alone.
+
+**That property obligation is met by a substituted oracle, and the substitution is named for
+what it is.**
 `specs/sad.md` prescribes the resolution and this plan carries it: property tests recompute the
 fusion arithmetic in Python and assert it matches the emitted order. The technique has a name and a
 known limit. It is a **pseudo-oracle** (`research-quality.md` §Test-strategy), and its founding
@@ -438,14 +452,15 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 | FR-027, FR-028 | Connection, arms | `src/api/src/api/db.py`, `retrieval/arms.py`; **verification**: `src/api/tests/retrieval/test_vector_settings.py` (integration, live index) | Breadth on the connection (AD-002); strict iterative scan (AD-003) |
 | FR-029 | Parameters | `retrieval/parameters.py`; **verification**: `src/api/tests/retrieval/test_parameters.py` | Emitted with any result an evaluation consumes |
 | FR-030, FR-031, FR-032, **FR-042** | Metrics | `src/api/src/api/retrieval/metrics.py`; **verification**: `src/api/tests/retrieval/test_metrics.py` — property tests written **first** (FR-042), over the properties FR-042 names and the input domains it fixes, plus the emitted-artifact assertion FR-031 requires: no non-proportion statistic carries an interval recorded as `wilson` | Wilson for recall, bootstrap for MRR, unresolvable verdict on overlap by FR-032's closed-interval rule. These are the pure functions the quality policy's mandate applies to directly — no SQL obstacle, so no oracle |
-| AD-010's frozen set | Evaluation set and harness | `src/api/tests/retrieval/evaluation_set/`; **verification**: `src/api/tests/retrieval/test_evaluation_set.py` — perturbs a copy and asserts the harness exits non-zero **before emitting any measurement** | Derived from Principle VI rather than from a spec requirement, and listed as derived so it is not an orphan. Its three open decisions — consultation budget, composition, judgement source — are recorded under §Architecture Decisions |
-| FR-033, **SC-016** | Reranker session, reporting, container benchmark | `gateway/inference/reranker.py`, `retrieval/report.py`, **verification**: `src/api/tests/retrieval/test_performance_report.py` plus the container benchmark job `specs/sad.md` §Quality Attributes names, run under the one-vCPU quota | Latency and per-session resident memory against the declared budgets, taken by FR-033's fixed method. The row previously named a component and no verification, which left the one requirement whose whole content is *measurement* with nothing that measures it. The test asserts the report carries workload, environment, measurement point, occasion, counter, arm and corpus size; the benchmark job produces the figures. SC-016's memory half is adjudicable at ≤ 400 MB today; its latency half waits on amendment 7 |
+| AD-010's frozen set | Evaluation set and harness | `src/api/tests/retrieval/evaluation_set/`; **verification**: `src/api/tests/retrieval/test_evaluation_set.py` — perturbs a copy and asserts the harness exits non-zero **before emitting any measurement** | Derived from Principle VI rather than from a spec requirement, and listed as derived so it is not an orphan. Of its three recorded decisions, two are now settled at `spec.md` §Decisions Taken at Checklist — the consultation budget (none; tuning after measurement is what is disciplined) and the judgement source (the generator's pre-render document model, published as a ceiling) — and **composition alone remains open**. Restated under §Architecture Decisions |
+| FR-033, **SC-016** | Reranker session, reporting, container benchmark | `gateway/inference/reranker.py`, `retrieval/report.py`, **verification**: `src/api/tests/retrieval/test_performance_report.py` plus the container benchmark job `specs/sad.md` §Quality Attributes names, run under the one-vCPU quota | Latency and per-session resident memory against the declared budgets, taken by FR-033's fixed method. The row previously named a component and no verification, which left the one requirement whose whole content is *measurement* with nothing that measures it. The test asserts the report carries workload, environment, measurement point, occasion, counter, arm and corpus size; the benchmark job produces the figures. Both of SC-016's halves are adjudicable: memory at ≤ 400 MB, latency at the never-exceed 400 ms settled at `spec.md` §Decisions Taken at Checklist. Amendment 7 asks `specs/sad.md` to record that statistic and does not gate the criterion |
 | FR-037 | Fusion query, arm selection, reranker session | `retrieval/fusion.py`, `retrieval/arms.py`, `src/api/tests/retrieval/test_workload.py` | The derived constraint: depth 50 → reranked count 50 → breadth ≥ 50, and the top 50 of the fused ordering are what the reranker scores when the fused set holds up to 100 |
 | FR-038 | Configuration, reranker session | `src/api/src/api/config.py`, `gateway/inference/reranker.py`, `src/gateway/tests/test_inference.py` | Intra-op from the container's CPU quota, inter-op one; asserted set rather than defaulted |
 | FR-039 | Connection, vector settings | `src/api/src/api/db.py`, `src/api/tests/retrieval/test_vector_settings.py` | Extension version verified against the pinned digest before iterative scan is relied on; version recorded with the settings |
 | FR-040 | Connection, parameters | `src/api/src/api/db.py`, `retrieval/parameters.py`, `src/api/tests/retrieval/test_vector_settings.py` | Breadth recorded; any value above FR-027's floor is a recorded change carrying a re-measured latency figure |
 | FR-041 | Readiness, reporting | `retrieval/readiness.py`, `retrieval/report.py`, `src/api/tests/retrieval/test_degraded.py` | Degraded-path latency reported on FR-033's terms and asserted not slower than the reranked path |
-| FR-034, FR-035, **SC-015** | Recorded amendments | `spec.md` §Requirements; **verification**: the amending revision on the default branch, cited in the task that closes each — the four blocking items in §Pending Amendments, which SC-015 now gates in full rather than gating two of four | Performed on the default branch, not here. The check is decidable at this epic's boundary: read the default branch for the revision, cite it in the closing task |
+| FR-034, FR-035, FR-044, FR-045, **FR-047**, **FR-048**, **SC-015** | Recorded amendments | `spec.md` §Requirements; **verification**: the amending revision on the default branch, cited in the task that closes each — T001–T004, T096 and T097 against the six blocking items in §Pending Amendments (1, 2, 3, 4, 9, 10), which SC-015 now gates in full rather than gating two of four | Performed on the default branch, not here. The check is decidable at this epic's boundary: read the default branch for the revision, cite it in the closing task. FR-047 and FR-048 were added at Analyze: FR-048 closes the `specs/sad.md` twin of FR-034's `specs/prd.md` defect, which was queued against one registered document and not the other, and FR-047 closes the §Technology Stack INT8 qualifier that had been left to another epic's PR body — neither a queue nor a verifier |
+| **§Temporary Files** | Quantization tool, gateway inference | `src/model/tools/quantize_reranker.py`, `src/gateway/tests/test_scratch_location.py` (T017, T098) | Derived from `AGENTS.md` rather than from a spec requirement, and listed as derived so it is not an orphan. This is the one epic that downloads a model and runs a native toolchain, and the existing scratch check covers only the api tier — the tier that does neither |
 
 ## Project Structure
 
@@ -484,28 +499,52 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 +                                                      test_candidate_set.py, test_determinism.py,
 +                                                      test_parameters.py, test_router.py,
 +                                                      test_part_number_coverage.py,
-+                                                      test_results.py, test_page_provenance.py,
++                                                      test_page_provenance.py,
 +                                                      test_arms.py, test_flag_parity.py,
 +                                                      test_vector_settings.py, test_report.py,
 +                                                      test_metrics.py, test_readiness.py,
 +                                                      test_degraded.py, test_evaluation_set.py,
 +                                                      test_workload.py,
 +                                                      test_performance_report.py
++ src/api/tests/retrieval/fixtures/seed_chunks.py     the committed integration corpus — the merge
++                                                      gate applies migrations and never ingests
++ src/api/tests/test_retrieval_benchmark.py           the latency and memory figures, under the
++                                                      one-vCPU quota, after readiness
++ src/api/tests/test_retrieval_contract_conformance.py  E008's own contract, following E010's
++                                                      module rather than extending it (AD-014)
 + tests/checks/test_vendored_model_provenance.py      licence basis, source, quantization record
 +                                                      and digest for both graphs — cross-entry,
 +                                                      because it asserts on what entered the
 +                                                      repository rather than on a runtime path
 + src/gateway/tests/test_inference.py
++ src/gateway/tests/test_scratch_location.py          the gateway tier's scratch check — this epic
++                                                      downloads a model and creates sessions, and
++                                                      the existing check covers only the api tier
 ~ src/gateway/pyproject.toml                          declares onnxruntime, tokenizers
 ~ src/model/pyproject.toml                            stops declaring them; inherits via gateway
-~ src/api/pyproject.toml                              retrieval dependencies, and the forbidden
-~                                                      contract extended to name `api.retrieval`
-~                                                      as the third computation package
+~ src/model/src/model/ingest/embed.py                 repointed at gateway.inference.encoder so
+~                                                      exactly one pooling implementation exists
+~ src/api/pyproject.toml                              retrieval dependencies, and a new forbidden
+~                                                      contract naming `api.retrieval` as source
+~                                                      with `allow_indirect_imports = false` —
+~                                                      E010's separate-contract precedent, not a
+~                                                      list extension
+~ src/api/src/api/main.py                             readiness withheld inside the lifespan hook
 ~ tests/checks/helpers/image_contents.py              SHARED_INFRASTRUCTURE extension
 ~ tests/checks/test_dependency_isolation.py           the mirrored copy, and the heavy set
+~ tests/checks/test_image_contents.py                 the admitted runtime reflected in the
+~                                                      serving image's asserted contents
 ~ src/api/src/api/config.py                           index flag, thread counts, breadth
 ~ src/api/src/api/db.py                               connection options carrying the breadth
+~ .github/workflows/verify.yml                        per-package coverage floors, and the
+~                                                      benchmark module named in the api step
 ```
+
+*(Reconciled at Analyze, 2026-07-29: seven paths tasks write were absent from this list, and
+`test_results.py` was listed with no task creating it — the projection assertions it implied are
+carried by `test_page_provenance.py` and the contract-conformance module, so it is removed rather
+than given a task. A structure list is read as the change surface; a path missing from it is a file
+nobody reviewed for, and a path present with no author is a file nobody writes.)*
 
 **Brownfield Notes**
 
@@ -571,12 +610,14 @@ already carry it).
 ## Pending Amendments — recorded here, performed on the default branch
 
 Governance serializes amendments to registered documents onto the default branch; a feature branch
-records the need. **Recording is not performing, and "one in flight" governs performing — so six
+records the need. **Recording is not performing, and "one in flight" governs performing — so ten
 recorded needs queue rather than breach the clause.** What follows is the queue *with its order*,
-because an ungated amendment is a need nobody is obliged to meet.
+because an ungated amendment is a need nobody is obliged to meet. **Item numbers are assignment
+order and are cited from `spec.md` and `tasks.md`, so they are stable**: items 9 and 10 were added
+at Analyze and are blocking despite following the non-blocking ones.
 
 **Blocking — implementation does not begin until these land** (spec SC-015 gates 1 and 2; this plan
-extends the gate to 3 and 4):
+extends the gate to 3, 4, 9 and 10):
 
 1. **`specs/prd.md`** — the retrieval MRR row specifies a Wilson 95% interval for a statistic that is
    not a proportion (spec FR-034).
@@ -588,7 +629,12 @@ extends the gate to 3 and 4):
    ADR-0022 places inference in the gateway, and `onnxruntime` pulls NumPy transitively — so the
    decision contradicts the governing document. An ADR cannot override a `project-instructions.md`
    clause; the clause is amended to except a shared inference runtime, or the decision is wrong.
-   ADR-0022's related artifacts must cite it.
+   ADR-0022's related artifacts must cite it. **The amendment must reach two clauses, not one.**
+   §Testing & Quality Policy separately asserts that the request-serving image contains no
+   modeling-stack packages, and T007's admission of NumPy to `SHARED_INFRASTRUCTURE` breaches that
+   sentence by the same reasoning that breaches §Source Code Layout. An amendment naming only the
+   layout clause would let T003 close green while the image assertion stayed contradicted — the
+   failure mode this queue exists to prevent. FR-044 and T003 verify both clauses.
 4. **`specs/sad.md`** — the ADR catalog needs ADR-0022's row, appended after ADR-0021. Gated because
    merging with the catalog missing an `accepted` record is the registered index disagreeing with
    the record set it indexes:
@@ -629,11 +675,27 @@ extends the gate to 3 and 4):
    occupies it is wrong. Non-blocking, but it should land before any figure is published against the
    row, or the published figure will be read against a configuration that does not ship.
 
+**Blocking — added at Analyze, 2026-07-29:**
+
+9. **`specs/sad.md:262`** — carries the **same defect as item 1**: a Wilson 95% interval specified
+   for mean reciprocal rank, which is not a proportion. Item 1 queues the `specs/prd.md` occurrence
+   and this one went unrecorded, so on the current queue `specs/prd.md` would be corrected while a
+   second registered document went on specifying the invalid interval. Governance holds the
+   registered document wins where a downstream artifact conflicts, so FR-031 loses to `specs/sad.md`
+   until this lands — the identical exposure item 1 exists to close (spec FR-048, task T097).
+10. **`project-instructions.md` §Technology Stack** — names "ONNX Runtime **for INT8 CPU
+    inference**". This epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the
+    INT8 one, so the qualifier excludes two things the design ships. E006 raised the same conflict
+    **in its PR body**, which is not this queue: a PR body obliges nobody and is not a verifier, and
+    this plan's own standard is that an obligation recorded only in prose fails silently. Raised here
+    with an owner and a verifier rather than depended on (spec FR-047, task T096).
+
 **Sequencing.** E006 holds at least one amendment outstanding ahead of these, so the queue is
-E006's, then 1–4 in the order above, then 7 and 8, then 5 and 6 whenever. This plan does not assert
-they will land; it asserts implementation does not begin until 1–4 have, that SC-016's latency half
-is not adjudicated until 7 has, and it names the verifier: the amending revision on the default
-branch, cited in the task that closes each.
+E006's, then 1–4 and 9–10 in the order above, then 7 and 8, then 5 and 6 whenever. This plan does not
+assert they will land; it asserts implementation does not begin until 1–4, 9 and 10 have, that
+SC-016's latency half is measured against the never-exceed settled at spec §Decisions Taken at
+Checklist and item 7 records rather than gates it, and it names the verifier: the amending revision
+on the default branch, cited in the task that closes each.
 
 **On the workflow's own shared-document steps.** Steps 4.3 and 5.6 instruct an epic to write the
 `specs/sad.md` catalog row and to rewrite its managed baseline section directly. Those steps and the
@@ -759,8 +821,8 @@ Recorded against E010; not fixed here, because it is not this epic's file.
 ## Checklist Outcome
 
 Three checklists, 119 items, 100% carrying traceability references. **108 closed** — 28 already
-answered by the artifacts, 80 closed by amending them. The spec grew from 36 requirements to 42 and
-the contract was corrected rather than annotated.
+answered by the artifacts, 80 closed by amending them. The spec grew from 36 requirements to 42 at
+checklist, and to 48 across Tasks and Analyze; the contract was corrected rather than annotated.
 
 Four decisions went to the user and are recorded in `spec.md` §Decisions Taken at Checklist: the
 latency statistic (never-exceed, not a percentile), the source of relevance judgements
@@ -768,6 +830,15 @@ latency statistic (never-exceed, not a percentile), the source of relevance judg
 tuning), and partial reranker load (ready, naming the failed arm).
 
 ### The seven that remain open, and why none is invented here
+
+**Reconciling the count**: 119 items, 108 closed at evaluation, so eleven stood open when the
+checklists were written — Performance CHK001, CHK002, CHK010, CHK015, CHK029, CHK031; Testing
+CHK017, CHK026, CHK027, CHK028; API Quality CHK028. The four decisions above then closed four of
+them: CHK001 and CHK002 by the never-exceed statistic, CHK026 by the tuning-disclosure rule that
+replaced a consultation budget, and Testing CHK028 by naming the generator's pre-render document
+model as the judgement source. **Seven remain**, and they are the seven rows below.
+
+Every one is a **number nobody has chosen**.
 
 Every one is a **number nobody has chosen**. Recording an unchosen number as a requirement is how a
 budget comes to exist that no one agreed to, so each carries the occasion on which it will be set.
@@ -781,20 +852,9 @@ budget comes to exist that no one agreed to, so each carries the occasion on whi
 | CHK027 (Testing) | The evaluation set's size and draw method are unspecified, against a spec risk that says fifty queries cannot separate close arms | Owned jointly with E014, which owns the frozen set. E008 builds its own set to measure at its gate; the sizing question belongs where the published figures are produced |
 | CHK028 (API Quality) | `results.maxItems: 100` is underived. FR-037 bounds the *fused* set at 100, but `limit` cuts the ranked portion to 50 before return and route additions are counted outside `limit`, so the cap assumes the route contributes at most 50 — which nothing states | Resolved by rule rather than number: the array is bounded by `limit` plus one result per part-number token recognised in the query, and the query is capped at 1,000 characters. Stating the rule is honest where a round number was not |
 
-### Two findings from the checklists that were not checklist items
-
-**The merge gate runs against an empty chunk table.** `.github/workflows/verify.yml` applies the
-migration chain but never ingests a corpus — the `reproduce` job aborts before writing chunks by
-design. The fusion statement's integration tier must therefore commit and seed its own fixture, or
-it passes against zero rows. Separately, the api step runs `-m "not benchmark"` while naming one
-benchmark file explicitly, so an E008 benchmark module not added to that list **runs nowhere**.
-Four workflow edits are named in §Testing Strategy.
-
-**The plan's own oracle wording was the defect it existed to prevent.** It said the Python side
-recomputes "from the same per-arm rank vectors" — reading inputs back from the query under test,
-which makes the comparison prove only that the copy was faithful. The substitution is now named a
-pseudo-oracle, its independence assumption is stated as empirically falsified, and four soundness
-conditions and three uncovered surfaces are enumerated.
+Two findings the checklists surfaced that were not checklist items — the merge gate running against
+an empty `chunk` table, and this plan's own oracle wording reading inputs back from the query under
+test — are carried in §Testing Strategy, which owns both remedies. They are not restated here.
 
 ## Inherited from E010, checked after its merge
 
@@ -805,29 +865,12 @@ is still v1.2.8 so this plan's compliance audit names the current version, and n
 `pyproject.toml`, `image_contents.py`, `test_dependency_isolation.py` or `verify.yml` was touched.
 First clean merge with a sibling epic.
 
-**One gap, of the class that does not announce itself.** E010 added
-`src/api/tests/test_contract_conformance.py`, which validates a served response against its committed
-contract — and it names one contract by path:
-
-```
-CONTRACT = … / "00010-risk-ranked-coordinator-worklist" / … / "openapi.yaml"
-```
-
-So it covers E010's contract and nothing else. **E008's contract would ship unvalidated**, which is
-the same shape as the benchmark module that runs nowhere and the merge gate that runs against an
-empty chunk table: a check that exists, passes, and does not cover the thing you assumed it did.
-
-E010's own reasoning is the argument for closing it — *"Hand-written key sets are … a bad way to
-assert closure over a whole document, because the ones nobody wrote are exactly the ones that
-drift."* E008's contract is closed throughout (`additionalProperties: false`) and its response
-carries members no hand-written assertion is likely to enumerate: `weighted_fields.all_empty`,
-`match_kind`, `deterministic_route`, per-session memory, `ordering_digest`.
-
-**AD-014**: E008 adds contract conformance for its own surface, following E010's module rather than
-extending it. Extending would make one test own two epics' contracts and fail for reasons belonging
-to the other; following keeps each contract's authority with its own epic. Recorded in §Testing
-Strategy's Integration tier and in the Requirement Coverage Map against FR-008, FR-013, FR-022 and
-FR-029, whose response members it is the only mechanical check over.
+**One gap, of the class that does not announce itself.** E010's
+`src/api/tests/test_contract_conformance.py` names one contract by path
+(`… / "00010-risk-ranked-coordinator-worklist" / … / "openapi.yaml"`), so it covers E010's contract
+and nothing else and **E008's would ship unvalidated** — the same shape as the benchmark module that
+runs nowhere and the merge gate that runs against an empty chunk table. **AD-014** in
+§Architecture Decisions settles the remedy and is not restated here; T091 carries it.
 
 **Not inherited, checked and ruled out**: E010's FR-057 makes its response contract read-only for
 later epics, but names E012, E017 and E019 as the bound consumers. E008 adds its own retrieval

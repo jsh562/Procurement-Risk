@@ -349,10 +349,19 @@ difference is which vector-search strategy executed.
 
 - **FR-015**: System MUST rerank the fused candidate set with a cross-encoder that scores the
   query and each candidate jointly.
-- **FR-016**: System MUST load the reranker from an artifact committed to the repository, with
-  a recorded identity, revision, **license basis and source**, and a digest verified before the
-  session is created, reaching no network at run time. License basis is required of every
-  artifact entering this repository, and a vendored third-party model is no exception.
+- **FR-016** *(extended 2026-07-29 at Analyze)*: System MUST load the reranker from an artifact
+  committed to the repository, with a recorded identity, revision, **license basis and source**, and
+  a digest verified before the session is created, reaching no network at run time. License basis is
+  required of every artifact entering this repository, and a vendored third-party model is no
+  exception. Two further obligations, previously carried by `plan.md` and `tasks.md` and by no
+  requirement: **(a)** the INT8 graph is a *generated* artifact, so its record MUST additionally
+  carry the **generator identity, the seed, the date and the hash of the source graph it was
+  produced from** — without them the quantized graph is an unreproducible binary whose provenance
+  stops at "someone quantized something"; and **(b)** both graphs MUST record their licence basis
+  **separately**, because the INT8 graph derives from the FP32 one and a derived artifact does not
+  automatically inherit the licence of its source — a single shared licence line would assert an
+  inheritance nobody checked. *(The generated-artifact half was carried by AD-007 and T017 alone;
+  Data Provenance governs it and no requirement enforced it.)*
 - **FR-017** *(amended 2026-07-29)*: System MUST load the reranker once per process, warm it at the
   **maximum** batch and sequence shape, and withhold readiness until warm-up completes. The maximum
   shape is defined numerically rather than left to the implementer: **batch equal to the reranked
@@ -650,10 +659,17 @@ well-defined to consume.
   before any figure is measured against it, and MUST abort rather than report when the harness finds
   the digest does not match. Judgements are derived from the generator's pre-render document model,
   so every query is answerable by construction and the resulting recall is an **upper bound on
-  real-world performance**, which MUST be published as such rather than as an estimate. *(Added
-  2026-07-29. The set was committed to by AD-010 and depended on by SC-001 and SC-002, and no
-  requirement obliged it — so a deliverable that two published figures rest on could have been
-  skipped without any requirement failing. Principle VI is the source; this makes it enforceable.)*
+  real-world performance**, which MUST be published as such rather than as an estimate. The set may
+  be measured against without limit; what is disciplined is **tuning after measurement**. Any change
+  to a ranking parameter made after a figure has been measured MUST be recorded as a decision, the
+  set re-measured, and **the figure before the change and the figure after it published together**.
+  Publishing only the later figure satisfies the re-measurement and hides the tuning, which is the
+  half that makes a re-tune visible. *(Added 2026-07-29. The set was committed to by AD-010 and
+  depended on by SC-001 and SC-002, and no requirement obliged it — so a deliverable that two
+  published figures rest on could have been skipped without any requirement failing. Principle VI is
+  the source; this makes it enforceable. The both-figures obligation was extended in on the same
+  date: §Decisions Taken at Checklist replaced a run budget with it, and it was carried by that
+  section and by `plan.md` alone.)*
 - **FR-044**: System MUST NOT begin implementation until the amendment against
   `project-instructions.md` §Source Code Layout has landed on the default branch, verified by citing
   the amending revision. That clause reads that the gateway package carries neither a web framework
@@ -667,11 +683,30 @@ well-defined to consume.
   FR-044.)*
 - **FR-046**: System MUST bound the returned result array by a stated rule rather than a fixed
   ceiling: at most `limit` ranked results plus at most one deterministic match per part-number token
-  recognised in the query, with the query length capped. *(Added 2026-07-29. The contract declared a
-  fixed maximum of 100 that nothing derived — `limit` cuts the ranked portion to 50 before return
-  and route additions are counted outside it, so the cap silently assumed the route contributes at
-  most 50. The rule was resolved at checklist and recorded in `plan.md`, and no requirement or task
-  carried it.)*
+  recognised in the query, with the query length capped. The rule bounds only the ranked portion by
+  `limit` because **FR-012** requires route matches be unioned additively and counted outside it — a
+  single ceiling over both would make the route subtractive at the boundary, which is the property
+  FR-012 exists to forbid. *(Added 2026-07-29. The contract declared a fixed maximum of 100 that
+  nothing derived — `limit` cuts the ranked portion to 50 before return and route additions are
+  counted outside it, so the cap silently assumed the route contributes at most 50. The rule was
+  resolved at checklist and recorded in `plan.md`, and no requirement or task carried it.)*
+- **FR-047**: System MUST NOT begin implementation until the amendment against
+  `project-instructions.md` §Technology Stack has landed on the default branch, verified by citing
+  the amending revision. That clause names ONNX Runtime **"for INT8 CPU inference"**, and this epic
+  runs an FP32 query encoder and — per FR-025 — an FP32 reranker arm beside the INT8 one, so the
+  qualifier excludes two things the design ships. *(Added 2026-07-29 at Analyze. E006 raised the same
+  conflict in its PR body and E008's plan depended on that landing. A PR body is not the amendment
+  queue: nobody is obliged to perform it, nothing fails when it is skipped, and both FR-025 and
+  FR-007 rest on it. `plan.md` §Pending Amendments item 10.)*
+- **FR-048**: System MUST NOT begin implementation until the amendment against `specs/sad.md`'s
+  retrieval-metrics row has landed on the default branch, verified by citing the amending revision.
+  That row specifies a Wilson 95% interval for mean reciprocal rank, which is not a proportion —
+  **the identical defect FR-034 raises against `specs/prd.md`**. *(Added 2026-07-29 at Analyze.
+  FR-034 queued one occurrence and this second one went unrecorded, so `specs/prd.md` would have been
+  corrected while a second registered document went on specifying the invalid interval. Governance
+  holds the registered document wins where a downstream artifact conflicts, so FR-031 loses to
+  `specs/sad.md` until this lands — the exposure FR-034 exists to close, left open on the other half.
+  `plan.md` §Pending Amendments item 9.)*
 
   The generated input domains MUST reach the cases those properties are stated for: query-set sizes
   from one upward, all-hit and all-miss sets, ties in reciprocal rank, and per-query values at both
@@ -733,7 +768,12 @@ name has a bounded life.
   worklist and the grounded answer, and not the fusion statement. The exact path's per-query latency
   is reported at the measured corpus size under FR-033, so the assumption becomes falsifiable the
   moment a query-level budget exists. Until then this entry is an assumption in the strict sense and
-  is not a criterion anything can fail.
+  is not a criterion anything can fail. **Reversal trigger**: a query-level latency budget declared
+  in `specs/sad.md`, or a measured exact-path query exceeding the 400 ms this epic never-exceeds for
+  the reranking step alone — either turns the band into a threshold and this entry into a criterion.
+  **Production-scale alternative**: an approximate index sized and tuned against a declared
+  end-to-end budget, with the exact path retained only as the recall reference the approximate path
+  is measured against, which is what the FR-026 flag already makes selectable.
 
 ### Risks
 
@@ -853,16 +893,18 @@ Statement names, applied to its own gate.
 - **SC-014** [US6]: Zero queries return fewer candidates than requested where that many matching
   rows exist, including filtered queries, on either path — so no recall is lost to a retrieval
   setting rather than to the ranking design.
-- **SC-015** [US1] *(amended 2026-07-29)*: **All four blocking amendments** have landed on the
-  default branch before implementation begins — FR-034 against `specs/prd.md`, FR-035 against
-  `specs/project-plan.md`, and the two the Plan phase added and gated (`plan.md` §Pending
-  Amendments): item 3, `project-instructions.md` §Source Code Layout, without which ADR-0022's
-  placement of inference in the gateway contradicts a governing clause, and item 4, `specs/sad.md`'s
-  ADR catalog row for ADR-0022. **The verifier is named and the gate is decidable at this epic's own
-  boundary**: each is checked by reading the default branch for the revision that performed it,
-  cited in the task that closes it, so this criterion is adjudicated here rather than asserted about
-  another branch. Until the first lands, a registered document and FR-031 disagree, and Governance
-  holds the registered document wins.
+- **SC-015** [US1] *(amended 2026-07-29; extended at Analyze the same day)*: **All six blocking
+  amendments** have landed on the default branch before implementation begins — FR-034 against
+  `specs/prd.md`, FR-035 against `specs/project-plan.md`, the two the Plan phase added and gated
+  (`plan.md` §Pending Amendments): item 3, `project-instructions.md` §Source Code Layout **and**
+  §Testing & Quality Policy, without which ADR-0022's placement of inference in the gateway
+  contradicts two governing clauses, and item 4, `specs/sad.md`'s ADR catalog row for ADR-0022 — and
+  the two Analyze added: item 9 (FR-048) against `specs/sad.md`'s Wilson-on-MRR row, and item 10
+  (FR-047) against §Technology Stack's INT8 qualifier. **The verifier is named and the gate is
+  decidable at this epic's own boundary**: each is checked by reading the default branch for the
+  revision that performed it, cited in the task that closes it, so this criterion is adjudicated here
+  rather than asserted about another branch. Until items 1 and 9 land, two registered documents and
+  FR-031 disagree, and Governance holds the registered document wins.
 - **SC-016** [US3] *(amended 2026-07-29)*: Reranking latency and the resident memory of every model
   session the serving process holds are measured exactly as FR-033 prescribes and **fall within** the
   budgets `specs/sad.md` declares — resident set size **≤ 400 MB** for the serving container
@@ -873,9 +915,12 @@ Statement names, applied to its own gate.
   enumerated candidate set — and both carry the corpus size the run was measured at. Publishing an
   overage discharges FR-033's disclosure obligation and **does not satisfy this criterion**: a run
   exceeding a budget fails it and says so, because Publish-the-Miss makes a miss visible rather than
-  making it a pass. **Pending**: the memory half is adjudicable today at ≤ 400 MB; the latency half
-  becomes adjudicable only when a statistic is named for the 150–400 ms range, which is an amendment
-  against `specs/sad.md` (`plan.md` §Pending Amendments, item 7) and not this epic's to choose.
+  making it a pass. **Both halves are adjudicable**: memory at ≤ 400 MB, and latency as a
+  **never-exceed 400 ms** — no query in an evaluation run may exceed it, a single observation
+  falsifies it, and 150 ms is a reported expectation rather than part of the requirement. That
+  statistic was settled at §Decisions Taken at Checklist; `specs/sad.md` owns the number and states no
+  statistic for it, so amendment 7 (`plan.md` §Pending Amendments) remains open as a request that the
+  registered document **record** what this epic measures against. It does not gate this criterion.
 
 ## Glossary *(include when spec introduces 2+ domain-specific terms)*
 
@@ -996,7 +1041,20 @@ repeated measurement, and no artifact in this repository can count runs across m
 after a measurement is recorded as a decision, the set is re-measured, and **both figures are
 published**. Chosen over a split set because the spec's own risk already records that fifty queries
 cannot separate arms differing by a few points, and halving it would make every comparison
-unresolvable.
+unresolvable. Obliged by FR-043; recorded in the four-part limitation format below.
+
+- **Scope decision**: the frozen evaluation set carries a digest and no run budget, and the
+  discipline it enforces is disclosure of tuning rather than restraint in measuring.
+- **Supporting evidence**: a digest is a modification detector and detects nothing about how often
+  the set is read; no artifact in this repository counts runs across machines and branches, so a run
+  budget here would be a rule enforced by memory and unfalsifiable at review.
+- **Reversal trigger**: any evaluation figure published outside this repository, or any query set
+  drawn from real coordinator questions — at which point overfitting stops being a local concern and
+  a held-out split is worth the loss of statistical power.
+- **Production-scale alternative**: a train/dev/test split with the test partition released only at
+  a decision point, plus a run counter held by the evaluation service rather than the repository.
+  That is the standard remedy and it needs a set large enough to survive being divided, which fifty
+  queries is not.
 
 **A partially loaded reranker reports ready, naming the arm that failed** (settles FR-021 and the
 readiness contract). With two graphs, one loading while the other fails is reachable. The serving
