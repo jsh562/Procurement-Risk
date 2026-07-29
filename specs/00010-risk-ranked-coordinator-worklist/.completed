@@ -1,6 +1,6 @@
 E010 — Risk-Ranked Coordinator Worklist
-Implementation complete: 52 tasks, plus 45 bug tasks from five QC iterations.
-All 45 are closed.
+Implementation complete: 52 tasks, plus 47 bug tasks from six QC iterations.
+All 47 are closed.
 
 ## The release gate, and how it closed
 
@@ -83,7 +83,7 @@ Compliance Check, which had been reached by neither re-run.
 
 ## What four iterations of QC actually found
 
-45 defects. **Every finding after iteration 1 was an artifact claiming more than
+47 defects. **Every finding after iteration 1 was an artifact claiming more than
 the repository does, rather than a fault in what it does** — with two exceptions:
 T083, a formatting gate that genuinely failed CI, and T096, a manual procedure
 that could not be executed as written. The recurring shape is narrower
@@ -184,6 +184,19 @@ that the class is wider than the title.
           file is the sole record of WCAG coverage. Now points at
           `procurement_e2e`; verified by running it: total 15, ranked 13.
     T097  T081's record cited plan.md:438 for HINT-003, which is at 437.
+
+  Iteration 6 (T098-T099) — 2 findings, both in the commit that closed T081
+    T098  That commit changed three sites in plan.md and left the fourth — the
+          section whose entire purpose is to state the amendment's status,
+          which still read "recorded, not performed" and still named
+          `/lines?project=` as what the SAD says "today". The plan
+          contradicted itself about the gate in the same commit that closed
+          it. Also corrected the C4 label at plan.md:62, a fourth address
+          site, on the same argument the commit itself had made.
+    T099  The PO-447x figure published for T096 was the ranked count written
+          twice. All 15 response rows are PO-447x; the database holds 16, and
+          the difference is `PO-4479-1`, which is closed and excluded per
+          SC-008 — not the posterior-less line, which is a different one.
 
 ## Reported, outside E010's scope
 

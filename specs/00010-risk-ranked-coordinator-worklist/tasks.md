@@ -390,11 +390,23 @@
   > Scenarios A1-A7 name `PO-4473-1`, `PO-4474-1/2`, `PO-4475-1`, `PO-4476-1/2`. The shared database holds **0** rows matching `PO-447%`; `procurement_e2e` holds 16. So every scenario in the file was unobservable, and `manual-test.md` is the sole record of WCAG coverage (qc-report.md:45).
   > The note three lines above the block already said the seed "writes only to `procurement_e2e` … and prints that URL when it finishes", and `playwright.config.ts:44-48` warns against this exact substitution. The document contradicted itself across four lines.
   > Note the two URLs are *not* both wrong: the seed at line 27 is handed the shared URL and derives the dedicated name from it (`seed.py:60-66`), so that line is correct and must not be "fixed" to match.
-  > Fix hint: point the boundary at `procurement_e2e`, and say why the two URLs differ so the next reader does not reconcile them the wrong way. Verified after the fix: `counts.total == 15`, ranked 13, unranked 2, 13 PO-447x rows.
+  > Fix hint: point the boundary at `procurement_e2e`, and say why the two URLs differ so the next reader does not reconcile them the wrong way. Verified after the fix: `counts.total == 15`, ranked 13, unranked 2, and all 15 rows in the response are PO-447x. The database holds 16: `PO-4479-1` is closed and is excluded from the worklist, which is what SC-008 asserts. The first published figure said 13 — the ranked count restated, not the row count — and a first correction attributed the 16-to-15 difference to a missing posterior, which is a different line (`PO-4473-1`, open, no posterior, shown as not_covered). Measured both times rather than reasoned about the second.
 
 - [X] T097 [BUG:WARNING] {FR-040} [accuracy] T081's record cites the wrong line for the gate it quotes — specs/00010-risk-ranked-coordinator-worklist/tasks.md:313
   > The record reads "plan.md:46 and HINT-003 (plan.md:438)". `plan.md:437` is HINT-003; `plan.md:438` is HINT-005. Off by one, in the only open task, in the sentence that quotes the release gate it exists to hold.
   > Fix hint: `plan.md:437`.
+
+
+- [X] T098 [BUG:ERROR] {FR-040} [accuracy] The plan's dedicated amendment-status record still declared the amendment not performed after it had been performed — specs/00010-risk-ranked-coordinator-worklist/plan.md:398
+  > The commit that closed T081 changed three sites in `plan.md` — the Governance row (:46), the summary table (:90) and HINT-003 (:437) — and did not touch the fourth, which is the section whose entire purpose is to state the amendment's current status.
+  > `plan.md:398` read "**Status**: recorded, not performed"; :400 named `GET /lines?project=…` as what the SAD "sketches"; :402 said "this branch does neither of the two things that would settle it"; :410 said "`/lines` is what the architecture document says today"; :412 stated a "**Consequence if unresolved**". All five were false, and unlike :46 and :437 the section carried no closure marker.
+  > So `plan.md` contradicted itself about the release gate in the same commit that closed it. This is the same class the last five iterations were about, inside the same file as the fix.
+  > Fix hint: close the record in place rather than deleting it — status, past tense, and a **Resolution** in place of **Consequence if unresolved**. Also `plan.md:62`'s C4 label read `GET /worklist`; the commit that closed T081 argued three artifacts naming one address should not require composition to see it, and that argument applies to the fourth site too.
+
+- [X] T099 [BUG:WARNING] {FR-040} [accuracy] The PO-447x figure published for T096's verification was the ranked count restated — specs/00010-risk-ranked-coordinator-worklist/tasks.md:393
+  > T096's record and `qc-report.md` both published "13 PO-447x rows" alongside "ranked 13, unranked 2". Measured: all **15** rows in the response are PO-447x, and the database holds **16**. 13 was the ranked count written twice.
+  > The first correction then attributed the 16-to-15 difference to a line with no posterior. Measured: `PO-4479-1` is **closed** and excluded, which is what SC-008 asserts; the posterior-less line is `PO-4473-1`, which is open and shows as not_covered. Two different lines and two different reasons.
+  > Fix hint: state the response count, the database count, and the measured reason they differ.
 
 
 ---

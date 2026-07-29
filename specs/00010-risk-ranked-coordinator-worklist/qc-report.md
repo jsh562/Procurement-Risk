@@ -387,7 +387,8 @@ use" and it had five members. The one that was missed was the line that decided
 whether any of the rest could run.
 
 Both fixed. The corrected procedure was executed rather than reasoned about:
-`counts.total == 15`, ranked 13, unranked 2, 13 `PO-447x` rows, `page_states
+`counts.total == 15`, ranked 13, unranked 2, all 15 response rows `PO-447x`
+(16 in the database — `PO-4479-1` is closed and excluded, per SC-008), `page_states
 ['stale_run']` — matching the file's readiness check.
 
 ## T081

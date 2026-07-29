@@ -59,7 +59,7 @@ C4Container
     }
     ContainerDb(db, "Postgres", "PostgreSQL 16", "Lines and posteriors")
     Rel(coord, web, "Reads, adjusts need-by")
-    Rel(web, api, "GET /worklist")
+    Rel(web, api, "GET /api/v1/worklist")
     Rel(api, risk, "Ranks")
     Rel(risk, db, "Reads")
 ```
@@ -395,23 +395,28 @@ adopt rather than re-choose:
 
 ## Recorded Amendment Request — endpoint address
 
-**Raised by**: E010, 2026-07-28. **Target**: `specs/sad.md:124`. **Status**: recorded, not performed.
+**Raised by**: E010, 2026-07-28. **Target**: `specs/sad.md:124`.
+**Status**: **PERFORMED** on the default branch as `24456b9` (2026-07-29), merged here. Closed.
 
-`specs/sad.md:124` sketches the worklist read as `W->>A: GET /lines?project=…`. This feature's contract
+`specs/sad.md:124` sketched the worklist read as `W->>A: GET /lines?project=…`. This feature's contract
 defines `GET /api/v1/worklist`. Governance says the registered document wins and a feature branch
-records the need for an amendment rather than performing it, so this branch does neither of the two
-things that would settle it: it does not rename the endpoint to match the sketch, and it does not edit
-`specs/sad.md`.
+records the need for an amendment rather than performing it, so this branch did neither of the two
+things that would have settled it here: it did not rename the endpoint to match the sketch, and it did
+not edit `specs/sad.md`. QC iteration 4 found the gate unmet after three iterations had not checked it
+and logged it as T081; the amendment was then performed where governance places it, and merged back.
 
-**The case for `/worklist`**, for whoever resolves it: the resource is a ranked projection carrying
-page-scope state and two disjoint groups — not a collection of lines. A caller asking for `/lines`
-would reasonably expect line resources back, and would not expect `no_active_run` to be a successful
-response. E010's own Implementation Signals call it "a worklist endpoint". Against it: `/lines` is
-what the architecture document says today, and the sketch predates the contract.
+**The case for `/worklist`**, which is the one that prevailed: the resource is a ranked projection
+carrying page-scope state and two disjoint groups — not a collection of lines. A caller asking for
+`/lines` would reasonably expect line resources back, and would not expect `no_active_run` to be a
+successful response. E010's own Implementation Signals call it "a worklist endpoint". The argument
+against it was that `/lines` was what the architecture document said, and the sketch predated the
+contract — which is exactly why the fix was to amend the sketch rather than to rename the endpoint.
 
-**Consequence if unresolved**: the two documents disagree in writing, and E012, E013 and E017 all build
-against this surface. Whichever name survives, it should be settled before the endpoint ships rather
-than discovered by the first consumer.
+**Resolution**: `specs/sad.md`'s primary flow now reads `GET /api/v1/worklist?project_id=…`, and the
+decision is recorded in that document's managed `Project Context Baseline Updates` section so it is
+discoverable from where project-level decisions live rather than only from a diagram. All three
+artifacts resolve to one address without composition — the SAD's primary flow, this plan's summary
+table, and the contract's `servers` plus path. E012, E013 and E017 build against a settled name.
 
 ## Story Phasing Note
 
