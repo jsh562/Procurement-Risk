@@ -1,0 +1,262 @@
+{
+  "declared_bounds": {
+    "cosine_similarity_min": 0.999999,
+    "declared_before": "the first comparison was run; see specs/.../plan.md FR-019",
+    "max_absolute_per_dimension_difference": 1e-05
+  },
+  "probes": [
+    {
+      "document_id": "ufgs-01-33-00",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "reference list",
+      "page_number": 5,
+      "probe_id": "ufgs-01-33-00-p0005-l000-008",
+      "text": "PART 1 GENERAL\n1.1 SUMMARY\n**************************************************************************\nNOTE: This paragraph contains tailoring for Army,\nDesign-Bid-Build, and Design-Build. Use for Army\nprojects only.\n**************************************************************************\n1.1.1 Submittal Information"
+    },
+    {
+      "document_id": "ufgs-01-33-00",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "body prose",
+      "page_number": 15,
+      "probe_id": "ufgs-01-33-00-p0015-l000-008",
+      "text": "required to use for this contract]. Properly complete this form by\nfilling out all the heading blank spaces and identifying each item\nsubmitted. Exercise special care to ensure proper listing of the\nspecification paragraph and sheet number of the contract drawings\npertinent to the data submitted for each item.\n1.6.2 Identifying Submittals\n**************************************************************************\nNOTE: This paragraph includes tailoring for Navy."
+    },
+    {
+      "document_id": "ufgs-01-33-00",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "ladder",
+      "page_number": 29,
+      "probe_id": "ufgs-01-33-00-p0029-l000-008",
+      "text": "Government reserves the right to rescind inadvertent approval of\nsubmittals containing unnoted variations.\n1.10.3 Warranting that Variations are Compatible\nWhen delivering a variation for approval, the Contractor warrants that\nthis contract has been reviewed to establish that the variation, if\nincorporated, will be compatible with other elements of work.\n1.10.4 Review Schedule Extension\n**************************************************************************"
+    },
+    {
+      "document_id": "ufgs-26-11-16",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "reference list",
+      "page_number": 6,
+      "probe_id": "ufgs-26-11-16-p0006-l000-008",
+      "text": "**************************************************************************\nNOTE: The following information shall be shown on\nthe project drawings:\n1. Single-line diagram showing transformers, buses,\nand interrupting devices with interrupting\ncapacities; current transformers with ratings;\ninstruments and meters required; and description of\ninstruments and meters."
+    },
+    {
+      "document_id": "ufgs-26-11-16",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "body prose",
+      "page_number": 20,
+      "probe_id": "ufgs-26-11-16-p0020-l000-008",
+      "text": "(4) Include a self-shorting contact on the case terminal block for\na1arm indication and tripping of circuit breaker upon removal of\nthe relay from the case.\nb. Equip each relay system with a communications module to transmit the\nfollowing data.\n(1) Relay's metered and target data, such as currents, set points,\ncause of trip, magnitude of trip current, and open-close trip\nstatus."
+    },
+    {
+      "document_id": "ufgs-26-11-16",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "ladder",
+      "page_number": 40,
+      "probe_id": "ufgs-26-11-16-p0040-l000-008",
+      "text": "]2.7 STATION BATTERIES AND CHARGER\n**************************************************************************\nNOTE: For NAVFAC SE projects, specify\nmaintenance-free sealed batteries only. Provide\nonly when an external control power source is\nrequired for circuit breaker or switch operation.\n**************************************************************************\nProvide station batteries and charger, suitable for the requirements of"
+    },
+    {
+      "document_id": "ufgs-26-36-23",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "reference list",
+      "page_number": 4,
+      "probe_id": "ufgs-26-36-23-p0004-l000-008",
+      "text": "supplied by different transformers. \"Normal\" and\n\"emergency\" should be used for the emergency system\napplication described in NFPA 70.\nThis specification covers conventional, standard,\ncommercially available equipment appropriate for\nmost Department of Army/Air Force/Navy\napplications. Special applications may require\nsynchronized, closed-transition transfer, or"
+    },
+    {
+      "document_id": "ufgs-26-36-23",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "body prose",
+      "page_number": 13,
+      "probe_id": "ufgs-26-36-23-p0013-l000-008",
+      "text": "close and withstand ratings at 208 VAC [480 VAC] must be 30 [42] [65]\n[100] [200] kA.\nh. Nonwelding Contacts: Provide contacts that are nonwelding at the\navailable fault current rating. Contacts must be suitable for\nrepetitive power transfer switching. Switches rated 800 amps and\nabove must have segmented, blow-on construction for high withstand and\nclose-on capability and be protected by separate arcing contacts.\n**************************************************************************"
+    },
+    {
+      "document_id": "ufgs-26-36-23",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        8
+      ],
+      "note": "ladder",
+      "page_number": 25,
+      "probe_id": "ufgs-26-36-23-p0025-l000-008",
+      "text": "d. Failure of communication link.\n][2.5 REMOTE ANNUNCIATOR AND CONTROL SYSTEM PANEL\n**************************************************************************\nNOTE: This option is for a combination remote\nannunciator and control system panel. If this is\nchosen be sure to delete the previous 'Remote\nAnnunciator Panel' option.\n**************************************************************************"
+    },
+    {
+      "document_id": "ufgs-26-11-16",
+      "layer": "REAL",
+      "line_range": [
+        0,
+        60
+      ],
+      "note": "over cap",
+      "page_number": 24,
+      "probe_id": "ufgs-26-11-16-p0024-l000-060",
+      "text": "[two][_____] below rated primary voltage.\nb. Tap changer, with external, pad-lockable, manual type operating\nhandle, for changing tap setting when transformer is de-energized.\n[ c. Dead-front high-voltage bushings; IEEE 386. [15 kV, 95 kV BIL][25kV,\n125 kV BIL][35 kV, 150 kV BIL]. Provide [200 ampere bushing wells\nwith bushing well inserts][600 ampere one piece deadbreak apparatus\nbushings].\n] **************************************************************************\nNOTE: Include standoff bushings only when the\nActivity requires the additional items.\n**************************************************************************\n[ d. Parking stands: Provide a parking stand near each dead-front\nbushing.[ Provide insulated standoff bushings for parking of\nenergized load-break connectors on each parking stands.]\n] e. Insulated low-voltage neutral bushing with lugs for ground cable and\nremovable ground strap.\nf. Ground pads.\ng. Liquid-level indicator.\nh. Pressure-vacuum gage.\ni. Liquid temperature indicator.\nj. Drain and filter valves.\nk. Pressure relief device, top mounted.\nl. Diagrammatic stainless steel or laser-etched anodized aluminum\nnameplate in accordance with IEEE C57.12.00 and as modified or\nsupplemented by this section.\nm. Transformer base with provisions for jacking and for rolling in either\ndirection.\nn. Lifting provisions.\no. Bolted transformer top or welded top with bolted handhole access.\n[ p. Auxiliary cooling equipment and controls.\n[ (1) Transformer must have provisions for future addition of\nautomatically controlled fans for forced-air-cooling.\n][ (2) Transformer must be forced-air-cooled. Forced-air-cooling fans\nmust have [automatic temperature control relay][winding\ntemperature indicator with sequence contacts].\n]]2.2.2.3 Specified Transformer Efficiencies\n**************************************************************************\nNOTE: Transformer losses and efficiency\nrequirements have been modified into the table\nSECTION 26 11 16 Page 24"
+    },
+    {
+      "document_id": "prj-001-t0001-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-001-t0001-r0-p0001-l000-012",
+      "text": "PRJ-001-T0001-R0 | Page 1 of 2\nSUBMITTAL REGISTER TRANSMITTAL\nCompact register format\nTransmittal Record\nVendor: VND-001 Calvex Supply Co\nProject: PRJ-001 Thundervale Transit Interchange\nTransmittal No.: PRJ-001-T0001\nRevision: 0\nSpecification Section: 26 11 13\nSubmittal Descriptor: SD-09 Manufacturer's Field Reports\nContract No.:\nApproving Authority: Contractor Approved"
+    },
+    {
+      "document_id": "prj-001-t0002-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-001-t0002-r0-p0001-l000-012",
+      "text": "PRJ-001-T0002-R0 | Page 1 of 2\nTRANSMITTAL OF SUBMITTAL DATA\nVendor register - equipment and material submittals\nTransmittal Record\nProject: PRJ-001 Thundervale Transit Interchange\nContract No.: DACA11-2026-C-1000\nTransmittal No.: PRJ-001-T0002\nRevision: 0\nVendor: VND-002 Dornthorne Fabrication\nDate Submitted: 2026-03-09\nSpecification Section: 26 36 23\nSubmittal Descriptor: SD-03G Product Data"
+    },
+    {
+      "document_id": "prj-002-t0001-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-002-t0001-r0-p0001-l000-012",
+      "text": "PRJ-002-T0001-R0 | Page 1 of 2\nTRANSMITTAL OF SUBMITTAL DATA\nVendor register - equipment and material submittals\nTransmittal Record\nProject: PRJ-002 Kestrelmoor Water Reclamation Plant\nContract No.: DACA12-2026-C-1001\nTransmittal No.: PRJ-002-T0001\nRevision: 0\nVendor: VND-005 Gladblen Materials\nDate Submitted: 2026-05-03\nSpecification Section: 23 52 00\nSubmittal Descriptor: SD-10G Operation and Maintenance Data"
+    },
+    {
+      "document_id": "prj-002-t0002-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-002-t0002-r0-p0001-l000-012",
+      "text": "PRJ-002-T0002-R0 | Page 1 of 2\nSUBMITTAL TRANSMITTAL AND REVIEW RECORD\nContractor submittal register entry (approximated form)\nTransmittal Record\nTransmittal No.:\nPRJ-002-T0002\nRevision:\n0\nProject:\nPRJ-002 Kestrelmoor Water Reclamation Plant\nContract No.:\nVendor:"
+    },
+    {
+      "document_id": "prj-003-t0001-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-003-t0001-r0-p0001-l000-012",
+      "text": "PRJ-003-T0001-R0 | Page 1 of 2\nSUBMITTAL TRANSMITTAL AND REVIEW RECORD\nContractor submittal register entry (approximated form)\nTransmittal Record\nTransmittal No.:\nPRJ-003-T0001\nRevision:\n0\nProject:\nPRJ-003 Ashgrove Hollow Civic Archive\nContract No.:\nDACA13-2026-C-1002"
+    },
+    {
+      "document_id": "prj-003-t0002-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-003-t0002-r0-p0001-l000-012",
+      "text": "PRJ-003-T0002-R0 | Page 1 of 2\nSUBMITTAL REGISTER TRANSMITTAL\nCompact register format\nTransmittal Record\nVendor: VND-010 Lantthorne Works\nProject: PRJ-003 Ashgrove Hollow Civic Archive\nTransmittal No.: PRJ-003-T0002\nRevision: 0\nSpecification Section: 26 11 13\nSubmittal Descriptor: SD-08 Manufacturer's Instructions\nContract No.: DACA13-2026-C-1002\nApproving Authority: Contractor Approved"
+    },
+    {
+      "document_id": "prj-004-t0001-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-004-t0001-r0-p0001-l000-012",
+      "text": "PRJ-004-T0001-R0 | Page 1 of 2\nSUBMITTAL REGISTER TRANSMITTAL\nCompact register format\nTransmittal Record\nVendor: VND-001 Calvex Supply Co\nProject: PRJ-004 Pellmire Regional Hospital\nTransmittal No.: PRJ-004-T0001\nRevision: 0\nSubmittal Descriptor: SD-03G Product Data\nContract No.: DACA14-2026-C-1003\nApproving Authority: Government Approval Required (G)\nReviewer Action: D Not Approved"
+    },
+    {
+      "document_id": "prj-004-t0002-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-004-t0002-r0-p0001-l000-012",
+      "text": "PRJ-004-T0002-R0 | Page 1 of 2\nTRANSMITTAL OF SUBMITTAL DATA\nVendor register - equipment and material submittals\nTransmittal Record\nProject: PRJ-004 Pellmire Regional Hospital\nContract No.: DACA14-2026-C-1003\nTransmittal No.: PRJ-004-T0002\nRevision: 0\nVendor: VND-002 Dornthorne Fabrication\nDate Submitted: 2026-03-11\nSpecification Section: 26 22 00\nSubmittal Descriptor: SD-09 Manufacturer's Field Reports"
+    },
+    {
+      "document_id": "prj-005-t0001-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-005-t0001-r0-p0001-l000-012",
+      "text": "PRJ-005-T0001-R0 | Page 1 of 2\nTRANSMITTAL OF SUBMITTAL DATA\nVendor register - equipment and material submittals\nTransmittal Record\nProject: PRJ-005 Quillhaven Freight Terminal\nContract No.: DACA15-2026-C-1004\nTransmittal No.: PRJ-005-T0001\nRevision: 0\nVendor: VND-005 Gladblen Materials\nDate Submitted: 2026-04-21\nSpecification Section: 26 28 00\nSubmittal Descriptor: SD-06 Test Reports"
+    },
+    {
+      "document_id": "prj-005-t0002-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        12
+      ],
+      "note": "transmittal field block",
+      "page_number": 1,
+      "probe_id": "prj-005-t0002-r0-p0001-l000-012",
+      "text": "PRJ-005-T0002-R0 | Page 1 of 2\nSUBMITTAL TRANSMITTAL AND REVIEW RECORD\nContractor submittal register entry (approximated form)\nTransmittal Record\nTransmittal No.:\nPRJ-005-T0002\nRevision:\n0\nProject:\nPRJ-005 Quillhaven Freight Terminal\nContract No.:\nDACA15-2026-C-1004"
+    },
+    {
+      "document_id": "prj-001-t0001-r0",
+      "layer": "SYNTHETIC",
+      "line_range": [
+        0,
+        80
+      ],
+      "note": "over cap",
+      "page_number": 1,
+      "probe_id": "prj-001-t0001-r0-p0001-l000-080",
+      "text": "PRJ-001-T0001-R0 | Page 1 of 2\nSUBMITTAL REGISTER TRANSMITTAL\nCompact register format\nTransmittal Record\nVendor: VND-001 Calvex Supply Co\nProject: PRJ-001 Thundervale Transit Interchange\nTransmittal No.: PRJ-001-T0001\nRevision: 0\nSpecification Section: 26 11 13\nSubmittal Descriptor: SD-09 Manufacturer's Field Reports\nContract No.:\nApproving Authority: Contractor Approved\nReviewer Action: E Receipt Acknowledged, No Action Taken\nDate Submitted: 2026-04-10\nDate Received: 2026-04-20\nDate Returned: 2026-04-26"
+    }
+  ],
+  "purpose": "FR-019 / ADR-0018 parity probe set. Spans both corpus layers. Selection is mechanical and recorded per probe: document identifier, page number, and the half-open line range taken from that page through the committed reader."
+}

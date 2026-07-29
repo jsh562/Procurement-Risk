@@ -149,6 +149,6 @@ Readers filter through a view. The view is not a convenience; it is the single p
 - `src/model/src/model/schema/versions/0009_provenance_privileges.py` — the `REVOKE UPDATE, DELETE` on `extracted_value`, `extracted_value_contributing_chunk`, and `extraction_failure` that makes in-place replacement unavailable
 - `src/model/src/model/schema/versions/0006_extraction.py` — the `ON DELETE RESTRICT` citation edges that force leaf-up retirement, and `v_extracted_value_provenance`
 - `src/model/src/model/schema/versions/0008_forecast.py` — `ix_forecast_run__single_active` and `v_active_forecast_run`, the global-scope precedent this per-document mechanism follows
-- E006 — the epic that raises this decision and owns the generation records in its claimed `0300`–`0399` migration block
+- E006 — the epic that raises this decision and owns the generation records in its claimed `0400`–`0499` migration block
 - E008, E009, E012 — the epics bound by the filtering obligation; the view is where they discharge it
 - [specs/sad.md](../sad.md) — ADR catalog; requires a new row

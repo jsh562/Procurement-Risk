@@ -1,0 +1,71 @@
+E006 Document Ingestion and Extraction — QC PASSED, run 3, 2026-07-28.
+Governing document: project-instructions.md v1.2.6.
+Measured on the merged tree (main merged in), not the branch alone.
+
+Required categories (profile `standard`):
+  linting  — ruff check and ruff format clean at all four command sites,
+             including the repository-root `ruff format --check .` that run 2
+             found was never running in CI at all; mypy clean, 18 files;
+             9 import contracts kept, 0 broken; 3 locks consistent
+  coverage — 92% combined against threshold 80, exit 0, combined from 3 files;
+             per-package floors all exit 0: ingest 90%, llm 95%, compute 92%,
+             corpus 93%
+
+Tests, all five tiers — run 1 reported four of them green while the fifth was
+red and unrun, which was its own HIGH finding:
+  model            3,220 passed, 0 skipped
+  cross-entry      269 passed
+  gateway          407 passed, 5 skipped (provider smoke, gated on an opt-in)
+  api              0 tests — the entry ships three empty __init__.py and no
+                   runtime code; named here rather than counted as green
+  web              3 passed; lint exit 0, tsc clean, prettier clean
+
+Migrations: one alembic head, 0404. Apply-from-empty 0001-0103, 0300-0303
+(E007), 0400-0404 (E006), exit 0; re-apply a no-op.
+
+Pipeline: `ingest --mode replay` exits 3 on a clean database — 6,391 chunks
+written, dispositions ingested=26 skipped_unchanged=0 rolled_back=1
+not_reached=24 summing to the enumerated 51, and the report refusing 5 of 21
+items by name rather than emitting a partial artifact.
+
+Requirements: 74 FR declared, 73 cited in code or tests. FR-051 is governance
+and is discharged by the decision records on main. 58 success criteria.
+tasks.md 101/103 [X].
+
+Blocked, and open rather than closed:
+  T081  extraction fixtures. Three independent causes, none resolvable here.
+        (a) Recording needs ANTHROPIC_API_KEY, which this work does not have.
+        (b) gateway.compute.hashing.fixture_key digests request.model_dump_json()
+            and trace_id is a declared field with no exclude=True, so FR-070's
+            one-trace-id-per-run mints a different key every run — six distinct
+            keys were observed for one document across six runs. A recorded
+            fixture would miss on the next run regardless of (a).
+        (c) DEFAULT_FIXTURE_ROOT resolves relative to the installed package, so
+            from the model entry it lands in src/model/.venv/Lib/fixtures —
+            not where plan.md places E006's fixtures.
+        (b) and (c) are E004's and need no credential; they are being fixed on
+        their own branch.
+  T089  the regenerated ingestion report, blocked transitively on T081.
+
+Not measured here, recorded rather than implied:
+  - Extraction accuracy. No value has ever been extracted, because no fixture
+    exists. Every precision, recall and confidence figure in the report design
+    is unpopulated, and the 5 refused report items are exactly those.
+  - The real layer is not measured for accuracy by design (SC-012), and is
+    published as not-measured rather than as 0/0.
+  - The reproduction job compares the reachable portion only, and says so in
+    the workflow: no results manifest is committed, so there are no figures to
+    diff. It fails loudly if one ever appears.
+
+Run history, because this epic did not pass first time:
+  run 1  FAIL — 9 findings. A red gateway tier that was never run, three
+         project-instructions violations, and ~4,900 lines of publish layer
+         with no production caller.
+  run 2  FAIL — 10 findings. All 9 closed. A CRITICAL governance violation two
+         compliance audits had marked PASS without checking, and a fourth
+         orphaned component.
+  run 3  PASS — 9 findings, all LOW/MEDIUM, all closed. Two were the
+         implementer's own: a wrong argument for keeping dead code, and a
+         qc-report.md that pre-declared its verdict before the audit ran.
+
+See qc-report.md for the full run.

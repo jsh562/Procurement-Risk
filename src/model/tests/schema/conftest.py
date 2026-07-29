@@ -45,14 +45,17 @@ worth anything.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
+from uuid import uuid4
 
 import psycopg
 import pytest
 from sqlalchemy import URL, Engine, create_engine, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
 from model.schema.url import (
     DATABASE_URL_ENV_VAR,
@@ -213,6 +216,79 @@ def db_session(engine: Engine) -> Iterator[Session]:
         if outer_transaction.is_active:
             outer_transaction.rollback()
         connection.close()
+
+
+#: The database `CREATE DATABASE` is issued *from*. It cannot be the database
+#: being created, and it must not be the one under test, since PostgreSQL will
+#: not drop a database that has a live connection.
+MAINTENANCE_DATABASE = "postgres"
+
+#: Scratch database names are built, not taken from input, and are matched
+#: against this before being interpolated into DDL. PostgreSQL has no bind
+#: parameter for an identifier, so the guard is what stands in for one.
+SCRATCH_DATABASE_PREFIX = "e006_schema_scratch_"
+SAFE_IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9_]+$")
+
+
+@pytest.fixture
+def empty_scratch_database(database_url: URL, monkeypatch: pytest.MonkeyPatch) -> Iterator[URL]:
+    """An empty database of its own, created for one test and dropped after it.
+
+    For tests whose subject is the *migration chain* rather than the schema it
+    builds, and for which `db_session` is exactly wrong twice over: those tests
+    need a database with nothing in it, and they need the chain's work to be
+    really committed so a second run can observe the recorded version.
+
+    Function-scoped and uniquely named, so each test gets a database with
+    nothing in it and cannot observe another's migrations. The cost is one
+    `CREATE DATABASE` per test, which copies `template1` and is cheap; sharing
+    one instead would make "empty" depend on execution order.
+
+    `DATABASE_URL` is repointed at the new database for the duration, because
+    that variable is the *only* channel `env.py` reads -- steering a migration
+    run any other way would test a code path the deployed runner does not use.
+    `monkeypatch` restores the original value even if the test fails, so the
+    shared database named by the developer's environment is never touched.
+
+    Teardown drops the database `WITH (FORCE)`, terminating any connection that
+    outlived its test; without it, one leaked connection would leave a stray
+    database behind on every subsequent run.
+
+    **Added for E006's migration-set tests (T014, T015), and deliberately not a
+    move of `test_migration_chain.py`'s identical fixture.** That module keeps
+    its own, which shadows this one for its tests and leaves E003's chain
+    assertions running against exactly the fixture they were written for. Two
+    modules outside it now need the same thing -- `test_table_ownership.py`'s
+    FR-065 snapshot comparison and `test_ingestion_migrations.py` -- and a
+    fixture imported from a sibling test module would depend on pytest's
+    `sys.path` insertion, which this file's own docstring notes stops holding
+    the moment an `__init__.py` appears here.
+    """
+    name = f"{SCRATCH_DATABASE_PREFIX}{uuid4().hex}"
+    if not SAFE_IDENTIFIER_PATTERN.fullmatch(name):
+        raise AssertionError(f"refusing to build DDL around the identifier {name!r}")
+
+    # AUTOCOMMIT because PostgreSQL runs neither CREATE DATABASE nor DROP
+    # DATABASE inside a transaction block.
+    maintenance = create_engine(
+        database_url.set(database=MAINTENANCE_DATABASE),
+        isolation_level="AUTOCOMMIT",
+        poolclass=NullPool,
+    )
+    try:
+        with maintenance.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{name}"'))
+        scratch_url = database_url.set(database=name)
+        try:
+            monkeypatch.setenv(
+                DATABASE_URL_ENV_VAR, scratch_url.render_as_string(hide_password=False)
+            )
+            yield scratch_url
+        finally:
+            with maintenance.connect() as connection:
+                connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+    finally:
+        maintenance.dispose()
 
 
 @contextmanager

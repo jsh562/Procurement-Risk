@@ -29,6 +29,38 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Keep pytest's scratch inside the checkout. Without this it derives its base
+# temp from `tempfile.gettempdir()`, which on Windows is %LOCALAPPDATA%\Temp —
+# where a build's unsigned compiler probes and a 1 GB throwaway environment
+# once tripped the machine's antivirus as a dropper. `.tmp/` is gitignored, and
+# pytest clears its own basetemp at start, so nothing else may live there.
+# Belt and braces with the TMPDIR rule in AGENTS.md: this holds even when a
+# command is run without it.
+#
+# **This tier needed it most and was the one without it.** All three entries
+# under `/src` pinned it and the root did not — v1.2.5 spells the obligation as
+# "each entry's pytest configuration" and the cross-entry harness is not an
+# entry, which is exactly how it was missed. Meanwhile the only pytest code in
+# the repository that builds a *virtual environment* lives here —
+# `tests/checks/test_gateway_no_provider_env.py` constructs one through
+# `tmp_path_factory`, which resolves through this setting. So the tier that
+# would have put an unsigned install in the system temp directory was the one
+# tier not stopped from doing it.
+#
+# The path is relative to the invocation directory rather than to rootdir,
+# which is what pytest does with `--basetemp`; every step that runs this tier
+# runs from the repository root. The entries spell theirs `../../.tmp/pytest-*`
+# because they run from `src/<entry>`.
+#
+# **One subdirectory per tier, not one shared directory.** All four originally
+# named `.tmp/pytest`, and pytest *clears its basetemp at start of every run* —
+# correct in CI, where the four tiers are sequential steps, and destructive
+# anywhere they overlap. Two tiers started concurrently on a developer's machine
+# wipe each other's `tmp_path` mid-run, which surfaces as an unrelated test
+# failing on a file that existed a moment earlier. That happened twice while
+# this epic was being worked on. The suffix is the tier, so the directory names
+# its owner.
+addopts = "--basetemp=.tmp/pytest-checks"
 
 [tool.coverage.run]
 branch = true
@@ -55,16 +87,35 @@ branch = true
 # combined percentage down while measuring nothing. The two settings are one
 # change, not two.
 #
+# `model.ingest`, `model.llm` and `model.compute` were added with E006, under
+# the same "one change, not two" rule -- they were the three packages the epic
+# named in the model step's `--source` and in four per-package coverage floors
+# while appearing in neither setting here. Nothing was wrong today, because the
+# model step's explicit `--source` puts them in the combined data with their
+# real hits. What was wrong is that the rule this list states -- every package
+# shipping executable runtime code -- had three exceptions nothing recorded, so
+# the day the model step loses its explicit scope these three leave the
+# denominator altogether. That direction is the worse one: an absent package is
+# not measured at all rather than measured badly.
+#
 # `model.forecast` was added with E007 (T001) under that same rule, in both
 # places in the same change. E003 and E005 each recorded the halves as one
-# change; adding the third package is where a note that has now been written
+# change; adding a further package is where a note that has now been written
 # twice either holds or was never worth writing.
+#
+# E006's three and E007's one were added on separate branches against the same
+# baseline and merged on 2026-07-28. The union is what is correct: dropping
+# either side's packages to resolve the merge would remove them from the
+# denominator entirely, which is the failure mode the paragraph above describes.
 source = [
     "tests/checks/helpers",
     "src/model/src/model/roster",
     "src/model/src/model/schema",
     "src/model/src/model/corpus",
     "src/model/src/model/procurement",
+    "src/model/src/model/ingest",
+    "src/model/src/model/llm",
+    "src/model/src/model/compute",
     "src/model/src/model/forecast",
     "src/gateway/src/gateway",
 ]
@@ -86,6 +137,22 @@ corpus = ["src/model/src/model/corpus", "*/src/model/corpus"]
 # explicit `--source` and the data file holds absolute paths, and it is written
 # anyway so the package is not the one that breaks when that stops being true.
 procurement = ["src/model/src/model/procurement", "*/src/model/procurement"]
+# Added with E006. Same reasoning as `corpus` and `procurement` above, and the
+# same reason for writing them now rather than when they break: the model step
+# passes an explicit `--source` naming all eight packages and the data file
+# holds absolute paths, so the mapping is not consulted today. It is consulted
+# the moment anyone sets `relative_files` or the step loses its explicit scope,
+# and the package with no entry here is the one that silently double-counts
+# then. Three packages, three entries — a mapping that covered some of the
+# packages in `source` above would be a rule stated for some of them.
+#
+# Paired with the three added to `[tool.coverage.run] source` above in the same
+# change, per the "one change, not two" rule recorded there. `verify.yml`'s
+# coverage gate additionally asserts each of the three alone at 80%, which is
+# the arithmetic reason they cannot be left to an aggregate.
+ingest = ["src/model/src/model/ingest", "*/src/model/ingest"]
+llm = ["src/model/src/model/llm", "*/src/model/llm"]
+compute = ["src/model/src/model/compute", "*/src/model/compute"]
 # Added with E007, alongside the `source` entry above. Same reasoning as
 # `corpus` and `procurement`.
 forecast = ["src/model/src/model/forecast", "*/src/model/forecast"]

@@ -1575,15 +1575,27 @@ UPDATE_DOCUMENT_ID = text(
 #: ones the calling test wrote -- and reading the whole table is what makes "every
 #: chunk followed the key" a claim about all of them rather than about a list the
 #: test remembered to check.
+# Scoped to the two keys this test moves between, not the whole table. The
+# unscoped form assumed `document` and `chunk` held only this fixture's rows,
+# which is true of a fresh database and false of any database an ingest has run
+# against — E006 writes 51 documents and 6,466 chunks, and both assertions below
+# then fail for a reason that has nothing to do with the cascade they test. The
+# claims are unchanged: after the update exactly one row carries the new key,
+# none carries the old, and every chunk that referenced the old key followed.
 CHUNK_DOCUMENT_KEYS = text(
     """
     SELECT chunk_id, document_id, document_type, project_id
     FROM chunk
+    WHERE document_id IN (:old_document_id, :new_document_id)
     ORDER BY ordinal
     """
 )
 
-DOCUMENT_KEYS = text("SELECT document_id FROM document ORDER BY document_id")
+DOCUMENT_KEYS = text(
+    "SELECT document_id FROM document "
+    "WHERE document_id IN (:old_document_id, :new_document_id) "
+    "ORDER BY document_id"
+)
 
 FOREIGN_KEY_UPDATE_ACTION = text(
     """
@@ -1629,7 +1641,10 @@ def test_updating_a_document_key_cascades_to_every_chunk(
     insert_chunk(db_session, chunk_row(real_document, ordinal=0, page_number=1))
     insert_chunk(db_session, chunk_row(real_document, ordinal=1, page_number=2))
 
-    before = db_session.execute(CHUNK_DOCUMENT_KEYS).all()
+    before = db_session.execute(
+        CHUNK_DOCUMENT_KEYS,
+        {"old_document_id": old_document_id, "new_document_id": RENAMED_DOCUMENT_ID},
+    ).all()
     assert [row.document_id for row in before] == [old_document_id, old_document_id], (
         "both chunks must reference the old key before the update, or the cascade below "
         f"has nothing to move and the assertion after it is vacuous; got {before!r}"
@@ -1643,13 +1658,18 @@ def test_updating_a_document_key_cascades_to_every_chunk(
         f"the key-space change must update exactly one document row; it matched {updated.rowcount}"
     )
 
-    assert db_session.execute(DOCUMENT_KEYS).scalars().all() == [RENAMED_DOCUMENT_ID], (
+    assert db_session.execute(
+        DOCUMENT_KEYS, {"old_document_id": old_document_id, "new_document_id": RENAMED_DOCUMENT_ID}
+    ).scalars().all() == [RENAMED_DOCUMENT_ID], (
         "the key moved *in place*: one document row afterwards, carrying the new key. Two "
         "rows would mean the change had been performed as a copy, which is the reload "
         "TR-078 says is not required"
     )
 
-    after = db_session.execute(CHUNK_DOCUMENT_KEYS).all()
+    after = db_session.execute(
+        CHUNK_DOCUMENT_KEYS,
+        {"old_document_id": old_document_id, "new_document_id": RENAMED_DOCUMENT_ID},
+    ).all()
     assert [row.document_id for row in after] == [RENAMED_DOCUMENT_ID, RENAMED_DOCUMENT_ID], (
         f"every chunk's document_id must follow the document's by cascade (TR-078); got "
         f"{[row.document_id for row in after]!r}. Without ON UPDATE CASCADE the UPDATE "

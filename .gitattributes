@@ -37,3 +37,13 @@ data/roster/**/*.md   text eol=lf
 data/procurement/**/*.json   text eol=lf
 data/procurement/**/*.md     text eol=lf
 data/ground-truth/**/*.json  text eol=lf
+
+# The encoder artifact is digest-verified before a session is created, so its
+# committed bytes are content. Without these rules `core.autocrlf` smudges the
+# JSON on a Windows checkout and the digests fail there while passing on Linux
+# — or the reverse, which is what happened: two records were written from a
+# CRLF working tree and the LF blobs then failed on the Linux runner.
+data/encoder/**/*.json text eol=lf
+data/encoder/**/*.txt  text eol=lf
+data/encoder/**/*.md   text eol=lf
+data/encoder/*.onnx    binary

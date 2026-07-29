@@ -98,6 +98,27 @@ jobs:
   verify:
     runs-on: ubuntu-latest
 
+    # `project-instructions.md` v1.2.5: scratch stays inside the checkout.
+    #
+    # Identical to the three lines the `reproduce` job below carries, and the
+    # asymmetry between the two jobs is what made this a finding rather than a
+    # preference — one job honoured the rule and the other, the one running
+    # every build, lint, sync and test step in the repository, did not. This is
+    # the layer that covers everything pytest's `--basetemp` cannot: `uv`'s
+    # build and unpack scratch, `npm`'s, `docker build`'s context staging, and
+    # the unsigned feature-probe executables a compiler emits while resolving a
+    # source distribution — the exact class of artifact the amendment was
+    # raised by.
+    env:
+      TMPDIR: ${{ github.workspace }}/.tmp
+      TEMP: ${{ github.workspace }}/.tmp
+      TMP: ${{ github.workspace }}/.tmp
+      # v1.2.6, narrowed by v1.2.8: Numba keeps private scratch that `tempfile`
+      # and the three above never reach. PyTensor's `base_compiledir` is
+      # deliberately NOT redirected — it holds a compiled C++ extension, not
+      # scratch, and pinning it made every checkout rebuild the same binary.
+      NUMBA_CACHE_DIR: ${{ github.workspace }}/.tmp/numba
+
     # The model entry's schema tests assert constraint rejection, index presence,
     # and deferred-constraint behaviour at commit. All three are enforced by the
     # server, so there is nothing a fake or an in-process engine could stand in
@@ -145,6 +166,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Before the first tool runs, because `TMPDIR` pointing at a directory
+      # that does not exist is worse than not setting it: a runner starts with
+      # no `.tmp/` (it is gitignored, so the checkout does not create one) and
+      # the first tool to open a temporary file would fail with a path error
+      # that names neither this variable nor the rule behind it.
+      - name: Create the checkout's scratch directory
+        run: mkdir -p "$TMPDIR"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -226,11 +255,21 @@ jobs:
           for entry in gateway api model; do uv run --directory "src/$entry" ruff check .; done
           uv run ruff check .
 
+      # The root is listed alongside the loop for the same reason the Lint step
+      # above lists it: it is not one of the three entries, so a per-entry loop
+      # silently omits it. It was omitted — root linting was enforced and root
+      # formatting was not, leaving everything under `/tests` format-unchecked:
+      # the 22 modules of `tests/checks` and the 41 import-linter negative
+      # fixtures under `tests/fixtures`, 403 files at the root against the
+      # entries' 243. `tests/checks/test_lint_and_format_cover_the_same_tiers.py` now
+      # asserts the two steps cover the same set, so the class of omission fails
+      # a build rather than waiting for the next reader.
       - name: Format check (Python)
         run: |
           for entry in gateway api model; do
             uv run --directory "src/$entry" ruff format --check .
           done
+          uv run ruff format --check .
 
       - name: Lint and format check (web)
         working-directory: src/web
@@ -299,20 +338,28 @@ jobs:
         working-directory: src/model
         # --source overrides the root pyproject.toml `source` list rather than
         # merging with it, so every package in that list must appear here too or
-        # it lands in the denominator with no hits. Five packages now: roster
+        # it lands in the denominator with no hits. Eight packages now: roster
         # from the scaffold, corpus from E002, schema from E003, procurement
-        # from E005, forecast from E007. Each epic widened this line
-        # independently and the union is what is correct — dropping any package
-        # would put it in the denominator uncovered and drag the gate down while
-        # measuring nothing.
+        # from E005, ingest, llm and compute from E006, and forecast from E007.
+        # Each epic widened this line independently and the union is what is
+        # correct — dropping any package would put it in the denominator
+        # uncovered and drag the gate down while measuring nothing.
         #
-        # `forecast` was the one that proved the rule rather than restating it.
-        # E007's T001 made both root `pyproject.toml` edits — the `source` entry
-        # and the `[tool.coverage.paths]` mapping — and this inline list, which
-        # overrides the first of them, was left at four. `tests/forecast` ran on
-        # every CI run while the package it exercises was uncounted, so the two
-        # halves of T001 bought nothing on the only run that gates (T111).
-        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement,src/model/forecast -m pytest tests -q
+        # An *absent* package is the direction that hurts more: it is not
+        # measured at all rather than measured badly, so a list left short makes
+        # every line of the epic that added the package invisible to the gate
+        # below — a green 80% that says nothing about the code just added.
+        #
+        # `forecast` proved that rather than restating it. E007's T001 made both
+        # root `pyproject.toml` edits — the `source` entry and the
+        # `[tool.coverage.paths]` mapping — and this inline list, which overrides
+        # the first of them, was left at four. `tests/forecast` ran on every CI
+        # run while the package it exercises was uncounted, so the two halves of
+        # T001 bought nothing on the only run that gates (T111). E006 and E007
+        # each extended this line on their own branch, against the same
+        # four-package baseline; the merge is the union and neither side's
+        # packages may be dropped to resolve it.
+        run: uv run coverage run --source=src/model/roster,src/model/schema,src/model/corpus,src/model/procurement,src/model/ingest,src/model/llm,src/model/compute,src/model/forecast -m pytest tests -q
 
       # E005's release gate. Each command below is a checkable claim about the
       # committed dataset, and each fails the build rather than warning:
@@ -506,8 +553,264 @@ jobs:
       # the model step's `--source=…,src/model/corpus` records every importable
       # file under the package whether a test reached it or not, so a new module
       # nothing covers subtracts here instead of being averaged away.
+      #
+      # E006 adds three more per-package floors for the same reason SC-026 gave
+      # for `model.corpus`, and the reason is arithmetic rather than style: a
+      # single combined figure lets `roster`, `schema`, `corpus` and
+      # `procurement` — already covered — carry a newly added package across the
+      # threshold with none of its own lines exercised. That is precisely the
+      # arithmetic that makes a coverage gate agree with adding untested code.
+      # Each of `ingest`, `llm` and `compute` is therefore asserted alone.
       - name: Coverage gate
         run: |
           uv run coverage combine
           uv run coverage report --fail-under=80
           uv run coverage report --include='*/model/corpus/*' --fail-under=80
+          uv run coverage report --include='*/model/ingest/*' --fail-under=80
+          uv run coverage report --include='*/model/llm/*' --fail-under=80
+          uv run coverage report --include='*/model/compute/*' --fail-under=80
+
+  # ---------------------------------------------------------------------------
+  # T088 / FR-074 — the replay reproduction job
+  # ---------------------------------------------------------------------------
+  #
+  # **Which of the two possible jobs this is, stated plainly: it runs the
+  # reachable portion of the replay pipeline and compares that.** It is not the
+  # figure-level comparison FR-074 ultimately asks for, because that comparison
+  # is not reachable from any committed artifact today, and a job that pretended
+  # otherwise would be the worst of the three options — worse than no job.
+  #
+  # Why the figure-level comparison is unreachable. FR-074 measures reproduction
+  # as "a replay-mode run from a clean checkout against the committed results
+  # manifest". `specs/00006-document-ingestion-and-extraction/results-manifest.json`
+  # is **not committed**: T089, which regenerates the report and the manifest, is
+  # blocked on T081, and T081 is blocked because a fixture is a recorded provider
+  # response and none can be produced without network access and a provider
+  # credential. With zero fixtures committed, a replay run aborts at the first
+  # synthetic transmittal with `fixture_missing` — which is the designed
+  # behaviour (FR-045, FR-056), not a failure of it — so there are no figures for
+  # a manifest to hold and nothing for a diff to compare.
+  #
+  # What is compared instead, and against what oracle. The run's own
+  # per-document disposition ledger (FR-073) against an expectation derived from
+  # the **committed corpus manifests** — not from a number typed into this file
+  # and not from the run's own enumeration, either of which would let the run
+  # grade its own homework. A corpus of R real documents and S synthetic ones,
+  # replayed with no fixtures, must produce exactly: R `ingested`, 0
+  # `skipped_unchanged`, 1 `rolled_back`, S−1 `not_reached`, exit code 3, and a
+  # recorded `fixture_missing`. Anything else fails this job loudly. That covers
+  # the reachable half of the pipeline — enumeration, hash verification,
+  # identifier minting, chunking, embedding, the per-document transaction, the
+  # skip decision, the abort and its record — which is every stage but the one
+  # the missing fixtures gate.
+  #
+  # And when a manifest **is** committed, this job fails until it is finished.
+  # That is deliberate rather than a trap: committing a results manifest means
+  # figures exist to reproduce, and this job has no way to regenerate them (the
+  # console entry emits no report). Failing then is the only outcome that does
+  # not silently downgrade a figure-level gate to a ledger-level one.
+  #
+  # Cost, disclosed rather than hidden: this job chunks and embeds the whole real
+  # layer before it reaches the abort, which is minutes of runner time on every
+  # push. It is not gated on `verify` — a reproduction failure hidden behind an
+  # unrelated lint error is a reproduction failure nobody sees — and it is not
+  # scoped to release tags, because this workflow has no tag trigger and a job
+  # wired to a trigger that never fires is the do-nothing job this comment
+  # exists to rule out. Narrowing it to tags is a change to make when a tag
+  # trigger exists, not before.
+  reproduce:
+    name: Replay reproduction (FR-074)
+    runs-on: ubuntu-latest
+
+    # The same digest-pinned image, credentials and health check the `verify`
+    # job's service carries, for the same reason: a reproduction measured
+    # against a different server than the one the suite runs on is a
+    # reproduction of something else. Copied from the Compose `db` service
+    # (AD-001); update the pin there and copy it here.
+    services:
+      db:
+        image: pgvector/pgvector:pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb
+        env:
+          POSTGRES_USER: procurement
+          POSTGRES_PASSWORD: local-development-only
+          POSTGRES_DB: procurement
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U procurement -d procurement"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+      # TR-048: every invocation is priced, replay included — a replayed one from
+      # the fixture's recorded token counts. The value is `price_table_version.
+      # version_id` as E003's revision 0103 seeds it. A stale literal here fails
+      # this job loudly rather than quietly: the gateway refuses a pin that
+      # resolves to no version *before* it builds a request, so the run would
+      # abort as `provider_unreachable` and the comparison below would report a
+      # disposition ledger that does not match.
+      GATEWAY_PRICE_TABLE_VERSION: "2026-07-26-published"
+      # FR-038: the build revision the run records. Supplied rather than left to
+      # `git rev-parse` because `actions/checkout` leaves a detached HEAD whose
+      # commit is exactly this, and because the ingestion entry refuses a run it
+      # cannot attribute rather than recording a placeholder.
+      INGEST_VCS_REVISION: ${{ github.sha }}
+      # project-instructions.md v1.2.5: scratch stays inside the checkout.
+      TMPDIR: ${{ github.workspace }}/.tmp
+      TEMP: ${{ github.workspace }}/.tmp
+      TMP: ${{ github.workspace }}/.tmp
+      # v1.2.6, narrowed by v1.2.8: Numba keeps private scratch that `tempfile`
+      # and the three above never reach. PyTensor's `base_compiledir` is
+      # deliberately NOT redirected — it holds a compiled C++ extension, not
+      # scratch, and pinning it made every checkout rebuild the same binary.
+      NUMBA_CACHE_DIR: ${{ github.workspace }}/.tmp/numba
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Only the modeling entry. The ingestion job is a console entry point of
+      # that entry (ADR-0011), so nothing here needs the web tier, the serving
+      # image, or the gateway's provider extra — `replay` reaches no provider.
+      - name: Sync the modeling entry against its lockfile
+        run: |
+          mkdir -p "$TMPDIR"
+          uv sync --locked --directory src/model
+
+      - name: Apply the migration chain (model)
+        run: uv run --directory src/model migrate
+
+      # `set +e` around the run and not `set -e`: a non-zero exit is the expected
+      # outcome while T081 is open, and the comparison step is what judges it. A
+      # step that failed here would report "the run failed" for a run that did
+      # exactly what it is currently supposed to do.
+      - name: Replay-mode run from the clean checkout
+        run: |
+          set -uo pipefail
+          mkdir -p "$TMPDIR"
+          status=0
+          uv run --directory src/model ingest --mode replay \
+            >"$TMPDIR/replay.out" 2>"$TMPDIR/replay.err" || status=$?
+          echo "$status" >"$TMPDIR/replay.status"
+          echo "--- stdout ---"; cat "$TMPDIR/replay.out"
+          echo "--- stderr ---"; cat "$TMPDIR/replay.err"
+          echo "--- exit code: $status ---"
+
+      # Standard library only, and `python3` rather than an entry's environment:
+      # this step reads two JSON files and three text files, and pulling in a
+      # project environment to do it would make the comparison depend on the
+      # thing it is comparing.
+      - name: Compare the run against the committed results manifest
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          scratch = pathlib.Path(os.environ["TMPDIR"])
+          manifest = pathlib.Path(
+              "specs/00006-document-ingestion-and-extraction/results-manifest.json"
+          )
+          failures = []
+
+          def fail(message):
+              failures.append(message)
+              print(f"::error::{message}")
+
+          out = (scratch / "replay.out").read_text(encoding="utf-8")
+          err = (scratch / "replay.err").read_text(encoding="utf-8")
+          status = int((scratch / "replay.status").read_text(encoding="utf-8").strip())
+
+          # The oracle: the committed corpus manifests, read independently of the
+          # run. Deriving it from the run's own enumeration would compare the run
+          # with itself and pass for any corpus at all.
+          layers = {}
+          for path in sorted(pathlib.Path("data/corpus").rglob("manifest.json")):
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              layers[payload["layer"]] = layers.get(payload["layer"], 0) + len(payload["entries"])
+          real = layers.get("REAL", 0)
+          synthetic = layers.get("SYNTHETIC", 0)
+          if real < 1 or synthetic < 2:
+              fail(
+                  f"the corpus oracle enumerated REAL={real} SYNTHETIC={synthetic}; a "
+                  f"comparison against an empty or one-document layer passes for no reason "
+                  f"(FR-068)"
+              )
+
+          printed = re.search(r"^ingest: dispositions (.+) enumerated=(\d+)\s*$", out, re.M)
+          if printed is None:
+              fail(
+                  "the replay run printed no disposition ledger, so there is nothing to "
+                  "compare; it did not reach the write stage at all"
+              )
+          observed = {}
+          enumerated = -1
+          if printed is not None:
+              observed = dict(
+                  (name, int(value))
+                  for name, value in (pair.split("=") for pair in printed.group(1).split())
+              )
+              enumerated = int(printed.group(2))
+
+          if manifest.exists():
+              # The figure-level gate FR-074 states. Unreachable from this job:
+              # the console entry emits no report, so there is nothing to
+              # regenerate the manifest from and nothing to diff. Failing is the
+              # only honest outcome — passing would downgrade a figure-level gate
+              # to a ledger-level one without saying so.
+              fail(
+                  f"{manifest} is committed, so figures exist that FR-074 requires this job "
+                  f"to reproduce — and this job cannot: the `ingest` console entry emits no "
+                  f"report, so there is nothing here to regenerate the manifest from. Wire "
+                  f"the report emitter into the entry and diff the regenerated manifest "
+                  f"against the committed one before committing it (T089)."
+              )
+          else:
+              # The reachable portion, while T081 leaves the fixture store empty.
+              expected = {
+                  "ingested": real,
+                  "skipped_unchanged": 0,
+                  "rolled_back": 1,
+                  "not_reached": synthetic - 1,
+              }
+              if status != 3:
+                  fail(
+                      f"the replay run exited {status}; with no fixtures committed (T081) it "
+                      f"must abort part-way and exit 3. 0 would mean it reached extraction, "
+                      f"which no committed fixture can satisfy; 2 would mean it was refused "
+                      f"before writing anything."
+                  )
+              if "fixture_missing" not in err:
+                  fail(
+                      "the replay run did not abort with `fixture_missing`. That is the one "
+                      "run-level kind an empty fixture store produces (FR-045, FR-056); any "
+                      "other kind means the run stopped for a different reason and this "
+                      "comparison is measuring something else."
+                  )
+              if observed != expected:
+                  fail(
+                      f"the disposition ledger is {observed}, and the committed corpus "
+                      f"(REAL={real}, SYNTHETIC={synthetic}) requires {expected}"
+                  )
+              if enumerated != real + synthetic:
+                  fail(
+                      f"the run enumerated {enumerated} documents and the committed manifests "
+                      f"hold {real + synthetic}"
+                  )
+
+          if failures:
+              print(f"reproduction FAILED: {len(failures)} check(s)")
+              sys.exit(1)
+          print(
+              f"reproduction held over the reachable portion: {observed}, enumerated "
+              f"{enumerated}, exit {status}, aborted on `fixture_missing`. The figure-level "
+              f"comparison FR-074 states is NOT covered — no results manifest is committed "
+              f"(T089, blocked on T081)."
+          )
+          PY

@@ -2,12 +2,12 @@
 
 {SAD:ADR-0013} splits one Alembic directory across the epics that author into
 it, each claiming a block at its start: `0001`-`0099` is E003's, `0100`-`0199`
-is E004's, `0200`-`0299` is E005's, `0300`-`0399` is E007's. **Nothing maps a
-revision to an owning epic except its prefix** — there is no manifest, no
-per-file marker, and no import to inspect. So the check is a *partition* check
-over the whole directory rather than a per-file epic lookup: it asserts the
-blocks tile the range without overlap, that every revision falls inside one of
-them, and that no prefix is duplicated.
+is E004's, `0200`-`0299` is E005's, `0300`-`0399` is E007's, `0400`-`0499` is
+E006's. **Nothing maps a revision to an owning epic except its prefix** — there
+is no manifest, no per-file marker, and no import to inspect. So the check is a
+*partition* check over the whole directory rather than a per-file epic lookup:
+it asserts the blocks tile the range without overlap, that every revision falls
+inside one of them, and that no prefix is duplicated.
 
 **A claimed block need not be used.** E005 creates no database object at all —
 its data model says so in its first line — so its block is declared here and
@@ -23,6 +23,16 @@ the boundary *between* the epics' claims. No one of them owns the assertion:
 E004 cannot add a test to E003's suite, and E003 has no reason to assert E004's
 half. That is the same narrow `/tests` exception `test_layout.py` and
 `test_orchestration.py` sit under.
+
+**A declared block need not hold revisions** (E006 AD-013). A block is a
+*claim on a number range*, and the claim is what prevents a collision — so it
+has to be declarable before the first revision inside it is authored, and it
+has to survive an epic that claims a block and never uses it. E005 is exactly
+that case: it claimed `0200`-`0299` at epic start expecting it to go unused,
+and stated the claim stands regardless so a later need cannot collide. The
+distinction the assertions below draw is therefore between *reserved-and-empty*
+(permitted, and the point of a reservation) and *populated-but-undeclared*
+(forbidden, and what the whole file exists to catch).
 
 **A missing directory is reported and skipped, not passed** (TR-051). Before
 E003's arrangement landed there was no directory to check, and a check that
@@ -55,11 +65,23 @@ VERSIONS_DIR = REPO_ROOT / "src" / "model" / "src" / "model" / "schema" / "versi
 #: **Extended 2026-07-27 (E007 AD-007).** Adding `0300`-`0399` alone would fail
 #: the partition check, which requires `next_low == high + 1` and so refuses the
 #: gap at `0200`-`0299`; E005's claimed-but-unused block closes it.
+#:
+#: **Extended again 2026-07-28 (E006 AD-013, FR-040).** E006 and E007 both
+#: claimed `0300`-`0399`, against the same baseline and by the same
+#: scan-for-the-highest rule, and both were right when they claimed it. E007
+#: landed on `main` first, so E006 renumbered its five revisions into
+#: `0400`-`0499` and this table records the outcome. The collision was invisible
+#: to git — the two sets of `03xx` files carry different names, so the merge
+#: raised no conflict — and would have surfaced only as duplicate revision
+#: identifiers and two heads, which is what
+#: `test_no_prefix_is_duplicated` and
+#: `test_the_revision_graph_resolves_to_a_single_head` below exist to catch.
 DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
     (1, 99, "E003"),
     (100, 199, "E004"),
     (200, 299, "E005"),
     (300, 399, "E007"),
+    (400, 499, "E006"),
 )
 
 #: The owners whose block is expected to hold at least one revision — the
@@ -72,7 +94,13 @@ DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
 #: the partition check refuses. Membership here is a statement about an epic's
 #: scope and is edited when an epic's scope changes — never to make a red run
 #: green.
-OWNERS_EXPECTED_TO_HAVE_REVISIONS: frozenset[str] = frozenset({"E003", "E004", "E007"})
+OWNERS_EXPECTED_TO_HAVE_REVISIONS: frozenset[str] = frozenset({"E003", "E004", "E006", "E007"})
+
+#: The width of one block, used to name the block a revision prefix implies.
+#: Every block above is a hundreds bucket, and the assertion that every
+#: *populated* bucket is declared depends on that being true rather than
+#: assumed — `test_every_block_is_one_hundreds_bucket` holds it.
+BLOCK_WIDTH = 100
 
 #: `NNNN_name.py`. The prefix is the revision id and the filename prefix at
 #: once — E003's convention, and what makes a prefix-based partition possible.
@@ -263,6 +291,100 @@ def test_every_declared_down_revision_exists() -> None:
     assert not dangling, f"revisions point at parents that do not exist: {dangling}"
 
 
+def test_every_block_is_one_hundreds_bucket() -> None:
+    """The premise `test_every_populated_block_is_declared` rests on.
+
+    That check names the block a revision implies by dividing its prefix by
+    `BLOCK_WIDTH`. If a block were ever declared across a bucket edge — `0350`
+    to `0449`, say — the division would name two buckets for one block and the
+    check would report a false violation, or worse, silently agree with half of
+    one. Asserted rather than assumed, because the block table is the one thing
+    in this file nothing else validates.
+
+    E003's block runs `1`-`99` rather than `0`-`99`, and that is not a
+    misalignment: `0000` is not a revision number, it is the below-every-block
+    negative control at the foot of this file. What matters is that low and
+    high land in the same bucket, and that no two blocks share one.
+    """
+    straddling = [
+        f"{low:04d}-{high:04d} {owner}"
+        for low, high, owner in DECLARED_BLOCKS
+        if low // BLOCK_WIDTH != high // BLOCK_WIDTH
+    ]
+    assert not straddling, (
+        f"{straddling} span more than one hundreds bucket; BLOCK_WIDTH no longer "
+        f"describes the table"
+    )
+
+    buckets: dict[int, list[str]] = {}
+    for low, _, owner in DECLARED_BLOCKS:
+        buckets.setdefault(low // BLOCK_WIDTH, []).append(owner)
+    shared = {bucket: owners for bucket, owners in buckets.items() if len(owners) > 1}
+    assert not shared, (
+        f"one hundreds bucket is split between epics: {shared}; a revision inside it "
+        f"would imply two owners at once"
+    )
+
+
+def test_every_populated_block_is_declared() -> None:
+    """Half of what the old both-populated assertion carried, kept and sharpened.
+
+    Direction matters, and only this direction is a defect: a hundreds bucket
+    holding revisions that no block claims means those revisions belong to no
+    epic. The converse — a declared block holding nothing — is a *reservation*,
+    which is why it is asserted nowhere.
+
+    Distinct from `test_every_revision_falls_inside_a_declared_block` above,
+    which reads one file at a time. This one groups first, so the failure names
+    the unclaimed *block* and every revision inside it rather than a list of
+    filenames a reader has to bucket by hand.
+    """
+    declared = {low // BLOCK_WIDTH for low, _, _ in DECLARED_BLOCKS}
+    by_bucket: dict[int, list[str]] = {}
+    for path in _revision_files():
+        by_bucket.setdefault(_prefix(path) // BLOCK_WIDTH, []).append(path.name)
+
+    undeclared = {
+        f"{bucket * BLOCK_WIDTH:04d}-{bucket * BLOCK_WIDTH + BLOCK_WIDTH - 1:04d}": names
+        for bucket, names in by_bucket.items()
+        if bucket not in declared
+    }
+    assert not undeclared, (
+        f"revisions sit in hundreds buckets no block claims: {undeclared}. "
+        f"Nothing but the prefix says which epic owns a revision, so a bucket "
+        f"outside the block table belongs to no one. Declared: "
+        f"{[f'{low:04d}-{high:04d} {owner}' for low, high, owner in DECLARED_BLOCKS]}"
+    )
+
+
+def test_at_least_two_blocks_are_populated() -> None:
+    """The other half, and the reason the old assertion existed at all.
+
+    Its job was never to police any particular epic's block — it was to stop
+    every property above from passing over a directory that only one epic had
+    ever written into, where a partition check describes nothing. That job
+    needs *some* block populated beyond the first, not *all* of them, and the
+    difference is what lets `0200`-`0299` and `0400`-`0499` be claimed before a
+    revision is authored inside either.
+
+    Two, not five, and deliberately weak: it says the split is load-bearing,
+    never how many revisions a block should hold.
+
+    **Kept alongside E007's stronger equality below rather than folded into
+    it**, because the two fail on different things. This one is a floor that
+    survives any change to `OWNERS_EXPECTED_TO_HAVE_REVISIONS`; that one is an
+    equality against a hand-maintained set, and an equality can be made to pass
+    by editing the set. A floor cannot.
+    """
+    populated = _populated_owners(DECLARED_BLOCKS)
+    assert len(populated) >= 2, (
+        f"only {sorted(populated)} hold revisions; with fewer than two populated blocks "
+        f"every assertion above passes over a single-epic directory and the partition "
+        f"is evidenced by nothing. Declared but empty: "
+        f"{sorted({owner for _, _, owner in DECLARED_BLOCKS} - populated)}"
+    )
+
+
 def test_every_block_whose_owner_authored_revisions_is_populated() -> None:
     """Not a rule any epic states, and deliberately weak: it asserts only that
     the partition is doing work.
@@ -294,7 +416,7 @@ def test_every_block_whose_owner_authored_revisions_is_populated() -> None:
     )
 
 
-@pytest.mark.parametrize("prefix", ["0000", "0400", "9999"])
+@pytest.mark.parametrize("prefix", ["0000", "0500", "9999"])
 def test_the_check_reports_a_revision_numbered_outside_the_blocks(prefix: str) -> None:
     """A check that cannot fail proves nothing.
 
@@ -302,11 +424,15 @@ def test_the_check_reports_a_revision_numbered_outside_the_blocks(prefix: str) -
     one far outside — the just-past case is the one an off-by-one in the block
     table would let through.
 
-    **The just-past probe moved from `0200` to `0400` when E007 claimed
-    `0300`-`0399` and E005's `0200`-`0299` was declared to close the gap.** It
-    has to track the last declared block; left at `0200` it would assert that a
-    now-declared number is undeclared, which is the same off-by-one it exists to
-    catch, pointed at the test instead of at the table.
+    **The just-past probe has moved twice.** It was `0200` while E004's
+    `0100`-`0199` was the last declared block; it moved to `0400` when E007
+    claimed `0300`-`0399` and E005's `0200`-`0299` was declared to close the
+    gap; and it moved to `0500` on 2026-07-28 when E006 renumbered into
+    `0400`-`0499` and made `0400` a real revision. It has to track the last
+    declared block: left behind, it asserts that a now-declared number is
+    undeclared, which is the same off-by-one it exists to catch, pointed at the
+    test instead of at the table. A control aimed inside a claimed and
+    populated block is not a control.
     """
     number = int(prefix)
     claimants = _owners_claiming(number, DECLARED_BLOCKS)
@@ -475,6 +601,7 @@ def test_declaring_e007s_block_without_the_rest_of_the_remediation_stays_red() -
 
     assert _owners_claiming(PROBE_BEFORE_PART_C, DECLARED_BLOCKS), (
         f"{PROBE_BEFORE_PART_C:04d} is still outside every declared block, so part (c) "
-        f"-- moving the just-past-the-end probe to 0400 -- fixed nothing and the probe "
-        f"could have stayed where it was. Check that E005's block is still declared."
+        f"-- moving the just-past-the-end probe past the last declared block -- fixed "
+        f"nothing and the probe could have stayed where it was. Check that E005's block "
+        f"is still declared."
     )
