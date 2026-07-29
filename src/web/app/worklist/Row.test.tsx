@@ -49,7 +49,12 @@ const NOMINAL: RankedRow = {
       },
     },
   },
-  secondary: { as_of_date: "2026-07-24", criticality: 5, calendar_margin_days: 17 },
+  secondary: {
+    as_of_date: "2026-07-24",
+    as_of_is_stale: false,
+    criticality: 5,
+    calendar_margin_days: 17,
+  },
 };
 
 const render = (row: RankedRow) => renderToStaticMarkup(<Row row={row} />);
@@ -206,5 +211,80 @@ describe("an excluded row", () => {
     expect(markup).not.toContain("Criticality");
     expect(markup).not.toContain("margin");
     expect(markup).not.toMatch(/\d+\s*%/);
+  });
+});
+
+describe("the row-level stale mark (FR-029)", () => {
+  it("qualifies the as-of date in the row when the run is stale", () => {
+    // FR-029: "Because a page-level banner alone stops carrying once rows are
+    // sorted, filtered, or read one at a time, the row MUST carry the signal
+    // too ... so a coordinator reading one row in isolation cannot take its
+    // figures as current."
+    const markup = render({
+      ...NOMINAL,
+      secondary: { ...NOMINAL.secondary, as_of_is_stale: true },
+    });
+    expect(markup).toContain("out of date");
+  });
+
+  it("carries the mark as words, not as a style alone", () => {
+    // FR-050. A mark carried only by italics or a tint is invisible to a
+    // coordinator who cannot see it, and to every automated check.
+    const markup = render({
+      ...NOMINAL,
+      secondary: { ...NOMINAL.secondary, as_of_is_stale: true },
+    });
+    const withoutMarkup = markup.replace(/<[^>]*>/g, "");
+    expect(withoutMarkup).toContain("out of date");
+  });
+
+  it("says nothing extra when the run is fresh", () => {
+    // The mark must not be permanent furniture — a qualifier present on every
+    // row says nothing on the rows that need it.
+    expect(render(NOMINAL)).not.toContain("out of date");
+  });
+});
+
+describe("spoken bounded forms (FR-051)", () => {
+  const bounded = (display: string, other: string): RankedRow => ({
+    ...NOMINAL,
+    primary: {
+      ...NOMINAL.primary,
+      miss_probability: {
+        measure: "point",
+        bounded: true,
+        miss: { percent: null, display },
+        on_time: { percent: null, display: other },
+      },
+    },
+  });
+
+  it("announces <1% as words", () => {
+    // FR-051: "the < and > glyphs are read inconsistently or dropped outright,
+    // and a dropped < turns <1% into a flat 1%, which is a false precision of
+    // exactly the kind FR-008 exists to remove."
+    const markup = render(bounded("<1%", ">99%"));
+    expect(markup).toContain("less than one percent");
+    expect(markup).toContain("greater than ninety-nine percent");
+  });
+
+  it("hides the glyph from assistive technology so neither reader gets both", () => {
+    const markup = render(bounded("<1%", ">99%"));
+    expect(markup).toMatch(/aria-hidden="true"[^>]*>&lt;1%|<span aria-hidden="true">&lt;1%/);
+  });
+
+  it("keeps the glyph for sighted readers", () => {
+    // The words are an addition, not a replacement: "<1%" is the compact form a
+    // coordinator scans a column by.
+    expect(render(bounded("<1%", ">99%"))).toContain("&lt;1%");
+  });
+
+  it("leaves an ordinary integer figure untouched", () => {
+    // A substitution rule that fired on every figure would speak "87%" as
+    // something invented. Only the two forms FR-051 names are rewritten.
+    const markup = render(NOMINAL);
+    expect(markup).toContain("87%");
+    expect(markup).not.toContain("less than");
+    expect(markup).not.toContain("greater than");
   });
 });

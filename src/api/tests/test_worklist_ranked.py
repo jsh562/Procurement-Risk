@@ -97,7 +97,12 @@ def test_a_nominal_row_carries_exactly_the_four_comparison_quantities(
     it is only decidable because the shape is closed."""
     row = _by_identifier(worklist["ranked"])["PO-4471-1"]
     assert set(row["primary"]) == {"identity", "need_by", "miss_probability", "duration_pair"}
-    assert set(row["secondary"]) == {"as_of_date", "criticality", "calendar_margin_days"}
+    assert set(row["secondary"]) == {
+        "as_of_date",
+        "as_of_is_stale",
+        "criticality",
+        "calendar_margin_days",
+    }
 
 
 def test_the_miss_probability_matches_the_stored_survival_value(
@@ -448,3 +453,98 @@ def test_changing_the_sort_key_changes_the_ranked_order(
 
     assert sorted(by_harm) == sorted(by_need_by), "no line may appear or vanish with the key"
     assert by_harm != by_need_by
+
+
+def test_a_calendar_passed_row_still_shows_its_probability(
+    worklist: dict[str, Any],
+) -> None:
+    """US3 scenario 8, FR-030. The row shows the forecast probability *and*
+    separately flags that the date has passed — both clauses, not just the flag.
+
+    T058. The suite's other probability loops skip `None` figures, so a
+    regression that suppressed this row's probability would have passed every
+    one of them. Asserted positively here for that reason.
+    """
+    row = _by_identifier(worklist["ranked"])["PO-4475-1"]
+
+    assert row["state"] == "calendar_passed"
+    figure = row["primary"]["miss_probability"]
+    assert figure is not None, (
+        "a calendar-passed line is still forecast — the run covers the date and only the "
+        "coordinator's calendar has moved past it, so the probability is sound and must show"
+    )
+    assert figure["measure"] == "point"
+    assert figure["miss"]["percent"] == 90
+
+
+def test_the_reference_class_describes_the_run_the_figure_came_from(
+    worklist: dict[str, Any], frozen_run: dict[str, Any]
+) -> None:
+    """FR-003, CHK021. T059.
+
+    The reference class is published twice — per quantile and at page scope —
+    and the figure's copy is authoritative. The per-figure copy must therefore
+    describe the run *this figure* was computed from, not the shape
+    `schema_constants` happens to declare. Nothing in E003 ties the two columns
+    together: `forecast_run.draw_count` carries only its own positivity check.
+    """
+    pair = _by_identifier(worklist["ranked"])["PO-4471-1"]["primary"]["duration_pair"]
+
+    assert pair["reference_class"]["draw_count"] == frozen_run["run"]["draw_count"]
+
+
+def test_the_two_published_reference_classes_agree(worklist: dict[str, Any]) -> None:
+    """FR-003: "the two MUST agree within a response. A disagreement is a
+    provenance defect under Principle I, not a display choice."
+
+    Asserted as a comparison between them rather than each against a literal —
+    two assertions against the same hard-coded 4000 would both pass while the
+    sources diverged.
+    """
+    conventions = worklist["meta"]["conventions"]
+    for row in worklist["ranked"]:
+        reference = row["primary"]["duration_pair"]["reference_class"]
+        assert reference["draw_count"] == conventions["draw_count"]
+        assert reference["percentile_convention"] == conventions["percentile_convention"]
+
+
+def test_the_response_identifies_the_artifact_set_its_figures_came_from(
+    worklist: dict[str, Any], frozen_run: dict[str, Any]
+) -> None:
+    """FR-052, SC-016. T061.
+
+    Principle I requires a published figure to resolve to the artifact it came
+    from, and the as-of date alone does not resolve it: two runs can share an
+    as-of date, and neither the model version nor the artifact schema version is
+    derivable from one. Asserted at the tier that produces them — the only prior
+    evidence rendered a hand-authored stub.
+    """
+    run = worklist["meta"]["forecast_run"]
+
+    assert run["run_id"] == frozen_run["run"]["run_id"]
+    assert run["model_version"] == frozen_run["run"]["model_version"]
+    assert run["artifact_schema_version"] == frozen_run["run"]["artifact_schema_version"]
+    assert run["as_of_date"] == frozen_run["run"]["as_of_date"]
+
+
+def test_the_last_in_grid_day_reads_a_figure_from_the_fixture(
+    worklist: dict[str, Any], frozen_run: dict[str, Any]
+) -> None:
+    """FR-036's `need_by_last_in_grid_day` case. T063.
+
+    The fixture carried a line for this boundary and no acceptance test read it;
+    the boundary was asserted only against a synthetic line. FR-036 requires one
+    named test per case *against the committed fixture*.
+
+    At the last in-grid day the miss probability and the residual tail mass are
+    the same quantity read two ways — `survival[horizon_days]` is both the last
+    grid entry and the mass unresolved at the horizon — so this is also where
+    the two agree by construction.
+    """
+    line = next(item for item in frozen_run["lines"] if item["case"] == "need_by_last_in_grid_day")
+    row = _by_identifier(worklist["ranked"])["PO-4475-2"]
+
+    assert row["state"] == "nominal", "the last in-grid day is inside the horizon, not beyond it"
+    figure = row["primary"]["miss_probability"]
+    assert figure["measure"] == "point", "a grid entry exists here, so this is not a bound"
+    assert figure["miss"]["percent"] == round(line["posterior"]["residual_tail_mass"] * 100)

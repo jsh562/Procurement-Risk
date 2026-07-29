@@ -245,12 +245,36 @@ than met (FR-040).
 
 ### Recorded limitation — security scanning is reported, not gated
 
-- **Scope decision**: dependency advisories are surfaced in CI and do not fail the build.
+**Corrected 2026-07-29 (QC iteration 1, T053).** The first revision of this record stated two things
+that were not true, and its own reversal trigger had already fired when it was written. Principle VII
+forbids leaving a shortfall unpublished; it equally forbids publishing one inaccurately. What the
+first revision claimed, and what is actually the case:
+
+| Claimed | Measured |
+|---|---|
+| "dependency advisories are surfaced in CI" | No `pip-audit` or `npm audit` step existed anywhere in `verify.yml`. They were surfaced nowhere. |
+| "12 high advisories that all chain from `brace-expansion` through ESLint — dev-only" | 12 high in total, of which **3 are production dependencies of `/src/web`**: `next` (direct), and `postcss` and `sharp` transitively. |
+
+- **Scope decision**: dependency advisories are surfaced in CI and do not fail the build. This is now
+  true rather than aspirational — a `Dependency advisories (reported, not gated)` step runs
+  `npm audit` and `pip-audit` with `continue-on-error: true`, so the figures appear in every run's
+  log and no advisory blocks a merge.
 - **Supporting evidence**: the project's required QC categories are linting and coverage; security is
-  deliberately not among them, and `npm audit` currently reports 12 high advisories that all chain
-  from `brace-expansion` through ESLint — dev-only, absent from the serving image.
+  deliberately not among them. `npm audit --omit=dev` reports **3 high advisories on production
+  dependencies of `/src/web`** — `next` depends on vulnerable `postcss` (path traversal and arbitrary
+  file read via `sourceMappingURL`) and `sharp` (libvips CVE-2026-33327 / 33328 / 35590 / 35591).
+  The remaining 9 chain from `brace-expansion` through ESLint and are dev-only. `pip-audit` cannot
+  run in the development environment at all: local TLS interception re-signs the connection and
+  `pip-audit` ships its own CA bundle, so it fails certificate verification rather than reporting.
+  It runs in CI, where no interception exists.
 - **Reversal trigger**: any advisory affecting a runtime dependency of `/src/api` or `/src/web`, or the
-  first advisory reachable from the serving image.
+  first advisory reachable from the serving image. **This trigger has FIRED** — see the three above.
+  It has fired for `/src/web` only. The serving image is unaffected: `pip-audit` names nothing, and
+  the 34 image assertions confirm no modeling or web distribution reaches the api container. The
+  reversal is therefore scoped to the interface tier and is recorded here rather than acted on inside
+  this epic, because upgrading `next` across a major is a change to E001's scaffold with its own
+  verification surface, not a worklist change. It is carried forward as an explicit obligation rather
+  than closed.
 - **Production-scale alternative**: gate on critical and high severity for runtime dependencies with a
   documented waiver path, and pin transitive resolutions rather than accepting whatever the tree yields.
 

@@ -73,6 +73,19 @@ class RowInputs:
     horizon_days: int
     conventions: Conventions
     today: date
+    #: FR-003. The draw count of the run this row's figures were computed from.
+    #: Distinct from `conventions.draw_count`, which comes from
+    #: `schema_constants` and describes the shape the schema declares. Nothing
+    #: constrains the two to agree — `forecast_run.draw_count` carries only its
+    #: own positivity check — so publishing the schema's number beside a figure
+    #: computed from a differently-sized run would state a denominator that
+    #: figure never had. The figure's copy is authoritative (FR-003).
+    run_draw_count: int = 0
+    #: FR-029. Whether the run these figures came from is stale. Carried onto
+    #: the row rather than left to the page banner: a banner stops carrying
+    #: once rows are sorted, filtered, or read one at a time, and a coordinator
+    #: reading a single row would take its figures as current.
+    run_is_stale: bool = False
 
 
 def quantile_days(draws: tuple[float, ...], percentile: int) -> int:
@@ -193,7 +206,9 @@ def _duration_pair(inputs: RowInputs) -> dict[str, Any]:
         "eightieth": _quantile(line, 80),
         "reference_class": {
             "basis": "posterior_predictive_draws",
-            "draw_count": inputs.conventions.draw_count,
+            # The run's own count, not `schema_constants`'. This describes the
+            # draws behind *this* figure.
+            "draw_count": inputs.run_draw_count,
             "percentile_convention": inputs.conventions.percentile_convention,
         },
     }
@@ -266,17 +281,28 @@ def build_primary(inputs: RowInputs) -> dict[str, Any]:
 
 
 def build_secondary(inputs: RowInputs) -> dict[str, Any]:
-    """FR-009's explanatory context — exactly three members.
+    """FR-009's explanatory context, and FR-029's row-level stale mark.
 
     The as-of date, the criticality, and the calendar margin: the two inputs to
     the harm score that are not the distribution, plus the frame everything is
-    counted from. The score itself is absent under FR-041, and the region is
-    closed at three so a fifth scannable figure cannot be parked here instead of
-    in `primary`, which is what makes FR-027's cap decidable at all.
+    counted from. The score itself is absent under FR-041, and the region stays
+    closed so a fifth scannable *figure* cannot be parked here instead of in
+    `primary`, which is what makes FR-027's cap decidable at all.
+
+    ``as_of_is_stale`` is the fourth member and is not a fifth figure — it is a
+    boolean qualifying the as-of date already present, which is why FR-029 says
+    the mark "needs no new figure and no new field". FR-027 counts comparison
+    quantities a coordinator scans across rows; a staleness flag is not one, and
+    it carries no number to read.
+
+    It is on the row because a page-scope banner stops carrying once rows are
+    sorted, filtered, or read one at a time — and a coordinator reading a single
+    row in isolation would otherwise take stale figures as current.
     """
     line = inputs.resolved.line
     return {
         "as_of_date": inputs.as_of_date.isoformat(),
+        "as_of_is_stale": inputs.run_is_stale,
         "criticality": line.criticality,
         "calendar_margin_days": calendar_margin_days(
             line.effective_need_by_date, inputs.as_of_date

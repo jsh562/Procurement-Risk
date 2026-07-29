@@ -120,7 +120,12 @@ const RANKED: WorklistResponse = {
           },
         },
       },
-      secondary: { as_of_date: "2026-06-01", criticality: 5, calendar_margin_days: 70 },
+      secondary: {
+        as_of_date: "2026-06-01",
+        as_of_is_stale: false,
+        criticality: 5,
+        calendar_margin_days: 70,
+      },
     },
   ],
   unranked: [],
@@ -259,12 +264,17 @@ describe("worklist page, no active run", () => {
     // The other half of the pair above. With nothing outstanding the page says
     // so plainly — and that statement is only safe to make because the failure
     // path above never reaches it.
+    //
+    // The wording no longer says "in scope": that phrase implied a scope on a
+    // page that has none, which is the borrowing FR-042 forbids in the opposite
+    // direction. The scoped variant is asserted separately below.
     const markup = await renderWith({
       ...RESPONSE,
+      scope: { project_id: null, available_projects: [] },
       unranked: [],
       counts: { ranked: 0, unranked: 0, total: 0 },
     });
-    expect(markup).toContain("No open purchase-order lines are in scope.");
+    expect(markup).toContain("Nothing is outstanding");
     expect(markup).not.toContain('role="alert"');
   });
 
@@ -362,5 +372,62 @@ describe("worklist page, no active run", () => {
 
     expect(markup).toContain(STATE_COPY.stale_run.label);
     expect(markup).toContain(STATE_COPY.empty_filter.label);
+  });
+
+  it("keeps the scoping control on screen when the filter matches nothing", async () => {
+    // FR-042: "MUST leave the scoping control and its full set of selectable
+    // projects on screen so the coordinator can leave the scope without
+    // reloading or guessing."
+    //
+    // This is the regression QC found. `empty_filter` implies counts.total ===
+    // 0, so a guard that swapped the board for an empty paragraph removed the
+    // control in exactly the state the requirement names — the coordinator's
+    // only exit was a reload.
+    const markup = await renderWith({
+      ...RESPONSE,
+      scope: {
+        project_id: "PRJ-004",
+        available_projects: [
+          { project_id: "PRJ-001", open_line_count: 12 },
+          { project_id: "PRJ-004", open_line_count: 0 },
+        ],
+      },
+      page_states: ["empty_filter"],
+      ranked: [],
+      unranked: [],
+      counts: { ranked: 0, unranked: 0, total: 0 },
+    });
+
+    expect(markup).toContain('id="worklist-scope"');
+    // The full set, not just the active one — "without guessing".
+    expect(markup).toContain("PRJ-001 (12 open)");
+    expect(markup).toContain("PRJ-004 (0 open)");
+    expect(markup).toContain("All projects");
+  });
+
+  it("distinguishes an empty filter from an empty worklist in the row area", async () => {
+    // FR-042 forbids an unfiltered empty worklist from borrowing the filter's
+    // wording: the claim that a filter matched nothing would be false, and
+    // FR-018's enumeration is canonical, so no ninth state may be invented.
+    const filtered = await renderWith({
+      ...RESPONSE,
+      scope: { project_id: "PRJ-004", available_projects: [] },
+      page_states: ["empty_filter"],
+      ranked: [],
+      unranked: [],
+      counts: { ranked: 0, unranked: 0, total: 0 },
+    });
+    expect(filtered).toContain("No open lines in PRJ-004");
+
+    const unfiltered = await renderWith({
+      ...RESPONSE,
+      scope: { project_id: null, available_projects: [] },
+      page_states: [],
+      ranked: [],
+      unranked: [],
+      counts: { ranked: 0, unranked: 0, total: 0 },
+    });
+    expect(unfiltered).toContain("Nothing is outstanding");
+    expect(unfiltered).not.toContain("No open lines in");
   });
 });

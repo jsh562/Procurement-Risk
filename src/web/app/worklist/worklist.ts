@@ -119,6 +119,13 @@ export interface PrimaryFigures {
  */
 export interface SecondaryContext {
   readonly as_of_date: string;
+  /**
+   * FR-029. Whether the run these figures came from is stale. A boolean
+   * qualifying the as-of date already present — not a fifth figure under
+   * FR-027's cap, which counts comparison quantities a coordinator scans
+   * across rows.
+   */
+  readonly as_of_is_stale: boolean;
   readonly criticality: number;
   readonly calendar_margin_days: number;
 }

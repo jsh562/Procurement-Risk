@@ -240,6 +240,17 @@
   font-weight: 400;
 }
 
+/*
+ * FR-029's row-level stale mark. FR-050 forbids colour as the sole carrier, so
+ * the mark is the words "out of date" in the row text; this rule only makes
+ * them findable. Italic rather than a tint for the same reason — a coordinator
+ * who cannot distinguish the colour still reads the words.
+ */
+.staleAsOf {
+  font-style: italic;
+  font-weight: 600;
+}
+
 .description,
 .rowState {
   font-size: var(--scale-secondary);

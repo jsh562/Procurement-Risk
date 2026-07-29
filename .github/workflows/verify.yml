@@ -491,7 +491,9 @@ jobs:
       - name: E2E (web)
         working-directory: src/web
         env:
-          DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
+          # The dedicated database `Seed the frozen fixture` just created. The
+          # shared one still holds E005's dataset, which the model tier reads.
+          E2E_DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement_e2e
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e
@@ -515,6 +517,30 @@ jobs:
       # OBJ1 VC6 says "when the application builds". Nothing built it, so the
       # criterion was unevidenced and a scaffold that could not compile would
       # have passed every other check.
+      # Principle VII. The plan records a limitation reading "dependency
+      # advisories are surfaced in CI and do not fail the build". That sentence
+      # was false when written — no step surfaced them anywhere — and QC caught
+      # it. This step is what makes the record true rather than aspirational.
+      #
+      # `continue-on-error` rather than a soft exit code, deliberately: security
+      # is not among the project's required QC categories, so an advisory must
+      # not block a merge, but the step's own status must still show as failed
+      # in the run summary. A step that swallowed the exit code would report
+      # green and bury the finding in a log nobody opens, which is the same
+      # defect as not running it.
+      - name: Dependency advisories (reported, not gated)
+        continue-on-error: true
+        # `cd` in a subshell rather than `npm audit --prefix`: npm rejects
+        # `--prefix` on several subcommands, and this repository has already
+        # been bitten by that once with `npm ci --prefix`.
+        run: |
+          echo "::group::npm audit (production dependencies of src/web)"
+          ( cd src/web && npm audit --omit=dev ) || true
+          echo "::endgroup::"
+          echo "::group::pip-audit (src/api)"
+          uv run --directory src/api --with pip-audit pip-audit || true
+          echo "::endgroup::"
+
       - name: Build (web)
         working-directory: src/web
         run: npm run build

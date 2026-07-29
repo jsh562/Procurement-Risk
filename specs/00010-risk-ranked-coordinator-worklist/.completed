@@ -1,0 +1,46 @@
+E010 — Risk-Ranked Coordinator Worklist
+Implementation complete: 52 tasks, plus 13 bug tasks from QC iteration 1.
+
+Every figure below was measured in the run that wrote this file. The previous
+revision carried web coverage figures that predated Phase 6 and overstated them;
+T065 is that correction.
+
+Local verification at completion (2026-07-29):
+  api tests            194 passed, 1 skipped, 3 deselected
+                       (the skip is model_invocation — E008 owns that table)
+  api benchmark        3 passed — p95 47.1 ms and 39.7 ms against a 1500 ms budget
+  web unit tests       76 passed
+  web e2e specs        19 passed against the real page and the real boundary
+  root checks          246 passed, 3 pre-existing failures from main
+  python coverage      97% (floor 80, verified failing at 99)
+  web coverage         99.23% statements / 96.07% branches / 97.22% functions
+                       / 99.17% lines (floor 80, verified failing at 100)
+  ruff                 clean
+  import contracts     3 kept, 0 broken, each with a negative fixture
+  contract conformance 9 tests — every response state validated against
+                       contracts/openapi.yaml, with two negative controls
+
+QC iteration 1 found 13 defects; all are fixed:
+  T053  Principle VII — the security limitation record stated two falsehoods and
+        its reversal trigger had fired. Corrected, and a non-gating audit step
+        added so its scope decision is true rather than aspirational.
+  T054  FR-042 — the scoping control was never on screen in the empty-filter
+        state, so a coordinator could only leave the scope by reloading.
+  T055  FR-029 — the row-level stale mark was unimplemented.
+  T056  FR-051 — bounded forms were not announced as words.
+  T057  The E2E seed truncated the shared development database, breaking
+        src/model's forecast tier. It now owns a separate database.
+  T058-T064  Test-coverage and provenance gaps, including a per-figure reference
+        class sourced from schema_constants rather than the run it describes.
+  T065  This marker's own figures.
+
+Pre-existing failures, outside this epic:
+  tests/checks/test_single_import_site.py — 3 tests. The roster filename is
+  named in 7 files where 1 is permitted, all in src/model from E005 and E007.
+  Fails identically on main; E007's two merges did not touch it.
+
+Carried forward, not closed:
+  The security limitation's reversal trigger has fired for /src/web — 3 high
+  advisories on production dependencies (next, postcss, sharp). Recorded in
+  plan.md with its scope: upgrading next across a major is a change to E001's
+  scaffold with its own verification surface, not a worklist change.

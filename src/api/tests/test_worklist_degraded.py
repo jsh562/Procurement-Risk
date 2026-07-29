@@ -250,3 +250,54 @@ class TestFailuresAreNotStates:
         first = client.get("/api/v1/worklist").json()["detail"]["correlation_id"]
         second = client.get("/api/v1/worklist").json()["detail"]["correlation_id"]
         assert first != second
+
+
+class TestTheRowLevelStaleMark:
+    """FR-029. The signal reaches the row, not only the page banner."""
+
+    def test_a_stale_run_marks_every_populated_row(
+        self, frozen_run: dict[str, Any], client: Any, at_today: Any
+    ) -> None:
+        """FR-029: "Because a page-level banner alone stops carrying once rows
+        are sorted, filtered, or read one at a time, the row MUST carry the
+        signal too ... so a coordinator reading one row in isolation cannot take
+        its figures as current."
+
+        Asserted over *every* ranked row rather than one: a mark applied to the
+        first row only would satisfy a single-row check and leave the rest
+        reading as current.
+        """
+        at_today(AS_OF + timedelta(days=8))
+        body = client.get("/api/v1/worklist").json()
+
+        assert "stale_run" in body["page_states"], "precondition: the run must be stale"
+        assert body["ranked"], "precondition: there must be populated rows to mark"
+        for row in body["ranked"]:
+            assert row["secondary"]["as_of_is_stale"] is True, (
+                f"{row['primary']['identity']['po_number']} carries no stale mark while the "
+                "run is stale — a coordinator reading this row alone would take it as current"
+            )
+
+    def test_a_fresh_run_marks_no_row(
+        self, frozen_run: dict[str, Any], client: Any, at_today: Any
+    ) -> None:
+        """The mark must not be permanent furniture. A qualifier present on
+        every row regardless of the run says nothing on the rows that need it."""
+        at_today(AS_OF + timedelta(days=2))
+        body = client.get("/api/v1/worklist").json()
+
+        assert "stale_run" not in body["page_states"]
+        assert all(row["secondary"]["as_of_is_stale"] is False for row in body["ranked"])
+
+    def test_the_mark_tracks_the_threshold_from_both_sides(
+        self, frozen_run: dict[str, Any], client: Any, at_today: Any
+    ) -> None:
+        """The row mark and the page banner are the same claim at two scopes, so
+        they must agree at the boundary — seven days fresh, eight days stale."""
+        at_today(AS_OF + timedelta(days=7))
+        fresh = client.get("/api/v1/worklist").json()
+        assert all(row["secondary"]["as_of_is_stale"] is False for row in fresh["ranked"])
+
+        at_today(AS_OF + timedelta(days=8))
+        stale = client.get("/api/v1/worklist").json()
+        assert all(row["secondary"]["as_of_is_stale"] is True for row in stale["ranked"])

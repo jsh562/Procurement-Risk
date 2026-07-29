@@ -243,18 +243,39 @@ test.describe("accessibility (FR-048, FR-049, FR-050, FR-051)", () => {
   });
 
   test("a bounded probability is spoken as a bound rather than as a numeral", async ({ page }) => {
-    // FR-008. `<1%` must reach a screen reader as the bound it is. Asserted on
-    // the text rather than on a title attribute, because a bound carried only
-    // in a tooltip is one assistive technology may never announce.
+    // FR-051: "FR-008's bounded forms MUST be announced as words, 'less than
+    // one percent' and 'greater than ninety-nine percent': the < and > glyphs
+    // are read inconsistently or dropped outright, and a dropped < turns <1%
+    // into a flat 1%."
+    //
+    // Unguarded, deliberately. The previous revision wrapped this in
+    // `if (count > 0)`, so it would have vacated silently the day the fixture
+    // stopped producing a bound — an assertion that cannot fail is not one.
+    // PO-4476-2's residual tail is 0.075%, so a bound is guaranteed present; if
+    // it ever is not, this test should fail rather than quietly pass.
     await worklist(page);
-    const bounded = page.getByText("<1%").first();
 
-    if ((await bounded.count()) > 0) {
-      await expect(bounded).toBeVisible();
-      const row = bounded.locator("xpath=ancestor::li[1]");
-      await expect(row).not.toContainText(/\b0%/);
-      await expect(row).not.toContainText(/\b100%/);
-    }
+    const bounded = page.getByText("<1%", { exact: true }).first();
+    await expect(bounded).toBeVisible();
+
+    // The glyph is hidden from assistive technology and the words carry the
+    // meaning, so a screen reader hears the bound once rather than twice.
+    await expect(bounded).toHaveAttribute("aria-hidden", "true");
+
+    const row = bounded.locator("xpath=ancestor::li[1]");
+    await expect(row).toContainText("less than one percent");
+    await expect(row).not.toContainText(/\b0%/);
+    await expect(row).not.toContainText(/\b100%/);
+  });
+
+  test("a stale run marks every row, not only the page banner", async ({ page }) => {
+    // FR-029. A page banner stops carrying once rows are sorted, filtered, or
+    // read one at a time. The fixture's run is anchored 2026-06-01, so on any
+    // realistic clock it is far past the seven-day threshold.
+    await worklist(page);
+
+    await expect(page.locator("section[data-state='stale_run']")).toBeVisible();
+    await expect(page.locator("ol li").first()).toContainText("out of date");
   });
 });
 

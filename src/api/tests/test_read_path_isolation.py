@@ -13,9 +13,11 @@ false in a different way:
   a bad network day. Re-asserted here so the contract's *existence* is itself
   under test — a contract silently deleted is a boundary silently removed.
 - **No datastore connection from the interface tier** (FR-024): proved at two
-  sites, because either alone is escapable. The manifest check would miss a
-  driver reached through a transitive dependency; the request check would miss a
-  driver present but not exercised by the paths a test happens to run.
+  sites, because either alone is escapable — a driver could be vendored rather
+  than declared, or declared and reached only on a path no test runs. The
+  manifest and lockfile half lives at
+  `tests/checks/test_web_has_no_db_driver.py`, since the artifact it asserts
+  over belongs to no Python entry. The request-set half is here.
 """
 
 from __future__ import annotations
@@ -31,31 +33,14 @@ import pytest
 #: sits at `src/api/tests/`, so [0] is `tests`, [1] is `api`, [2] is `src`.
 WEB = Path(__file__).resolve().parents[2] / "web"
 
-#: Distributions that speak a database wire protocol. A dependency on any of
-#: them in the interface tier is a datastore connection waiting to be opened,
-#: whether or not any code path currently opens one.
-DATABASE_DRIVERS = frozenset(
-    {
-        "pg",
-        "pg-promise",
-        "postgres",
-        "postgresql",
-        "node-postgres",
-        "mysql",
-        "mysql2",
-        "mongodb",
-        "mongoose",
-        "sqlite3",
-        "better-sqlite3",
-        "prisma",
-        "@prisma/client",
-        "drizzle-orm",
-        "typeorm",
-        "sequelize",
-        "knex",
-        "kysely",
-    }
-)
+#: The manifest and lockfile assertions moved to
+#: `tests/checks/test_web_has_no_db_driver.py` in QC iteration 1 (T062) — the
+#: path T026 and `plan.md` § Observation procedures both name, with an explicit
+#: Source Code Layout rationale for the root placement. They ran from here and
+#: passed; the placement contradicted the plan that justified it.
+#:
+#: The request-set assertion below stays, because it is about the read path this
+#: entry owns rather than about another entry's manifest.
 
 
 def test_the_provider_being_unreachable_does_not_change_the_response(
@@ -139,35 +124,6 @@ def test_the_import_contracts_that_enforce_the_boundary_still_exist() -> None:
         "without this the graph holds only internal modules and the gateway contract passes "
         "by naming a module the analysis never loaded"
     )
-
-
-def test_the_interface_tier_declares_no_database_driver() -> None:
-    """FR-024, first observation site: the manifest.
-
-    A driver declared here is a datastore connection waiting to be opened,
-    whether or not any current code path opens one — and "no code calls it yet"
-    is a property of today's code, not of the boundary.
-    """
-    manifest = __import__("json").loads((WEB / "package.json").read_text(encoding="utf-8"))
-    declared = set(manifest.get("dependencies", {})) | set(manifest.get("devDependencies", {}))
-
-    offending = declared & DATABASE_DRIVERS
-    assert not offending, f"the web boundary declares {sorted(offending)}"
-
-
-def test_no_database_driver_reaches_the_interface_tier_transitively() -> None:
-    """FR-024, still the manifest site — but through the lockfile.
-
-    The direct-dependency check above would miss a driver arriving under
-    something else, and a transitive driver is as connectable as a declared one.
-    """
-    lockfile = __import__("json").loads((WEB / "package-lock.json").read_text(encoding="utf-8"))
-    installed = {
-        path.rsplit("node_modules/", 1)[-1] for path in lockfile.get("packages", {}) if path
-    }
-
-    offending = installed & DATABASE_DRIVERS
-    assert not offending, f"a database driver is installed in the web boundary: {sorted(offending)}"
 
 
 def test_the_worklist_page_reaches_the_serving_boundary_and_nothing_else() -> None:

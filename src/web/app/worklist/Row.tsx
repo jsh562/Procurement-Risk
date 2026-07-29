@@ -1,5 +1,5 @@
 import { STATE_COPY } from "./stateCopy";
-import type { RankedRow, UnrankedRow } from "./worklist";
+import type { PercentFigure, RankedRow, UnrankedRow } from "./worklist";
 import styles from "./page.module.css";
 
 /**
@@ -120,12 +120,49 @@ function MissProbability({
   return (
     <span className={styles.missProbability}>
       {bound ? "At most " : ""}
-      <strong className={styles.figure}>{figure.miss.display}</strong> miss the date
+      <Percent figure={figure.miss} /> miss the date
       {bound ? ", at least " : ", "}
-      <strong className={styles.figure}>{figure.on_time.display}</strong> arrive in time
+      <Percent figure={figure.on_time} /> arrive in time
     </span>
   );
 }
+
+/**
+ * FR-008's spoken forms. Written out in the accessibility tree, per FR-051.
+ *
+ * The `<` and `>` glyphs are read inconsistently by screen readers and dropped
+ * outright by some — and a dropped `<` turns `<1%` into a flat `1%`, which is a
+ * false precision of exactly the kind FR-008 exists to remove. The bound would
+ * become the certainty it was introduced to avoid, silently, for the readers
+ * least able to notice.
+ *
+ * `aria-hidden` on the glyph and a visually-hidden span carrying the words:
+ * sighted readers see `<1%`, assistive technology hears "less than one
+ * percent", and neither gets both.
+ */
+function Percent({ figure }: { readonly figure: PercentFigure }) {
+  const spoken = SPOKEN_BOUND[figure.display];
+  if (!spoken) {
+    return <strong className={styles.figure}>{figure.display}</strong>;
+  }
+  return (
+    <strong className={styles.figure}>
+      <span aria-hidden="true">{figure.display}</span>
+      <span className={styles.visuallyHidden}>{spoken}</span>
+    </strong>
+  );
+}
+
+/**
+ * FR-051 names both forms verbatim. Keyed by the display string the server
+ * already finished, so the interface performs no second rounding and no
+ * substitution rule of its own — a figure this map does not know renders
+ * unchanged rather than being guessed at.
+ */
+const SPOKEN_BOUND: Readonly<Record<string, string>> = {
+  "<1%": "less than one percent",
+  ">99%": "greater than ninety-nine percent",
+};
 
 /**
  * FR-004 and FR-049. One labelled unit, not two adjacent numbers.
@@ -177,9 +214,16 @@ function Secondary({ secondary }: { readonly secondary: RankedRow["secondary"] }
       <span>
         {margin >= 0 ? `${margin} days of margin` : `${Math.abs(margin)} days past the anchor`}
       </span>
-      {/* FR-019. Reachable without hover or expansion. */}
-      <span>
+      {/*
+       * FR-019, and FR-029's row-level stale mark. Reachable without hover or
+       * expansion, and qualified in the row itself when the run is stale — a
+       * page banner stops carrying once rows are sorted, filtered, or read one
+       * at a time, and a coordinator reading this row alone would otherwise
+       * take its figures as current.
+       */}
+      <span className={secondary.as_of_is_stale ? styles.staleAsOf : undefined}>
         Forecast as of <time dateTime={secondary.as_of_date}>{secondary.as_of_date}</time>
+        {secondary.as_of_is_stale ? " — out of date" : null}
       </span>
     </div>
   );

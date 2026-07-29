@@ -904,10 +904,17 @@ components:
         contract, which requires named primary and secondary regions and a type scale here that is smaller
         than the primary region's and never heavier. FR-027 classifies everything here as context rather
         than a comparison quantity, so nothing in this object may be rendered with the weight of a figure
-        in `primary`. `additionalProperties: false` over exactly these three is what closes the region:
-        FR-027's cap is decidable only if a fifth scannable figure cannot be parked here instead.
+        in `primary`. `additionalProperties: false` is what closes the region: FR-027's cap is decidable
+        only if a fifth scannable figure cannot be parked here instead.
+
+        **`as_of_is_stale` is not a fifth figure.** It was added when FR-029's row-level clause was
+        implemented, and it is a boolean qualifying the `as_of_date` already present rather than a new
+        quantity — which is why FR-029 says the mark "needs no new figure and no new field". FR-027 caps
+        the *comparison quantities* a coordinator scans across rows; a staleness flag carries no number to
+        compare. The closure still holds: four members, and a figure cannot be added here without amending
+        this schema.
       additionalProperties: false
-      required: [as_of_date, criticality, calendar_margin_days]
+      required: [as_of_date, as_of_is_stale, criticality, calendar_margin_days]
       properties:
         as_of_date:
           type: string
@@ -917,6 +924,21 @@ components:
             requirement is that the date the run was fitted as of is visible in the row without hovering
             or opening anything, and a value the row renderer must reach out of page scope to find is one
             refactor away from a tooltip.
+        as_of_is_stale:
+          type: boolean
+          description: |
+            FR-029. Whether the run these figures were computed from is stale — the same claim
+            `meta.forecast_run.stale` carries at page scope, restated on the row.
+
+            Restated rather than left to the banner because "a page-level banner alone stops carrying
+            once rows are sorted, filtered, or read one at a time", and a coordinator reading one row in
+            isolation would otherwise take its figures as current. The two are the same predicate and MUST
+            agree within a response; `meta.forecast_run.stale` is the page-scope statement and this is the
+            row-scope one.
+
+            The interface must carry it as text rather than as a tint alone (FR-050) — a mark visible only
+            by colour is invisible to the coordinator most likely to be reading one row at a time through
+            assistive technology.
         criticality:
           type: integer
           minimum: 1

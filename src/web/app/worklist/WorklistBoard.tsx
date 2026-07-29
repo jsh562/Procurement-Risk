@@ -125,6 +125,27 @@ export function WorklistBoard({ initial }: { readonly initial: WorklistResponse 
           </ul>
         </section>
       ) : null}
+
+      {/*
+       * FR-042. Rendered *after* the controls, never instead of them. This is
+       * the empty-filter state's whole difficulty: the coordinator needs the
+       * scoping control most at the moment there is nothing to show, and a
+       * guard that swapped the board for this paragraph took the control away
+       * exactly then.
+       *
+       * The wording distinguishes the two ways a worklist can be empty. FR-042
+       * forbids an unfiltered empty worklist from borrowing the filter's
+       * wording — the claim that a filter matched nothing would be false, and
+       * FR-018's enumeration is canonical, so no ninth state may be invented
+       * for it either.
+       */}
+      {worklist.counts.total === 0 ? (
+        <p className={styles.empty}>
+          {worklist.scope.project_id === null
+            ? "No open purchase-order lines. Nothing is outstanding."
+            : `No open lines in ${worklist.scope.project_id}. Choose another project above, or select all projects, to see lines again.`}
+        </p>
+      ) : null}
     </>
   );
 }

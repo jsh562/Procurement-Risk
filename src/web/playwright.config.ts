@@ -41,9 +41,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       env: {
+        // The dedicated end-to-end database, never the shared development one.
+        // `seed.py` owns it and prints this URL; pointing the boundary at the
+        // shared database would make these specs depend on whatever another
+        // epic's tier last left there.
         DATABASE_URL:
-          process.env.DATABASE_URL ??
-          "postgresql://procurement:local-development-only@localhost:5434/procurement",
+          process.env.E2E_DATABASE_URL ??
+          "postgresql://procurement:local-development-only@localhost:5434/procurement_e2e",
         WORKLIST_TIMEZONE: "UTC",
         // The interface tier's origin. Every client-side re-query is
         // cross-origin, so without this the browser blocks each adjustment

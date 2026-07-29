@@ -47,11 +47,19 @@ export default async function WorklistPage() {
 
       <AsOf meta={worklist.meta} />
 
-      {worklist.counts.total === 0 ? (
-        <p className={styles.empty}>No open purchase-order lines are in scope.</p>
-      ) : (
-        <WorklistBoard initial={worklist} />
-      )}
+      {/*
+       * FR-042. The board renders whatever the counts say, because it owns the
+       * scoping control and the control must stay on screen when a filter
+       * matches nothing — that is the state in which a coordinator most needs
+       * it, and it is precisely the state a `counts.total === 0` guard removed
+       * it from. `empty_filter` implies an empty result, so the earlier guard
+       * meant the control was *never* present exactly when the requirement
+       * called for it, and the coordinator's only exit was a reload.
+       *
+       * The empty message moved inside the board for the same reason: it has to
+       * appear beside the control rather than instead of it.
+       */}
+      <WorklistBoard initial={worklist} />
     </main>
   );
 }
