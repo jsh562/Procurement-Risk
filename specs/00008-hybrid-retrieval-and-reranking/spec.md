@@ -845,6 +845,33 @@ name has a bounded life.
   because the amendment that assigned FR-035's owner also imposed this on E008, and an obligation
   living only in another document's risk register has no verifier here — the failure shape this
   epic has now hit four times.)*
+- **FR-051** *(added 2026-07-29 at the v1.2.10 re-audit)*: Every figure this epic emits MUST carry
+  **either an interval or an explicit declaration that it has none**, and a figure declaring no
+  interval MUST carry **its exact denominator** and a **`no_interval_reason`** drawn from a closed
+  set the contract declares. The set is exactly two values:
+
+  - **`census_over_enumerated_population`** — the figure is computed over every element of a finite,
+    enumerated population, so nothing is sampled and there is no sampling frame to generalize from.
+    This is what SC-009's candidate-set figures and SC-016's per-query latency draw on.
+  - **`single_observation`** — exactly one reading exists for the run, so there is no population to
+    sample at all. This is what SC-016's per-run resident-memory reading draws on.
+
+  A figure emitted with neither an interval nor a reason MUST be **refused rather than emitted**, and
+  a reason outside the declared set MUST be refused likewise — the assertion is made over the emitted
+  artifact, the shape FR-031, FR-006 and FR-049 use.
+
+  *(Principle II was amended to v1.2.10 while this epic sat at its Implement gate. The principle
+  previously read "every reported metric MUST be published together with its interval" without
+  qualification, and this spec already answered the substance — SC-009 and SC-016 both state that
+  their figures are a census over an enumerated population and need no interval. What v1.2.10 adds is
+  the part this spec did **not** have: the reason must come from a **closed set**, and **the artifact
+  publishing the figure must declare that set**, because "an open-ended reason field is satisfied by
+  any string and enforces nothing". The contract carries 18 closed enums already and carried none for
+  this, so the declaration existed in prose and was unenforceable. Attaching an interval to a census
+  asserts a sampling frame the figure does not have; publishing a census with no declaration leaves
+  it indistinguishable from an estimate whose interval was quietly dropped. Both are the false
+  confidence the principle exists to remove, which is why the **declaration** is the load-bearing
+  half rather than the absence of the interval.)*
 - **FR-050** *(added 2026-07-29 at the v1.2.9 re-audit)*: System MUST ship a **datasheet** beside the
   frozen evaluation set, disclosing its generative assumptions, and an automated check MUST fail if
   the set is present without one. §Data Provenance requires this of **every synthetic dataset**, and

@@ -26,7 +26,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Audited against**: `project-instructions.md` **v1.2.9** (last amended 2026-07-29) ·
+**Audited against**: `project-instructions.md` **v1.2.10** (last amended 2026-07-29) ·
 **Audit date**: 2026-07-29 · **Verdict**: PASS after remediation. **All six blocking amendments have
 landed**; the two rows that were CONDITIONAL are closed by v1.2.9 itself. Recorded because this
 document moved five times in five days while this epic was in flight, and a compliance record that
@@ -41,7 +41,7 @@ missed.)*
 | Principle / Section | Verdict | Where |
 |---|---|---|
 | I. Traceable or It Does Not Ship | PASS | Every result projects document, type, project and page from the chunk row; SC-003 asserts identity with the stored value. The response type has no constructor that accepts a page from anywhere else (AD-004) |
-| II. Uncertainty Is the Product | PASS | Recall with a Wilson interval, MRR with a percentile bootstrap, and an explicit unresolvable verdict where intervals overlap |
+| II. Uncertainty Is the Product | PASS with a scheduled contract change | Recall with a Wilson interval, MRR with a percentile bootstrap, and an explicit unresolvable verdict where intervals overlap. **v1.2.10 amended this principle while the epic sat at its Implement gate** and it lands here directly: a **census** must now carry its exact denominator plus a reason from a **closed set**, and the publishing artifact must declare that set, because an open-ended reason field enforces nothing. SC-009 and SC-016 already declared census-and-no-interval in prose; the contract carried 18 closed enums and none for this, so the declaration was unenforceable. Closed by **FR-051** and **T106**, which add a two-value `no_interval_reason` enum |
 | III. Precision Over Recall Where a Mistake Is Silent | PASS | FR-007 refuses on encoder-identity mismatch rather than answering; FR-009 returns empty as empty; the route is additive |
 | IV. Agent Output Style | PASS with a recorded exception | Template sections, plus two the template does not name: §Pending Amendments, which Governance requires of a branch that records an amendment it may not perform, and §Decisions Taken at Checklist's plan-side counterpart folded into §Checklist Outcome. Both carry an obligation no template section owns. The three summary epilogues an earlier draft carried were removed at Analyze — §IV forbids restating finished work, and each duplicated a section above it |
 | V. The Model Extracts, Code Computes | PASS with **two** scheduled contract changes | All ranking arithmetic is in one statement inside the deterministic boundary, and AD-005 settles where reranker score-sorting sits. **`api.retrieval` is the third computation package, so the api forbidden contract must name it** — E010 recorded the precedent when it added the second: a boundary that guards one of two is a boundary in name. **The same argument reaches the gateway, and that is new at v1.2.9**: `src/gateway/pyproject.toml`'s contract forbids `gateway.provider` from reaching `gateway.compute`, and T020 puts masked mean pooling and L2 normalization into `gateway.inference` — a second arithmetic package in the same root as the single provider-facing module in the repository. Before v1.2.9 no inference lived in the gateway, so this gap did not exist to be found. Both changes are scheduled: T006 and **T102** (AD-015) |
