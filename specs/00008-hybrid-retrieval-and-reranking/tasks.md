@@ -145,15 +145,15 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T063 [US3] {FR-017,FR-025} Load and warm both the INT8 and FP32 sessions before readiness (AD-011, AD-013) in src/api/src/api/retrieval/readiness.py after:T062
 - [X] T064 [US3] {FR-017} [COMPLETES FR-017] Withhold readiness until warm-up completes, inside the lifespan hook (HINT-005), in retrieval/readiness.py and src/api/src/api/main.py after:T063
 - [X] T065 [US3] {FR-015,FR-018,FR-038} [COMPLETES FR-038] Cover load-once, the warmed shape, joint scoring of the fused set and the thread counts, in src/gateway/tests/test_inference.py after:T064
-- [ ] T066 [US3] {FR-019} Publish the sequence limit as a number with the candidate-length distribution and the truncated fraction, in retrieval/report.py ← T062:TruncationReport
-- [ ] T067 [US3] {FR-033} Report per-query reranking latency with the fusion-statement and encoder times beside it, and per-session RSS against the budget, in retrieval/report.py after:T066
-- [ ] T068 [US3] {FR-033,FR-049} Assert the report carries workload, environment, measurement point, occasion, counter, arm, corpus size and ingest generation, in src/api/tests/retrieval/test_performance_report.py after:T067
+- [X] T066 [US3] {FR-019} Publish the sequence limit as a number with the candidate-length distribution and the truncated fraction, in retrieval/report.py ← T062:TruncationReport
+- [X] T067 [US3] {FR-033} Report per-query reranking latency with the fusion-statement and encoder times beside it, and per-session RSS against the budget, in retrieval/report.py after:T066
+- [X] T068 [US3] {FR-033,FR-049} Assert the report carries workload, environment, measurement point, occasion, counter, arm, corpus size and ingest generation, in src/api/tests/retrieval/test_performance_report.py after:T067
 - [ ] T100 [US3] {FR-049} [COMPLETES FR-049] Assert two figures differing only in ingest generation are distinguishable, since the repair changes no chunk count, in src/api/tests/retrieval/test_report.py after:T099
 - [ ] T069 [US3] {FR-033} [COMPLETES FR-033] Take the latency and memory figures under the one-vCPU quota after readiness, in src/api/tests/test_retrieval_benchmark.py after:T067
 - [X] T070 [US3] {FR-020} Assert the reranked ordering repeats identically and SC-007's three counters read zero after readiness, in src/api/tests/retrieval/test_readiness.py after:T064
-- [ ] T071 [US3] {FR-036} Select the strongest single arm by the fixed per-statistic rule and compute paired per-query differences against it, in retrieval/metrics.py after:T046
-- [ ] T072 [US3] {FR-036} Label fusion-only as the weak comparator and record the selected arm and the statistic that selected it, in src/api/src/api/retrieval/report.py after:T071
-- [ ] T073 [US3] {FR-036} [COMPLETES FR-036] Assert the selection rule over constructed figures, including the overlapping-interval case where both are reported, in src/api/tests/retrieval/test_metrics.py after:T072
+- [X] T071 [US3] {FR-036} Select the strongest single arm by the fixed per-statistic rule and compute paired per-query differences against it, in retrieval/metrics.py after:T046
+- [X] T072 [US3] {FR-036} Label fusion-only as the weak comparator and record the selected arm and the statistic that selected it, in src/api/src/api/retrieval/report.py after:T071
+- [X] T073 [US3] {FR-036} [COMPLETES FR-036] Assert the selection rule over constructed figures, including the overlapping-interval case where both are reported, in src/api/tests/retrieval/test_metrics.py after:T072
 
 ---
 
@@ -164,9 +164,9 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T076 [US4] {FR-021} [COMPLETES FR-021] Report partially_available per session and refuse the unavailable arm explicitly rather than serving the other, in retrieval/readiness.py after:T075
 - [X] T077 [US4] {FR-022} State fusion-only and unreranked in every degraded response body and expose the degraded state at /readyz, in src/api/src/api/retrieval/routes.py after:T076
 - [X] T078 [US4] {FR-022} Carry a machine-readable unreranked reason — arm_excludes_reranking, no_candidates_to_score — without claiming fusion-only, in retrieval/routes.py after:T077
-- [ ] T079 [US4] {FR-023} Record the mode a run executed in on every evaluation-facing output, in src/api/src/api/retrieval/report.py after:T078
+- [X] T079 [US4] {FR-023} Record the mode a run executed in on every evaluation-facing output, in src/api/src/api/retrieval/report.py after:T078
 - [ ] T080 [US4] {FR-024} Force load failure at the artifact-loading boundary and assert ready-degraded, the fusion-only statement with results, and the recorded mode, in src/api/tests/retrieval/test_degraded.py after:T079
-- [ ] T081 [US4] {FR-041} Report the degraded path's per-query latency on FR-033's terms and assert it never exceeds the reranked path's over the same query set, in src/api/tests/retrieval/test_degraded.py after:T080
+- [X] T081 [US4] {FR-041} Report the degraded path's per-query latency on FR-033's terms and assert it never exceeds the reranked path's over the same query set, in src/api/tests/retrieval/test_degraded.py after:T080
 
 ---
 

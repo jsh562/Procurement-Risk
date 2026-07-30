@@ -21,7 +21,7 @@ emitted artifact rather than over intent.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -31,13 +31,16 @@ import numpy as np
 __all__ = [
     "BOOTSTRAP_BIT_GENERATOR",
     "BOOTSTRAP_RESAMPLES",
+    "ArmComparison",
     "IntervalMethod",
     "IntervalRecord",
     "MetricsError",
     "mean_reciprocal_rank",
     "overlap_verdict",
     "percentile_bootstrap",
+    "compare_against_strongest",
     "recall_at_k",
+    "strongest_single_arm",
     "wilson_interval",
 ]
 
@@ -231,3 +234,101 @@ def overlap_verdict(a: tuple[float, float], b: tuple[float, float]) -> bool:
             msg = f"interval {name} has a lower bound above its upper bound: {interval}"
             raise MetricsError(msg)
     return a[1] < b[0] or b[1] < a[0]
+
+
+# ---------------------------------------------------------------------------
+# FR-036: the honest comparator
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ArmComparison:
+    """Reranking measured against the strongest single arm, not the weakest.
+
+    Principle VIII. Comparing reranking against fusion-only is the flattering
+    comparison and this epic's own risk register calls that ordering weak by
+    construction — at depth 50 with k=60 the rank-1 to rank-50 ratio is 1.8, so
+    beating it is close to guaranteed and says almost nothing.
+    """
+
+    comparator_arm: str
+    selecting_statistic: str
+    comparator_value: float
+    subject_value: float
+    paired_differences: tuple[float, ...]
+    unresolvable: bool
+    both_reported: tuple[str, ...] = ()
+
+    @property
+    def mean_difference(self) -> float:
+        if not self.paired_differences:
+            msg = "no paired differences; the comparison covers no query"
+            raise MetricsError(msg)
+        return sum(self.paired_differences) / len(self.paired_differences)
+
+
+def strongest_single_arm(figures: Mapping[str, float]) -> tuple[str, ...]:
+    """The single arm with the highest figure, or all arms tied at the top.
+
+    Returns a tuple because a tie is a real outcome and picking one would be a
+    silent choice. `fusion` is eligible — it is a single arm — but FR-036 labels
+    it the weak comparator wherever it wins, so the caller can say so.
+    """
+    if not figures:
+        msg = "no arm figures were supplied; there is nothing to compare against"
+        raise MetricsError(msg)
+    best = max(figures.values())
+    return tuple(sorted(name for name, value in figures.items() if value == best))
+
+
+def compare_against_strongest(
+    subject: str,
+    subject_values: Sequence[float],
+    arm_values: Mapping[str, Sequence[float]],
+    *,
+    statistic: str,
+    intervals: Mapping[str, tuple[float, float]] | None = None,
+) -> ArmComparison:
+    """Compare `subject` against the strongest single arm, per query.
+
+    **Paired differences, not a difference of means.** The same queries run
+    through both arms, so pairing removes between-query variance — which at
+    fifty queries is most of the variance there is, and an unpaired comparison
+    at that size cannot separate arms differing by a few points.
+
+    When the two intervals overlap the verdict is **unresolvable** and both
+    figures are reported. Declaring a winner on overlapping intervals is the
+    overclaim FR-032 exists to prevent, and reporting only the subject would
+    hide that the comparison did not settle.
+    """
+    means = {
+        name: (sum(values) / len(values) if values else 0.0) for name, values in arm_values.items()
+    }
+    candidates = strongest_single_arm(means)
+    comparator = candidates[0]
+    comparator_values = arm_values[comparator]
+    if len(comparator_values) != len(subject_values):
+        msg = (
+            f"the subject was measured on {len(subject_values)} queries and "
+            f"{comparator} on {len(comparator_values)}; a paired difference needs "
+            f"the same queries through both arms"
+        )
+        raise MetricsError(msg)
+    differences = tuple(
+        float(s) - float(c) for s, c in zip(subject_values, comparator_values, strict=True)
+    )
+    unresolvable = False
+    both: tuple[str, ...] = ()
+    if intervals and subject in intervals and comparator in intervals:
+        unresolvable = not overlap_verdict(intervals[subject], intervals[comparator])
+        if unresolvable:
+            both = (subject, comparator)
+    return ArmComparison(
+        comparator_arm=comparator,
+        selecting_statistic=statistic,
+        comparator_value=means[comparator],
+        subject_value=(sum(subject_values) / len(subject_values) if subject_values else 0.0),
+        paired_differences=differences,
+        unresolvable=unresolvable,
+        both_reported=both,
+    )

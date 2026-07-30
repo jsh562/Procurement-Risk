@@ -229,3 +229,139 @@ def ranking_parameters_in_force(config: RetrievalConfig) -> RankingParameters:
         search_breadth=config.search_breadth,
         index_mode=config.index_mode,
     )
+
+
+# ---------------------------------------------------------------------------
+# FR-033, FR-041, SC-016: the performance figures and how they were taken
+# ---------------------------------------------------------------------------
+
+#: The never-exceed reranking latency, settled at spec §Decisions Taken at
+#: Checklist. A single observation above it falsifies SC-016 — chosen over a p95
+#: because a p95 across a fifty-query set is decided by its two or three worst
+#: observations, which is a weak gate that reads like a strong one.
+LATENCY_NEVER_EXCEED_MS: Final = 400.0
+
+
+@dataclass(frozen=True)
+class PerformanceReport:
+    """One run's latency and memory, with everything needed to read them.
+
+    FR-033 fixes seven things about how a figure is taken, and all seven travel
+    with it. A latency without its workload, environment, measurement point,
+    occasion, counter, arm and corpus size is a number that cannot be compared
+    with another number — which is the only thing a performance figure is for.
+    """
+
+    workload: str
+    environment: str
+    measurement_point: str
+    occasion: str
+    counter: str
+    arm: str
+    corpus_size: int
+    ingest_generation: str
+    per_query_reranking_ms: tuple[float, ...]
+    per_query_fusion_ms: tuple[float, ...]
+    per_query_encoder_ms: tuple[float, ...]
+    resident_bytes_by_session: dict[str, int]
+    process_resident_bytes: int
+    peak_resident_bytes: int
+    memory_budget_bytes: int
+
+    @property
+    def worst_reranking_ms(self) -> float:
+        """The never-exceed statistic, which is the gate.
+
+        A **census** over every query in the run — nothing is sampled — so it
+        publishes its denominator and no interval, per FR-051.
+        """
+        if not self.per_query_reranking_ms:
+            msg = "no query was timed; the never-exceed figure is undefined"
+            raise ReportError(msg)
+        return max(self.per_query_reranking_ms)
+
+    @property
+    def within_latency_budget(self) -> bool:
+        return self.worst_reranking_ms <= LATENCY_NEVER_EXCEED_MS
+
+    @property
+    def within_memory_budget(self) -> bool:
+        return self.process_resident_bytes <= self.memory_budget_bytes
+
+    def as_figures(self) -> list[FigureRecord]:
+        """Every figure this report publishes, each carrying its own uncertainty.
+
+        The memory reading is `single_observation` and the latency is
+        `census_over_enumerated_population`: one is a single reading per run
+        with no population to sample, the other covers every query. Both are
+        censuses in the sense Principle II means, and they draw different
+        licensed reasons because they are census for different reasons.
+        """
+        return [
+            publish_figure(
+                FigureRecord(
+                    name="reranking_latency_never_exceed_ms",
+                    value=self.worst_reranking_ms,
+                    denominator=len(self.per_query_reranking_ms),
+                    no_interval_reason=NoIntervalReason.CENSUS_OVER_ENUMERATED_POPULATION,
+                    corpus_size=self.corpus_size,
+                    ingest_generation=self.ingest_generation,
+                    extra={"budget_ms": LATENCY_NEVER_EXCEED_MS, "arm": self.arm},
+                )
+            ),
+            publish_figure(
+                FigureRecord(
+                    name="process_resident_bytes",
+                    value=float(self.process_resident_bytes),
+                    denominator=1,
+                    no_interval_reason=NoIntervalReason.SINGLE_OBSERVATION,
+                    corpus_size=self.corpus_size,
+                    ingest_generation=self.ingest_generation,
+                    extra={
+                        "budget_bytes": self.memory_budget_bytes,
+                        "peak_bytes": self.peak_resident_bytes,
+                        # Itemized against the one total rather than apportioned:
+                        # FR-033 requires the report break the sessions out, and
+                        # the 400 MB is deliberately not split between them.
+                        "by_session": dict(self.resident_bytes_by_session),
+                    },
+                )
+            ),
+        ]
+
+
+def degraded_never_exceeds(
+    degraded_ms: Sequence[float],
+    reranked_ms: Sequence[float],
+) -> dict[str, Any]:
+    """FR-041. The degraded path's latency, on its own defined terms.
+
+    **The span differs from FR-033's and that is not an oversight.** FR-033
+    measures the reranker component's scoring call, and on the degraded path
+    that call does not occur — inheriting "the same terms" would leave the span
+    empty and the requirement unfalsifiable. The degraded span is total
+    in-process query wall-clock, the only span both paths share.
+
+    Two statistics because they answer different questions. The never-exceed is
+    the gate. The mean is reported beside it and compared against the reranked
+    mean, which is where "removing the reranker made queries faster" is either
+    visible or absent — a per-query comparison would be falsified by ordinary
+    scheduling jitter on some query in every run.
+    """
+    if not degraded_ms:
+        msg = "no degraded query was timed"
+        raise ReportError(msg)
+    degraded_mean = sum(degraded_ms) / len(degraded_ms)
+    reranked_mean = (sum(reranked_ms) / len(reranked_ms)) if reranked_ms else None
+    return {
+        "span": "total_in_process_query_wall_clock",
+        "never_exceed_ms": max(degraded_ms),
+        "within_budget": max(degraded_ms) <= LATENCY_NEVER_EXCEED_MS,
+        "mean_ms": degraded_mean,
+        "reranked_mean_ms": reranked_mean,
+        "faster_than_reranked_on_average": (
+            None if reranked_mean is None else degraded_mean <= reranked_mean
+        ),
+        "denominator": len(degraded_ms),
+        "no_interval_reason": str(NoIntervalReason.CENSUS_OVER_ENUMERATED_POPULATION),
+    }
