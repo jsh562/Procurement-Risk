@@ -41,6 +41,14 @@ __all__ = [
 QUERIES_NAME: Final = "queries.json"
 MANIFEST_NAME: Final = "manifest.json"
 
+#: Where the frozen set lives. Under `data/`, not beside this module, because
+#: `project-instructions.md` §Source Code Layout places "data, corpus manifests,
+#: and datasheets under `data/`" and a committed, hashed corpus with a
+#: release-gate role is data rather than a test fixture. `data/reranker/` set the
+#: same precedent in this epic. The *harness* stays here, in the tier that runs
+#: it, because it is code.
+COMMITTED_SET = Path(__file__).resolve().parents[5] / "data" / "evaluation_set"
+
 
 class EvaluationSetError(RuntimeError):
     """The evaluation set is absent, malformed, or does not match its digest.

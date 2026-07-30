@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from retrieval.evaluation_set.harness import (
+    COMMITTED_SET,
     MANIFEST_NAME,
     QUERIES_NAME,
     EvaluationSetError,
@@ -26,7 +27,7 @@ from retrieval.evaluation_set.harness import (
     reciprocal_ranks,
 )
 
-COMMITTED = Path(__file__).resolve().parent / "evaluation_set"
+COMMITTED = COMMITTED_SET
 DATASHEET = COMMITTED / "DATASHEET.md"
 
 
