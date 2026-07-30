@@ -6,7 +6,7 @@ spec_type: "product"
 spec_maturity: "clarified"
 epic_id: "E009"
 epic_sources: "{PRD:CAP-004}"
-instructions_version: "1.2.10"
+instructions_version: "1.2.11"
 ---
 
 # Feature Specification: Cross-Document Identity Resolution
