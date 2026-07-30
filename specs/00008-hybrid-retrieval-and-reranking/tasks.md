@@ -82,7 +82,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T021 {FR-007} Refuse retrieval when the query encoder identity differs from the identity recorded on the chunks, in gateway/inference/encoder.py after:T020 → exports: assert_encoder_identity
 - [X] T022 Repoint src/model/src/model/ingest/embed.py at gateway.inference.encoder so exactly one pooling implementation exists (ADR-0023) after:T021
 - [X] T105 Repoint src/model/src/model/ingest/tokens.py at the gateway so model imports no distribution it stops declaring after:T020
-- [ ] T023 Commit and seed the integration fixture corpus — the merge gate applies migrations and never ingests — in src/api/tests/retrieval/fixtures/seed_chunks.py → exports: seeded_corpus
+- [X] T023 Commit and seed the integration fixture corpus — the merge gate applies migrations and never ingests — in src/api/tests/retrieval/fixtures/seed_chunks.py → exports: seeded_corpus
 
 ---
 
