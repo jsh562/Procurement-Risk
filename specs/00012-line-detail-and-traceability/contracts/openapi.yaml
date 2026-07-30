@@ -1,0 +1,2245 @@
+openapi: 3.1.0
+
+info:
+  title: Line Detail and Traceability
+  version: 1.0.0
+  x-epic: E012
+  x-spec: specs/00012-line-detail-and-traceability/spec.md
+  summary: One purchase-order line's posterior, plotted and inspectable, with every linked record resolving to its source page.
+  description: |
+    Two read operations. Neither writes anything, and there is deliberately no write path on this
+    surface: the view is read-only (spec § Scope → Excluded) and FR-029 forbids writing to any
+    identity-resolution record, so the absence is a property of the operation table rather than a
+    convention somebody maintains.
+
+    **What this contract exists to prevent.** The product refuses to publish a single predicted
+    delivery date. The stored artifacts make that refusal fragile — a consumer holding the draw array
+    or the day-grid array can compute a mean, a mode, or any quantile it likes and render exactly the
+    date the product removes. So the prohibition is enforced *at the boundary*, in this schema, rather
+    than by asking clients to behave: neither array appears here, no member is a central summary, and
+    the figures that do cross are closed in five classes.
+
+    This is the general rule ADR-0025 establishes. E010 kept the arrays off *its* response and said in
+    terms that the prohibition was scoped to that surface and that this feature's presentation
+    obligations were its own to state. This contract states them.
+
+    **Nothing at the boundary is re-chosen.** FR-036 requires every failure on this view to take "the
+    same form the serving boundary already establishes (E010 FR-043) rather than a new one", and this
+    document reads that as binding the whole boundary convention rather than the error shape alone.
+    Adopted from `specs/00010-risk-ranked-coordinator-worklist/contracts/openapi.yaml` unchanged: RFC
+    9457 `application/problem+json` with a closed `type` set and `correlation_id` required on *every*
+    problem including 422; `ETag` + `If-None-Match` → 304; `Cache-Control: private, no-cache`; the
+    `meta` envelope with `ForecastRunMeta` and `Conventions`; `PercentFigure`; `ReferenceClass`. Where
+    a schema here differs from E010's copy, the difference is stated in that schema and carries the
+    requirement that forced it. Where a state name already exists — `roster_mismatch`, `not_covered`,
+    `no_active_run`, `stale_run`, `beyond_horizon`, `already_late` — it is adopted rather than minted,
+    so one line cannot carry differently-spelled states on the two surfaces.
+
+    **The honest limit, stated rather than glossed.** Fifty equal-probability marks *are* the
+    distribution, and counting to the twenty-fifth yields its middle. That is what plotting a
+    distribution means, and no schema can forbid it without forbidding the plot. FR-012 concedes this
+    and declines to claim otherwise. What the schema does enforce is that no such value is *stated,
+    labelled, or carried as a field* — which is what Principle II actually rests on (FR-039).
+
+    **Two scalars a reader might expect are deliberately absent**, and the absences are recorded rather
+    than implied:
+      - **`criticality`.** Scalar, stated, and a member of none of FR-038's five classes — therefore a
+        sixth. E010 FR-027 classifies it on the worklist as *explanatory context*, which that requirement
+        states "is not a comparison quantity and MUST be visually subordinate";
+        no E012 requirement puts it on this view, and Key Entities describes the entity read rather
+        than mandating publication. E017 owns the override; the worklist is where it is read.
+      - **`calendar_margin_days`.** E010's secondary-region figure. The same quantity is needed here to
+        place FR-005's need-by mark on a day axis, so it appears as
+        `Distribution.miss.need_by_offset_days` — a coordinate inside the encoding, which FR-039
+        excludes from FR-038's domain — and never as a stated figure. Different role, different name,
+        so the two cannot be mistaken for one another.
+
+    **There is no `textual_equivalent` member, and its absence is the mechanism.** FR-014 requires a
+    structured textual equivalent carrying the reference class, the labelled quantile pair, the miss
+    mass in both directions, the residual mass, and a banded summary of the day grid. Every one of
+    those is already a member of `figures` or `encoding`. FR-016 requires a reader using the equivalent
+    to obtain the same figures a reader using the plot obtains — which is *guaranteed* when both render
+    from the same members and merely *hoped for* when the response carries two copies. A block of
+    pre-composed summary strings would also be the one place FR-017's point estimate could re-enter
+    unnoticed, since prose is unconstrained where a `PercentFigure` is not. Scope's "no second copy of
+    any figure the worklist already publishes" is the same argument one surface out. FR-015 and FR-017
+    are rendering obligations with no payload consequence; FR-016's band-boundedness is structural in
+    `CumulativeView`, so the equivalent cannot band on a calendar grid even if an implementer wanted
+    to.
+
+    **Authentication.** None, and inherited rather than decided here. `specs/sad.md` § Security records
+    the absence as a project-level scope decision with its reversal condition; E010 FR-056 carried it
+    into the worklist and this feature adopts it unchanged. `Cache-Control: private` therefore rests on
+    the request-time date and not on an identity this system does not have.
+
+    **Compatibility and change.** No consumer outside this repository exists, and the project plan
+    records no consumer of this surface at all (§ Shared Artifact Surface → API Surfaces: *Line detail
+    endpoint | Introduced by E012 | Consumed by —*). A change to this contract therefore lands with its
+    implementation in the same commit and bumps `info.version`. A change is **breaking** if it removes
+    or renames a member, changes a member's type or admitted values, adds a member to an object
+    declared `additionalProperties: false`, adds a value to a closed `enum`, adds a required parameter,
+    or moves a condition to a different status. Because every object here is closed, almost any payload
+    change is breaking for a strict consumer — that is the deliberate cost of FR-038's cap being
+    structural. Adding a `type` to the problem vocabulary is the one compatible change to that enum;
+    renaming or reusing one is not.
+
+    **What this contract does not touch.** The worklist response is E010's and is read-only for later
+    epics (E010 FR-057). Making a worklist row's identity navigate (FR-035) is a web-layer change to an
+    already-present field — it adds no element to the row, so it neither changes E010's contract nor
+    triggers its same-commit consumer rule.
+
+servers:
+  - url: /api/v1
+    description: Request-serving boundary (FastAPI, Python 3.12), mounted under a version prefix.
+
+tags:
+  - name: line-detail
+    description: One line's distribution, covariates, and linked records. Read-only.
+  - name: traceability
+    description: Resolving a stored document identifier to a readable source. Read-only.
+
+x-prohibited-members:
+  description: |
+    FR-011 and FR-012. Member names that MUST NOT appear anywhere in a response from this boundary,
+    published machine-readably so a contract test asserts their absence by name rather than by reading
+    schemas. Every object in the 200 response tree is `additionalProperties: false`, which is what
+    makes the list enforceable rather than aspirational. The single exception is `Problem`, which is
+    `additionalProperties: true` because RFC 9457 contemplates extension members and E010's copy is
+    open for the same reason — it carries no figure, appears only on error responses, and is
+    therefore outside the tree this list governs.
+  stored_arrays: [draws, survival]
+  central_summaries:
+    - mean
+    - mean_delivery_days
+    - mode
+    - modal_delivery_days
+    - expected_value
+    - expected_delivery_date
+    - expected_overrun_days
+    - point_estimate
+    - predicted_delivery_date
+
+x-figure-classes:
+  description: |
+    FR-038 closes the view's stated scalar figures in five classes and no sixth. The closure is
+    structural: `StatedFigures` has exactly five properties, named for the five classes, and is
+    `additionalProperties: false`. A sixth class requires adding a property to a closed object, which
+    this document's own compatibility rule calls breaking — so introducing one reopens FR-038's check
+    deliberately rather than by accident, which is what makes the check finite.
+
+    Each class lists the exact response locations of its members, so "no sixth" is checkable by walking
+    a response rather than by reading an interface's source. The distribution *encoding* is outside
+    this enumeration by FR-039; `meta` is artifact identification under FR-013 and Principle I, not a
+    stated figure; identifiers locate a record and state no quantity about delivery risk.
+  classes:
+    - name: distribution
+      requirements: [FR-001, FR-004]
+      members: [/figures/distribution/quantiles, /figures/distribution/share_per_mark]
+    - name: mass
+      requirements: [FR-005, FR-006, FR-008]
+      members:
+        - /figures/mass/miss
+        - /figures/mass/residual
+        - /encoding/cumulative/bands/*/delivered_by
+    - name: date
+      requirements: [FR-005, FR-013]
+      members: [/figures/date/as_of_date, /figures/date/effective_need_by]
+    - name: evidence
+      requirements: [FR-018, FR-024]
+      members: [/figures/evidence/source_census, /linked_records/*/confidence]
+    - name: covariate
+      requirements: [FR-030]
+      members: [/figures/covariate/covariates/*/observed_value]
+  band_note: |
+    `delivered_by` is listed under *mass* and introduces no sixth class, exactly as FR-038 states:
+    FR-016 bounds every band by the quantiles FR-004 already labels, so the first bands' masses are the
+    labelled quantile shares and the last band's is the complement of the residual mass FR-008 already
+    publishes.
+  confidence_note: |
+    Per-field confidence is listed under *evidence* but lives on each linked record, not in the figures
+    block. FR-018 requires confidence to travel with the citation, because this is the surface on which
+    a coordinator judges whether to believe an extracted value; lifting it into a figures block would
+    separate it from the record it qualifies. Both locations are listed so the closure stays checkable.
+
+x-states:
+  description: |
+    FR-042 enumerates the view's states at three scopes. Resolution resolves to exactly one of five, in
+    the stated precedence. Annotation is zero or more of three and applies only where figures render.
+    Section-scoped resolves to exactly one per rendered section, and each set carries its nominal
+    member so "exactly one" never forces a degraded state permanently.
+
+    Where a section holds several items each carrying its own state, the section's state is the
+    degraded member when any item carries it and the nominal member otherwise. That composition rule is
+    stated here so a client never has to infer it.
+  resolution_precedence:
+    - {rank: 1, state: absent_or_closed_line, requirement: FR-044}
+    - {rank: 2, state: roster_mismatch, requirement: FR-042}
+    - {rank: 3, state: not_covered_by_active_run, requirement: FR-042}
+    - {rank: 4, state: no_active_run, requirement: FR-042}
+    - {rank: 5, state: figures_render, requirement: FR-042}
+  precedence_note: |
+    Roster mismatch precedes not-covered because E010 FR-018a fixes that order and E010 FR-033
+    establishes the two as jointly constructible. Adopting E010's order by reference is what keeps one
+    line from carrying different states on the two surfaces.
+
+    One `resolution_state`, and no list of also-applicable states. E010 refused such a list on the
+    ground that two independent booleans would let a client annotate a row under the losing label; the
+    same refusal holds here, and SC-018's "exactly one resolution state in every case" is what it
+    protects. The applied rank travels in `resolution_precedence` so the order the server used is
+    readable from the payload rather than inferred from a constant table.
+  annotation_admissible_sets:
+    - []
+    - [stale_run]
+    - [beyond_horizon]
+    - [already_late]
+    - [stale_run, beyond_horizon]
+    - [stale_run, already_late]
+  annotation_excluded:
+    - set: [beyond_horizon, already_late]
+      why: |
+        `beyond_horizon` requires the effective need-by date to fall after `as_of_date + horizon_days`;
+        `already_late` requires it to fall at or before `as_of_date`. The pair asserts both at once.
+        `maxItems: 2` on the array is what makes the exclusion partly structural; the remaining reason
+        no triple exists is this pair being in every one.
+  section_scoped:
+    - {section: identity, nominal: resolved_with_members, requirement: FR-027}
+    - {section: covariates, nominal: covariates_reconciled, requirement: FR-031}
+    - {section: sources, nominal: sources_resolve, requirement: FR-023}
+
+paths:
+  /lines/{po_line_id}:
+    get:
+      tags: [line-detail]
+      operationId: getLineDetail
+      summary: One line's posterior, covariates, and linked records.
+      description: |
+        Returns everything the detail view renders, in one response. No follow-up call per linked
+        record and none per figure: the registered envelope is a p95 of 1.5 s on one shared vCPU, and a
+        response that fanned out per record could not meet it.
+
+        **Every distribution figure derives from the same stored row, for the same active run, that the
+        worklist read for this line (FR-010).** The two surfaces read rather than recompute, which is
+        what makes them incapable of disagreeing (SC-003). Covariate values are the stated exception:
+        they are not stored beside the posterior and are reconstructed on the serving side under
+        FR-031's obligation, which is why an unreconciled value is withheld rather than shown.
+
+        **Absent data is a state carried in a 200, not a fault.** A line with no posterior — because no
+        run is active, because the active run does not cover it, or because the roster moved — returns
+        200 with a resolution state naming which. So does a line identifier that names nothing or names
+        a closed line (FR-044). Returning 404 or 500 for those would present an honest outcome as a
+        broken page, which is the one reading that sends a coordinator to chase an engineer instead of
+        a vendor. It would also put one member of a closed five-member enumeration outside the payload
+        that carries the enumeration, leaving SC-018 unassertable against a response.
+
+        **What is absent is absent.** Where FR-006 withholds the miss mass — the need-by date at or
+        before the run's anchor — the `miss` member is *not present*. It is not null, not zero, and not
+        a dash. A nullable field is one renderer away from a screen reading `0%`, which is the defect
+        the bounded forms exist to prevent. The root schema's conditionals make the rule enforceable
+        rather than documented.
+      parameters:
+        - $ref: '#/components/parameters/PoLineId'
+        - $ref: '#/components/parameters/NeedByOverride'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The line's detail, in every resolution state including those carrying no figures.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineDetailResponse'
+              examples:
+                nominal:
+                  $ref: '#/components/examples/NominalLineDetail'
+                alreadyLate:
+                  $ref: '#/components/examples/AlreadyLateLineDetail'
+                absentLine:
+                  $ref: '#/components/examples/AbsentLineDetail'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatastoreUnavailable'
+
+  /documents/{document_id}/source:
+    get:
+      tags: [traceability]
+      operationId: getDocumentSource
+      summary: The originating document, streamed inline for display at a page.
+      description: |
+        Resolves a stored document identifier to a readable source and streams it inline, so the reader
+        lands on the page a value was extracted from rather than being handed a citation to chase
+        (FR-020).
+
+        **Why the whole document rather than one extracted page.** The serving boundary declares
+        `fastapi`, `gateway`, `psycopg` and `uvicorn` and no PDF library — `pdfplumber` belongs to the
+        modelling boundary, which serving may not import, and the two are separate distributions.
+        Extracting a page server-side would mean adding a dependency to the request-serving image,
+        which the registered compute envelope and the image-contents assertions both push back on. The
+        document is therefore streamed with `Content-Disposition: inline` and the caller opens it at
+        `#page=N`, using the page number the detail response already carries for that record. The
+        reader arrives at the page; the byte range is not narrowed. That is a real limitation and it is
+        stated here rather than implied.
+
+        **FR-021 and FR-022 are discharged in headers, because the body is bytes.** A PDF stream cannot
+        carry the layer a document was drawn from or the generation it was read through, and both are
+        required at the moment of display rather than only in a list. `X-Source-Kind` and
+        `X-Ingestion-Generation` carry them. The document is resolved through
+        `v_active_ingestion_generation`: a reader that does not filter receives the resident
+        generation's rows with no run attribution and cannot distinguish no live generation from one,
+        and both failures are silent.
+
+        **Resolution is not guaranteed and is measured.** The binding from identifier to source is held
+        in configuration, not storage — the identifier is minted by a lossy transform that cannot be
+        reversed, and the schema stores no path. An unresolvable identifier is a named failure carrying
+        a cause from a closed set (FR-023, FR-036), never an empty frame, and the share that resolves
+        is published as a census on the detail response.
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The source document, for inline display.
+          headers:
+            Content-Disposition:
+              $ref: '#/components/headers/ContentDispositionInline'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Source-Kind:
+              $ref: '#/components/headers/SourceKind'
+            X-Ingestion-Generation:
+              $ref: '#/components/headers/IngestionGeneration'
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '404':
+          $ref: '#/components/responses/SourceNotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/SourceUnresolvable'
+        '503':
+          $ref: '#/components/responses/DatastoreUnavailable'
+
+components:
+
+  parameters:
+
+    PoLineId:
+      name: po_line_id
+      in: path
+      required: true
+      description: |
+        The purchase-order line. A malformed identifier is a 422 naming the parameter; a well-formed
+        identifier naming no line is a **200** carrying the `absent_or_closed_line` resolution state,
+        because "you asked for something that does not exist" and "this request was malformed" are
+        different statements and only one of them is the caller's error.
+
+        FR-035 makes the worklist's existing line identity the navigation target, so this is the value
+        E010 already publishes on every row rather than a natural key recomposed into path segments.
+      schema:
+        $ref: '#/components/schemas/PoLineId'
+
+    NeedByOverride:
+      name: need_by_override
+      in: query
+      required: false
+      description: |
+        The session-local what-if need-by date E010 FR-031 owns, carried across the navigation. Nothing
+        is written; the parameter is the whole mechanism, and reloading without it restores the
+        recorded date.
+
+        **Why this feature accepts a parameter its Scope excludes.** Scope excludes *editing*: this
+        view is read-only and offers no adjustment control, which remains E010's. It does not follow
+        that the view must be blind to an adjustment E010's control already made. FR-010 requires this
+        view's figures to derive from the same stored row the worklist's derive from, and SC-003
+        requires no case in which the two disagree — which is exactly what a coordinator who moved a
+        date on the worklist and then opened the line would meet if this parameter did not exist.
+
+        **A bare date, not E010's `<po_line_id>:<date>` pair, and not repeatable.** The path already
+        names the line, so the pairing E010 needs to disambiguate a repeatable parameter has nothing to
+        disambiguate here. Admissibility follows E010 FR-055: a value that is not a calendar date, or
+        that falls more than ten years from `today`, is a 422 naming the parameter and the reason. The
+        stored constraint `need_by_date >= order_date` is deliberately not applied — it guards the
+        stored record, this value is never stored, and enforcing it would refuse a question the figures
+        answer correctly.
+      schema:
+        type: string
+        format: date
+      example: '2026-07-18'
+
+    DocumentId:
+      name: document_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/DocumentId'
+
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |
+        The validator from a prior response. Matching returns 304 with no body. The line payload
+        depends on the day through staleness, so a stored copy could show a run as current after the
+        day boundary made it stale — which is why neither response is shared-cacheable.
+      schema:
+        type: string
+      example: 'W/"sha256:1f0c9d2b8a4e6015c7b3d9012fa4e86b5c37d0912ae4f6b83c105d7e29ab4f60"'
+
+  headers:
+
+    ETag:
+      description: |
+        Weak validator over exactly the inputs admitted to the response, so an unchanged validator is a
+        positive statement that the whole response is unchanged rather than merely that no figure
+        moved.
+
+        **`GET /lines/{po_line_id}`:** the active run identifier or its absence and its
+        `artifact_schema_version`; `today` in the configured zone; `po_line_id` and the applied
+        override; every stored field of the line the response derives from; the line's `line_posterior`
+        row identity for the active run or its absence; the resolved entity the line belongs to and
+        that entity's document-derived membership; the active ingestion generation of every document a
+        linked record cites; the corpus binding's manifest digest, because a source that resolved
+        yesterday and does not today moves `figures.evidence.source_census`; and `info.version`.
+
+        **`GET /documents/{document_id}/source`:** `document_id`; the active ingestion generation for
+        that document — its run identifier and `input_tuple_digest`, so a re-ingestion under changed
+        inputs invalidates the source; the corpus binding's manifest digest; and `info.version`.
+
+        `meta.generated_at` takes no part in either. It records when the response was produced rather
+        than what it contains, and a validator moving with the clock would report a change on every
+        request and assert nothing. It is the single member two otherwise-identical responses may
+        differ in.
+      schema:
+        type: string
+      example: 'W/"sha256:1f0c9d2b8a4e6015c7b3d9012fa4e86b5c37d0912ae4f6b83c105d7e29ab4f60"'
+
+    CacheControl:
+      description: |
+        Always `private, no-cache`. Revalidate every request and never serve from a shared cache. E010's
+        header, adopted with the same two reasons, both of which hold here: a response computed under
+        one adjustment set must not reach a request carrying a different one, and the payload is
+        time-dependent through `today`. `private` rests on the adjustment set the request carries, not
+        on an identity this system does not have.
+      schema:
+        type: string
+        const: 'private, no-cache'
+
+    ContentDispositionInline:
+      description: |
+        `inline`, so the reader lands in a viewer at the cited page rather than downloading a file they
+        must then open and navigate themselves.
+      schema:
+        type: string
+        pattern: '^inline'
+
+    SourceKind:
+      description: |
+        FR-022, carried at display. The corpus holds both layers deliberately, and a synthesized
+        submittal page is otherwise indistinguishable from a verbatim federal specification page. It is
+        a header because the body is a byte stream that cannot carry it, and it is required rather than
+        optional because "wherever such a record is listed **or its page displayed**" is what FR-022
+        says.
+      required: true
+      schema:
+        type: string
+        enum: [REAL, SYNTHETIC]
+
+    IngestionGeneration:
+      description: |
+        FR-021. The `input_tuple_digest` of the active ingestion generation this document was resolved
+        through, so a displayed page resolves to the ingestion that produced the citation pointing at
+        it — Principle I applied to the second artifact this feature reads.
+      required: true
+      schema:
+        type: string
+        pattern: '^sha256:[0-9a-f]{64}$'
+
+  responses:
+
+    NotModified:
+      description: The validator matched. No body.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+
+    ValidationFailed:
+      description: |
+        A path or query parameter is malformed or semantically inadmissible: a `po_line_id` failing its
+        UUID pattern, a `document_id` outside the frozen slug format, or a `need_by_override` that is
+        not a calendar date or falls outside the ten-year window.
+
+        422 rather than 400 for all of them, including malformed path segments, and the choice is the
+        convention E010 established for this boundary rather than the framework's default: it covers
+        the malformed and the semantically inadmissible alike, so a consumer needs one branch and not
+        two. FastAPI's default `RequestValidationError` body does not match this schema; these
+        operations inherit the handler E010 registered rather than adding a second.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/invalid-parameter'
+            title: Invalid parameter
+            status: 422
+            detail: '`po_line_id` is not a well-formed identifier.'
+            instance: '/api/v1/lines/not-a-uuid'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+            errors:
+              - parameter: po_line_id
+                value: not-a-uuid
+                reason: malformed
+
+    SourceNotFound:
+      description: |
+        The citation names a document this system holds no live record of. Two reasons reach this
+        status, both from `SourceUnresolvableReason`:
+
+          - `document_unknown` — no `document` row carries this identifier.
+          - `not_in_active_generation` — the document exists but no generation of it is active
+            (FR-021). A different statement from "the source is missing": it says the document is not
+            in the *live* ingested content, which a reader that skipped the generation filter would
+            have served as an ordinary document.
+
+        Distinct from the 500 below, which means the record exists and the system could not honour it.
+        The split is what makes FR-023's "naming the cause" actionable: one is repaired by ingesting,
+        the other by fixing the corpus binding.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/source-not-found'
+            title: No live record of that document
+            status: 404
+            detail: 'Document prj-001-t0002-r0 has no active ingestion generation.'
+            instance: '/api/v1/documents/prj-001-t0002-r0/source'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+            reason: not_in_active_generation
+
+    SourceUnresolvable:
+      description: |
+        FR-023. The stored citation is sound and no readable source could be produced from it. Three
+        reasons reach this status — `corpus_root_unconfigured`, `not_in_manifest`, `source_file_missing`
+        — each naming what would change it.
+
+        **Not a 404, and the difference is the point.** A 404 would say the document does not exist,
+        which the stored citation asserts it does and which `fk_chunk__document` makes a referential
+        fact. What failed is this system's binding from a document identifier to a readable source —
+        the hop the Recorded Limitation places in configuration rather than storage, and the hop FR-025
+        measures against a 100% target. Reporting it as the reader's mistake would make a published
+        miss look like a bad request.
+
+        No partial document is returned under any reason: FR-023 requires a stated failure rather than
+        an empty or partial frame, and half a document carries no marking saying which half is missing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/source-unresolvable'
+            title: Cannot produce that source
+            status: 500
+            detail: 'Document prj-001-t0002-r0 resolves to a manifest entry whose file is not present at the configured corpus root.'
+            instance: '/api/v1/documents/prj-001-t0002-r0/source'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+            reason: source_file_missing
+
+    InternalError:
+      description: |
+        Two conditions, distinguished by `type`, both adopted unchanged from E010 FR-043 under FR-036 —
+        no figure, no partial view, wording distinct from `no_active_run`, and a correlation identifier.
+
+          - `internal-error` — an unhandled fault in the serving boundary.
+          - `unsupported-artifact-schema` — the active run's `artifact_schema_version` is one this build
+            does not read. A deliberate refusal rather than a breakdown: a reader meeting an unfamiliar
+            artifact schema fails loudly rather than misreading array offsets, and a misread offset here
+            would place fifty marks at wrong days with nothing on screen to show it. It is **not** a
+            sixth resolution state — FR-042's set stays canonical at five — and not a 503, because the
+            datastore is reachable and retrying changes nothing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/unsupported-artifact-schema'
+            title: Forecast artifact schema not recognised
+            status: 500
+            detail: 'Active run 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201 carries artifact_schema_version 2; this build reads 1.'
+            instance: '/api/v1/lines/1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+
+    DatastoreUnavailable:
+      description: |
+        The system could not look, which is a different statement from "it looked and found nothing" —
+        rendering them alike would present an outage as an honest empty state. Distinct from
+        `no_active_run` and `not_covered_by_active_run`, both of which are 200 resolution states. The
+        model provider being unreachable never produces this status; neither operation calls it.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          example: 5
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://procurement-risk.local/problems/datastore-unavailable'
+            title: Cannot read forecast data
+            status: 503
+            detail: 'The datastore is unreachable, so no line detail could be assembled.'
+            instance: '/api/v1/lines/1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55'
+            correlation_id: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+
+  schemas:
+
+    PoLineId:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      description: |
+        `purchase_order_line.po_line_id`. A `uuid` by E003's schema, and the same key E010 publishes on
+        every row and names in a `need_by_override`. The natural key is
+        `(project_id, po_number, line_number)` and is deliberately not the route key: routing on it
+        would put three path segments where one identity exists.
+      example: 1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55
+
+    DocumentId:
+      type: string
+      pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      minLength: 3
+      maxLength: 128
+      description: |
+        `document.document_id` — the corpus manifest key in the format E003 froze: a lowercase kebab
+        slug of 3 to 128 characters, enforced at the storage boundary by `ck_document__id_format`. It
+        identifies one fixed *revision* of a source document, so a citation already taken keeps
+        resolving to the revision it was extracted from.
+      example: prj-001-t0002-r0
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 problem details. Adopted from the serving boundary E010 established (E010 FR-043), not
+        re-chosen. Every problem carries a correlation identifier, including 422 — a reader who meets a
+        failure must be able to quote something that reaches its record (FR-036, SC-024).
+      additionalProperties: true
+      required: [type, title, status, correlation_id]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            The set a consumer of these operations may encounter, closed at six. Four are E010's,
+            unchanged and never renamed in place; two are this feature's.
+
+            | `type` | Status | Condition |
+            |---|---|---|
+            | `…/problems/invalid-parameter` | 422 | a path or query parameter is malformed or inadmissible |
+            | `…/problems/source-not-found` | 404 | the citation names a document with no live record (FR-021, FR-023) |
+            | `…/problems/source-unresolvable` | 500 | the record exists and no readable source could be produced (FR-023) |
+            | `…/problems/unsupported-artifact-schema` | 500 | the active run's `artifact_schema_version` is unrecognised |
+            | `…/problems/internal-error` | 500 | an unhandled fault in the serving boundary |
+            | `…/problems/datastore-unavailable` | 503 | PostgreSQL is unreachable |
+          enum:
+            - 'https://procurement-risk.local/problems/invalid-parameter'
+            - 'https://procurement-risk.local/problems/source-not-found'
+            - 'https://procurement-risk.local/problems/source-unresolvable'
+            - 'https://procurement-risk.local/problems/unsupported-artifact-schema'
+            - 'https://procurement-risk.local/problems/internal-error'
+            - 'https://procurement-risk.local/problems/datastore-unavailable'
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+        correlation_id:
+          type: string
+          minLength: 1
+          description: |
+            **Required on every problem response, including 422**, where the correlation is what turns
+            "it would not open my citation" into a record someone can find.
+          example: '01J9Z6Q4T7B3K2V8N1M0X5C7YD'
+        reason:
+          allOf:
+            - $ref: '#/components/schemas/SourceUnresolvableReason'
+          description: |
+            Present on 404 and on 500 with `type: source-unresolvable`. FR-036 requires the cause to be
+            drawn from a closed set; this is that member, and it is the same enumeration each linked
+            record carries, so a citation marked unresolvable in the list and the failure met on
+            opening it name the cause identically.
+        errors:
+          type: array
+          description: |
+            Per-parameter detail, present on 422. The vocabulary is closed at three: `malformed` and
+            `date_out_of_range` are E010's, reused verbatim where the condition coincides;
+            `unknown_parameter` covers a query parameter this operation does not offer.
+          items:
+            type: object
+            additionalProperties: false
+            required: [parameter, reason]
+            properties:
+              parameter:
+                type: string
+              value:
+                type: [string, 'null']
+              reason:
+                type: string
+                enum: [malformed, date_out_of_range, unknown_parameter]
+
+    SourceUnresolvableReason:
+      type: string
+      description: |
+        FR-023 and FR-036's closed cause set for a source that cannot be produced. One enumeration
+        serving two places: the `reason` on a problem document, and the `reason` on a linked record
+        whose source this view already knows will not open. Two lists would let a citation be marked
+        unresolvable for one cause in the list and fail with another on opening.
+
+        | Reason | Status | What would change it |
+        |---|---|---|
+        | `document_unknown` | 404 | a `document` row for this identifier |
+        | `not_in_active_generation` | 404 | ingesting this document, so a live generation carries it |
+        | `corpus_root_unconfigured` | 500 | the configured binding to the corpus location |
+        | `not_in_manifest` | 500 | a manifest entry recoverable from this identifier |
+        | `source_file_missing` | 500 | the file the manifest entry names, present at the corpus root |
+
+        The three 500 reasons are the failure modes of the hop the Recorded Limitation places in
+        configuration rather than storage.
+      enum:
+        - document_unknown
+        - not_in_active_generation
+        - corpus_root_unconfigured
+        - not_in_manifest
+        - source_file_missing
+
+    ReferenceClass:
+      type: object
+      description: |
+        The population a displayed proportion is a proportion *of*, and the convention by which it was
+        read, carried *with* the figure rather than applied once per screen. **E010's schema, adopted
+        unchanged** — a second shape for one denominator would be two claims about the same thing.
+
+        FR-004 requires the class adjacent to each frequency rather than once for the figure, which is
+        the field-measured misreading of "50 in 100" as fifty of the hundred parts on the line rather
+        than fifty comparable orders. That is why it appears on each `LabelledQuantile` here as well as
+        on the pair, where E010 carries it once.
+
+        Where this appears beside a figure and again in `meta.conventions`, **the copy carried with the
+        figure is authoritative** and the two MUST agree within a response. A disagreement is a
+        provenance defect under Principle I, not a display choice.
+      additionalProperties: false
+      required: [basis, draw_count, percentile_convention]
+      properties:
+        basis:
+          type: string
+          const: posterior_predictive_draws
+        draw_count:
+          type: integer
+          minimum: 1
+        percentile_convention:
+          type: string
+          const: nearest_rank_one_based_no_interpolation
+
+    PercentFigure:
+      type: object
+      description: |
+        One percentage, rounded for display server-side. **E010's schema of the same name, adopted
+        unchanged** — same two members, same nullability rule, same pattern. FR-041 requires the
+        figures this view publishes and the worklist does not (the residual mass, the beyond-horizon
+        bound, the per-mark share) to take the same bounded form rather than a new one, and the
+        delivered implementation of that form is `api.compute.probability.PercentFigure`.
+
+        `reference_class` is deliberately **not** a member, because it is not one on E010's copy and a
+        shared schema that differs between two contracts is two schemas. It sits on the enclosing
+        figure — `PercentPair`, `LabelledQuantile`, `MarkSeries` — which is where FR-004 wants it
+        anyway.
+      additionalProperties: false
+      required: [percent, display]
+      properties:
+        percent:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 99
+          description: |
+            **Null exactly when the figure renders in the bounded form**, so a client physically cannot
+            render `0%` or `100%` from a numeric field. The range is 1..99 rather than 0..100 because
+            every value rounding to either endpoint is sent to the bounded form: an integer 0 or 100 is
+            unrepresentable, not merely rare, and that is what makes a regression fail schema
+            validation instead of rendering a certainty on screen (SC-020).
+        display:
+          type: string
+          pattern: '^(<1%|>99%|([1-9]|[1-9][0-9])%)$'
+          description: |
+            The numeral as it must appear. `"0%"` and `"100%"` are excluded by construction. The
+            interface supplies the surrounding words and the spoken equivalents for the bounded forms —
+            a screen reader that drops the `<` turns `<1%` into a flat `1%`.
+
+    PercentPair:
+      type: object
+      description: |
+        Both directions of one probability, with the reference class each frequency is read against.
+        The complement is subtracted from the displayed integer rather than re-rounded from the stored
+        value, so an unbounded pair sums to 100 exactly; independent rounding produces pairs summing to
+        99 or 101, which reads as an arithmetic error and destroys the dual framing. A bounded figure
+        pairs with the opposite bound, never with a flat certainty.
+
+        `bounded` is E010's member on `MissProbability`, kept here so a client branches on a declared
+        fact rather than on `percent === null`.
+      additionalProperties: false
+      required: [bounded, late, on_time, reference_class]
+      properties:
+        bounded:
+          type: boolean
+          description: |
+            True when the bounded form is in use. Then both `percent` fields are null and the two
+            `display` values are the complementary bounds `<1%` and `>99%`.
+        late:
+          $ref: '#/components/schemas/PercentFigure'
+        on_time:
+          $ref: '#/components/schemas/PercentFigure'
+        reference_class:
+          $ref: '#/components/schemas/ReferenceClass'
+
+    LabelledQuantile:
+      type: object
+      description: |
+        A quantile that carries the proportion it stands for. FR-012 forbids a quantile transmitted
+        *without* the member that pairs with it — a lone quantile is a central summary wearing a
+        percentile label, and this schema has no way to express one because `QuantilePair` requires
+        both.
+      additionalProperties: false
+      required: [percentile, days, later_share, reference_class]
+      properties:
+        percentile:
+          type: integer
+          enum: [50, 80]
+          description: |
+            The two the worklist publishes for this line, closed here because FR-004 says "the same two
+            quantiles" and an open range would let a third arrive that the worklist does not carry.
+        days:
+          type: integer
+          minimum: 0
+          description: |
+            Days counted from the run's as-of date. Deliberately not a calendar date: FR-009 keeps
+            absolute dates off the axis, off tick labels and out of figure titles, because a date is
+            read as a prediction where a duration is read as a spread. FR-009 would *permit* a date
+            attached to a labelled quantile; this contract declines the permission, as E010 does, so no
+            member of the payload is a date an interface could lift into an axis label.
+        later_share:
+          $ref: '#/components/schemas/PercentFigure'
+        reference_class:
+          $ref: '#/components/schemas/ReferenceClass'
+
+    QuantilePair:
+      type: object
+      description: |
+        The same two quantiles the worklist publishes for this line (FR-004), read from the same stored
+        row for the same active run so the two surfaces cannot disagree (FR-010, SC-003). Both members
+        are required — that is what makes FR-012's "a quantile carried without the member that pairs
+        with it" unrepresentable rather than merely discouraged. Both are present even on a
+        near-degenerate posterior where they are equal; the contract offers no way to collapse them to
+        one figure.
+      additionalProperties: false
+      required: [median, eightieth]
+      properties:
+        median:
+          $ref: '#/components/schemas/LabelledQuantile'
+        eightieth:
+          $ref: '#/components/schemas/LabelledQuantile'
+
+    MarkSeries:
+      type: object
+      description: |
+        The distribution, as fifty equal-probability marks. Each mark stands for two in one hundred
+        comparable orders, and the count is fixed: it must not vary with the line, the run, or the
+        stored draw count (FR-002, SC-027), because a figure whose denominator moves between lines
+        cannot be compared between them.
+
+        Fifty is the largest count with comprehension evidence behind it and is not extrapolated past —
+        a hundred-mark or full-draw plot would be an unevidenced extrapolation, and would also be the
+        stored array by another name. Discrete marks rather than a continuous density because a reader
+        can count them and check a stated probability against the picture; a density supports no
+        counting and must be taken on faith.
+      additionalProperties: false
+      required: [mark_count, unit, counted_from, offsets_days]
+      properties:
+        mark_count:
+          type: integer
+          const: 50
+          description: |
+            Stated as a `const` and again as the array bounds below, on purpose: the first is what a
+            reader sees, the second is what a validator enforces.
+        unit:
+          type: string
+          const: days
+        counted_from:
+          type: string
+          const: run_as_of_date
+        offsets_days:
+          type: array
+          minItems: 50
+          maxItems: 50
+          description: |
+            Exactly fifty, always, ascending. The bounds are the enforcement: an array of a different
+            length is a schema violation, not a rendering quirk, so a regression that leaked the stored
+            draws here fails validation rather than reaching a browser.
+          items:
+            type: integer
+            minimum: 0
+
+    CumulativeBand:
+      type: object
+      description: |
+        One band of the day grid, rendered as an increasing "delivered by day k" quantity. The stored
+        array is the decreasing complement and carries double the reading load; the increasing form is
+        what crosses. Lay comprehension of a decreasing survival curve is unresolved in the literature,
+        which is why the complement is what this contract publishes.
+      additionalProperties: false
+      required: [from_day, through_day, bounded_by, delivered_by]
+      properties:
+        from_day:
+          type: integer
+          minimum: 0
+        through_day:
+          type: integer
+          minimum: 0
+        bounded_by:
+          type: string
+          enum: [median, eightieth, horizon]
+          description: |
+            Which labelled figure fixes `through_day`. `median` and `eightieth` are the quantiles FR-004
+            labels; `horizon` is the end of the modelled grid. This member is what makes FR-016's
+            band-boundedness structural — there is no value here naming a calendar interval, so a band
+            chosen on a calendar grid is unrepresentable.
+        delivered_by:
+          $ref: '#/components/schemas/PercentFigure'
+
+    CumulativeView:
+      type: object
+      description: |
+        The banded cumulative series. Bands are bounded by the quantiles `QuantilePair` labels (FR-016),
+        not by a calendar grid, so a reader using the textual equivalent reads off the same figures a
+        reader using the plot does. A calendar grid would make the two populations answer different
+        questions.
+
+        **Exactly three bands, because FR-016 bounds them by a two-member quantile pair.** The count is
+        fixed by the array bounds rather than left to an implementation, so a fourth band bounded on
+        some other figure cannot arrive. This is also what keeps FR-011 true: `line_posterior.survival`
+        holds one value per day over the modelled horizon, and three bands is the resolution the figure
+        needs rather than the stored array under another name.
+
+        Placed after the distribution in reading order by FR-007, and never the only encoding present:
+        `Distribution` requires `marks` alongside it.
+      additionalProperties: false
+      required: [unit, counted_from, horizon_days, bands]
+      properties:
+        unit:
+          type: string
+          const: days
+        counted_from:
+          type: string
+          const: run_as_of_date
+        horizon_days:
+          type: integer
+          minimum: 1
+        bands:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/CumulativeBand'
+
+    MissMass:
+      type: object
+      description: |
+        How much of the distribution falls past the need-by date, in both directions, with the need-by
+        position marked and the mass beyond it shaded (FR-005). The shaded region is what makes the
+        stated figure checkable; the stated figure is what survives a reader who does not interpret
+        shading. Both are required — neither alone is sufficient.
+
+        **This member is absent entirely where FR-006 withholds it** (need-by at or before the run's
+        anchor). Absence is the encoding; there is no null and no zero to render. The absence is never
+        the sole carrier of the condition — the `already_late` annotation is present, and FR-040
+        requires it in the accessibility tree as text.
+      additionalProperties: false
+      required: [need_by_offset_days, shade_from_mark_index, probability, measure]
+      properties:
+        need_by_offset_days:
+          type: integer
+          minimum: 1
+          description: |
+            The effective need-by date, in days from the as-of date. **At least 1**, which makes
+            FR-006's withholding rule fully structural rather than half of it: a need-by date at or
+            before the anchor withholds `miss` entirely, so a zero or negative offset inside a
+            present `miss` is a state the requirement makes unreachable and the schema now refuses. The coordinate that places FR-005's mark on the day axis, and an *encoding*
+            coordinate rather than a stated figure — see the document description on why it is not
+            named `calendar_margin_days`. It takes no forecast input, so it cannot be combined with a
+            displayed figure to reconstruct a delivery date.
+        shade_from_mark_index:
+          type: integer
+          minimum: 0
+          maximum: 50
+          description: |
+            Zero-based index of the first mark at or beyond `need_by_offset_days`; `50` when no mark
+            falls beyond it, meaning nothing is shaded. Deriving the boundary on the server keeps the
+            picture self-consistent across renderers.
+
+            **Disclosed rather than hidden:** the shaded marks are read from the stored draws and
+            `probability` is read from the stored day grid — two members of one row derived by
+            independent paths. At a rounding boundary the count of shaded marks and the stated
+            percentage can differ by one mark in one hundred. Publishing the boundary the server
+            computed makes such a difference visible and attributable rather than something a reader
+            discovers by counting.
+        probability:
+          $ref: '#/components/schemas/PercentPair'
+        measure:
+          type: string
+          enum: [exact, upper_bound]
+          description: |
+            `upper_bound` where the need-by date falls beyond the modelled horizon (FR-006), present
+            exactly when the `beyond_horizon` annotation is in force. The interface renders "at most" /
+            "at least" around the numeral; the bound is never silently presented as an exact figure.
+            The measure travels with the figure rather than being inferred from the annotation set,
+            because the two are rendered in different words and an unmarked figure is one refactor from
+            being rendered as a point.
+
+    Covariate:
+      type: object
+      description: |
+        One input the fit conditioned on, with the value observed for this line at the run's anchor.
+        Presented as an input, never as a cause: the model supports "associated with slower delivery in
+        comparable orders", not "removing one approval cycle moves the date" (FR-034).
+
+        **No per-covariate contribution figure appears here, deliberately (FR-033).** Attribution makes
+        a model's correlations transparent without making them causal, and in the study that measured
+        it, increased transparency actively hampered readers' ability to notice a sizable model
+        mistake. A contribution percentage would assert a decomposition that confounding makes
+        unreliable, and would read as precision. The absence is structural — this object is closed and
+        carries no numeric property but the observed value itself.
+
+        **The association wording is deliberately not in the payload.** FR-034 requires each covariate
+        described as associated with slower or faster delivery. `forecast_run.covariate_names` records
+        *which* covariates entered the fit and not which way each points, so a direction published here
+        would be a claim about the model's reasoning that no stored member evidences — the confident,
+        specific, unfalsifiable-looking claim FR-031 already refuses for values. The wording is
+        committed copy on the interface, keyed by covariate name, in the shape FR-026 commits the state
+        copy.
+
+        A value that cannot be reconciled against the value the fit used is **withheld** — the covariate
+        carries `state: covariate_withheld` and no `observed_value` at all — rather than displayed
+        (FR-031). A reconstruction that drifts produces a confident, specific, unfalsifiable-looking
+        claim about a model's reasoning, which Principle III requires the system refuse.
+      additionalProperties: false
+      required: [name, state]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: |
+            A member of `forecast_run.covariate_names` for the active run. FR-032 forbids displaying a
+            covariate the active run does not record as having entered its fit, so this is a projection
+            of that stored column and never a superset of it — which is why it is an open string rather
+            than a closed enum: the run row is the arbiter of what entered the fit, and closing the set
+            here would make this contract the arbiter instead. See `x-covariates-admitted`.
+        state:
+          $ref: '#/components/schemas/CovariateSectionState'
+        observed_value:
+          type: object
+          description: |
+            Present exactly when `state` is `covariates_reconciled`. `display` is the value as it must
+            appear, formatted once on the server, so the one place a value is formatted stays the one
+            place — the rule `PercentFigure` follows. `number` is retained beside it for assistive
+            technology and for tests, and is null on a categorical covariate.
+          additionalProperties: false
+          required: [kind, display, number]
+          properties:
+            kind:
+              type: string
+              enum: [category, count, days]
+            display:
+              type: string
+              minLength: 1
+            number:
+              type: [integer, 'null']
+
+    LinkedRecord:
+      type: object
+      description: |
+        One specification, submittal or purchase-order record reached through cross-document identity,
+        with the evidence needed to check it rather than take it on faith (FR-018). Reached through
+        `resolved_entity_member`, which is the only sanctioned route between an extracted value and a
+        line — `extracted_value` carries no foreign key to `purchase_order_line` and never will.
+
+        Read through the active ingestion generation (FR-021, SC-021). A reader that does not filter
+        receives the resident generation's rows with no run attribution and cannot distinguish no live
+        generation from one, and both failures are silent.
+      additionalProperties: false
+      required:
+        - extracted_value_id
+        - field_name
+        - document_id
+        - document_title
+        - document_type
+        - page_number
+        - extracted_span
+        - confidence
+        - provenance_layer
+        - page_state
+        - href
+      properties:
+        extracted_value_id:
+          type: string
+          format: uuid
+        field_name:
+          type: string
+          minLength: 1
+          description: The `field_vocabulary` term this value was extracted for.
+        document_id:
+          $ref: '#/components/schemas/DocumentId'
+        document_title:
+          type: string
+          minLength: 1
+          description: |
+            A meaningful label, never a bare "Source" (FR-019). A citation that raises confidence
+            without being checked is a liability rather than a feature, and a label carrying no
+            information is one the reader cannot judge without opening it.
+        document_type:
+          type: string
+          enum:
+            - specification
+            - submittal
+            - purchase_order
+            - rfi
+            - transmittal
+            - drawing
+            - reference_standard
+        page_number:
+          type: integer
+          minimum: 1
+          description: |
+            `extracted_value.cited_page`, which cannot disagree with its source chunk's page — the
+            composite foreign key against `uq_chunk__chunk_page` gives a citation whose page differs no
+            referent at all rather than a wrong one. Required on the label by FR-019, and the value the
+            caller appends as `#page=N` when following `href`.
+        extracted_span:
+          type: string
+          minLength: 1
+          description: |
+            `extracted_value.value_text` — the value's text as it appeared in the source document.
+            Non-blank by `ck_extracted_value__value_text_present`, so there is no empty-span case.
+        confidence:
+          type: object
+          description: |
+            FR-018's per-field confidence, in the form it must be displayed. E003 stores it as a
+            `double precision` in the closed unit interval and records it as a **self-reported score
+            and not a calibrated probability**, which is why `basis` travels with it and why it is
+            deliberately *not* formatted as a percentage: `0.87` rendered as `87%` reads as a frequency
+            the extraction never claimed, and this view already publishes real frequencies a reader
+            would confuse it with.
+          additionalProperties: false
+          required: [value, display, basis]
+          properties:
+            value:
+              type: number
+              minimum: 0
+              maximum: 1
+            display:
+              type: string
+              pattern: '^(0\.[0-9]{2}|1\.00)$'
+            basis:
+              type: string
+              const: self_reported_extraction_confidence
+        provenance_layer:
+          type: string
+          enum: [REAL, SYNTHETIC]
+          description: |
+            Preserved at display (FR-022). A synthesized submittal must not be presented
+            indistinguishably from a real published specification. Carried here for the list, and in
+            the `X-Source-Kind` header when the source itself is served.
+        page_state:
+          allOf:
+            - $ref: '#/components/schemas/SourceSectionState'
+          description: |
+            Whether the configured binding can produce a readable source for this record. An
+            enumeration rather than a boolean, per FR-042: the section-scoped set has two named members
+            and a boolean carries no name, which FR-040 forbids as the sole carrier of a state.
+        reason:
+          allOf:
+            - $ref: '#/components/schemas/SourceUnresolvableReason'
+          description: |
+            Present exactly when `page_state` is `source_unresolvable`. Marking a citation that will
+            not open *before* the coordinator clicks it turns FR-023's stated failure from an
+            interruption into information, and it is the same predicate the census counts.
+        span_present_on_page:
+          type: boolean
+          description: |
+            Present exactly when `page_state` is `sources_resolve`. The second of FR-024's two
+            conditions: a record counts toward the census numerator when its source resolves **and**
+            its extracted span is present on the cited page. `false` contributes
+            `span_not_found_on_page` to `shortfall_causes`.
+        href:
+          type: string
+          description: |
+            The source operation for this citation. Composed on the server so the interface follows a
+            link rather than building a URL, and present even when `page_state` is
+            `source_unresolvable` — following it is how a reader obtains the correlation identifier
+            FR-036 requires them to be able to quote.
+          example: /api/v1/documents/prj-001-t0002-r0/source
+
+    CensusFigure:
+      type: object
+      description: |
+        The share of linked records whose source resolves and whose extracted span is present on the
+        cited page — two conditions, and the numerator counts records satisfying both. A **census**
+        over every linked record the active resolution run carries — not the subset this view renders;
+        every element observed, none sampled — so it is published as an exact count with its denominator and carries **no interval**.
+
+        The no-interval declaration travels with the figure rather than sitting elsewhere in the
+        product: a census published with no declaration is indistinguishable from an estimate whose
+        interval was quietly dropped. The licensed reason is drawn from the closed set of exactly two
+        that E009 FR-025 already fixes, **adopted by reference rather than enumerated again** — two
+        independently minted sets would let a figure be licensed under one and not the other. Only the
+        census member is available to this figure; the other is licensed only to an estimate that
+        publishes no point estimate.
+
+        **The target is fixed before the measurement, not after it.** `target_percent` is a `const`, so
+        it cannot be adjusted to the result it judges — a threshold named after that result is the
+        retroactive adjustment the published-miss rule exists to prevent, and a rate published against
+        no threshold cannot be missed and therefore evidences nothing.
+
+        **`population` states what the denominator counts**, because a share whose population is not
+        named is not a census of anything in particular. This is a display-time property distinct from
+        the registered storage-time traceability metric, and stating it does not restate that one.
+      additionalProperties: false
+      required:
+        - population
+        - resolved_count
+        - total_count
+        - share
+        - target_percent
+        - meets_target
+        - has_interval
+        - no_interval_reason
+        - shortfall_causes
+      properties:
+        population:
+          type: string
+          const: linked_records_in_active_resolution_run
+          description: |
+            The denominator FR-024 states: **every linked record the active run carries**, not the
+            subset this view happens to render. Narrowing it to the rendered subset would make the
+            figure cheaper and would also make it a different claim — a per-view sample reported in
+            the grammar of a census — and a denominator chosen to fit a latency budget is the
+            retroactive adjustment the published-miss rule exists to prevent.
+
+            The envelope is met by the shape of the work rather than by shrinking the population:
+            resolution is a property of the *document*, not of each record, and the corpus holds far
+            fewer documents than linked records. The share is one aggregate over the run's records
+            grouped by document identifier, with each distinct identifier resolved once and memoised
+            for the process lifetime. See the plan's AD-009.
+        resolved_count:
+          type: integer
+          minimum: 0
+        total_count:
+          type: integer
+          minimum: 0
+          description: |
+            The active resolution run's whole linked-record count, so this figure is **the same on
+            every line's response** — it is a run-level property carried here because this is the
+            surface that publishes it, not a per-line measurement. Zero is legal and meaningful: it
+            is the state the product is in until identity resolution first runs, and `share` is null
+            there rather than a
+            fabricated 100%.
+        share:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 1
+          description: |
+            `resolved_count / total_count`, exact, in the closed unit interval. Null exactly when
+            `total_count` is zero.
+
+            **Not a `PercentFigure`, deliberately.** FR-041 scopes the bounded form to the three
+            figures it names and records why: those are distribution communication and several thousand
+            draws cannot evidence a certainty. A census can. Twelve of twelve is exactly 100%, and
+            rendering it `>99%` would understate a figure that is exact — the bounded form's purpose
+            inverted.
+        target_percent:
+          type: integer
+          const: 100
+          description: Fixed at 100 before the first measurement is taken (FR-025).
+        meets_target:
+          type: boolean
+          description: '`share == 1`. True where `total_count` is zero: nothing failed.'
+        has_interval:
+          type: boolean
+          const: false
+        no_interval_reason:
+          type: string
+          description: |
+            E009 FR-025's closed set of exactly two licensed reasons, adopted by reference. This figure
+            can only carry the census member.
+          enum:
+            - census_over_run_candidate_set
+            - estimator_undefined_at_realized_denominator
+          default: census_over_run_candidate_set
+        shortfall_causes:
+          type: array
+          description: |
+            FR-025. Empty when `meets_target` is true. Otherwise one entry per distinct cause with the
+            count of records it accounts for, so a miss is published with its cause rather than as a
+            bare shortfall. `span_not_found_on_page` is the one cause outside
+            `SourceUnresolvableReason`: the source resolved and the span was not on the cited page,
+            which is a different failure from the source not resolving and is why FR-024 states two
+            conditions rather than one.
+          items:
+            type: object
+            additionalProperties: false
+            required: [cause, count]
+            properties:
+              cause:
+                oneOf:
+                  - $ref: '#/components/schemas/SourceUnresolvableReason'
+                  - type: string
+                    const: span_not_found_on_page
+              count:
+                type: integer
+                minimum: 1
+
+    ResolutionState:
+      type: string
+      description: |
+        Exactly one, chosen by the precedence in `x-states`. Every state is carried by text in the
+        accessibility tree; colour, position, an icon with no accessible name, or the mere absence of a
+        figure is never the sole carrier (FR-040).
+
+        `absent_or_closed_line` covers both conditions FR-044 names, as one member. The two are not
+        split, and the absence of a split is deliberate: FR-042 closes the set at five, and a sixth
+        resolution state distinguishing them is one no requirement asks for. The wording that
+        distinguishes what a reader is told is committed copy on the interface (FR-026), which is where
+        FR-043's decidable-distinctness rule applies.
+
+        `figures_render` is the nominal member, named for what it does rather than "nominal", so
+        FR-043's rule has something to bind to at the key as well as at the copy.
+      enum:
+        - absent_or_closed_line
+        - roster_mismatch
+        - not_covered_by_active_run
+        - no_active_run
+        - figures_render
+
+    AnnotationState:
+      type: string
+      description: |
+        Zero or more, determined independently, and only where the figures render. These annotate
+        rather than replace, which is why they cannot be members of the resolution set. All three names
+        are E010's, adopted rather than minted: `stale_run` is E010's page state, `beyond_horizon` and
+        `already_late` its row states for the same two conditions — so one line cannot carry
+        differently-spelled states on the two surfaces.
+      enum:
+        - stale_run
+        - beyond_horizon
+        - already_late
+
+    IdentityState:
+      type: string
+      description: |
+        FR-027 distinguishes a line belonging to no resolved entity from one belonging to a resolved
+        entity that carries no document-derived members. They are different facts and an identical
+        rendering asserts they are the same one. `resolved_with_members` is the nominal member.
+
+        Until cross-document identity first runs, `no_resolved_entity` is the state every line is in —
+        the common path, not an edge case. FR-028 holds in all three: the distribution and the line's
+        own record render regardless, because neither depends on identity resolution.
+      enum:
+        - no_resolved_entity
+        - resolved_without_members
+        - resolved_with_members
+
+    CovariateSectionState:
+      type: string
+      description: |
+        FR-042's section-scoped set for covariates, carrying FR-031's withheld state plus its nominal
+        member. Carried on each covariate and, by the composition rule in `x-states`, on the section:
+        `covariate_withheld` when any value is withheld, `covariates_reconciled` otherwise.
+      enum: [covariates_reconciled, covariate_withheld]
+
+    SourceSectionState:
+      type: string
+      description: |
+        FR-042's section-scoped set for pages, carrying FR-023's unresolvable state plus its nominal
+        member. Carried on each linked record and, by the composition rule in `x-states`, on the
+        section — including where `linked_records` is empty, which is the nominal member and not a
+        degraded one (SC-018).
+      enum: [sources_resolve, source_unresolvable]
+
+    Conventions:
+      type: object
+      description: |
+        **E010's schema, adopted unchanged and deliberately not widened.** The read conventions the
+        figures were produced under, published from `schema_constants` rather than compiled into either
+        tier, so a displayed figure resolves to the artifact and the rule it was computed by. Where
+        this overlaps a figure's own `reference_class`, the figure's copy governs and the two must
+        agree.
+
+        The fifty-mark count is **not** here: it is a property of this view's encoding rather than of
+        the stored artifact, and adding a fourth member to a schema E010 closed at three would change a
+        shared object for one consumer's convenience. It lives on `MarkSeries.mark_count`, beside the
+        array whose bounds enforce it.
+      additionalProperties: false
+      required: [draw_count, percentile_convention, anchor_date_convention]
+      properties:
+        draw_count:
+          type: integer
+          minimum: 1
+          description: |
+            How many draws stand behind the figures. Published so a reader can judge the resolution the
+            figures honestly support — several thousand draws support whole percent and no more. The
+            draws themselves are not published and cannot be (FR-011).
+        percentile_convention:
+          type: string
+          const: nearest_rank_one_based_no_interpolation
+        anchor_date_convention:
+          type: string
+          const: run_as_of_date
+
+    ForecastRunMeta:
+      type: object
+      description: |
+        **E010's schema, adopted unchanged.** Which run produced what the reader is looking at (FR-013,
+        SC-017). Without this a figure is unattributable, and an unattributable figure cannot be checked
+        against the run that made it. Two runs can share an as-of date and neither version is derivable
+        from a date, so the date alone does not resolve the artifact.
+
+        Selected by the explicit active-run pointer, never by most-recent timestamp.
+      additionalProperties: false
+      required:
+        - run_id
+        - as_of_date
+        - horizon_days
+        - roster_hash
+        - model_version
+        - artifact_schema_version
+        - age_days
+        - stale
+        - staleness_threshold_days
+        - staleness_basis
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        as_of_date:
+          type: string
+          format: date
+        horizon_days:
+          type: integer
+          minimum: 1
+        roster_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        model_version:
+          type: string
+          minLength: 1
+        artifact_schema_version:
+          type: integer
+          minimum: 1
+          description: |
+            An integer, matching `forecast_run.artifact_schema_version` and E010's copy of this schema.
+            A value this build does not read is a 500 carrying `unsupported-artifact-schema`, never an
+            interface version mismatch.
+        age_days:
+          type: integer
+          minimum: 0
+          description: '`today − as_of_date` in whole days — the as-of date, not the run''s creation time.'
+        stale:
+          type: boolean
+          description: |
+            True when `age_days > staleness_threshold_days`. When true the view marks its own figures
+            rather than relying on a banner elsewhere in the product (FR-045) — a banner stops carrying
+            once a line is read on its own, and this view is that case by construction. The mark is
+            composed from this flag and `figures.date.as_of_date`; no new field is needed, and none is
+            added. Staleness annotates and suppresses nothing.
+        staleness_threshold_days:
+          type: integer
+          minimum: 1
+          description: Configuration, not a literal. Returned so the interface states the threshold being judged against.
+        staleness_basis:
+          type: string
+          minLength: 1
+          description: |
+            The threshold's recorded basis, travelling with it. A threshold whose basis lives only in a
+            configuration file is indistinguishable on screen from one someone guessed.
+
+    Meta:
+      type: object
+      description: |
+        **E010's envelope, adopted unchanged.** Artifact identification and request context — not a
+        stated figure, and outside FR-038's domain for the reason given in the document description.
+      additionalProperties: false
+      required: [generated_at, today, timezone, forecast_run, conventions]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          description: |
+            When this response was produced. The single member two responses with identical admitted
+            inputs may differ in, and it takes no part in the ETag.
+        today:
+          type: string
+          format: date
+          description: |
+            The request-time date in the configured zone, supplied by the server and never taken from
+            the viewer's device: staleness and the `already_late` annotation both depend on it, and a
+            per-viewer clock would let the same run be stale for one coordinator and current for
+            another, making the state labels irreproducible.
+        timezone:
+          type: string
+          description: IANA zone that fixes `today`, so the claim is auditable rather than asserted.
+          example: America/New_York
+        forecast_run:
+          oneOf:
+            - $ref: '#/components/schemas/ForecastRunMeta'
+            - type: 'null'
+          description: Null exactly when `resolution_state` is `no_active_run`.
+        conventions:
+          $ref: '#/components/schemas/Conventions'
+
+    NeedBy:
+      type: object
+      description: |
+        FR-005's marked date. **E010's schema of the same name, adopted unchanged.** `date` is the value
+        every figure in this response was computed against; `date_of_record` is the stored value, equal
+        to it unless a session what-if is in force. Both travel so the adjustment is auditable in the
+        payload rather than only on screen, and `unsaved` gives "visibly marked as unsaved" a field to
+        bind to. Nothing here is ever persisted.
+      additionalProperties: false
+      required: [date, date_of_record, source, unsaved]
+      properties:
+        date:
+          type: string
+          format: date
+        date_of_record:
+          type: string
+          format: date
+        source:
+          type: string
+          enum: [record, session_override]
+        unsaved:
+          type: boolean
+          description: True exactly when `source` is `session_override`.
+
+    DistributionFigures:
+      type: object
+      description: 'FR-038''s **distribution** class: the labelled quantile pair FR-004 requires, and the per-mark share FR-001 states. Closed at two.'
+      additionalProperties: false
+      required: [quantiles, share_per_mark]
+      properties:
+        quantiles:
+          $ref: '#/components/schemas/QuantilePair'
+        share_per_mark:
+          type: object
+          description: |
+            FR-001. Each of the fifty marks stands for the same share of comparable orders, and that
+            share is stated beside the figure rather than left to a legend. Fifty marks over one
+            hundred comparable orders is two in one hundred, so this is `2%` for every line under every
+            run — which is exactly why FR-002 forbids the mark count varying. Carried as a
+            `PercentFigure` under FR-041 rather than a bare `2`, so the one place a percentage is
+            formatted stays the one place.
+          additionalProperties: false
+          required: [share, reference_class]
+          properties:
+            share:
+              $ref: '#/components/schemas/PercentFigure'
+            reference_class:
+              $ref: '#/components/schemas/ReferenceClass'
+
+    MassFigures:
+      type: object
+      description: |
+        FR-038's **mass** class: the miss mass in both directions FR-005 requires, the bound FR-006
+        requires (carried as `miss.measure`), and the residual mass FR-008 requires. Closed at two
+        properties, of which one is conditionally absent — see `MissMass`.
+      additionalProperties: false
+      required: [residual]
+      properties:
+        miss:
+          $ref: '#/components/schemas/MissMass'
+        residual:
+          type: object
+          description: |
+            The mass unresolved at the end of the horizon, published as a labelled quantity wherever
+            the grid is shown (FR-008). Required, not optional: a curve terminating above zero is read
+            as terminating at zero, so omitting it is itself a claim.
+
+            Bounded form under FR-041, and bounded **with** its complement — the last cumulative band's
+            `delivered_by` is this figure's complement and the two take the bounded form together, so a
+            residual of `<1%` never pairs with a flat `100%` delivered.
+
+            One of the three figures FR-041 names as published by this view and not the worklist. It is
+            distribution communication under Principle II's first sentence rather than a metric
+            reported about the system, so the interval-or-declaration obligation does not attach to it;
+            the census in the evidence class is a reported metric and does carry it.
+          additionalProperties: false
+          required: [share, reference_class]
+          properties:
+            share:
+              $ref: '#/components/schemas/PercentFigure'
+            reference_class:
+              $ref: '#/components/schemas/ReferenceClass'
+
+    DateFigures:
+      type: object
+      description: |
+        FR-038's **date** class: the as-of date FR-013 identifies, and the effective need-by date
+        FR-005 marks. Closed at two, and these are the only calendar dates the view states as figures.
+        FR-009's axis prohibition is safe because the payload carries no other date an interface could
+        lift into an axis, a tick label or a title.
+      additionalProperties: false
+      required: [as_of_date, effective_need_by]
+      properties:
+        as_of_date:
+          type: string
+          format: date
+          description: |
+            FR-013. The date the active run was fitted, from which every duration on this view is
+            counted. Repeated here rather than left in `meta.forecast_run` alone, for the reason E010
+            gives for repeating it on every row: a value the figure renderer must reach out of page
+            scope to find is one refactor away from a tooltip, and FR-045 composes the per-view stale
+            mark from this date and `meta.forecast_run.stale`.
+        effective_need_by:
+          $ref: '#/components/schemas/NeedBy'
+
+    EvidenceFigures:
+      type: object
+      description: |
+        FR-038's **evidence** class: the census share and its denominator FR-024 publishes, and the
+        per-field confidence FR-018 carries. The confidences are not in this object — see
+        `x-figure-classes.confidence_note` for why FR-018 puts them on the citation instead, and why
+        both locations are listed under this class.
+      additionalProperties: false
+      required: [source_census]
+      properties:
+        source_census:
+          $ref: '#/components/schemas/CensusFigure'
+
+    CovariateFigures:
+      type: object
+      description: 'FR-038''s **covariate** class: the observed values FR-030 shows, and nothing else.'
+      additionalProperties: false
+      required: [state, covariates]
+      properties:
+        state:
+          allOf:
+            - $ref: '#/components/schemas/CovariateSectionState'
+          description: 'The section-scoped state, composed by the rule in `x-states`. Exactly one, including where nothing is wrong (SC-018).'
+        covariates:
+          type: array
+          minItems: 1
+          description: |
+            The covariates the active run's fit conditioned on, in the order
+            `forecast_run.covariate_names` records them (FR-030, FR-032).
+          items:
+            $ref: '#/components/schemas/Covariate'
+
+    StatedFigures:
+      type: object
+      description: |
+        FR-038. **The view's stated scalar figures, closed in five classes and no sixth.** Exactly five
+        properties, all required, named for the five classes, and `additionalProperties: false`.
+
+        This is the device that makes "no sixth" structural rather than a claim about whatever the
+        interface happens to render. A sixth class requires adding a property to a closed object, which
+        this document's compatibility rule calls breaking and which fails schema validation for every
+        strict consumer until the contract is amended — so introducing one reopens FR-038's check
+        deliberately rather than by accident, which is what makes the check finite.
+
+        No combination of figures drawn from these five yields either a bare delivery date or a bare
+        central summary of the line's distribution (SC-026). The as-of date added to a labelled
+        quantile is the permitted case, and is permitted precisely because the result carries a stated
+        proportion and is therefore neither bare.
+
+        Present exactly when `resolution_state` is `figures_render`; absent in the other four states,
+        where no figure exists to state.
+      additionalProperties: false
+      required: [distribution, mass, date, evidence, covariate]
+      properties:
+        distribution:
+          $ref: '#/components/schemas/DistributionFigures'
+        mass:
+          $ref: '#/components/schemas/MassFigures'
+        date:
+          $ref: '#/components/schemas/DateFigures'
+        evidence:
+          $ref: '#/components/schemas/EvidenceFigures'
+        covariate:
+          $ref: '#/components/schemas/CovariateFigures'
+
+    Distribution:
+      type: object
+      description: |
+        The distribution encoding. Present only in the `figures_render` resolution state; absent
+        entirely otherwise, so there is no shape here that could hold a placeholder.
+
+        **Outside FR-038's domain, deliberately (FR-039).** Fifty equal-probability marks *are* the
+        distribution, and counting to the twenty-fifth yields its middle — which is what plotting a
+        distribution means; forbidding it would forbid publishing the distribution at all. FR-039
+        records that reading as this feature's rather than asserting it on Principle II's behalf.
+
+        **`marks` is a resolution reduction, not the stored array.** `line_posterior.draws` holds
+        several thousand values; this holds fifty, read at fifty evenly spaced probabilities under the
+        run's own percentile convention. FR-011 is a limit on resolution rather than a claim that what
+        is withheld cannot be approximated.
+
+        There is deliberately **no** `mean`, `mode`, `expected_value`, `expected_overrun`, or
+        `point_estimate` member, and no property carrying the stored draw array or the stored day-grid
+        array. `additionalProperties: false` is what keeps that true as the schema changes; the names
+        are listed at `x-prohibited-members` so a test can assert their absence directly.
+      additionalProperties: false
+      required: [marks, cumulative]
+      properties:
+        marks:
+          $ref: '#/components/schemas/MarkSeries'
+        cumulative:
+          $ref: '#/components/schemas/CumulativeView'
+
+    LineIdentity:
+      type: object
+      description: |
+        **E010's schema, plus the two match fields identity resolution turns on.** `manufacturer` and
+        `part_number` are absent from E010's copy because no E010 requirement needed them and its
+        FR-027 caps what a row may carry; neither reason applies here — FR-027 has no counterpart on
+        this view, FR-038 caps *scalar figures* and these are neither, and the two are what a resolved
+        entity normalizes, so a coordinator reading `no_resolved_entity` can see the values resolution
+        had to work with.
+      additionalProperties: false
+      required: [project_id, po_number, line_number, description, manufacturer, part_number]
+      properties:
+        project_id:
+          type: string
+          pattern: '^PRJ-[0-9]{3}$'
+          description: E001's frozen format, enforced at the storage boundary by `ck_pol__project_id_format`.
+        po_number:
+          type: string
+          minLength: 1
+        line_number:
+          type: integer
+          minimum: 1
+          description: One-based, as printed on the purchase order. An identifier, not a figure.
+        description:
+          type: string
+          minLength: 1
+        manufacturer:
+          type: string
+          minLength: 1
+        part_number:
+          type: string
+          minLength: 1
+
+    LineRecord:
+      type: object
+      description: |
+        The line under inspection, as stored. Read-only: this feature writes nothing, to this table or
+        any other. FR-028 requires it to render in either identity state; it renders under every
+        resolution state but `absent_or_closed_line`, where there is no line to render.
+
+        **`criticality` is deliberately absent** — see the document description for the full record of
+        that decision. `vendor_id` and `material_category` are present because Key Entities names the
+        pooling groups the fit shared strength across, and neither is a figure: they are the strata,
+        not a quantity about this line.
+      additionalProperties: false
+      required: [identity, need_by, vendor_id, material_category, lifecycle_state, is_closed]
+      properties:
+        identity:
+          $ref: '#/components/schemas/LineIdentity'
+        need_by:
+          $ref: '#/components/schemas/NeedBy'
+        vendor_id:
+          type: string
+          pattern: '^VND-[0-9]{3}$'
+        material_category:
+          type: string
+          minLength: 1
+        lifecycle_state:
+          type: string
+          description: E003's seven states, as `ck_pol__lifecycle_state` fixes them.
+          enum:
+            - submitted
+            - under_review
+            - revise_and_resubmit
+            - approved
+            - released_for_fabrication
+            - shipped
+            - delivered
+        is_closed:
+          type: boolean
+          description: |
+            `delivered` is the only terminal state and closure agrees with it by
+            `ck_pol__closed_iff_delivered`. Always `false` where `resolution_state` is
+            `figures_render`, because a closed line resolves to `absent_or_closed_line` at precedence 1.
+
+    LineDetailResponse:
+      type: object
+      description: |
+        Everything the detail view renders for one line.
+
+        **Presence is a function of `resolution_state`, and the conditionals below make it one.** `line`,
+        `figures`, `encoding`, `identity_state`, `linked_records` and `covariate_state` are each absent
+        in exactly the states named on them and never in any other, so a client never infers a state
+        from an absence. The state is always carried explicitly, and FR-040 requires it in the
+        accessibility tree as text — colour, position, an icon with no accessible name, or the mere
+        absence of a figure may not be the sole carrier of any state this view resolves to.
+      additionalProperties: false
+      required: [po_line_id, meta, resolution_state, resolution_precedence, annotations]
+      properties:
+        po_line_id:
+          $ref: '#/components/schemas/PoLineId'
+        meta:
+          $ref: '#/components/schemas/Meta'
+        resolution_state:
+          $ref: '#/components/schemas/ResolutionState'
+        resolution_precedence:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: |
+            The winning state's rank in FR-042's precedence, 1 highest. Publishing the rank makes the
+            applied order readable from the payload rather than inferred from a constant table, in the
+            spirit of E010 publishing `sort.tiebreak` and `staleness_basis`: a rule the server applied
+            and did not state is a rule a reader cannot check.
+        annotations:
+          type: array
+          description: |
+            FR-042's annotation scope. Empty in every resolution state but `figures_render`. Order is
+            not significant. `maxItems: 2` encodes the one excluded pair — see `x-states`.
+          uniqueItems: true
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/AnnotationState'
+        line:
+          allOf:
+            - $ref: '#/components/schemas/LineRecord'
+          description: Absent exactly when `resolution_state` is `absent_or_closed_line`.
+        figures:
+          allOf:
+            - $ref: '#/components/schemas/StatedFigures'
+          description: Absent exactly when `resolution_state` is not `figures_render`.
+        encoding:
+          allOf:
+            - $ref: '#/components/schemas/Distribution'
+          description: Absent exactly when `resolution_state` is not `figures_render`.
+        identity_state:
+          allOf:
+            - $ref: '#/components/schemas/IdentityState'
+          description: |
+            Absent exactly when `line` is absent. FR-028 keeps it present in every state where a line
+            exists, including `not_covered_by_active_run` and `no_active_run`, because identity
+            resolution does not depend on the forecast run any more than the distribution depends on
+            identity resolution.
+        source_state:
+          allOf:
+            - $ref: '#/components/schemas/SourceSectionState'
+          description: |
+            The section-scoped state over `linked_records`, composed by the rule in `x-states`. Absent
+            exactly when `line` is absent.
+        linked_records:
+          type: array
+          description: |
+            Absent exactly when `line` is absent. An empty array is not a state of its own: a line with
+            no linked records is described by `identity_state`, which distinguishes a line belonging to
+            no resolved entity from one belonging to a resolved entity that carries no document-derived
+            members. Inventing a third state here would make two facts render alike, which is what
+            FR-027 exists to prevent.
+          items:
+            $ref: '#/components/schemas/LinkedRecord'
+      allOf:
+        - description: FR-006 — the miss mass is withheld by structural absence where the need-by date is at or before the anchor.
+          if:
+            properties:
+              annotations:
+                contains:
+                  const: already_late
+            required: [annotations]
+          then:
+            properties:
+              figures:
+                properties:
+                  mass:
+                    not:
+                      required: [miss]
+        - description: FR-006 — the miss mass is present and labelled as an upper bound where the need-by date is beyond the horizon.
+          if:
+            properties:
+              annotations:
+                contains:
+                  const: beyond_horizon
+            required: [annotations]
+          then:
+            properties:
+              figures:
+                properties:
+                  mass:
+                    required: [miss]
+                    properties:
+                      miss:
+                        properties:
+                          measure:
+                            const: upper_bound
+        - description: FR-042 — figures, encoding and annotations exist only where the figures render.
+          if:
+            properties:
+              resolution_state:
+                not:
+                  const: figures_render
+            required: [resolution_state]
+          then:
+            properties:
+              annotations:
+                maxItems: 0
+            not:
+              anyOf:
+                - required: [figures]
+                - required: [encoding]
+        - description: FR-044 — no line record, identity state or linked records where the identifier names no open line.
+          if:
+            properties:
+              resolution_state:
+                const: absent_or_closed_line
+            required: [resolution_state]
+          then:
+            not:
+              anyOf:
+                - required: [line]
+                - required: [identity_state]
+                - required: [source_state]
+                - required: [linked_records]
+
+  examples:
+
+    NominalLineDetail:
+      summary: Figures render, run current, identity resolved, every citation resolves
+      value:
+        po_line_id: 1a5d3e70-c2b8-4f6a-9d21-0e77b4c81f55
+        meta:
+          generated_at: '2026-07-28T13:04:11Z'
+          today: '2026-07-28'
+          timezone: America/New_York
+          forecast_run:
+            run_id: 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201
+            as_of_date: '2026-07-24'
+            horizon_days: 365
+            roster_hash: 'sha256:4c1e9a77b2d3f0518c6a4bb90e2f17d3a58c60419e7b2d8f3a1c5e0d94b7f682'
+            model_version: lognormal-hierarchical-v3
+            artifact_schema_version: 1
+            age_days: 4
+            stale: false
+            staleness_threshold_days: 7
+            staleness_basis: One refit cadence — a run whose anchor predates the current week has missed at least a week of lifecycle events.
+          conventions:
+            draw_count: 4000
+            percentile_convention: nearest_rank_one_based_no_interpolation
+            anchor_date_convention: run_as_of_date
+        resolution_state: figures_render
+        resolution_precedence: 5
+        annotations: []
+        line:
+          identity:
+            project_id: PRJ-001
+            po_number: PO-4471
+            line_number: 3
+            description: Air handling unit AHU-3, 12000 CFM
+            manufacturer: Trane
+            part_number: CSAA012UB
+          need_by:
+            date: '2026-08-10'
+            date_of_record: '2026-08-10'
+            source: record
+            unsaved: false
+          vendor_id: VND-014
+          material_category: hvac_air_handling
+          lifecycle_state: released_for_fabrication
+          is_closed: false
+        figures:
+          distribution:
+            quantiles:
+              median:
+                percentile: 50
+                days: 34
+                later_share: {percent: 50, display: '50%'}
+                reference_class: &rc
+                  basis: posterior_predictive_draws
+                  draw_count: 4000
+                  percentile_convention: nearest_rank_one_based_no_interpolation
+              eightieth:
+                percentile: 80
+                days: 51
+                later_share: {percent: 20, display: '20%'}
+                reference_class: *rc
+            share_per_mark:
+              share: {percent: 2, display: '2%'}
+              reference_class: *rc
+          mass:
+            miss:
+              need_by_offset_days: 17
+              shade_from_mark_index: 3
+              probability:
+                bounded: false
+                late: {percent: 87, display: '87%'}
+                on_time: {percent: 13, display: '13%'}
+                reference_class: *rc
+              measure: exact
+            residual:
+              share: {percent: null, display: '<1%'}
+              reference_class: *rc
+          date:
+            as_of_date: '2026-07-24'
+            effective_need_by:
+              date: '2026-08-10'
+              date_of_record: '2026-08-10'
+              source: record
+              unsaved: false
+          evidence:
+            source_census:
+              population: linked_records_in_active_resolution_run
+              resolved_count: 391
+              total_count: 391
+              share: 1
+              target_percent: 100
+              meets_target: true
+              has_interval: false
+              no_interval_reason: census_over_run_candidate_set
+              shortfall_causes: []
+          covariate:
+            state: covariates_reconciled
+            covariates:
+              - name: lifecycle_state
+                state: covariates_reconciled
+                observed_value: {kind: category, display: Released for fabrication, number: null}
+              - name: days_in_state
+                state: covariates_reconciled
+                observed_value: {kind: days, display: 21 days, number: 21}
+              - name: approval_cycle_count
+                state: covariates_reconciled
+                observed_value: {kind: count, display: '3', number: 3}
+        encoding:
+          marks:
+            mark_count: 50
+            unit: days
+            counted_from: run_as_of_date
+            offsets_days: [11, 14, 16, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 28, 29, 30, 30, 31, 32, 32, 33, 33, 34, 34, 34, 35, 35, 36, 36, 37, 38, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48, 50, 51, 53, 56, 59, 63, 69, 78, 96]
+          cumulative:
+            unit: days
+            counted_from: run_as_of_date
+            horizon_days: 365
+            bands:
+              - {from_day: 0, through_day: 34, bounded_by: median, delivered_by: {percent: 50, display: '50%'}}
+              - {from_day: 35, through_day: 51, bounded_by: eightieth, delivered_by: {percent: 80, display: '80%'}}
+              - {from_day: 52, through_day: 365, bounded_by: horizon, delivered_by: {percent: null, display: '>99%'}}
+        identity_state: resolved_with_members
+        source_state: sources_resolve
+        linked_records:
+          - extracted_value_id: 4c2f81a6-90bd-4e3a-8f27-51c0d6b39e84
+            field_name: lead_time_weeks
+            document_id: prj-001-t0002-r0
+            document_title: Transmittal T0002 R0 — AHU submittal package
+            document_type: submittal
+            page_number: 4
+            extracted_span: 16 weeks ARO
+            confidence: {value: 0.87, display: '0.87', basis: self_reported_extraction_confidence}
+            provenance_layer: SYNTHETIC
+            page_state: sources_resolve
+            span_present_on_page: true
+            href: /api/v1/documents/prj-001-t0002-r0/source
+          - extracted_value_id: 91b0c7e5-2d64-4a18-b3f7-6e5a1c90d284
+            field_name: part_number
+            document_id: ufgs-23-64-26
+            document_title: UFGS 23 64 26 — Chilled Water Air Conditioning Systems
+            document_type: reference_standard
+            page_number: 11
+            extracted_span: CSAA012UB
+            confidence: {value: 0.94, display: '0.94', basis: self_reported_extraction_confidence}
+            provenance_layer: REAL
+            page_state: sources_resolve
+            span_present_on_page: true
+            href: /api/v1/documents/ufgs-23-64-26/source
+
+    AlreadyLateLineDetail:
+      summary: Need-by at or before the anchor — `miss` is absent, not zero; stale run, one unresolvable citation, one withheld covariate
+      value:
+        po_line_id: 9f2a1c44-7b31-4d0e-9a11-2c8e5f0b71d3
+        meta:
+          generated_at: '2026-07-28T13:04:11Z'
+          today: '2026-07-28'
+          timezone: America/New_York
+          forecast_run:
+            run_id: 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201
+            as_of_date: '2026-07-12'
+            horizon_days: 365
+            roster_hash: 'sha256:4c1e9a77b2d3f0518c6a4bb90e2f17d3a58c60419e7b2d8f3a1c5e0d94b7f682'
+            model_version: lognormal-hierarchical-v3
+            artifact_schema_version: 1
+            age_days: 16
+            stale: true
+            staleness_threshold_days: 7
+            staleness_basis: One refit cadence — a run whose anchor predates the current week has missed at least a week of lifecycle events.
+          conventions:
+            draw_count: 4000
+            percentile_convention: nearest_rank_one_based_no_interpolation
+            anchor_date_convention: run_as_of_date
+        resolution_state: figures_render
+        resolution_precedence: 5
+        annotations: [stale_run, already_late]
+        line:
+          identity:
+            project_id: PRJ-002
+            po_number: PO-4502
+            line_number: 1
+            description: Switchgear lineup SWG-2, 480V
+            manufacturer: Eaton
+            part_number: MAG-4816-A
+          need_by:
+            date: '2026-07-08'
+            date_of_record: '2026-08-02'
+            source: session_override
+            unsaved: true
+          vendor_id: VND-007
+          material_category: electrical_switchgear
+          lifecycle_state: under_review
+          is_closed: false
+        figures:
+          distribution:
+            quantiles:
+              median:
+                percentile: 50
+                days: 9
+                later_share: {percent: 50, display: '50%'}
+                reference_class: &rc2
+                  basis: posterior_predictive_draws
+                  draw_count: 4000
+                  percentile_convention: nearest_rank_one_based_no_interpolation
+              eightieth:
+                percentile: 80
+                days: 22
+                later_share: {percent: 20, display: '20%'}
+                reference_class: *rc2
+            share_per_mark:
+              share: {percent: 2, display: '2%'}
+              reference_class: *rc2
+          mass:
+            residual:
+              share: {percent: null, display: '<1%'}
+              reference_class: *rc2
+          date:
+            as_of_date: '2026-07-12'
+            effective_need_by:
+              date: '2026-07-08'
+              date_of_record: '2026-08-02'
+              source: session_override
+              unsaved: true
+          evidence:
+            source_census:
+              population: linked_records_in_active_resolution_run
+              resolved_count: 388
+              total_count: 391
+              share: 0.9923
+              target_percent: 100
+              meets_target: false
+              has_interval: false
+              no_interval_reason: census_over_run_candidate_set
+              shortfall_causes:
+                - {cause: source_file_missing, count: 3}
+          covariate:
+            state: covariate_withheld
+            covariates:
+              - name: lifecycle_state
+                state: covariates_reconciled
+                observed_value: {kind: category, display: Under review, number: null}
+              - name: days_in_state
+                state: covariate_withheld
+              - name: approval_cycle_count
+                state: covariates_reconciled
+                observed_value: {kind: count, display: '2', number: 2}
+        encoding:
+          marks:
+            mark_count: 50
+            unit: days
+            counted_from: run_as_of_date
+            offsets_days: [2, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 12, 12, 13, 13, 14, 14, 15, 16, 17, 18, 19, 20, 22, 24, 26, 29, 32, 37, 44, 55, 74]
+          cumulative:
+            unit: days
+            counted_from: run_as_of_date
+            horizon_days: 365
+            bands:
+              - {from_day: 0, through_day: 9, bounded_by: median, delivered_by: {percent: 50, display: '50%'}}
+              - {from_day: 10, through_day: 22, bounded_by: eightieth, delivered_by: {percent: 80, display: '80%'}}
+              - {from_day: 23, through_day: 365, bounded_by: horizon, delivered_by: {percent: null, display: '>99%'}}
+        identity_state: resolved_without_members
+        source_state: source_unresolvable
+        linked_records:
+          - extracted_value_id: e3f7a24b-8c05-4917-b6d2-0a51e9c73f80
+            field_name: promised_ship_date
+            document_id: prj-002-t0004-r1
+            document_title: Transmittal T0004 R1 — Switchgear submittal, revision 1
+            document_type: submittal
+            page_number: 2
+            extracted_span: '2026-09-14'
+            confidence: {value: 0.61, display: '0.61', basis: self_reported_extraction_confidence}
+            provenance_layer: SYNTHETIC
+            page_state: source_unresolvable
+            reason: source_file_missing
+            href: /api/v1/documents/prj-002-t0004-r1/source
+
+    AbsentLineDetail:
+      summary: A line identifier naming no open line — a stated outcome inside a 200, never a blank view
+      value:
+        po_line_id: 00000000-0000-4000-8000-000000000000
+        meta:
+          generated_at: '2026-07-28T13:04:11Z'
+          today: '2026-07-28'
+          timezone: America/New_York
+          forecast_run:
+            run_id: 3f7c2b90-5a44-4e11-8b0a-6d9e1c33a201
+            as_of_date: '2026-07-24'
+            horizon_days: 365
+            roster_hash: 'sha256:4c1e9a77b2d3f0518c6a4bb90e2f17d3a58c60419e7b2d8f3a1c5e0d94b7f682'
+            model_version: lognormal-hierarchical-v3
+            artifact_schema_version: 1
+            age_days: 4
+            stale: false
+            staleness_threshold_days: 7
+            staleness_basis: One refit cadence — a run whose anchor predates the current week has missed at least a week of lifecycle events.
+          conventions:
+            draw_count: 4000
+            percentile_convention: nearest_rank_one_based_no_interpolation
+            anchor_date_convention: run_as_of_date
+        resolution_state: absent_or_closed_line
+        resolution_precedence: 1
+        annotations: []
+
+x-covariates-admitted:
+  description: |
+    Orientation only, not a constraint. FR-032 makes `forecast_run.covariate_names` the arbiter of what
+    entered a fit, and `Covariate.name` is a projection of that column. These are the three the
+    delivered model records today; a run recording a fourth would publish it, and closing the set in
+    this contract would put the arbitration in the wrong place.
+  names: [lifecycle_state, days_in_state, approval_cycle_count]
