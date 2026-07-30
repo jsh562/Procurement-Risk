@@ -40,7 +40,7 @@ E001 scaffolded the four entries, `import-linter` and the Compose `db` service; 
   - **Strict test-first pairs**: T025→T026 (`calibrate.py`), T033→T034 (`pair_score.py`), T035→T036 (`decide.py`), T059→T060 (`metrics.py` additions). Neither member of a pair is ever `[P]`
   - **HINT-004** — deduplicate on the unordered identity **at generation** (T031, T032), never at reporting, or every published share carries a double-counted denominator
   - **HINT-003** — `0505` drops and recreates rather than widening in place, and T019 restates the eight falsified assertions rather than deleting them
-- **Governance boundary**: no task edits `specs/prd.md`, `specs/sad.md`, `specs/project-plan.md`, `project-instructions.md`, or anything under `specs/adrs/`. `plan.md` records **twelve** obligations P-1…P-12 as recorded-not-performed, and ADR-0022 is claimed, **owed under P-12**, and deliberately left unwritten *on this branch* — authoring it here would itself be the Governance violation E006's QC documented at its A-26. T082 asserts that boundary held
+- **Governance boundary**: no task edits `specs/prd.md`, `specs/sad.md`, `specs/project-plan.md`, `project-instructions.md`, or anything under `specs/adrs/`. `plan.md` records **thirteen** obligations, P-1…P-13. **P-1 through P-12 are discharged on `main`** — see the Discharged by column there; **P-13 is open** (E003's TR-084 enumeration, falsified by `0509`'s revoke). The decision record is **ADR-0024**, authored and landed on `main`, *not* on this branch — authoring it here would itself be the Governance violation E006's QC documented at its A-26, and it is numbered 0024 rather than 0022 or 0023 because `main` took both of those while E009 held them claimed on unpushed branches. T082 asserts that boundary held
 - **Regression focus**: `tests/checks/test_migration_ranges.py` stays green with a sixth block declared and its negative control still controlling; E006's FR-065 ownership guard stays green **and gains sight of the two tables it was blind to**; the existing computation-boundary and single-provider-import contracts stay KEPT as `model.identity` grows
 
 ---
@@ -172,7 +172,7 @@ E001 scaffolded the four entries, `import-linter` and the Compose `db` service; 
 
 - [ ] T080 [P] Verify model.identity reaches the 80% per-package coverage floor in the combined report, asserted alone after:T002
 - [ ] T081 [P] Verify the four architecture contracts stay KEPT — computation boundary, single provider import, model.identity isolation, baseline independence after:T007
-- [ ] T082 [P] Confirm no task edited specs/prd.md, specs/sad.md, specs/project-plan.md, project-instructions.md or specs/adrs/, that ADR-0022 remains unwritten on this branch, and that all 12 obligations P-1-P-12 are still recorded-not-performed
+- [ ] T082 [P] Confirm no task edited specs/prd.md, specs/sad.md, specs/project-plan.md, project-instructions.md or specs/adrs/, that no decision record was authored on this branch, and that every obligation in plan.md is either marked discharged with the amendment that discharged it or marked open — thirteen rows, P-1 through P-13, none deleted and none renumbered
 - [ ] T083 [P] Document the resolve-identity job, its two pre-transaction guards and the separate publication flip in src/model/README.md after:T040
 
 ---
