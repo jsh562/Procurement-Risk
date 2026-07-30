@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from retrieval.evaluation_set.build import build_query_set
 from retrieval.evaluation_set.harness import (
     COMMITTED_SET,
     MANIFEST_NAME,
@@ -26,6 +27,8 @@ from retrieval.evaluation_set.harness import (
     outcomes_at_k,
     reciprocal_ranks,
 )
+from retrieval.fixtures.seed_chunks import _deterministic_id as deterministic_id
+from retrieval.fixtures.seed_chunks import _rows as rows
 
 COMMITTED = COMMITTED_SET
 DATASHEET = COMMITTED / "DATASHEET.md"
@@ -133,6 +136,62 @@ def test_a_query_retrieving_nothing_is_a_miss_not_an_absence() -> None:
     empty = {query.query_id: [] for query in frozen.queries}
     assert outcomes_at_k(frozen, empty, k=5) == [False] * len(frozen)
     assert reciprocal_ranks(frozen, empty) == [0.0] * len(frozen)
+
+
+# ---------------------------------------------------------------------------
+# The set is verified against the corpus, not only against its own bytes
+# ---------------------------------------------------------------------------
+
+
+def test_the_committed_judgements_match_the_corpus_they_judge() -> None:
+    """The check the digest cannot make, and the one that was missing.
+
+    The committed set once named chunk identifiers the fixture had stopped
+    producing — same leading group, different derivation — so every judgement
+    missed and the gate measured recall 0.000 and MRR 0.000 for a reason that
+    had nothing to do with retrieval. The digest was correct throughout: it
+    certifies the set has not changed since it was frozen, and the set was
+    frozen wrong.
+
+    Verification against the *bytes* and verification against the *corpus* are
+    different questions. This asks the second one, by rebuilding the judgements
+    from the fixture rows and comparing.
+    """
+    rebuilt = build_query_set(rows(), deterministic_id)
+    committed = json.loads((COMMITTED / QUERIES_NAME).read_text(encoding="utf-8"))
+    assert committed == rebuilt, (
+        "the committed judgements no longer match the corpus they judge. Rebuild the "
+        "set and re-record its digest — a judgement pointing at an identifier the "
+        "fixture does not seed silently zeroes every figure measured against it."
+    )
+
+
+def test_every_judged_chunk_is_one_the_fixture_seeds() -> None:
+    """Stated separately from the equality above, because it fails differently.
+
+    The equality catches any drift at all. This one names the specific failure
+    that produced a zero: an identifier judged relevant that no row will ever
+    carry. Kept as its own assertion so a future change to the query wording
+    cannot make the diagnostic disappear along with the equality.
+    """
+    seeded = {deterministic_id(row.key) for row in rows()}
+    frozen = load_frozen_set(COMMITTED)
+    for query in frozen.queries:
+        stray = query.relevant_chunk_ids - seeded
+        assert not stray, f"{query.query_id} judges chunks the fixture never seeds: {sorted(stray)}"
+
+
+def test_the_recorded_digest_is_the_digest_of_the_committed_bytes() -> None:
+    """The manifest and the file agree, checked from outside the loader.
+
+    `load_frozen_set` already refuses a mismatch; this asserts the committed
+    pair is consistent in the first place, so a regenerated set that was written
+    without re-recording its digest fails here rather than in every measurement
+    downstream.
+    """
+    manifest = json.loads((COMMITTED / MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert manifest["sha256"] == digest_for(COMMITTED / QUERIES_NAME)
+    assert manifest["query_count"] == len(load_frozen_set(COMMITTED))
 
 
 # ---------------------------------------------------------------------------

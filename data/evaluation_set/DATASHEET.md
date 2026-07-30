@@ -12,9 +12,30 @@ judgements are generated**, not observed.
 | **Generator** | `e008-evaluation-set` |
 | **Seed** | `0` |
 | **Query count** | 3 |
-| **Draw method** | Hand-authored against the committed fixture corpus, one query per retrieval behaviour the P1 criteria measure: a lexical match, a dense match, and a part-number lookup |
-| **Judgement source** | The generator's pre-render document model — the record of what each document *prints*, not the rendered text |
+| **Draw method** | Query texts hand-authored, one per retrieval behaviour the P1 criteria measure: a lexical match, a dense match, and a part-number lookup |
+| **Judgement source** | The generator's pre-render document model — the record of what each document *prints*, not the rendered text. Judgements are **computed** from it by `src/api/tests/retrieval/evaluation_set/build.py` rather than typed |
 | **Digest** | Recorded in `manifest.json`; verified before any query is returned |
+
+### Why the judgements are computed rather than written down
+
+*(Repaired 2026-07-30, at the first measurement.)* They were hand-typed, and the
+identifiers went stale: this file named chunks like
+`556b9305-1f4b-1ba0-2c47-ec4a13a3a37d` while the fixture had come to produce
+`556b9305-242f-7766-9faf-84a98ceec320` — same leading group, different
+derivation. Every judgement missed, and the gate measured recall 0.000 and MRR
+0.000 for a reason that had nothing to do with retrieval.
+
+**The digest was correct throughout.** It certifies the set has not changed since
+it was frozen, and the set was frozen wrong. Verification against the *bytes* and
+verification against the *corpus* are different questions, and only the first was
+being asked. `test_evaluation_set.py` now asks the second: it rebuilds the
+judgements from the fixture rows and compares, so a judgement that stops matching
+its corpus fails a test instead of silently zeroing a headline figure.
+
+The judgements are still generator-derived. The predicates read each row's own
+`body_text` and `part_numbers` — the pre-render model for this corpus — rather
+than running retrieval and calling the winners relevant, which would make the
+measurement circular and force recall to 1.0 by construction.
 
 ## The ceiling, stated plainly
 

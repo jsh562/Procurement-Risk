@@ -3,21 +3,24 @@
     {
       "query_id": "q-001",
       "relevant_chunk_ids": [
-        "556b9305-1f4b-1ba0-2c47-ec4a13a3a37d"
+        "556b9305-242f-7766-9faf-84a98ceec320",
+        "67499488-ad9b-1c1a-910d-b44afe14aba6",
+        "8b540ccc-c8ad-3801-9035-b77366533996"
       ],
       "text": "bronze pressure relief valve"
     },
     {
       "query_id": "q-002",
       "relevant_chunk_ids": [
-        "19d5fc5f-0a51-b3a5-b9e0-6f0e0a4e2f56"
+        "19d5fc5f-63da-e8bf-a91e-af5b25fc6423"
       ],
       "text": "circulator pump mechanical seals"
     },
     {
       "query_id": "q-003",
       "relevant_chunk_ids": [
-        "556b9305-1f4b-1ba0-2c47-ec4a13a3a37d"
+        "8b540ccc-c8ad-3801-9035-b77366533996",
+        "e4e34e05-befc-003c-c86e-4f9672272e64"
       ],
       "text": "NRH-80347"
     }

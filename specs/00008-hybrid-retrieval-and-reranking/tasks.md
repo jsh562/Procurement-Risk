@@ -195,7 +195,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T092 [P] Verify api/retrieval and gateway/inference each reach the 80% per-package floor in the combined coverage report after:T091
 - [X] T093 [P] Verify the architecture contracts stay green — api.retrieval forbidden, numpy admitted in both copies, the serving image's contents — in tests/checks/ after:T009
 - [X] T098 [P] Extend the scratch-location check to the gateway tier so model download and session creation resolve temporary paths inside the checkout, in src/gateway/tests/test_scratch_location.py after:T018
-- [ ] T094 Run the gate measurement over the frozen set and record recall at five, MRR, their intervals, the comparator arm, the mode and the corpus size after:T091
+- [X] T094 Run the gate measurement over the frozen set and record recall at five, MRR, their intervals, the comparator arm, the mode and the corpus size after:T091
 
 ---
 
