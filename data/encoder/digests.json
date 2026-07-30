@@ -15,9 +15,12 @@
     "vocab.txt": "sha256:07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
   },
   "graph_output": "last_hidden_state",
+  "licence_basis": "Apache-2.0",
+  "licence_note": "Added by E008 (plan.md Pending Amendments item 5, non-blocking, \"fixable by whichever epic next touches the file\"). Data Provenance requires a licence basis of every vendored artifact; this record carried identity, revision and digests but neither a licence nor a source. Verified against the upstream model card at the pinned revision, which is the same sha recorded above.",
   "model_id": "sentence-transformers/all-MiniLM-L6-v2",
   "precision": "FP32",
   "purpose": "FR-019 / ADR-0018. The recorded digests of every file in this directory. model.ingest.artifacts verifies each one before an ONNX Runtime session is created; a mismatch or an absence fails the run naming the artifact and never falls back to a remote fetch.",
   "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "source": "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/tree/1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
   "vector_dimension": 384
 }

@@ -94,6 +94,24 @@ def _absent(record: Mapping[str, object], field: str) -> bool:
     return isinstance(value, str) and not value.strip()
 
 
+def _normalised_digest(recorded: str) -> str:
+    """Strip an optional `sha256:` prefix from a recorded digest.
+
+    Two artifacts in this repository record digests in two shapes: E006's
+    encoder uses `sha256:<hex>` and E008's reranker uses bare `<hex>`. Both are
+    SHA-256 of the file's bytes and neither is wrong, so this reader accepts
+    either rather than forcing a committed record to change format — rewriting
+    E006's digests to match a newer convention would change every line of a file
+    whose whole purpose is to be stable.
+
+    The prefixed form is the better one, because it names the algorithm at the
+    value rather than in a docstring, and it is what a future second algorithm
+    would need. Accepting both is the migration, not a permanent ambiguity.
+    """
+    prefix = "sha256:"
+    return recorded[len(prefix) :] if recorded.startswith(prefix) else recorded
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -158,7 +176,7 @@ def verify_artifact(directory: Path, *, record_name: str = "provenance.json") ->
     missing: list[str] = []
     altered: list[str] = []
     for name in sorted(files):
-        expected = files[name]
+        expected = _normalised_digest(str(files[name]))
         path = directory / name
         if not path.is_file():
             missing.append(name)

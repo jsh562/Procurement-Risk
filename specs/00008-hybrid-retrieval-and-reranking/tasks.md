@@ -106,7 +106,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T036 [US1] {FR-006} Assert over the emitted artifacts that no figure or label names BM25 and the no-corpus-statistics statement is present, in retrieval/report.py and src/api/tests/retrieval/test_report.py after:T035
 - [X] T037 [US1] {FR-029} Emit the ranking parameters in force with every result an evaluation consumes, in src/api/src/api/retrieval/report.py after:T015
 - [X] T038 [US1] {FR-004,FR-029} [COMPLETES FR-004] Assert the three parameters are stable identifier tokens read from the one source in src/api/tests/retrieval/test_parameters.py after:T037
-- [ ] T039 [US1] {FR-007} [COMPLETES FR-007] Embed the query through the gateway encoder, refusing on identity mismatch before any search, in src/api/src/api/retrieval/routes.py after:T021
+- [X] T039 [US1] {FR-007} [COMPLETES FR-007] Embed the query through the gateway encoder, refusing on identity mismatch before any search, in src/api/src/api/retrieval/routes.py after:T021
 - [ ] T040 [US1] {FR-008,FR-009} [COMPLETES FR-008] Wire GET /api/v1/retrieval/search to RetrievalResponse in retrieval/routes.py after:T039 ← T032:RetrievalResult
 - [X] T041 [US1] {FR-030,FR-042} Write failing property tests for recall at five and its Wilson interval in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T001
 - [X] T042 [US1] {FR-030,FR-042} Implement the recall proportion and the Wilson interval in src/api/src/api/retrieval/metrics.py after:T041 → exports: wilson_interval
