@@ -292,6 +292,7 @@ Project-level architectural decisions are maintained as standalone MADR files un
 | ADR-0020 | Ingested Derived Data Carries an Active or Superseded Generation | superseded | 2026-07-27 | — | [0020-ingested-derived-data-carries-an-active-or-superseded-generation.md](adrs/0020-ingested-derived-data-carries-an-active-or-superseded-generation.md) |
 | ADR-0021 | Superseded Generations Are Removed at Promotion, Not Retained | accepted | 2026-07-27 | ADR-0020 | [0021-superseded-generations-are-removed-at-promotion-not-retained.md](adrs/0021-superseded-generations-are-removed-at-promotion-not-retained.md) |
 | ADR-0022 | Interval Method Is Selected Per Estimator, Not Per Document | accepted | 2026-07-29 | — | [0022-interval-method-is-selected-per-estimator.md](adrs/0022-interval-method-is-selected-per-estimator.md) |
+| ADR-0023 | A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception | accepted | 2026-07-29 | — | [0023-consuming-epic-may-additively-extend-another-epics-tables.md](adrs/0023-consuming-epic-may-additively-extend-another-epics-tables.md) |
 
 <!-- Rows are managed by the ADR Author subagent. Do not embed full decision prose here. -->
 
