@@ -150,7 +150,7 @@ E001 scaffolded the four entries, `import-linter` and the Compose `db` service; 
 - [ ] T084 [P] [US3] {FR-047} [COMPLETES FR-047] Assert a run refuses when one weight is perturbed, each of the four alone, in tests/schema/test_calibration.py after:T038 (VR-030, SC-043)
 
 - [ ] T085 [US3] {FR-041,FR-049} Render each cluster's specification-section attribution, and every refused admission with the offending record, the refusing cluster, the section kept and the conflicting section, into the run report, in identity/report.py after:T064 (FR-049(h), G-14)
-- [ ] T086 [P] [US3] {FR-049,FR-012} [COMPLETES FR-049] Assert the report carries all eight FR-049 parts (a)-(h) and that the persisted candidate_pair count equals the set blocking generated, in tests/identity/test_report_content.py after:T085
+- [ ] T086 [P] [US3] {FR-049,FR-012,FR-053} [COMPLETES FR-049] Assert the report carries all eight FR-049 parts (a)-(h), enumerates both licensed no-interval reasons per FR-053 (SC-046) and that the persisted candidate_pair count equals the set blocking generated, in tests/identity/test_report_content.py after:T085
 
 **T084, T085 and T086 are appended rather than inserted**, following E006's T092-at-the-tail-of-US2 precedent, so the task IDs `plan.md` and the decomposition record already cite do not move. T084 sits at the end of Phase 5 because SC-043 is a US3 criterion and because it needs T038's manifest to have something to refuse.
 
