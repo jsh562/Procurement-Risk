@@ -260,6 +260,66 @@ def test_a_figure_without_an_ingest_generation_is_refused() -> None:
         publish_figure(FigureRecord(name="nogen", value=1.0, interval=(0.0, 1.0)))
 
 
+def test_two_figures_differing_only_in_ingest_generation_are_distinguishable() -> None:
+    """FR-049's point, stated as the thing that must be *possible*.
+
+    The refusal above proves a figure cannot be published without a generation.
+    It does not prove the generation is load-bearing — a field that is required
+    but discarded on the way out satisfies the refusal and still leaves the two
+    figures identical to a reader. This is the assertion that says otherwise.
+
+    Everything else is held equal on purpose, including `corpus_size`: E006's
+    `part_numbers` repair changes no chunk count, so the pre-repair and
+    post-repair corpora genuinely report the same size. The generation is the
+    *only* member that can tell them apart, and if it fails to, an inert lexical
+    weight-B slot and a working one publish the same recall figure.
+    """
+    before = publish_figure(
+        FigureRecord(
+            name="recall_at_5",
+            value=0.62,
+            interval=(0.55, 0.69),
+            corpus_size=6391,
+            ingest_generation="2026-07-11T00:00:00Z/part-numbers-null",
+        )
+    )
+    after = publish_figure(
+        FigureRecord(
+            name="recall_at_5",
+            value=0.62,
+            interval=(0.55, 0.69),
+            corpus_size=6391,
+            ingest_generation="2026-07-29T00:00:00Z/part-numbers-populated",
+        )
+    )
+    assert before.corpus_size == after.corpus_size
+    assert before.value == after.value
+    assert before.ingest_generation != after.ingest_generation
+    assert before != after, (
+        "two figures measured over different ingest generations compare equal; "
+        "the generation is carried but not load-bearing, which is FR-049's "
+        "failure mode rather than its remedy"
+    )
+
+
+def test_the_generation_survives_publication() -> None:
+    """Returned, not merely validated.
+
+    `publish_figure` could satisfy every refusal above and hand back a record
+    with the generation stripped; the caller writing the report would then emit
+    an unqualified number. Asserted on the returned value for that reason.
+    """
+    published = publish_figure(
+        FigureRecord(
+            name="mrr",
+            value=0.41,
+            interval=(0.33, 0.49),
+            ingest_generation="2026-07-29T00:00:00Z/part-numbers-populated",
+        )
+    )
+    assert published.ingest_generation == "2026-07-29T00:00:00Z/part-numbers-populated"
+
+
 def test_the_no_interval_reason_set_is_closed_at_two() -> None:
     """A closed set, declared by the artifact that publishes the figures.
 

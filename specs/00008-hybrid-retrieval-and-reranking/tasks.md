@@ -148,8 +148,8 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T066 [US3] {FR-019} Publish the sequence limit as a number with the candidate-length distribution and the truncated fraction, in retrieval/report.py ← T062:TruncationReport
 - [X] T067 [US3] {FR-033} Report per-query reranking latency with the fusion-statement and encoder times beside it, and per-session RSS against the budget, in retrieval/report.py after:T066
 - [X] T068 [US3] {FR-033,FR-049} Assert the report carries workload, environment, measurement point, occasion, counter, arm, corpus size and ingest generation, in src/api/tests/retrieval/test_performance_report.py after:T067
-- [ ] T100 [US3] {FR-049} [COMPLETES FR-049] Assert two figures differing only in ingest generation are distinguishable, since the repair changes no chunk count, in src/api/tests/retrieval/test_report.py after:T099
-- [ ] T069 [US3] {FR-033} [COMPLETES FR-033] Take the latency and memory figures under the one-vCPU quota after readiness, in src/api/tests/test_retrieval_benchmark.py after:T067
+- [X] T100 [US3] {FR-049} [COMPLETES FR-049] Assert two figures differing only in ingest generation are distinguishable, since the repair changes no chunk count, in src/api/tests/retrieval/test_report.py after:T099
+- [X] T069 [US3] {FR-033} [COMPLETES FR-033] Take the latency and memory figures under the one-vCPU quota after readiness, in src/api/tests/test_retrieval_benchmark.py after:T067
 - [X] T070 [US3] {FR-020} Assert the reranked ordering repeats identically and SC-007's three counters read zero after readiness, in src/api/tests/retrieval/test_readiness.py after:T064
 - [X] T071 [US3] {FR-036} Select the strongest single arm by the fixed per-statistic rule and compute paired per-query differences against it, in retrieval/metrics.py after:T046
 - [X] T072 [US3] {FR-036} Label fusion-only as the weak comparator and record the selected arm and the statistic that selected it, in src/api/src/api/retrieval/report.py after:T071
