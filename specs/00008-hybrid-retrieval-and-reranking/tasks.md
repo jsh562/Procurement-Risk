@@ -115,11 +115,11 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T045 [US1] {FR-032,FR-042} Write failing property tests for the overlap verdict — symmetry, reflexivity, touching endpoints — in src/api/tests/retrieval/test_metrics.py, done only on an observed failure after:T044
 - [X] T046 [US1] {FR-032,FR-042} Implement the unresolvable verdict by FR-032's closed-interval rule in src/api/src/api/retrieval/metrics.py after:T045 → exports: overlap_verdict
 - [X] T047 [US1] {FR-031} [COMPLETES FR-031] Record method, resample count, seed and bit generator on every emitted interval and assert no non-proportion statistic carries wilson, in retrieval/report.py and src/api/tests/retrieval/test_metrics.py after:T046
-- [ ] T048 [US1] {FR-042} [COMPLETES FR-042] Assert the generated domains reach set size one upward, all-hit, all-miss, ties and endpoints, and refuse an empty set, in src/api/tests/retrieval/test_metrics.py after:T047
-- [ ] T049 [US1] {FR-043} Freeze, hash and commit E008's own query set with generator-derived judgements and the published ceiling in src/api/tests/retrieval/evaluation_set/ (AD-010) after:T044
-- [ ] T050 [US1] {FR-043} Abort on digest mismatch before emitting any measurement in src/api/tests/retrieval/evaluation_set/harness.py (Principle VI) after:T049 → exports: load_frozen_set
-- [ ] T103 [US1] {FR-050} [COMPLETES FR-050] Ship the evaluation set's datasheet — generator identity, seed, document-model digest, draw method, query count, answerable-by-construction ceiling — in data/evaluation_set/DATASHEET.md and assert its presence in tests/checks/test_vendored_model_provenance.py after:T049
-- [ ] T051 [US1] {FR-043} [COMPLETES FR-043] Perturb a copy of the committed set and assert the harness exits non-zero before any measurement, and that a re-tune emits the before and after figures together, in src/api/tests/retrieval/test_evaluation_set.py after:T050
+- [X] T048 [US1] {FR-042} [COMPLETES FR-042] Assert the generated domains reach set size one upward, all-hit, all-miss, ties and endpoints, and refuse an empty set, in src/api/tests/retrieval/test_metrics.py after:T047
+- [X] T049 [US1] {FR-043} Freeze, hash and commit E008's own query set with generator-derived judgements and the published ceiling in src/api/tests/retrieval/evaluation_set/ (AD-010) after:T044
+- [X] T050 [US1] {FR-043} Abort on digest mismatch before emitting any measurement in src/api/tests/retrieval/evaluation_set/harness.py (Principle VI) after:T049 → exports: load_frozen_set
+- [X] T103 [US1] {FR-050} [COMPLETES FR-050] Ship the evaluation set's datasheet — generator identity, seed, document-model digest, draw method, query count, answerable-by-construction ceiling — in data/evaluation_set/DATASHEET.md and assert its presence in tests/checks/test_vendored_model_provenance.py after:T049
+- [X] T051 [US1] {FR-043} [COMPLETES FR-043] Perturb a copy of the committed set and assert the harness exits non-zero before any measurement, and that a re-tune emits the before and after figures together, in src/api/tests/retrieval/test_evaluation_set.py after:T050
 
 ---
 

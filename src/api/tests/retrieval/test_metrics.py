@@ -271,3 +271,53 @@ def test_intervals_are_finite() -> None:
         overlap_verdict((float("nan"), 0.5), (0.2, 0.3))
     with pytest.raises(MetricsError, match="finite"):
         overlap_verdict((0.1, math.inf), (0.2, 0.3))
+
+
+# ---------------------------------------------------------------------------
+# T048 / FR-042: the generated domains reach the cases the properties are for
+# ---------------------------------------------------------------------------
+
+
+def test_the_generated_domains_reach_every_case_fr042_names() -> None:
+    """The strategies above actually produce the boundaries, not just the middle.
+
+    FR-042 enumerates the input domains the property tests must reach: set sizes
+    from one upward, all-hit and all-miss sets, ties in reciprocal rank, and
+    per-query values at both ends of their range. A generator that never
+    produced an all-miss set would leave every property "verified" on inputs
+    that cannot exhibit the failure — the property would hold and mean nothing.
+
+    Asserted by drawing from the same strategies rather than by inspecting
+    them, because what matters is what they emit.
+    """
+    from hypothesis import find
+
+    # Set size one: where an interval degenerates and a careless denominator
+    # divides by zero.
+    assert find(_OUTCOMES, lambda values: len(values) == 1) is not None
+    # All-hit and all-miss: the boundaries where a naive normal interval leaves
+    # [0, 1] and Wilson does not.
+    assert find(_OUTCOMES, lambda values: len(values) >= 3 and all(values)) is not None
+    assert find(_OUTCOMES, lambda values: len(values) >= 3 and not any(values)) is not None
+    # Ties in reciprocal rank: repeated values, which the bootstrap's percentile
+    # step handles differently from distinct ones.
+    assert find(_RECIPROCALS, lambda values: len(values) >= 2 and len(set(values)) == 1) is not None
+    # Both ends of the per-query range: a top-1 hit and a complete miss.
+    assert find(_RECIPROCALS, lambda values: 1.0 in values) is not None
+    assert find(_RECIPROCALS, lambda values: 0.0 in values) is not None
+
+
+def test_an_empty_set_is_refused_by_every_metric() -> None:
+    """FR-042's explicit refusal, across all three entry points.
+
+    Stated once per function rather than once overall, because each is reachable
+    independently and a figure emitted from any of them is equally wrong.
+    """
+    for call in (
+        lambda: recall_at_k([]),
+        lambda: wilson_interval([]),
+        lambda: mean_reciprocal_rank([]),
+        lambda: percentile_bootstrap([], seed=1),
+    ):
+        with pytest.raises(MetricsError, match="empty"):
+            call()
