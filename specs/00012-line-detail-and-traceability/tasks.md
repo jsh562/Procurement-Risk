@@ -46,7 +46,7 @@ no table, no column and no migration, so no schema task appears below.
 
 ## Phase 1: Setup (Repository / Workspace Delta)
 
-- [ ] T001 Merge branch `claim-adr-0025` (commit `7846bae`) into `main` — the record is **already authored** at specs/adrs/0025-stored-posterior-arrays-do-not-cross-the-serving-boundary.md and pushed, together with its catalog rows in specs/sad.md and specs/project-plan.md as one serialized amendment. Do not re-author it: a second record under a different slug would claim the number twice. Then re-run the plan's Instructions Check gate, which is FAIL solely on this
+- [X] T001 Merge branch `claim-adr-0025` (commit `7846bae`) into `main` — the record is **already authored** at specs/adrs/0025-stored-posterior-arrays-do-not-cross-the-serving-boundary.md and pushed, together with its catalog rows in specs/sad.md and specs/project-plan.md as one serialized amendment. Do not re-author it: a second record under a different slug would claim the number twice. Then re-run the plan's Instructions Check gate, which is FAIL solely on this — **done**: merged at `f6e363f`; ADR-0025 and both catalog rows are on `main`, gate re-run to PASS
 - [ ] T002 {FR-023} Pass the corpus root to the api process in scripts/dev.py, scripts/e2e.py and the e2e step of .github/workflows/verify.yml {AD-007}
 
 ---
