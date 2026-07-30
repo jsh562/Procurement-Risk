@@ -76,12 +76,12 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T015 {FR-004} Fix the fusion constant 60, the tie-break key and the missing-arm convention as lowercase identifier tokens in src/api/src/api/retrieval/parameters.py → exports: RankingParameters
 - [ ] T016 {FR-016} Vendor the INT8 and FP32 reranker graphs with their tokenizer, digests, licence basis and source under data/reranker/ (AD-007, AD-011)
 - [ ] T017 {FR-016} Write the one-off dynamic quantization emitting the INT8 graph with generator identity, seed, date and source hash, resolving every scratch path through the checkout's own gitignored .tmp/ per AGENTS.md §Temporary Files, in src/model/tools/quantize_reranker.py after:T016
-- [ ] T018 {FR-016} Verify identity, revision, licence basis, source and digest before session creation in src/gateway/src/gateway/inference/artifacts.py after:T003 → exports: verify_artifact
+- [X] T018 {FR-016} Verify identity, revision, licence basis, source and digest before session creation in src/gateway/src/gateway/inference/artifacts.py after:T003 → exports: verify_artifact
 - [ ] T019 {FR-016} [COMPLETES FR-016] Assert licence basis, source, quantization record and digest for both graphs in tests/checks/test_vendored_model_provenance.py after:T018
-- [ ] T020 {FR-007} Move masked mean pooling and L2 normalization into src/gateway/src/gateway/inference/encoder.py, fed by the truncating tokenizer (HINT-004) after:T018 → exports: embed_texts
-- [ ] T021 {FR-007} Refuse retrieval when the query encoder identity differs from the identity recorded on the chunks, in gateway/inference/encoder.py after:T020 → exports: assert_encoder_identity
-- [ ] T022 Repoint src/model/src/model/ingest/embed.py at gateway.inference.encoder so exactly one pooling implementation exists (ADR-0023) after:T021
-- [ ] T105 Repoint src/model/src/model/ingest/tokens.py at the gateway so model imports no distribution it stops declaring after:T020
+- [X] T020 {FR-007} Move masked mean pooling and L2 normalization into src/gateway/src/gateway/inference/encoder.py, fed by the truncating tokenizer (HINT-004) after:T018 → exports: embed_texts
+- [X] T021 {FR-007} Refuse retrieval when the query encoder identity differs from the identity recorded on the chunks, in gateway/inference/encoder.py after:T020 → exports: assert_encoder_identity
+- [X] T022 Repoint src/model/src/model/ingest/embed.py at gateway.inference.encoder so exactly one pooling implementation exists (ADR-0023) after:T021
+- [X] T105 Repoint src/model/src/model/ingest/tokens.py at the gateway so model imports no distribution it stops declaring after:T020
 - [ ] T023 Commit and seed the integration fixture corpus — the merge gate applies migrations and never ingests — in src/api/tests/retrieval/fixtures/seed_chunks.py → exports: seeded_corpus
 
 ---

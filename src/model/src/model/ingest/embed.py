@@ -43,7 +43,12 @@ from functools import lru_cache
 
 import numpy as np
 import onnxruntime as ort
-from tokenizers import Tokenizer
+from gateway.inference.encoder import (
+    TokenizerLoadError,
+    l2_normalize,
+    load_tokenizer,
+    masked_mean,
+)
 
 from model.ingest.artifacts import (
     ArtifactError,
@@ -65,10 +70,6 @@ __all__ = [
 #: Chosen for memory, not for throughput: ingestion is offline and the 400 MB
 #: request-time envelope binds E008's reuse of this encoder, not this job.
 DEFAULT_BATCH_SIZE = 16
-
-#: The tokenizer's padding token. Named, not a credential -- S106/S105 reads any
-#: string literal bound to a name ending in TOKEN as one.
-_PAD_TOKEN = "[PAD]"  # noqa: S105
 
 
 class EmbedError(ValueError):
@@ -113,24 +114,20 @@ def encoder_session() -> ort.InferenceSession:
 
 
 @lru_cache(maxsize=1)
-def _embedding_tokenizer() -> Tokenizer:
+def _embedding_tokenizer() -> object:
     """The **embedding** tokenizer: truncating at the cap, padding per batch.
 
     A second instance rather than a second file — the same digest-verified
     `tokenizer.json`, configured for what the session needs. `tokens.py`'s
-    instance stays non-truncating because it is measuring, not feeding.
+    instance stays non-truncating because it is measuring, not feeding, and the
+    loader takes `truncate_at` with no default so neither caller can inherit the
+    other's setting by omission.
     """
     artifact = _artifact()
     try:
-        tokenizer = Tokenizer.from_file(str(artifact.tokenizer))
-    except Exception as exc:  # noqa: BLE001 - any load failure is this module's
-        raise EmbedError(f"cannot load the tokenizer at {artifact.tokenizer}: {exc}") from exc
-    tokenizer.enable_truncation(max_length=artifact.sequence_cap)
-    pad_id = tokenizer.token_to_id(_PAD_TOKEN)
-    if pad_id is None:
-        raise EmbedError(f"the committed tokenizer declares no {_PAD_TOKEN} token")
-    tokenizer.enable_padding(pad_id=pad_id, pad_token=_PAD_TOKEN)
-    return tokenizer
+        return load_tokenizer(artifact.tokenizer, truncate_at=artifact.sequence_cap)
+    except TokenizerLoadError as exc:
+        raise EmbedError(str(exc)) from exc
 
 
 def embedding_identity() -> tuple[str, str]:
@@ -139,34 +136,23 @@ def embedding_identity() -> tuple[str, str]:
     return artifact.model_id, artifact.revision
 
 
-def _masked_mean(hidden: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Attention-masked mean pooling — the reference's `Pooling` module.
-
-    `hidden` is `(batch, sequence, dimension)` and `mask` is `(batch, sequence)`
-    holding 1 for a real piece and 0 for padding. The mask is broadcast over the
-    dimension axis and multiplied in **before** the sum, so a padded position
-    contributes nothing to the numerator, and the denominator is the count of
-    real pieces rather than the padded sequence length. Getting either half
-    wrong is the quiet failure HINT-005 names.
-    """
-    weights = mask.astype(np.float32)[:, :, None]
-    summed = (hidden * weights).sum(axis=1)
-    counts = weights.sum(axis=1)
-    # A row with no unmasked piece cannot arise from a non-empty chunk, but
-    # dividing by zero would produce NaNs that propagate into stored vectors
-    # rather than raising, so the denominator is clamped exactly as the
-    # reference implementation clamps it.
-    return summed / np.clip(counts, 1e-9, None)
-
-
-def _l2_normalize(vectors: np.ndarray) -> np.ndarray:
-    """L2 normalization — the reference's `Normalize` module.
-
-    ADR-0012 requires normalized vectors, and cosine distance in pgvector is
-    only the inner product when they are.
-    """
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    return vectors / np.clip(norms, 1e-12, None)
+#: Pooling and normalization live in `gateway.inference.encoder` from E008
+#: ({SAD:ADR-0023}), and are re-exported here under their original private
+#: names so every call site in this module is unchanged.
+#:
+#: Moved rather than duplicated, and that is the whole point: this arithmetic is
+#: the part of the vector computation that fails *quietly* — pooling over
+#: padding yields vectors that are well-formed, well-scaled, plausible and
+#: wrong. Two copies kept in step by review is the same failure with a second
+#: place to introduce it. E008 embeds queries at request time from `/src/api`,
+#: which may not declare this entry, so the shared package is where the one
+#: implementation can live for both.
+#:
+#: The parity gate below now covers both callers: it asserts *this* module's
+#: output against independently produced reference vectors, and this module's
+#: output is now the gateway's arithmetic.
+_masked_mean = masked_mean
+_l2_normalize = l2_normalize
 
 
 def embed_chunks(
