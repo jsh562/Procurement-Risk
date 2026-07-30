@@ -616,8 +616,18 @@ because an ungated amendment is a need nobody is obliged to meet. **Item numbers
 order and are cited from `spec.md` and `tasks.md`, so they are stable**: items 9 and 10 were added
 at Analyze and are blocking despite following the non-blocking ones.
 
-**Status, 2026-07-29**: round 1 landed at `c422e24` (PR #22) and closed **items 1 and 9** together.
-**Four blocking items remain: 2, 3, 4 and 10.** Implementation stays gated.
+**Status, 2026-07-29 — ALL SIX BLOCKING ITEMS HAVE LANDED.** Three rounds, not four: round 1 closed
+items 1 and 9 at `c422e24` (PR #22); round 2 closed item 2 at `04f47f2` (PR #26); round 3 closed
+items **3, 10 and 4 together** at `c8fb2ce` (PR #27), because the `specs/sad.md` catalog row was
+written in the same amendment that moved the two `project-instructions.md` clauses. SC-015 is
+satisfiable and T001–T004, T096 and T097 all have their citations.
+
+**Implementation is not yet unblocked.** Round 3 bumped `project-instructions.md` to **v1.2.9**, and
+§Instructions Check above still records an audit against **v1.2.8**. Governance: *"A feature whose
+recorded compliance audit names a superseded version of this document MUST re-run its compliance
+gate before passing its next phase gate."* The re-run is `/sddp-analyze`, and until it completes the
+two rows this amendment was raised to fix are still recorded as CONDITIONAL against a version that
+no longer exists.
 
 **Blocking — implementation does not begin until these land** (spec SC-015 gates 1 and 2; this plan
 extends the gate to 3, 4, 9 and 10):
@@ -717,13 +727,23 @@ Four rounds, each landing before the next begins:
 | Round | Document | Items | What lands | Status |
 |---|---|---|---|---|
 | 1 | `specs/prd.md` + `specs/sad.md` | 1, **9** | The MRR interval, in **both** registered documents — one defect, one decision, one round | ✅ **landed `c422e24`** |
-| 2 | `specs/project-plan.md` | 2 | An owner for populating `chunk.part_numbers` | outstanding |
-| 3 | `project-instructions.md` | 3, 10 | §Source Code Layout **and** §Testing & Quality Policy except a shared inference runtime; §Technology Stack drops the INT8-only qualifier | outstanding |
-| 4 | `specs/sad.md` | 4 | ADR-0023's catalog row | outstanding |
+| 2 | `specs/project-plan.md` | 2 | An owner for populating `chunk.part_numbers` — **E006** | ✅ **landed `04f47f2`** |
+| 3 | `project-instructions.md` + `specs/sad.md` | 3, 10, **4** | Both clauses excepted, INT8 qualifier dropped, **and** ADR-0023's catalog row | ✅ **landed `c8fb2ce`** (v1.2.9) |
 
-*(Restated 2026-07-29 after round 1 landed. Round 1 was planned as `prd.md` alone with item 9 held
-for round 4; the amendment correctly treated two occurrences of one defect as one decision and
-closed both. Round 4 now carries item 4 only.)*
+*(Restated twice as the queue collapsed. Planned as four rounds; it took three. Round 1 was planned
+as `prd.md` alone with item 9 held back, and correctly treated two occurrences of one defect as one
+decision. Round 3 absorbed the planned round 4 for the same reason — the `specs/sad.md` catalog row
+records the very decision the `project-instructions.md` clauses were being amended to admit, so
+splitting them would have merged an index entry for a decision the instructions still forbade.)*
+
+**Each round landed wider than its ask, and all three widenings were load-bearing** — the pattern is
+worth naming rather than noting three times. Round 1 split the retrieval-quality row and pinned the
+bit generator (→ FR-031, T044, T047). Round 2 reopened E006 and imposed the ingest-generation
+qualifier (→ **FR-049**, T099, T100). Round 3 narrowed `specs/sad.md`'s serving/modeling isolation
+quality attribute and its Primary Dependencies line, neither of which this queue asked for, and
+stated the cost plainly: TR-013's derived protection drops from four heavy packages to three, so
+NumPy can henceforth arrive by an unintended route with nothing reporting it. That is a real
+reduction in a guarantee E008 relies on, accepted deliberately.
 
 Then 7 and 8, then 5 and 6 whenever. **E006 holds nothing ahead of this queue**: its outstanding
 amendment was the INT8 qualifier, recorded in a PR body and never performed — verified against the
