@@ -157,7 +157,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 
 ### Integration Risks
 
-- **Migration collisions (E003, E004; also E005, E006).** Two epics adding schema migrations in the same wave will conflict on migration ordering. Mitigation: each epic claims its migration numbers at start and owns a disjoint table set.
+- **Migration collisions (E003, E004; also E005, E006).** Two epics adding schema migrations in the same wave will conflict on migration ordering. Mitigation: each epic claims its migration numbers at start — by committing a reserved-prefix marker to the default branch, where the next allocator's scan will find it — and owns a disjoint table set.
 - **Interface shell contention (E010, E011; later E012, E013).** Parallel interface epics both modify routing and layout. Mitigation: the shell — navigation, layout, data-fetching conventions — is established once in E010 and treated as read-only by later interface epics.
 - **Retrieval configuration surface (E008 vs E014).** E014 exercises the exact-search path while E008 owns the configuration flag. Mitigation: the flag controls index usage only; filters, fusion, fetch depth, and reranking are shared code, per ADR-0005.
 - **Inert weight-B arm, and the re-ingest that repairs it (E006 vs E008) — live now.** `chunk.part_numbers` is NULL on all 6,391 chunks E006 wrote, so the weight-B slot of the generated `search_vector` is empty corpus-wide. E008 is in flight against that corpus and its FR-005 correctly *reports* the inert weighting rather than repairing it — E008 reads the chunk table and writes nothing to it. The risk is ordering, not ownership: E006's repair requires a re-ingest, and any lexical-arm figure E008 measures beforehand describes a corpus that no longer exists once it lands. Two epics can each be correct and the published number still be stale. Mitigation: E008's per-layer empty-weighted-field proportion is published *with the ingest generation it was measured against* ({SAD:ADR-0021} already makes a generation the unit), so a figure and the corpus it describes cannot be separated; any retrieval figure measured pre-repair is re-run post-repair before it reaches a published result. The two are otherwise parallel-safe — E006 writes the column, E008 only reads it.
@@ -170,8 +170,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | Resource | Contending epics | Resolution |
 |---|---|---|
 | Governance documents | Any epic raising an amendment | Single writer: one amendment in flight at a time, performed on the default branch and landed before the next begins. A feature branch records the need and does not perform it. Every in-flight epic rebases and re-runs its compliance gate afterwards |
-| Decision record numbers | Any epic creating an ADR | Number claimed at epic start, as migration numbers are |
-| Migration sequence | E003, E004, E005, E006 | Numbers claimed at epic start; disjoint table ownership |
+| Decision record numbers | Any epic creating an ADR | Number claimed at epic start by committing a placeholder record to the default branch — status `claimed`, claiming epic named, no decision content — so the directory scan that allocates the next number can see it. A claim held only in a feature workspace is not a claim |
+| Migration sequence | E003, E004, E005, E006 | Prefix block claimed at epic start by a reserved-prefix marker committed to the default branch; disjoint table ownership |
 | Interface shell | E010, E011, E012, E013 | Established in E010, read-only thereafter |
 | Retrieval configuration | E008, E014 | Flag scope limited to index usage |
 | Model gateway module | E006, E011 | Introduced in E004; both consume, neither modifies |
@@ -759,5 +759,5 @@ Before starting any epic in Wave N+1, verify:
 2. The technical context document reflects any decision made or changed during Wave N; a material change means a superseding decision record, not an edit.
 3. Every shared artifact listed for Wave N under Shared Artifact Surface exists and is reachable by its declared consumers.
 4. Every dependency contract declared by a Wave N+1 epic is satisfiable against what Wave N actually produced — in particular the forecast-run schema version, the review-queue record shape, and the retrieval configuration flag's scope.
-5. Migration numbers and decision-record numbers for the next wave are claimed before any parallel epic begins, so concurrent schema work cannot collide and two epics cannot allocate the same ADR number.
+5. Migration numbers and decision-record numbers for the next wave are claimed before any parallel epic begins, **and each claim is visible on the default branch** — a placeholder record for an ADR number, a reserved-prefix marker for a migration block — so the scan that allocates the next number can see it. A claim held only on a feature branch does not satisfy this step: it was tried, and four renumbers in one day were the result.
 6. No epic enters the wave carrying a compliance audit against a superseded version of the project instructions. Any amendment landed during Wave N is picked up by rebasing, and the affected epics re-run their compliance gate before starting Wave N+1 work.
