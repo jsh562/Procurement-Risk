@@ -14,14 +14,41 @@ dod_source: null
 
 > **`[X]` means the epic has passed QC and merged to the default branch** — its
 > workspace carries `.qc-passed` and its work is on `main`. Per
-> `amend-project/SKILL.md`, a ticked epic is **immutable**: only unchecked epics
-> may be adjusted by a later amendment.
+> `amend-project/SKILL.md`, a ticked epic is **immutable as to scope**: no later
+> amendment may add, remove, or redefine a ticked epic's objectives, requirements,
+> or deliverables.
 >
-> E001 through E004 are merged and remain unticked. That is a gap in this
-> document's bookkeeping, not a statement about those epics — the tick was never
-> applied as they landed, and back-filling four rows would freeze them against
-> adjustment in the same stroke as recording their status. Read an unticked row
-> as *not yet ticked*, and check the workspace marker for the epic's real state.
+> **Immutability of scope is not immutability of the record.** A ticked epic's
+> artifacts MUST still be corrected to stay true of what was built, and three
+> kinds of change are therefore admitted against a ticked epic:
+>
+> 1. **Admitting a later epic's extension** of an object the ticked epic created,
+>    where that extension is licensed by a decision record — see {SAD:ADR-0023}.
+>    The ticked epic's normative documents record what the database now is; they
+>    do not thereby acquire new scope, and the extension is the later epic's work
+>    and the later epic's responsibility.
+> 2. **Correcting a statement that has become false** — a stale count, a
+>    superseded rationale, an enumeration overtaken by a later revision.
+> 3. **Discharging a propagation obligation** another epic recorded against it.
+>
+> None of these reopens the epic's QC verdict, and none is a scope change. What
+> the rule forbids is reaching back into finished work to change what it was for.
+>
+> **Why this was amended.** The rule previously read as immutability of the whole
+> row, and it collided with the obligation queue on its first real test. E009
+> extends two tables E003 created and reverses a privilege decision E003
+> recorded; those needed E003's `data-model.md` and its TR-083 amended, and both
+> amendments were recorded as obligations (P-6, P-9) precisely because a feature
+> branch may not perform them. E001–E004 had been left deliberately unticked so
+> they stayed adjustable — the earlier note said so in terms — and when the ticks
+> were back-filled to record status, the read-as-written effect was to freeze
+> E003 against amendments already owed to it. That would have left a normative
+> document permanently false about its own schema with no legal correction path,
+> which is a worse outcome than either the tick or the amendment was trying to
+> prevent. The tick and the obligation should not race; scoping immutability to
+> scope is what stops them racing. Recorded rather than resolved by unticking,
+> because the ticks are correct — E001–E006 and E007, E010 have all passed QC and
+> merged.
 
 ### Wave 1 — Foundation
 
