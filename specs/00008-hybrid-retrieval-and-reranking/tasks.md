@@ -70,10 +70,10 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 
 **The extension-version check, the configuration and connection, the ranking parameters, both vendored graphs, the gateway inference package, and the seeded corpus every integration tier reads. Each blocks three or more stories, so none is left where its success criterion is labelled.**
 
-- [ ] T012 {FR-039} Read the pgvector extension version from the digest-pinned image and gate iterative scan on >= 0.8.0 in src/api/src/api/db.py after:T004 → exports: pgvector_version
-- [ ] T013 {FR-026,FR-038} Add retrieval configuration — index flag, breadth, fetch depth, intra-op and inter-op threads, memory budget — in src/api/src/api/config.py → exports: RetrievalConfig
-- [ ] T014 {FR-027,FR-040} Carry the search breadth on the connection options, never a per-query SET (AD-002), in src/api/src/api/db.py after:T012 ← T013:RetrievalConfig
-- [ ] T015 {FR-004} Fix the fusion constant 60, the tie-break key and the missing-arm convention as lowercase identifier tokens in src/api/src/api/retrieval/parameters.py → exports: RankingParameters
+- [X] T012 {FR-039} Read the pgvector extension version from the digest-pinned image and gate iterative scan on >= 0.8.0 in src/api/src/api/db.py after:T004 → exports: pgvector_version
+- [X] T013 {FR-026,FR-038} Add retrieval configuration — index flag, breadth, fetch depth, intra-op and inter-op threads, memory budget — in src/api/src/api/config.py → exports: RetrievalConfig
+- [X] T014 {FR-027,FR-040} Carry the search breadth on the connection options, never a per-query SET (AD-002), in src/api/src/api/db.py after:T012 ← T013:RetrievalConfig
+- [X] T015 {FR-004} Fix the fusion constant 60, the tie-break key and the missing-arm convention as lowercase identifier tokens in src/api/src/api/retrieval/parameters.py → exports: RankingParameters
 - [ ] T016 {FR-016} Vendor the INT8 and FP32 reranker graphs with their tokenizer, digests, licence basis and source under data/reranker/ (AD-007, AD-011)
 - [ ] T017 {FR-016} Write the one-off dynamic quantization emitting the INT8 graph with generator identity, seed, date and source hash, resolving every scratch path through the checkout's own gitignored .tmp/ per AGENTS.md §Temporary Files, in src/model/tools/quantize_reranker.py after:T016
 - [ ] T018 {FR-016} Verify identity, revision, licence basis, source and digest before session creation in src/gateway/src/gateway/inference/artifacts.py after:T003 → exports: verify_artifact
