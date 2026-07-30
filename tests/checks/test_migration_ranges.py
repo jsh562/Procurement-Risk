@@ -82,6 +82,7 @@ DECLARED_BLOCKS: tuple[tuple[int, int, str], ...] = (
     (200, 299, "E005"),
     (300, 399, "E007"),
     (400, 499, "E006"),
+    (500, 599, "E009"),
 )
 
 #: The owners whose block is expected to hold at least one revision — the
@@ -416,7 +417,7 @@ def test_every_block_whose_owner_authored_revisions_is_populated() -> None:
     )
 
 
-@pytest.mark.parametrize("prefix", ["0000", "0500", "9999"])
+@pytest.mark.parametrize("prefix", ["0000", "0600", "9999"])
 def test_the_check_reports_a_revision_numbered_outside_the_blocks(prefix: str) -> None:
     """A check that cannot fail proves nothing.
 
@@ -428,11 +429,16 @@ def test_the_check_reports_a_revision_numbered_outside_the_blocks(prefix: str) -
     `0100`-`0199` was the last declared block; it moved to `0400` when E007
     claimed `0300`-`0399` and E005's `0200`-`0299` was declared to close the
     gap; and it moved to `0500` on 2026-07-28 when E006 renumbered into
-    `0400`-`0499` and made `0400` a real revision. It has to track the last
+    `0400`-`0499` and made `0400` a real revision; and it moved to `0600` on
+    2026-07-29 when E009 claimed `0500`-`0599`. It has to track the last
     declared block: left behind, it asserts that a now-declared number is
     undeclared, which is the same off-by-one it exists to catch, pointed at the
     test instead of at the table. A control aimed inside a claimed and
-    populated block is not a control.
+    populated block is not a control. **Note the fourth move was forced by a
+    claim with no revisions behind it** — `project-instructions.md` v1.2.11
+    makes a block claimed by this marker rather than by a sentence in a plan,
+    so the probe now has to move when a block is *declared*, not when it is
+    first populated.
     """
     number = int(prefix)
     claimants = _owners_claiming(number, DECLARED_BLOCKS)
@@ -569,6 +575,17 @@ def test_declaring_e007s_block_without_the_rest_of_the_remediation_stays_red() -
     3. And it makes the *pre-part-(c)* probe at `0200` — whose entire purpose was
        that `0200` sits outside every block — assert something that is no longer
        true.
+
+    **E009 joined E005 in the declared-and-unpopulated set on 2026-07-29**, and it
+    is here rather than in `OWNERS_EXPECTED_TO_HAVE_REVISIONS` for the reason this
+    assertion's own message gives: a declared-and-unused block is a decision that
+    belongs in a data model, and E009's records it. What is new is *why* the block
+    is declared before it is populated — `project-instructions.md` v1.2.11 makes a
+    migration block claimed by this marker rather than by a sentence in a feature
+    plan, so a claim now necessarily precedes its first revision. E005's entry was
+    an epic that never authors DDL; E009's is an epic that has not authored it yet.
+    Both are legitimate, and the distinction is worth keeping visible: E009 moves
+    into `OWNERS_EXPECTED_TO_HAVE_REVISIONS` when `0500` lands, E005 never does.
     """
     gap_defects = _partition_defects(BLOCKS_WITH_E007_BUT_NO_E005)
 
@@ -583,13 +600,14 @@ def test_declaring_e007s_block_without_the_rest_of_the_remediation_stays_red() -
     populated = _populated_owners(DECLARED_BLOCKS)
     unpopulated_before_part_b = declared_owners - populated
 
-    assert unpopulated_before_part_b == {"E005"}, (
+    assert unpopulated_before_part_b == {"E005", "E009"}, (
         f"the pre-part-(b) rule was `populated == every declared owner`. Against the "
         f"current table the owners it would report as missing are "
         f"{sorted(unpopulated_before_part_b)}, and it should be exactly E005 — the epic "
-        f"that claims 0200-0299 and authors no DDL. An empty set means the rule would "
-        f"have passed and part (b) was unnecessary; a larger one means a second block is "
-        f"declared and unused, which is a decision belonging in a data model."
+        f"that claims 0200-0299 and authors no DDL, plus E009, which claims 0500-0599 "
+        f"and has not yet authored into it. An empty set means the rule would "
+        f"have passed and part (b) was unnecessary; a set larger than these two means a "
+        f"third block is declared and unused, which is a decision belonging in a data model."
     )
     assert populated > OWNERS_BEFORE_THE_POPULATION_SPLIT, (
         f"the populated owners are {sorted(populated)}, which does not strictly extend the "
