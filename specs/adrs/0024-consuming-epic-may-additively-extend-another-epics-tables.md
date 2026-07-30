@@ -1,5 +1,5 @@
 ---
-adr_id: ADR-0023
+adr_id: ADR-0024
 status: accepted
 date: 2026-07-29
 tags: [governance, schema, migrations, boundaries, process, traceability]
@@ -9,7 +9,7 @@ related_artifacts: ["specs/00009-cross-document-identity-resolution/spec.md", "s
 deciders: ["Project owner", "Solution architect"]
 ---
 
-# ADR-0023: A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception
+# ADR-0024: A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception
 
 ## Status
 
@@ -155,7 +155,7 @@ Option C is refused on schedule mechanics rather than on principle — its princ
 - **ADR-0013's schema ownership and ADR-0016's client-access clarification are unaffected.** The schema and its assets stay in `/src/model`; who may connect is untouched. This record is about who may alter a table, not where the schema lives or which entry may read it.
 - **TR-036 is unaffected.** It bars E003 from *creating* tables that E004, E009, and E017 own, and E009 creates no E003 table. The direction this record governs is the opposite one and was never covered by TR-036.
 - **E009 must claim a migration block, and the claim moves a control.** `tests/checks/test_migration_ranges.py` currently uses `0500` as its just-past-the-last-block negative control, and its docstring records that the probe has already moved twice for exactly this reason. A block claim at `0500`-`0599` makes `0500` a real number and the probe must move again; left behind, it asserts that a declared number is undeclared, which is the off-by-one it exists to catch pointed at the test instead of at the table.
-- **The epic-to-decision mapping for this record is recorded.** `specs/project-plan.md` § Architecture Decisions is the only place this project checks whether a decision reached an epic, and that section's own Uncovered Items note records that it has silently omitted records twice. The `ADR-0023 | accepted | E003, E009` row is present there, and the `specs/sad.md` catalog row is present too — the catalog table carries no mapping column, which is why the two are recorded in different documents. *(This item read "not yet recorded" when the record was authored, which was true then: the project-plan row is a separate amendment in the same serialized queue as P-6 and P-9, and it landed after this one. Corrected here rather than left standing, because a consequence that says a thing is missing when it is present is the shape of stale annotation this project has repeatedly had to chase.)*
+- **The epic-to-decision mapping for this record is recorded.** `specs/project-plan.md` § Architecture Decisions is the only place this project checks whether a decision reached an epic, and that section's own Uncovered Items note records that it has silently omitted records twice. The `ADR-0024 | accepted | E003, E009` row is present there, and the `specs/sad.md` catalog row is present too — the catalog table carries no mapping column, which is why the two are recorded in different documents. *(This item read "not yet recorded" when the record was authored, which was true then: the project-plan row is a separate amendment in the same serialized queue as P-6 and P-9, and it landed after this one. Corrected here rather than left standing, because a consequence that says a thing is missing when it is present is the shape of stale annotation this project has repeatedly had to chase.)*
 - **Nothing here licenses a consuming epic to alter a table it merely reads.** Condition 1 requires the consuming epic to be the table's first writer, and registered ownership — `E003 (schema), E009 (populated)` — is what makes E009 that writer. An epic with no populate claim on a table has no case under this record at all.
 
 ## Links
@@ -173,7 +173,7 @@ Option C is refused on schedule mechanics rather than on principle — its princ
 - [ADR-0017](0017-plan-phase-artifact-normative-over-a-specify-phase-requirement.md) — condition 3 is why this change reaches `spec.md` rather than stopping at `data-model.md`; unchanged by this record
 - [ADR-0021](0021-superseded-generations-are-removed-at-promotion-not-retained.md) — the refusal of a structurally similar widening on `chunk`, which stands; the disqualifying conditions are what keep the two apart
 - [ADR-0016](0016-database-client-access-is-not-restricted-by-schema-ownership.md) — the precedent that a feature-local acceptance does not bind a reviewer reading the record, which is why a Risks-section disclosure was not enough
-- [specs/project-plan.md](../project-plan.md) — § Shared Data Entities (`ResolvedEntity | E003 (schema), E009 (populated) | E012, E014, E016`), § Shared Artifact Surface (single-writer amendments on the default branch), § Epic Checklist (ticked epics are immutable), § Architecture Decisions (needs an `ADR-0023 | accepted | E003, E009` row)
+- [specs/project-plan.md](../project-plan.md) — § Shared Data Entities (`ResolvedEntity | E003 (schema), E009 (populated) | E012, E014, E016`), § Shared Artifact Surface (single-writer amendments on the default branch), § Epic Checklist (ticked epics are immutable), § Architecture Decisions (needs an `ADR-0024 | accepted | E003, E009` row)
 - `tests/checks/test_migration_ranges.py` — `DECLARED_BLOCKS` and the `0500` negative control that E009's block claim moves
 - [specs/sad.md](../sad.md) — ADR catalog; requires a new row
 - E003 — the owning epic; E009 — the consuming epic and the evidence base for the conditions
