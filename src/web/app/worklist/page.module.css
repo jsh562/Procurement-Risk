@@ -15,6 +15,13 @@
 .page {
   --scale-primary: 1rem;
   --scale-secondary: 0.875rem;
+  /*
+   * Below the secondary scale, because the provenance panels render inside both
+   * regions and FR-032's contract caps the largest type *anywhere* inside the
+   * secondary region below the primary region's. A third scale keeps that true
+   * by construction rather than by remembering it at each rule.
+   */
+  --scale-explain: 0.8125rem;
 
   max-width: 60rem;
   margin: 0 auto;
@@ -136,10 +143,37 @@
   gap: 0.5rem;
 }
 
+/*
+ * Two columns and three rows: the rank beside the content, and within the
+ * content the primary figures above a footer carrying the explanatory context
+ * and the row's state.
+ *
+ * This replaces a four-column form in which the secondary region and the state
+ * label each held a full-height column of their own. Two things were wrong with
+ * that. Measured at a 912px row, those two columns took 185px and 166px for
+ * three short lines and one short phrase — roughly 240px of each stood empty —
+ * while the primary column, which holds all four comparison quantities, was
+ * squeezed to 443px. And a dedicated column reads as a data column whatever
+ * size its text is set at, so FR-009's subordination was carried by type scale
+ * alone and contradicted by position. A reader asked, reasonably, why
+ * criticality had a column of its own.
+ *
+ * Subordination is now structural: the context sits *below* the figures rather
+ * than beside them, and flows inline rather than stacking in a column of its
+ * own. Nothing moves into the primary region — FR-027's cap counts membership
+ * of that region, so promoting criticality or the margin would make it a fifth
+ * comparison quantity. They stay exactly where FR-027 puts them, and the
+ * primary region gains the full row width, which is what the FR-005 reference
+ * class needs now that each frequency names its population.
+ */
 .row {
+  /* The containing block for this row's provenance panels, which float below it
+   * rather than expanding it. See `.explainBody`. */
+  position: relative;
   display: grid;
-  grid-template-columns: 3rem 1fr minmax(14rem, auto) minmax(12rem, auto);
-  gap: 0.75rem;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  column-gap: 0.75rem;
+  row-gap: 0.55rem;
   align-items: start;
   padding: 0.75rem 1rem;
   border: 1px solid currentColor;
@@ -152,6 +186,8 @@
  * under FR-041 that would leave the product's entire output unconveyed.
  */
 .rank {
+  /* Spans all three content rows so the number sits against the whole row. */
+  grid-area: 1 / 1 / 4 / 2;
   font-size: var(--scale-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -164,6 +200,7 @@
  * construction rather than by inspection.
  */
 .primary {
+  grid-area: 1 / 2 / 2 / 3;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -191,6 +228,12 @@
   font-size: var(--scale-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  /*
+   * A figure and its unit are one token to a reader. "36 days" broken across
+   * two lines reads as a bare 36 with an orphaned unit, which under Principle
+   * II is exactly the bare number the pair exists to avoid presenting.
+   */
+  white-space: nowrap;
 }
 
 /* FR-004, FR-049. One labelled unit, never two adjacent bare numbers. */
@@ -203,11 +246,23 @@
   font-weight: 600;
 }
 
+/*
+ * Label above figure, not beside it. Both lines carry the frequency framing and
+ * the reference class FR-005 requires, so both are sentences rather than
+ * fragments: "Four in five comparable orders land by" is thirty-eight characters
+ * and "89 days — 20 in 100 comparable orders land later" is forty-eight. Side by
+ * side that needs something over 600px on one line, which no column on this row
+ * has ever had; the label's `auto` track simply took the width and left the
+ * figure to wrap a word at a time.
+ *
+ * Stacked, each line sets on its own at every width the row reaches, and the
+ * figure still leads its line in the primary scale, so the number stays the
+ * scannable thing rather than the sentence around it.
+ */
 .pairFigures {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.15rem 0.5rem;
-  margin: 0.25rem 0 0;
+  grid-template-columns: 1fr;
+  margin: 0.3rem 0 0;
   font-size: var(--scale-primary);
   font-weight: 400;
 }
@@ -215,10 +270,21 @@
 .pairFigures dt {
   font-size: var(--scale-secondary);
   font-weight: 400;
+  line-height: 1.3;
 }
 
 .pairFigures dd {
-  margin: 0;
+  margin: 0.05rem 0 0;
+  line-height: 1.35;
+}
+
+/*
+ * The gap belongs *between* the two quantiles, not between a label and the
+ * figure it labels — FR-004 binds each pair into one unit, and even spacing
+ * would read as four independent statements.
+ */
+.pairFigures dd + dt {
+  margin-top: 0.45rem;
 }
 
 .unsaved {
@@ -233,9 +299,17 @@
  * the primary, which inverts the very subordination FR-009 asks for.
  */
 .secondary {
+  grid-area: 2 / 2 / 3 / 3;
+  /*
+   * Inline rather than stacked. FR-027 fixes the membership of this region at
+   * exactly three items and FR-009 requires them subordinate; a horizontal strip
+   * of three short phrases reads as an annotation on the row above, where the
+   * same three set as a column read as a third data field. Wrapping so the strip
+   * degrades to two lines rather than overflowing at narrow widths.
+   */
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  flex-flow: row wrap;
+  gap: 0.1rem 1.25rem;
   font-size: var(--scale-secondary);
   font-weight: 400;
 }
@@ -251,8 +325,20 @@
   font-weight: 600;
 }
 
-.description,
+.description {
+  font-size: var(--scale-secondary);
+  font-weight: 400;
+}
+
+/*
+ * FR-027's row status, which counts against no cap, and FR-050, which requires
+ * the state be carried by text in the accessibility tree. It sits on the footer's
+ * own row beneath the context strip rather than in a column beside the figures:
+ * it answers "how much of this row can you trust", not "how does this row compare
+ * to that one", and a column of its own invited it to be read as a measurement.
+ */
 .rowState {
+  grid-area: 3 / 2 / 4 / 3;
   font-size: var(--scale-secondary);
   font-weight: 400;
 }
@@ -331,9 +417,172 @@
   border: 0;
 }
 
-@media (max-width: 40rem) {
+/*
+ * The provenance disclosures.
+ *
+ * Every rule here is bounded by FR-032's presentation contract, which the e2e
+ * tier asserts over *descendants* rather than over the region elements: the
+ * largest type anywhere inside the secondary region must stay below the primary
+ * region's, and no weight inside it may exceed the primary's. Some of these
+ * panels sit inside that region, so the whole component is set at a scale below
+ * `--scale-secondary` and never above weight 600. That is also the right visual
+ * answer — an explanation that competed with the figure it explains would be a
+ * fifth thing to read on a row capped at four.
+ */
+/*
+ * Deliberately *not* positioned. The panel is absolute against the row, not
+ * against this toggle, so the row must be its nearest positioned ancestor — see
+ * `.explainBody` for why anchoring to the toggle does not survive contact with a
+ * real layout.
+ */
+.explain {
+  display: inline-block;
+  font-size: var(--scale-explain);
+  font-weight: 400;
+}
+
+/*
+ * The toggle is a glyph plus a visually-hidden name, never a glyph alone —
+ * FR-050 refuses an icon with no accessible name, and the name is the entry's
+ * own title so twenty toggles on a row announce distinctly instead of twenty
+ * identical "more information" buttons. `list-item` is removed because the
+ * default marker sits oddly mid-sentence; the glyph is the affordance.
+ */
+.explainToggle {
+  display: inline;
+  list-style: none;
+  cursor: help;
+  opacity: 0.65;
+  margin-left: 0.3rem;
+}
+
+.explainToggle::-webkit-details-marker {
+  display: none;
+}
+
+.explainToggle:hover,
+.explainToggle:focus-visible {
+  opacity: 1;
+}
+
+/*
+ * A floating panel, not a block in the row's flow. Opening one must not move
+ * anything: a figure that shifts down the page when a neighbouring explanation
+ * opens is a figure a reader loses their place in, and on a 24-row list every
+ * open panel would displace every row below it.
+ *
+ * `position: absolute` against the toggle rather than the Popover API. Popover
+ * would give light dismiss and Escape for nothing, but it renders in the top
+ * layer, which detaches the panel from its anchor's positioning context — and
+ * anchor positioning is not yet portable enough to put it back. A panel that
+ * floats but appears somewhere unrelated to the figure it explains is not a
+ * tooltip.
+ *
+ * An opaque background is load-bearing rather than decoration: the panel overlaps
+ * live text, and `--background` follows the light/dark scheme `globals.css` sets
+ * so it stays opaque in both.
+ */
+.explainBody {
+  /*
+   * Anchored to the row, spanning its width, floating just below it.
+   *
+   * The obvious design — absolute against the toggle, growing right and down —
+   * was built first and measured off-screen at five of six viewport widths, on
+   * both sides. A toggle in the row's right half throws its panel past the
+   * viewport; right-aligning that one throws the left-hand toggles' panels past
+   * zero. There is no static alignment that works, because CSS cannot see where
+   * the anchor sits, and the anchor moves with the text beside it. Clamping via
+   * `max-width` does not help either: the overflow is a function of position, not
+   * of width.
+   *
+   * Anchoring to the row removes the variable. `left: 0; right: 0` against a box
+   * that is already inside the page cannot leave the viewport at any width, and
+   * the full row width suits the content — a paragraph, a formula and a source
+   * note were never tooltip-sized.
+   */
+  position: absolute;
+  z-index: 20;
+  top: calc(100% - 0.25rem);
+  left: 0;
+  right: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  /* Opaque, and load-bearing rather than decoration: the panel overlays the row
+   * beneath it. `--background` follows the scheme `globals.css` sets, so it stays
+   * opaque in dark mode too. */
+  background: var(--background);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.28);
+  text-align: left;
+  /* Reset for panels opened from a heading or from the italic stale mark, both of
+   * which would otherwise inherit into the panel. */
+  font-weight: 400;
+  font-style: normal;
+}
+
+.explainWhat {
+  margin: 0 0 0.4rem;
+}
+
+.explainRow {
+  display: block;
+  margin: 0 0 0.35rem;
+}
+
+.explainRow:last-child {
+  margin-bottom: 0;
+}
+
+/* 600 rather than bold: the assertion caps weight inside the secondary region
+ * at the primary region's, which is 600. */
+.explainTerm {
+  display: block;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.explainFormula {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Set explicitly: a `code` element inherits a browser default that is often
+   * larger than the surrounding text, which would breach the descendant cap. */
+  font-size: var(--scale-explain);
+  overflow-wrap: anywhere;
+}
+
+.explainInputs {
+  margin: 0.15rem 0 0;
+}
+
+/* The bullet is drawn rather than inherited, since these are spans with a list
+ * role rather than list items — see Explain.tsx for why. */
+.explainInput {
+  display: block;
+  padding-left: 1.1rem;
+  text-indent: -0.7rem;
+}
+
+.explainInput::before {
+  content: "· ";
+  font-weight: 600;
+}
+
+/*
+ * No column restructuring at any width, and that is the point of the two-column
+ * form. The four-column row needed a breakpoint because its floors summed to
+ * about 49rem and it overflowed below that; before then it needed one at 40rem
+ * because the primary column was `1fr` and could be squeezed to nothing. Two
+ * columns of `3rem` and `minmax(0, 1fr)` have no floor to breach — the content
+ * column shrinks and its contents wrap — so the layout degrades continuously
+ * instead of switching form, and there is no band in which it is representable
+ * but unreadable.
+ *
+ * The gaps still tighten on a phone, where 0.75rem between a two-character rank
+ * and the row's content is most of the margin available.
+ */
+@media (max-width: 32rem) {
   .row {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
+    column-gap: 0.5rem;
+    row-gap: 0.4rem;
   }
 }
