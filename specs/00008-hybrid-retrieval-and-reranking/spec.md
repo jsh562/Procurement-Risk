@@ -730,10 +730,32 @@ name has a bounded life.
   lands, a registered document and FR-031 disagree, and Governance holds that the registered
   document wins — so the disagreement MUST be visible at every point a reader could act on it,
   not only inside FR-031.
-- **FR-035**: This epic MUST record an amendment request against `specs/project-plan.md`
-  assigning the population of `chunk.part_numbers` to an owning epic. E003 defines the column
-  and E006's acceptance criteria do not mention it, so a follow-up "against E006" currently
-  records against nothing. The lexical arm's field weighting is inert until it is assigned.
+- **FR-035** *(satisfied 2026-07-29 at `ee967c7`)*: This epic MUST record an amendment request
+  against `specs/project-plan.md` assigning the population of `chunk.part_numbers` to an owning
+  epic. E003 defines the column and E006's acceptance criteria do not mention it, so a follow-up
+  "against E006" currently records against nothing. The lexical arm's field weighting is inert
+  until it is assigned. **Landed**: E006 owns it, and the amendment reopened E006 — its
+  `.completed` and `.qc-passed` no longer describe its full scope. See FR-049, which the same
+  amendment obliges of this epic.
+- **FR-049** *(added 2026-07-29, obliged by `specs/project-plan.md` §Risks "Inert weight-B arm,
+  and the re-ingest that repairs it")*: System MUST publish the **ingest generation** each
+  retrieval figure was measured against, alongside the corpus size FR-033 already requires, and
+  MUST re-run any figure measured before E006's `part_numbers` repair once that repair lands,
+  before the figure reaches a published result. {SAD:ADR-0021} already makes a generation the
+  unit, so the qualifier names an existing concept rather than inventing one.
+
+  **The corpus-size qualifier does not cover this.** E006's repair populates a column on the
+  documents already ingested, so a pre-repair and a post-repair corpus can report the **same
+  chunk count** while the lexical arm's ranking changes completely — the weight-B slot goes from
+  empty corpus-wide to carrying text wherever a part number was printed. A figure qualified only
+  by size is therefore indistinguishable between the two, which is precisely the separation of a
+  number from the corpus it describes that this obligation exists to prevent.
+
+  This reaches **FR-005** above: the per-layer empty-weighted-field proportion is the figure most
+  sensitive to the repair, and is the one whose value is expected to move furthest. *(Recorded
+  because the amendment that assigned FR-035's owner also imposed this on E008, and an obligation
+  living only in another document's risk register has no verifier here — the failure shape this
+  epic has now hit four times.)*
 
 ### Key Entities *(include for product or technical specs if feature involves data)*
 
