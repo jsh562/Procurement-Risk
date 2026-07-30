@@ -74,10 +74,22 @@ SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
 #: transitive as a modeling intrusion, which is precisely what the first one's
 #: own docstring says it is not looking for.
 #:
-#: What TR-003 and TR-004 actually protect is the request-serving image staying
-#: free of PyMC, ArviZ, pandas and NumPy — the packages that make it fat. Those
-#: are still derived, never listed, and none of them appears here.
-SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+#: `numpy` joins on the same ground, from E008 ({SAD:ADR-0023}) — and this copy
+#: must move with the one in `helpers/image_contents.py`, never alone. The
+#: serving image is required to carry a local-inference runtime (ADR-0006's
+#: cross-encoder session, ADR-0019's request-time query embedding) and
+#: `onnxruntime` pulls NumPy transitively.
+#:
+#: The width is **NumPy alone**. `onnxruntime` and `tokenizers` are deliberately
+#: absent: E008 relocated both to `/src/gateway`, so they leave the derived set
+#: on their own, and naming them here would trip
+#: `test_every_excluded_name_is_still_declared_by_the_schema_owner` below.
+#:
+#: What TR-003 and TR-004 protect narrows accordingly, and the cost is stated
+#: rather than glossed: PyMC, ArviZ and pandas are still derived and never
+#: listed, but NumPy leaves the set the image is *guaranteed* to exclude, so it
+#: could later arrive by a route nobody intended with nothing reporting it.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
 #: against it rather than against a repeated literal.
@@ -123,7 +135,10 @@ def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() ->
     a dead entry that quietly weakens nothing but tells the next reader a
     falsehood — so every member is required to still be declared by `model`.
     """
-    heavy = {"pymc", "arviz", "pandas", "numpy"}
+    # NumPy left this set at E008 ({SAD:ADR-0023}) because the serving image is
+    # required to carry the inference runtime that pulls it. The three that
+    # remain are what actually make the image fat, and none of them is excluded.
+    heavy = {"pymc", "arviz", "pandas"}
     smuggled = heavy & SHARED_INFRASTRUCTURE
     assert not smuggled, (
         f"{sorted(smuggled)} is excluded from the derived modeling stack. That defeats "
@@ -534,7 +549,6 @@ DECLARED_BY_THE_MODELING_ENTRY: dict[str, str] = {
     "arviz": "the modeling stack, declared before E007 — sampler diagnostics",
     "jsonschema": "E002 — corpus manifest validation",
     "numpy": "the scaffold — arrays throughout",
-    "onnxruntime": "E006 — {SAD:ADR-0018}, the pinned embedding inference runtime",
     "pandas": "the modeling stack, declared before E007 — the summary frame",
     "pdfplumber": "E002 — corpus extraction",
     "pgvector": "E006 — the psycopg 3 adapter for bulk-loading embeddings",
@@ -544,7 +558,11 @@ DECLARED_BY_THE_MODELING_ENTRY: dict[str, str] = {
     "pysbd": "E006 — the pinned terminal sentence split below a paragraph",
     "reportlab": "E002 — corpus generation",
     "sqlalchemy": "E003 — the Core toolkit the driver is used through",
-    "tokenizers": "E006 — the encoder's own tokenizer, standalone",
+    # `onnxruntime` and `tokenizers` were here until E008 relocated both to
+    # /src/gateway ({SAD:ADR-0023}). This is an *equality* assertion, not a
+    # subset one, so leaving them would fail on symmetric difference the moment
+    # the manifest dropped them — the entry no longer declares them and reaches
+    # them through the gateway instead.
 }
 
 #: Imports `model.forecast` makes that the entry does not declare, with the

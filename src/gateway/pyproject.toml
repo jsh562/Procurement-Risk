@@ -10,7 +10,35 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.4",
     "psycopg[binary]>=3.2.3",
+    "onnxruntime>=1.24.1",
+    "tokenizers>=0.23.1",
 ]
+
+# Local inference lives here from E008 ({SAD:ADR-0023}). Both Python boundaries
+# already depend on this package, and E008 needs a query embedding at request
+# time -- so the alternative was either the serving entry declaring the modeling
+# entry, which the layout rule forbids outright, or a second pooling
+# implementation kept in step with the first by review. Neither is acceptable
+# for an embedding: a query embedded by a different implementation than the
+# corpus lands in a different vector space, with no error and degraded ranking
+# as the only symptom.
+#
+#   onnxruntime  {SAD:ADR-0019} pins the inference runtime for corpus and query
+#                embedding, and E008 adds the cross-encoder reranker session on
+#                the same runtime. Two graphs ship: INT8 for serving and FP32
+#                for measuring what quantization costs, both resident.
+#   tokenizers   The encoder's own tokenizer, standalone. Chunk sizes are
+#                measured in the encoder's word pieces against the 254-piece
+#                content budget, so counting with anything else measures a
+#                different thing than the model consumes. Declared without
+#                `transformers`: the tokenizer is all that is needed and the
+#                full library would pull a second inference stack in beside
+#                ONNX Runtime.
+#
+# This placement contradicted `project-instructions.md` §Source Code Layout
+# until v1.2.9, which excepts "a shared local-inference runtime and its
+# tokenizer, together with NumPy" -- and no more. PyMC, ArviZ and pandas remain
+# forbidden here; the exception is a named narrowing, not a general relaxation.
 
 # ADR-0014. The provider SDK is an extra, not a base dependency, so an
 # environment can exist in which this package imports and type-checks with no

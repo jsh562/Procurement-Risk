@@ -40,9 +40,27 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 #: `schema_constants` over the connection. Without this exclusion the denylist
 #: forbids the image the thing the design requires it to have.
 #:
-#: What TR-013 protects is unchanged: PyMC, ArviZ, pandas and NumPy are still
-#: derived, never listed, and none of them appears here.
-SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+#: `numpy` joins on the same ground, from E008 ({SAD:ADR-0023}). The serving
+#: image is required to carry a local-inference runtime — ADR-0006 loads a
+#: cross-encoder session in it and ADR-0019 embeds the query on it at request
+#: time — and `onnxruntime` pulls NumPy transitively. Without this exclusion the
+#: denylist again forbids the image the thing the design requires it to have.
+#:
+#: The width is load-bearing and is **NumPy alone**. `onnxruntime` and
+#: `tokenizers` are deliberately absent: this denylist derives from what `model`
+#: *directly* declares, and E008 relocated both to `/src/gateway`, so they leave
+#: it on their own. Naming them here would trip the companion assertion below
+#: that every excluded name is still declared by `model`. NumPy is different
+#: only because `model` goes on declaring it for PyMC and pandas while it also
+#: reaches the serving image through the runtime — so it is the one name that
+#: has to be admitted rather than relocated.
+#:
+#: What TR-013 protects narrows accordingly, and the cost is stated rather than
+#: glossed: PyMC, ArviZ and pandas are still derived and never listed, but NumPy
+#: leaves the set the image is *guaranteed* to exclude, so it could later arrive
+#: by a route nobody intended with nothing reporting it. That is the price of
+#: ADR-0006 and it is paid here deliberately.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 API_LOCK = REPO_ROOT / "src" / "api" / "uv.lock"
 MODEL_LOCK = REPO_ROOT / "src" / "model" / "uv.lock"
 # Resolved, not restated. A literal here and another in the workflow is how

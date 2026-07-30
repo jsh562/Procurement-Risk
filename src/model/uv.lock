@@ -483,15 +483,19 @@ name = "gateway"
 version = "0.1.0"
 source = { directory = "../gateway" }
 dependencies = [
+    { name = "onnxruntime" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
+    { name = "tokenizers" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'provider'", specifier = ">=0.120.0" },
+    { name = "onnxruntime", specifier = ">=1.24.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.3" },
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "tokenizers", specifier = ">=0.23.1" },
 ]
 provides-extras = ["provider"]
 
@@ -1016,7 +1020,6 @@ dependencies = [
     { name = "gateway" },
     { name = "jsonschema", extra = ["format-nongpl"] },
     { name = "numpy" },
-    { name = "onnxruntime" },
     { name = "pandas" },
     { name = "pdfplumber" },
     { name = "pgvector" },
@@ -1026,7 +1029,6 @@ dependencies = [
     { name = "pysbd" },
     { name = "reportlab" },
     { name = "sqlalchemy" },
-    { name = "tokenizers" },
 ]
 
 [package.dev-dependencies]
@@ -1047,7 +1049,6 @@ requires-dist = [
     { name = "gateway", directory = "../gateway" },
     { name = "jsonschema", extras = ["format-nongpl"], specifier = ">=4.26.0" },
     { name = "numpy", specifier = ">=2.4.6" },
-    { name = "onnxruntime", specifier = ">=1.24.1" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "pdfplumber", specifier = ">=0.11.10" },
     { name = "pgvector", specifier = ">=0.4.2" },
@@ -1057,7 +1058,6 @@ requires-dist = [
     { name = "pysbd", specifier = ">=0.3.4" },
     { name = "reportlab", specifier = ">=5.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.51" },
-    { name = "tokenizers", specifier = ">=0.23.1" },
 ]
 
 [package.metadata.requires-dev]

@@ -48,20 +48,20 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 
 **Lands the six amendment gates, the dependency relocation, both mirrored constants, and the two workflow lines before any module they constrain. Nothing below Phase 1 may be started while T001–T004, T096 or T097 are open.**
 
-- [ ] T001 {FR-034} Confirm the specs/prd.md MRR-interval amendment is on the default branch and cite the amending revision in plan.md §Pending Amendments item 1
-- [ ] T002 {FR-035} Confirm the specs/project-plan.md chunk.part_numbers owner amendment is on the default branch and cite the revision in plan.md item 2
-- [ ] T003 {FR-044} Confirm project-instructions.md excepts a shared inference runtime in BOTH §Source Code Layout and §Testing & Quality Policy's serving-image assertion, and cite the revision in plan.md item 3 (SC-015)
-- [ ] T004 {FR-045} Confirm specs/sad.md's ADR catalog carries the ADR-0023 row appended after ADR-0022 and cite the revision in plan.md §Pending Amendments item 4 (SC-015)
-- [ ] T096 {FR-047} Confirm project-instructions.md §Technology Stack no longer restricts ONNX Runtime to INT8 inference and cite the revision in plan.md §Pending Amendments item 10 (SC-015)
-- [ ] T097 {FR-048} Confirm specs/sad.md's retrieval-quality row no longer specifies a Wilson interval for MRR and cite the revision in plan.md §Pending Amendments item 9 (SC-015)
-- [ ] T005 Move onnxruntime and tokenizers from src/model/pyproject.toml to src/gateway/pyproject.toml so model inherits them through the gateway (ADR-0023) after:T003
+- [X] T001 {FR-034} Confirm the specs/prd.md MRR-interval amendment is on the default branch and cite the amending revision in plan.md §Pending Amendments item 1
+- [X] T002 {FR-035} Confirm the specs/project-plan.md chunk.part_numbers owner amendment is on the default branch and cite the revision in plan.md item 2
+- [X] T003 {FR-044} Confirm project-instructions.md excepts a shared inference runtime in BOTH §Source Code Layout and §Testing & Quality Policy's serving-image assertion, and cite the revision in plan.md item 3 (SC-015)
+- [X] T004 {FR-045} Confirm specs/sad.md's ADR catalog carries the ADR-0023 row appended after ADR-0022 and cite the revision in plan.md §Pending Amendments item 4 (SC-015)
+- [X] T096 {FR-047} Confirm project-instructions.md §Technology Stack no longer restricts ONNX Runtime to INT8 inference and cite the revision in plan.md §Pending Amendments item 10 (SC-015)
+- [X] T097 {FR-048} Confirm specs/sad.md's retrieval-quality row no longer specifies a Wilson interval for MRR and cite the revision in plan.md §Pending Amendments item 9 (SC-015)
+- [X] T005 Move onnxruntime and tokenizers from src/model/pyproject.toml to src/gateway/pyproject.toml so model inherits them through the gateway (ADR-0023) after:T003
 - [ ] T006 {FR-002} Add an import-linter forbidden contract naming api.retrieval as source with allow_indirect_imports false, following E010's separate-contract precedent, in src/api/pyproject.toml, and declare the retrieval dependencies after:T003
-- [ ] T007 Admit numpy alone to SHARED_INFRASTRUCTURE in tests/checks/helpers/image_contents.py, with the reason recorded at the constant (TR-013, HINT-003) after:T005
-- [ ] T008 Admit numpy, narrow heavy to pymc, arviz, pandas, and remove onnxruntime and tokenizers from DECLARED_BY_THE_MODELING_ENTRY with the reason recorded, in tests/checks/test_dependency_isolation.py (TR-003/TR-004, HINT-003) after:T007
+- [X] T007 Admit numpy alone to SHARED_INFRASTRUCTURE in tests/checks/helpers/image_contents.py, with the reason recorded at the constant (TR-013, HINT-003) after:T005
+- [X] T008 Admit numpy, narrow heavy to pymc, arviz, pandas, and remove onnxruntime and tokenizers from DECLARED_BY_THE_MODELING_ENTRY with the reason recorded, in tests/checks/test_dependency_isolation.py (TR-003/TR-004, HINT-003) after:T007
 - [ ] T101 Keep the pgvector distribution out of src/api/pyproject.toml and bind the query vector as a text-cast parameter, never register_vector, with the reason at the call site (AD-016) after:T006
 - [ ] T102 Name gateway.inference in the forbidden contract beside gateway.compute in src/gateway/pyproject.toml, following E010's separate-contract precedent (AD-015) after:T003
 - [ ] T105 Repoint src/model/src/model/ingest/tokens.py at the gateway so model imports no distribution it stops declaring after:T005
-- [ ] T009 Reflect the admitted inference runtime in the serving image's asserted contents in tests/checks/test_image_contents.py after:T008
+- [X] T009 Reflect the admitted inference runtime in the serving image's asserted contents in tests/checks/test_image_contents.py after:T008
 - [ ] T010 {FR-044} Append per-package 80% coverage floors for api/retrieval and gateway/inference to the Coverage gate step in .github/workflows/verify.yml after:T003
 - [ ] T011 {FR-033} Name src/api/tests/test_retrieval_benchmark.py in the Performance benchmark (api) step under taskset -c 0 in .github/workflows/verify.yml after:T010
 
