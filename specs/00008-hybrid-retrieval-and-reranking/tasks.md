@@ -165,26 +165,26 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T077 [US4] {FR-022} State fusion-only and unreranked in every degraded response body and expose the degraded state at /readyz, in src/api/src/api/retrieval/routes.py after:T076
 - [X] T078 [US4] {FR-022} Carry a machine-readable unreranked reason — arm_excludes_reranking, no_candidates_to_score — without claiming fusion-only, in retrieval/routes.py after:T077
 - [X] T079 [US4] {FR-023} Record the mode a run executed in on every evaluation-facing output, in src/api/src/api/retrieval/report.py after:T078
-- [ ] T080 [US4] {FR-024} Force load failure at the artifact-loading boundary and assert ready-degraded, the fusion-only statement with results, and the recorded mode, in src/api/tests/retrieval/test_degraded.py after:T079
+- [X] T080 [US4] {FR-024} Force load failure at the artifact-loading boundary and assert ready-degraded, the fusion-only statement with results, and the recorded mode, in src/api/tests/retrieval/test_degraded.py after:T079
 - [X] T081 [US4] {FR-041} Report the degraded path's per-query latency on FR-033's terms and assert it never exceeds the reranked path's over the same query set, in src/api/tests/retrieval/test_degraded.py after:T080
 
 ---
 
 ## Phase 7: US5 - Each Arm Can Be Measured On Its Own (Priority: P2)
 
-- [ ] T082 [US5] {FR-025} Implement the five request-selectable arms — lexical, dense, fused, fused_reranked, fused_reranked_full_precision — in retrieval/arms.py after:T063 → exports: run_arm
-- [ ] T083 [US5] {FR-025} Run lexical-only and dense-only without fusion or reranking, each returning results independently, in src/api/src/api/retrieval/arms.py after:T082
-- [ ] T084 [US5] {FR-025} [COMPLETES FR-025] Assert each of the five arms returns independently and identically across two runs on an unrebuilt index, in src/api/tests/retrieval/test_arms.py after:T083 ← T023:seeded_corpus
-- [ ] T085 [US5] {FR-037} [COMPLETES FR-037] Assert the derived 50/50/50 constraint over a fused set of up to 100, in src/api/tests/retrieval/test_workload.py after:T084
+- [X] T082 [US5] {FR-025} Implement the five request-selectable arms — lexical, dense, fused, fused_reranked, fused_reranked_full_precision — in retrieval/arms.py after:T063 → exports: run_arm
+- [X] T083 [US5] {FR-025} Run lexical-only and dense-only without fusion or reranking, each returning results independently, in src/api/src/api/retrieval/arms.py after:T082
+- [X] T084 [US5] {FR-025} [COMPLETES FR-025] Assert each of the five arms returns independently and identically across two runs on an unrebuilt index, in src/api/tests/retrieval/test_arms.py after:T083 ← T023:seeded_corpus
+- [X] T085 [US5] {FR-037} [COMPLETES FR-037] Assert the derived 50/50/50 constraint over a fused set of up to 100, in src/api/tests/retrieval/test_workload.py after:T084
 
 ---
 
 ## Phase 8: US6 - One Flag, Index Usage Only (Priority: P2)
 
-- [ ] T086 [US6] {FR-026} Make the exact/approximate flag control index usage only, with filters, fusion, depth and reranking shared, in src/api/src/api/config.py and retrieval/arms.py after:T082
-- [ ] T087 [US6] {FR-028} Return the requested candidate count from a filtered vector search under strict iterative scan (AD-003), in src/api/src/api/retrieval/arms.py after:T086
-- [ ] T088 [US6] {FR-027,FR-028} Assert the connection-borne breadth is at or above the fetch depth and a filtered query returns the requested count, in src/api/tests/retrieval/test_vector_settings.py after:T087 ← T023:seeded_corpus
-- [ ] T089 [US6] {FR-039,FR-040} Record the observed pgvector version and the breadth with the index settings, any value above the floor being a recorded change, in retrieval/parameters.py after:T088
+- [X] T086 [US6] {FR-026} Make the exact/approximate flag control index usage only, with filters, fusion, depth and reranking shared, in src/api/src/api/config.py and retrieval/arms.py after:T082
+- [X] T087 [US6] {FR-028} Return the requested candidate count from a filtered vector search under strict iterative scan (AD-003), in src/api/src/api/retrieval/arms.py after:T086
+- [X] T088 [US6] {FR-027,FR-028} Assert the connection-borne breadth is at or above the fetch depth and a filtered query returns the requested count, in src/api/tests/retrieval/test_vector_settings.py after:T087 ← T023:seeded_corpus
+- [X] T089 [US6] {FR-039,FR-040} Record the observed pgvector version and the breadth with the index settings, any value above the floor being a recorded change, in retrieval/parameters.py after:T088
 - [ ] T090 [US6] {FR-026} [COMPLETES FR-026] Build two differently configured application instances and compare the observable set FR-026 enumerates, in src/api/tests/retrieval/test_flag_parity.py after:T089 ← T023:seeded_corpus
 
 ---
