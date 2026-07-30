@@ -182,6 +182,15 @@ def warm_rerankers(
 
     target = readiness if state is None else state
     for precision in (Precision.INT8, Precision.FP32):
+        # Load **once per process**, which is what FR-017 requires and what the
+        # first version of this function did not do: the lifespan hook runs on
+        # every application startup, and in a test suite that is every
+        # `TestClient`. Reloading both graphs each time took the api suite from
+        # 105 seconds to over ten minutes — the same ~90 MB of weight loading
+        # FR-017 keeps off the request path, moved onto the startup path and
+        # repeated.
+        if str(precision) in target.sessions:
+            continue
         try:
             target.sessions[str(precision)] = load_reranker(
                 directory,
