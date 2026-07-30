@@ -17,11 +17,22 @@ dod_source: null
 > `amend-project/SKILL.md`, a ticked epic is **immutable**: only unchecked epics
 > may be adjusted by a later amendment.
 >
-> E001 through E004 are merged and remain unticked. That is a gap in this
-> document's bookkeeping, not a statement about those epics — the tick was never
-> applied as they landed, and back-filling four rows would freeze them against
-> adjustment in the same stroke as recording their status. Read an unticked row
-> as *not yet ticked*, and check the workspace marker for the epic's real state.
+> The six rows that were merged but unticked — E001 through E004, E006 and E010 —
+> are now ticked. This note previously described that gap as open and warned that
+> back-filling the rows would freeze them against adjustment in the same stroke as
+> recording their status. Both halves have now happened, in that order and in
+> parallel, which is worth keeping: the tick landed on the default branch while an
+> amendment was in flight against one of the rows it ticked.
+>
+> **E006 carries one recorded exception.** Its tick is correct — it passed QC on
+> the scope it had. An amendment then gave it ownership of populating
+> `chunk.part_numbers`, which no epic had owned, so its scope grew *after* its gate
+> ran. The tick and the exception assert different things and both are true: see
+> E006 under Epic Details, which states that its markers no longer describe its
+> full scope and that it owes its gate again. Adjusting a ticked epic is otherwise
+> not permitted; the exception is written down here so it cannot be read as the
+> rule. Where a row and a workspace marker disagree, the marker is the epic's real
+> state.
 
 ### Wave 1 — Foundation
 
@@ -42,7 +53,7 @@ dod_source: null
 > Synthetic history and document ingestion are fully independent: one produces procurement records, the other produces chunks and extracted line items.
 
 - [X] E005 [P1] [PRODUCT] [P] {PRD:CAP-001} Synthetic Procurement History — 200 lines with lifecycle events and disclosed assumptions
-- [X] E006 [P1] [PRODUCT] [P] {PRD:CAP-002}{SAD:ADR-0008} Document Ingestion and Extraction — structure-aware chunking with deterministic page provenance
+- [X] E006 [P1] [PRODUCT] [P] {PRD:CAP-002}{PRD:CAP-003}{SAD:ADR-0008} Document Ingestion and Extraction — structure-aware chunking with deterministic page provenance
 
 ### Wave 4 — Core Capabilities
 
@@ -133,6 +144,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Migration collisions (E003, E004; also E005, E006).** Two epics adding schema migrations in the same wave will conflict on migration ordering. Mitigation: each epic claims its migration numbers at start and owns a disjoint table set.
 - **Interface shell contention (E010, E011; later E012, E013).** Parallel interface epics both modify routing and layout. Mitigation: the shell — navigation, layout, data-fetching conventions — is established once in E010 and treated as read-only by later interface epics.
 - **Retrieval configuration surface (E008 vs E014).** E014 exercises the exact-search path while E008 owns the configuration flag. Mitigation: the flag controls index usage only; filters, fusion, fetch depth, and reranking are shared code, per ADR-0005.
+- **Inert weight-B arm, and the re-ingest that repairs it (E006 vs E008) — live now.** `chunk.part_numbers` is NULL on all 6,391 chunks E006 wrote, so the weight-B slot of the generated `search_vector` is empty corpus-wide. E008 is in flight against that corpus and its FR-005 correctly *reports* the inert weighting rather than repairing it — E008 reads the chunk table and writes nothing to it. The risk is ordering, not ownership: E006's repair requires a re-ingest, and any lexical-arm figure E008 measures beforehand describes a corpus that no longer exists once it lands. Two epics can each be correct and the published number still be stale. Mitigation: E008's per-layer empty-weighted-field proportion is published *with the ingest generation it was measured against* ({SAD:ADR-0021} already makes a generation the unit), so a figure and the corpus it describes cannot be separated; any retrieval figure measured pre-repair is re-run post-repair before it reaches a published result. The two are otherwise parallel-safe — E006 writes the column, E008 only reads it.
 - **Draw-array contract (E007 vs E010).** E007 writes both the canonical draw array and the derived survival array; E010 reads the latter. Mitigation: schema version on the forecast run, checked by the reader.
 - **Single-import-site regression (E005) — realized, and since repaired at `a18abb5`.** `tests/checks/test_single_import_site.py` permits exactly one file under `/src` to name `project-vendor-roster`. Seven did, so the required check "Cross-entry checks, image assertions, and supply chain" failed on `main` from `acfd1eb` until the repair. The count went 1→2 at `3bdc15a` and reached 7 by `915264a`, entirely within E005 — which had already repaired the identical breakage once, at `f732375`, by deriving the path from `model.roster.reader` instead of spelling it. The second repair took the same shape. Three offenders were generation-input manifest labels and three were test files, so this was name duplication rather than a second reader; the rule exists because the duplicate is the copy nobody remembers exists. Two details are worth keeping for whoever meets this next: a repair must reduce the count to one rather than reorder, because the companion assertion reads the first path-sorted mention and any survivor under `model/procurement/` keeps it red — and the same rule has now regressed twice in one epic, which says the check catches it but nothing prevents it. Mitigation for the class: what failed was not the check but noticing it, since the step is skipped whenever an earlier step aborts, and E007 aborted an earlier step on three consecutive runs. A required check that silently does not run is indistinguishable from one that passes.
 - **Amendment during flight (any wave with more than one epic).** The contended resource is not two epics amending at once — it is one epic amending while the others are mid-flight. The amendment procedure re-derives whole managed sections rather than patching lines, this plan is rewritten by every amendment and holds every epic's entry, and unchecked epics are precisely the ones another epic's amendment may adjust. Meanwhile the in-flight branches keep validating against the instruction version they were cut from, and quality control treats any violation as critical — so an epic can pass its gate against a rule that no longer exists. Mitigation: amendments serialize on the default branch, and every feature records the instruction version its compliance audit ran against, so drift is detectable at the next gate rather than at merge.
@@ -280,26 +292,30 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 ### E006 — Document Ingestion and Extraction
 
 - **Category**: PRODUCT · **Priority**: P1
-- **Source**: {PRD:CAP-002}{SAD:ADR-0008}
-- **Scope**: Parse corpus documents with a layout-aware parser, chunk on document structure rather than fixed size, and persist chunks with project, document type, specification section, and page metadata. Extract structured line items against a strict schema, with each value inheriting its page citation deterministically from the chunk it came from and carrying a per-field confidence.
+- **Source**: {PRD:CAP-002}{PRD:CAP-003}{SAD:ADR-0008}
+- **Scope**: Parse corpus documents with a layout-aware parser, chunk on document structure rather than fixed size, and persist chunks with project, document type, specification section, and page metadata. Extract structured line items against a strict schema, with each value inheriting its page citation deterministically from the chunk it came from and carrying a per-field confidence. **Also owns populating `chunk.part_numbers`** — the weight-B arm of the chunk store's generated search column — by projecting the part designations this epic already extracts back onto the chunk they were printed on.
 - **Actors**: Developer, coordinator (downstream), model provider
 - **Key entities**: Chunk, ExtractedValue, ExtractionFailure
 - **Depends on**: E002, E003, E004
 - **Dependency contracts**: E006 needs the vendored documents and manifest from E002; the chunk and extraction tables from E003; the gateway module from E004
 - **Depended on by**: E008, E009, E012
-- **Produces (shared)**: Populated chunk table with page provenance, extracted line items, extraction-failure records
-- **Constraints**: Chunk boundaries follow document structure; page provenance comes from the parser, never from model output; unvalidated values are never persisted
+- **Reopened by amendment (2026-07-29)**: This epic carries `.completed` and `.qc-passed` and is merged. The `chunk.part_numbers` requirement below was added afterwards, so **those markers no longer describe the epic's full scope** and the epic must re-run its quality gate before they do again. Recorded here rather than by silently ticking or silently amending, because a completed marker that has quietly stopped being true is the failure this plan's own bookkeeping note warns about. The gap is not an E006 defect: E006 wrote the column NULL deliberately and said why — *"this epic extracts no part designations from a chunk, and a column filled with a guess is worse than one left empty"* — which was the correct call at the time and is Principle III applied exactly as written. What was missing was an owner for the population step once the values existed.
+- **Cross-cutting**: `{PRD:CAP-003}` is carried because this column's only consumer is evidence retrieval — E006 writes it and never reads it. The tag records that a retrieval capability depends on an ingestion deliverable, which is the dependency that went unowned.
+- **Produces (shared)**: Populated chunk table with page provenance, extracted line items, extraction-failure records, `chunk.part_numbers` populated on the transmittal layer
+- **Constraints**: Chunk boundaries follow document structure; page provenance comes from the parser, never from model output; unvalidated values are never persisted. `chunk.part_numbers` carries only designations already extracted *as printed* under FR-027 — never a guess, never inferred from body prose, and never a normalized or canonicalized form, since FR-027's prohibition on a normalized twin applies to this projection as much as to the source value
 - **Acceptance criteria**:
   - [ ] Chunks align to specification section boundaries and carry project, document type, section, and page metadata
   - [ ] Every extracted value resolves to a page citation derived from its source chunk and carries a per-field confidence
   - [ ] Values failing validation after one repair attempt are routed to a failure record and left absent rather than stored wrong
   - [ ] Spot-checked page attributions match the source documents
+  - [ ] **`chunk.part_numbers` is non-NULL on every chunk from which a part designation was extracted, and NULL on every chunk from which none was** — so the weight-B arm of `search_vector` carries text wherever a part number was printed. The criterion is deliberately *not* corpus-wide coverage: the 26 real UFGS sections are requirement prose containing no part designations, so demanding non-NULL across all chunks would be unmeetable and would invite exactly the guessed value this epic refused. Verified by a query asserting the two-way correspondence between an extracted part-number value and its source chunk's populated column, not by a spot check
+  - [ ] A run reports the count and proportion of chunks whose weighted fields — heading, part number, specification section — are all empty, per layer, so an inert weighting is visible in the ingestion record rather than discovered downstream
 - **Specify input**:
-  - Description: Turn corpus documents into structure-aligned chunks and schema-validated line items, with page provenance derived deterministically from parsing rather than from model output.
+  - Description: Turn corpus documents into structure-aligned chunks and schema-validated line items, with page provenance derived deterministically from parsing rather than from model output. Project extracted part designations onto their source chunk so the chunk store's weight-B ranking arm carries data.
   - Actors: Developer, model provider
   - Key entities: Chunk, ExtractedValue, ExtractionFailure
   - Depends on artifacts: `specs/adrs/0008-*`, E002 corpus, E003 schema, E004 gateway
-  - Constraints: Structure-aware chunking; deterministic page provenance; absent beats wrong
+  - Constraints: Structure-aware chunking; deterministic page provenance; absent beats wrong; part numbers projected as printed, never normalized or guessed
 
 ### E007 — Delivery Forecast Model
 
@@ -621,7 +637,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 |---|---|
 | CAP-001 Auditable Data Foundation | E002, E005 |
 | CAP-002 Document Understanding & Extraction | E006 |
-| CAP-003 Evidence Retrieval | E008 |
+| CAP-003 Evidence Retrieval | E008, E006 (the `chunk.part_numbers` ranking arm the lexical search depends on) |
 | CAP-004 Cross-Document Identity Resolution | E009 |
 | CAP-005 Probabilistic Delivery Forecast | E007 |
 | CAP-006 Risk-Ranked Coordinator Worklist | E010 |
@@ -678,7 +694,7 @@ It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-
 | Entity | Introduced by | Consumed by |
 |---|---|---|
 | ProjectVendorRoster | E001 | E002, E005 |
-| Chunk | E003 (schema), E006 (populated) | E008, E012 |
+| Chunk | E003 (schema), E006 (populated, including the weighted `part_numbers` ranking arm) | E008, E012 |
 | ExtractedValue | E003, E006 | E009, E012 |
 | PurchaseOrderLine | E003, E005 | E007, E009, E010, E017, E019 |
 | LifecycleEvent | E003, E005 | E007 |
