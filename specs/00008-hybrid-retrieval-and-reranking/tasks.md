@@ -108,12 +108,12 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [ ] T038 [US1] {FR-004,FR-029} [COMPLETES FR-004] Assert the three parameters are stable identifier tokens read from the one source in src/api/tests/retrieval/test_parameters.py after:T037
 - [ ] T039 [US1] {FR-007} [COMPLETES FR-007] Embed the query through the gateway encoder, refusing on identity mismatch before any search, in src/api/src/api/retrieval/routes.py after:T021
 - [ ] T040 [US1] {FR-008,FR-009} [COMPLETES FR-008] Wire GET /api/v1/retrieval/search to RetrievalResponse in retrieval/routes.py after:T039 ← T032:RetrievalResult
-- [ ] T041 [US1] {FR-030,FR-042} Write failing property tests for recall at five and its Wilson interval in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T001
-- [ ] T042 [US1] {FR-030,FR-042} Implement the recall proportion and the Wilson interval in src/api/src/api/retrieval/metrics.py after:T041 → exports: wilson_interval
-- [ ] T043 [US1] {FR-031,FR-042} Write failing property tests for the percentile bootstrap over the query set in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T042
-- [ ] T044 [US1] {FR-031,FR-042} Implement MRR with a percentile bootstrap at the B and bit generator specs/sad.md fixes, recording resample count, seed and bit generator, in retrieval/metrics.py after:T043 → exports: percentile_bootstrap
-- [ ] T045 [US1] {FR-032,FR-042} Write failing property tests for the overlap verdict — symmetry, reflexivity, touching endpoints — in src/api/tests/retrieval/test_metrics.py, done only on an observed failure after:T044
-- [ ] T046 [US1] {FR-032,FR-042} Implement the unresolvable verdict by FR-032's closed-interval rule in src/api/src/api/retrieval/metrics.py after:T045 → exports: overlap_verdict
+- [X] T041 [US1] {FR-030,FR-042} Write failing property tests for recall at five and its Wilson interval in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T001
+- [X] T042 [US1] {FR-030,FR-042} Implement the recall proportion and the Wilson interval in src/api/src/api/retrieval/metrics.py after:T041 → exports: wilson_interval
+- [X] T043 [US1] {FR-031,FR-042} Write failing property tests for the percentile bootstrap over the query set in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T042
+- [X] T044 [US1] {FR-031,FR-042} Implement MRR with a percentile bootstrap at the B and bit generator specs/sad.md fixes, recording resample count, seed and bit generator, in retrieval/metrics.py after:T043 → exports: percentile_bootstrap
+- [X] T045 [US1] {FR-032,FR-042} Write failing property tests for the overlap verdict — symmetry, reflexivity, touching endpoints — in src/api/tests/retrieval/test_metrics.py, done only on an observed failure after:T044
+- [X] T046 [US1] {FR-032,FR-042} Implement the unresolvable verdict by FR-032's closed-interval rule in src/api/src/api/retrieval/metrics.py after:T045 → exports: overlap_verdict
 - [ ] T047 [US1] {FR-031} [COMPLETES FR-031] Record method, resample count, seed and bit generator on every emitted interval and assert no non-proportion statistic carries wilson, in retrieval/report.py and src/api/tests/retrieval/test_metrics.py after:T046
 - [ ] T048 [US1] {FR-042} [COMPLETES FR-042] Assert the generated domains reach set size one upward, all-hit, all-miss, ties and endpoints, and refuse an empty set, in src/api/tests/retrieval/test_metrics.py after:T047
 - [ ] T049 [US1] {FR-043} Freeze, hash and commit E008's own query set with generator-derived judgements and the published ceiling in src/api/tests/retrieval/evaluation_set/ (AD-010) after:T044
