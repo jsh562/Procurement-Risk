@@ -100,12 +100,12 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T033 [US1] {FR-009} Report an empty result set as empty and never pad a short set to reach a target count, in src/api/src/api/retrieval/results.py after:T032
 - [X] T034 [US1] {FR-008} Scan construction sites and assert the private factory is the only one (AD-004) in src/api/tests/retrieval/test_page_provenance.py after:T033
 - [X] T104 [US1] {FR-009,FR-013} Assert an empty result set is reported empty, a short set is never padded, and match_kind is carried, in src/api/tests/retrieval/test_results.py after:T033
-- [ ] T035 [US1] {FR-005} Publish the per-layer proportion of retrieved chunks whose weighted fields are all empty, in src/api/src/api/retrieval/report.py after:T002 → exports: weighted_field_report
-- [ ] T099 [US1] {FR-049} Carry the ingest generation on every published retrieval figure beside the corpus size, in src/api/src/api/retrieval/report.py after:T035 → exports: ingest_generation
-- [ ] T106 [US1] {FR-051} [COMPLETES FR-051] Declare the closed no_interval_reason enum in contracts/openapi.yaml, require an interval or a denominator-plus-reason on every emitted figure, and refuse a figure carrying neither, in src/api/src/api/retrieval/report.py after:T099
-- [ ] T036 [US1] {FR-006} Assert over the emitted artifacts that no figure or label names BM25 and the no-corpus-statistics statement is present, in retrieval/report.py and src/api/tests/retrieval/test_report.py after:T035
-- [ ] T037 [US1] {FR-029} Emit the ranking parameters in force with every result an evaluation consumes, in src/api/src/api/retrieval/report.py after:T015
-- [ ] T038 [US1] {FR-004,FR-029} [COMPLETES FR-004] Assert the three parameters are stable identifier tokens read from the one source in src/api/tests/retrieval/test_parameters.py after:T037
+- [X] T035 [US1] {FR-005} Publish the per-layer proportion of retrieved chunks whose weighted fields are all empty, in src/api/src/api/retrieval/report.py after:T002 → exports: weighted_field_report
+- [X] T099 [US1] {FR-049} Carry the ingest generation on every published retrieval figure beside the corpus size, in src/api/src/api/retrieval/report.py after:T035 → exports: ingest_generation
+- [X] T106 [US1] {FR-051} [COMPLETES FR-051] Declare the closed no_interval_reason enum in contracts/openapi.yaml, require an interval or a denominator-plus-reason on every emitted figure, and refuse a figure carrying neither, in src/api/src/api/retrieval/report.py after:T099
+- [X] T036 [US1] {FR-006} Assert over the emitted artifacts that no figure or label names BM25 and the no-corpus-statistics statement is present, in retrieval/report.py and src/api/tests/retrieval/test_report.py after:T035
+- [X] T037 [US1] {FR-029} Emit the ranking parameters in force with every result an evaluation consumes, in src/api/src/api/retrieval/report.py after:T015
+- [X] T038 [US1] {FR-004,FR-029} [COMPLETES FR-004] Assert the three parameters are stable identifier tokens read from the one source in src/api/tests/retrieval/test_parameters.py after:T037
 - [ ] T039 [US1] {FR-007} [COMPLETES FR-007] Embed the query through the gateway encoder, refusing on identity mismatch before any search, in src/api/src/api/retrieval/routes.py after:T021
 - [ ] T040 [US1] {FR-008,FR-009} [COMPLETES FR-008] Wire GET /api/v1/retrieval/search to RetrievalResponse in retrieval/routes.py after:T039 ← T032:RetrievalResult
 - [X] T041 [US1] {FR-030,FR-042} Write failing property tests for recall at five and its Wilson interval in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T001
@@ -114,7 +114,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T044 [US1] {FR-031,FR-042} Implement MRR with a percentile bootstrap at the B and bit generator specs/sad.md fixes, recording resample count, seed and bit generator, in retrieval/metrics.py after:T043 → exports: percentile_bootstrap
 - [X] T045 [US1] {FR-032,FR-042} Write failing property tests for the overlap verdict — symmetry, reflexivity, touching endpoints — in src/api/tests/retrieval/test_metrics.py, done only on an observed failure after:T044
 - [X] T046 [US1] {FR-032,FR-042} Implement the unresolvable verdict by FR-032's closed-interval rule in src/api/src/api/retrieval/metrics.py after:T045 → exports: overlap_verdict
-- [ ] T047 [US1] {FR-031} [COMPLETES FR-031] Record method, resample count, seed and bit generator on every emitted interval and assert no non-proportion statistic carries wilson, in retrieval/report.py and src/api/tests/retrieval/test_metrics.py after:T046
+- [X] T047 [US1] {FR-031} [COMPLETES FR-031] Record method, resample count, seed and bit generator on every emitted interval and assert no non-proportion statistic carries wilson, in retrieval/report.py and src/api/tests/retrieval/test_metrics.py after:T046
 - [ ] T048 [US1] {FR-042} [COMPLETES FR-042] Assert the generated domains reach set size one upward, all-hit, all-miss, ties and endpoints, and refuse an empty set, in src/api/tests/retrieval/test_metrics.py after:T047
 - [ ] T049 [US1] {FR-043} Freeze, hash and commit E008's own query set with generator-derived judgements and the published ceiling in src/api/tests/retrieval/evaluation_set/ (AD-010) after:T044
 - [ ] T050 [US1] {FR-043} Abort on digest mismatch before emitting any measurement in src/api/tests/retrieval/evaluation_set/harness.py (Principle VI) after:T049 → exports: load_frozen_set
