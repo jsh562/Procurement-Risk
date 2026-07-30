@@ -30,7 +30,6 @@ from api.config import load_retrieval_config
 from api.db import connection_options
 from api.retrieval.fusion import FUSION_SQL, retrieval_parameters
 
-
 #: Statements captured by the cursor below. Module-level because psycopg 3 sets
 #: the factory on the *connection* and constructs cursors itself, so there is no
 #: seam to inject a per-test list through.
