@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from api.config import RetrievalConfig, load_retrieval_config
 from api.db import connection_options
 from api.retrieval.fusion import FUSION_SQL, retrieval_parameters
+from api.retrieval.readiness import UnrerankedReason, readiness
 from api.retrieval.report import LEXICAL_ARM_NAME, ranking_parameters_in_force
 from api.retrieval.results import MatchKind, RetrievalResult, results_from_rows
 from api.retrieval.router import recognise_part_numbers, resolve_part_numbers
@@ -140,6 +141,7 @@ def search(
     config: Annotated[RetrievalConfig, Depends(get_config)],
     q: Annotated[str, Query(min_length=1, max_length=MAX_QUERY_CHARACTERS)],
     limit: Annotated[int, Query(ge=1)] = DEFAULT_LIMIT,
+    arm: Annotated[str, Query(pattern=r"^[a-z][a-z0-9_]*$")] = "fused_reranked",
 ) -> dict[str, Any]:
     """Return ranked passages for `q`, each carrying the page it was printed on.
 
@@ -201,7 +203,13 @@ def search(
         cursor.execute(FUSION_SQL, retrieval_parameters(q, embedding, config=config))
         fused = cursor.fetchall()
 
-    ranked_ids = [str(row[0]) for row in fused][:limit]
+    # FR-018, FR-025. Rerank the top of the fused ordering before the cut, so
+    # `limit` selects from a *reranked* list rather than reordering a slice
+    # someone else already chose. Reranking after the cut would let a candidate
+    # the reranker would have promoted be discarded before it was ever scored.
+    fused_ids = [str(row[0]) for row in fused]
+    reranking, fused_ids = _rerank(connection, q, fused_ids, arm=arm, config=config)
+    ranked_ids = fused_ids[:limit]
     results: list[RetrievalResult] = []
     if ranked_ids:
         with connection.cursor() as cursor:
@@ -266,9 +274,162 @@ def search(
             }
             for result in results
         ],
+        "mode": {
+            "arm_requested": arm,
+            "arm_served": reranking["arm_served"],
+            "degraded": readiness.degraded,
+            "reranked": reranking["reranked"],
+            "unreranked_reason": reranking["unreranked_reason"],
+            "statement": reranking["statement"],
+        },
+        "reranking": {
+            "candidates_scored": reranking["candidates_scored"],
+            "sequence_limit_tokens": reranking["sequence_limit_tokens"],
+            "candidates_truncated": reranking["candidates_truncated"],
+            "candidate_token_lengths": reranking["candidate_token_lengths"],
+            "precision": reranking["precision"],
+        },
         "deterministic_route": route.as_dict(),
         # FR-009: never raised to reach a target. `results: []` with
         # `result_count: 0` is a complete, successful answer.
         "result_count": len(results),
         "fused_candidate_count": len(fused),
     }
+
+
+#: Arms that do not rerank at all. Naming them rather than testing for the
+#: absence of a session is what keeps `arm_excludes_reranking` distinguishable
+#: from `reranker_unavailable` -- one is a choice and the other is a fault.
+_UNRERANKED_ARMS = {"lexical", "dense", "fused"}
+
+_ARM_PRECISION = {
+    "fused_reranked": "int8",
+    "fused_reranked_full_precision": "fp32",
+}
+
+
+def _rerank(
+    connection: psycopg.Connection,
+    query: str,
+    fused_ids: list[str],
+    *,
+    arm: str,
+    config: RetrievalConfig,
+) -> tuple[dict[str, Any], list[str]]:
+    """Rerank the fused ordering, or say precisely why it was not reranked.
+
+    Returns the reporting block and the possibly-reordered identifiers. Every
+    path here produces an `unreranked_reason` or `reranked: True` -- there is no
+    fall-through that leaves a response silent about which it was, because a
+    figure that does not say whether it was reranked cannot be compared with one
+    that does.
+    """
+    blank: dict[str, Any] = {
+        "arm_served": arm,
+        "reranked": False,
+        "unreranked_reason": None,
+        "statement": None,
+        "candidates_scored": 0,
+        "sequence_limit_tokens": None,
+        "candidates_truncated": 0,
+        "candidate_token_lengths": [],
+        "precision": None,
+    }
+
+    if arm in _UNRERANKED_ARMS:
+        blank["unreranked_reason"] = str(UnrerankedReason.ARM_EXCLUDES_RERANKING)
+        blank["statement"] = f"The {arm} arm does not rerank; this is not degradation."
+        return blank, fused_ids
+
+    if not fused_ids:
+        blank["unreranked_reason"] = str(UnrerankedReason.NO_CANDIDATES_TO_SCORE)
+        blank["statement"] = "Fusion returned no candidates, so there was nothing to score."
+        return blank, fused_ids
+
+    precision = _ARM_PRECISION.get(arm)
+    if precision is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "type": "unknown-arm",
+                "title": "Unknown retrieval arm",
+                "status": 422,
+                "detail": f"{arm!r} is not one of {sorted(_UNRERANKED_ARMS | set(_ARM_PRECISION))}",
+            },
+        )
+
+    session = readiness.session_for(precision)
+    if session is None:
+        # FR-021. Requesting an arm that did not load is refused explicitly
+        # rather than served by the other: an evaluation that silently fell back
+        # would put a quantized figure in a full-precision row.
+        if readiness.sessions:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "type": "arm-unavailable",
+                    "title": f"The {arm} arm did not load",
+                    "status": 503,
+                    "detail": (
+                        f"{precision} is unavailable and will not be silently served by "
+                        f"another precision, because the two are different measurements."
+                    ),
+                },
+            )
+        blank["unreranked_reason"] = str(UnrerankedReason.RERANKER_UNAVAILABLE)
+        blank["statement"] = (
+            "Fusion-only: no reranker loaded. This ordering is weak by construction "
+            "and no figure from it may be read as reranked."
+        )
+        return blank, fused_ids
+
+    top = fused_ids[: config.reranked_count]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT chunk_id::text, body_text FROM chunk WHERE chunk_id::text = ANY(%(ids)s)",
+            {"ids": top},
+        )
+        text_for = {str(row[0]): str(row[1]) for row in cursor.fetchall()}
+    ordered_top = [cid for cid in top if cid in text_for]
+    try:
+        scores, truncation = session.score(query, [text_for[cid] for cid in ordered_top])
+    except Exception as exc:  # noqa: BLE001 - a session lost mid-request degrades
+        # FR-021: the in-flight request completes as a degraded *success*, and
+        # the cause stays distinguishable from a startup failure so a run does
+        # not read a mid-request loss as "the reranker never loaded".
+        blank["unreranked_reason"] = str(UnrerankedReason.RERANKER_FAILED_DURING_REQUEST)
+        blank["statement"] = (
+            f"Fusion-only: the reranker session was lost while serving this request "
+            f"({str(exc)[:120]}). The results are complete; the ordering is not reranked."
+        )
+        return blank, fused_ids
+
+    order = sorted(range(len(ordered_top)), key=lambda i: (-float(scores[i]), ordered_top[i]))
+    reranked_ids = [ordered_top[i] for i in order] + fused_ids[config.reranked_count :]
+    return (
+        {
+            "arm_served": arm,
+            "reranked": True,
+            "unreranked_reason": None,
+            "statement": None,
+            "candidates_scored": len(ordered_top),
+            "sequence_limit_tokens": truncation.sequence_limit,
+            "candidates_truncated": truncation.truncated_count,
+            "candidate_token_lengths": list(truncation.candidate_token_lengths),
+            "precision": precision,
+        },
+        reranked_ids,
+    )
+
+
+@router.get("/api/v1/retrieval/readyz")
+def readyz() -> dict[str, Any]:
+    """Readiness, including the degraded state.
+
+    A **success response carrying a state field**, never a status code.
+    Orchestrator probes are ternary with no partial state, so a degraded system
+    reported through a status code would be pulled from rotation — which is the
+    outcome FR-021 exists to prevent, because a fusion-only service still
+    answers and restarting does not fix a missing graph.
+    """
+    return readiness.as_dict()

@@ -69,13 +69,24 @@ class InferenceSession(Protocol):
 
     def get_inputs(self) -> Sequence[_NamedInput]: ...
 
-    def run(self, output_names: Sequence[str], input_feed: Any) -> Sequence[Any]: ...
+    def run(self, output_names: Sequence[str] | None, input_feed: Any) -> Sequence[Any]: ...
+
+    # `output_names=None` means "every output", which is what the cross-encoder
+    # uses: it has one output and naming it would hard-code a graph detail this
+    # package does not otherwise depend on.
 
 
 class BatchTokenizer(Protocol):
-    """The slice of a tokenizer this module uses."""
+    """The slice of a tokenizer this module uses.
 
-    def encode_batch(self, inputs: Sequence[str]) -> Sequence[Any]: ...
+    `inputs` is a sequence of strings for the bi-encoder and a sequence of
+    `(query, candidate)` pairs for the cross-encoder. Both are what
+    `Tokenizer.encode_batch` accepts, and the difference is the whole reason a
+    cross-encoder can rank better: it sees the two together in one forward pass
+    rather than comparing two independently computed vectors.
+    """
+
+    def encode_batch(self, inputs: Sequence[Any]) -> Sequence[Any]: ...
 
 
 def load_tokenizer(path: object, *, truncate_at: int | None) -> BatchTokenizer:
