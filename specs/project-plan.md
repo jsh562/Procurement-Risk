@@ -356,9 +356,9 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Source**: {PRD:CAP-004}
 - **Scope**: Link the same material across specification, submittal, and purchase-order records by normalizing manufacturer aliases and units, blocking on manufacturer and part-number prefix, scoring candidate pairs on string similarity and attribute agreement, and clustering. Pairs below the confidence threshold are withheld and routed to a review queue rather than merged.
 - **Actors**: Coordinator, developer
-- **Key entities**: ResolvedEntity, CandidatePair, ReviewQueueItem
-- **Depends on**: E005, E006
-- **Dependency contracts**: E009 needs extracted line items from E006 and procurement lines from E005
+- **Key entities**: ResolvedEntity, CandidatePair, ReviewQueueItem, ManufacturerAliasTable, LabeledPairSet, ThresholdCalibration, ResolutionRun, ResolvedEntityInducedPair, ResolutionFigure
+- **Depends on**: E002, E005, E006
+- **Dependency contracts**: E009 needs extracted line items from E006 and procurement lines from E005, and **the manufacturer catalogue E002 commits** — the alias table's initial contents derive from it and every resolution run records that catalogue's digest, so the edge is structural rather than incidental
 - **Depended on by**: E014, E016
 - **Produces (shared)**: Resolved entity clusters, review-queue records, alias normalization tables
 - **Constraints**: Tuned for merge precision over recall; uncertain pairs withheld, never merged; the review-queue record shape must let a later workspace be additive
@@ -370,7 +370,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Specify input**:
   - Description: Resolve material identity across specification, submittal, and purchase-order records with precision-biased scoring and explicit routing of uncertain pairs to human review.
   - Actors: Coordinator, developer
-  - Key entities: ResolvedEntity, CandidatePair, ReviewQueueItem
+  - Key entities: ResolvedEntity, CandidatePair, ReviewQueueItem, ManufacturerAliasTable, LabeledPairSet, ThresholdCalibration, ResolutionRun, ResolvedEntityInducedPair, ResolutionFigure
   - Depends on artifacts: `specs/prd.md` (CAP-004, Product Principles), E005 lines, E006 extractions
   - Constraints: Precision over recall; refusal over incorrect merge; review-queue contract stable for later workspace
 
@@ -476,9 +476,9 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Source**: {PRD:CAP-009}{SAD:ADR-0009}{SAD:ADR-0022}
 - **Scope**: Build the evaluation harness covering retrieval, identity resolution, and forecast calibration. Evaluation sets are canonicalized, hashed, and committed before any tuning; the harness verifies the hash and aborts on mismatch. **E007 performs the train/held-out split of E005's lines; E014 freezes and hashes the resulting set.** The two are deliberately separated: construction belongs with the epic that reads the lines, and the freeze-before-tuning guarantee belongs with the harness that would otherwise be tuning against its own evaluation set. Results are written to a committed manifest that a reproduction job diffs against within the published tolerance.
 - **Actors**: Developer, evaluator
-- **Key entities**: GoldenSetItem, LabeledPair, ResultsManifest
+- **Key entities**: GoldenSetItem, ResultsManifest
 - **Depends on**: E004, E007, E008, E009
-- **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007. It also needs E004's `replay` mode to resolve every model-dependent step with no network and no credential, and owns publishing replayed and live numbers side by side — the decoding-variance disclosure {SAD:ADR-0007} commits to, which E004 supplies the modes and the invocation record for but does not perform. Edge added during E004 planning.
+- **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007. **`LabeledPair` is authored, frozen and hashed by E009, not by E014** — E014 consumes it and verifies its hash. The former arrangement was circular: it assigned E014 the entity while making E014 depend on E009, so E009 had no set to calibrate its thresholds against within its own scope. The separation it was meant to provide — construction apart from calibration — is reconstructed mechanically instead: E009 binds its threshold constants and its weight vector to the verified labeled-set hash and refuses to publish on divergence, so tuning against the evaluation set is detectable rather than merely forbidden ({SAD:ADR-0023} is a separate exception and does not cover this). It also needs E004's `replay` mode to resolve every model-dependent step with no network and no credential, and owns publishing replayed and live numbers side by side — the decoding-variance disclosure {SAD:ADR-0007} commits to, which E004 supplies the modes and the invocation record for but does not perform. Edge added during E004 planning.
 - **Depended on by**: E015
 - **Produces (shared)**: Frozen evaluation sets with hashes, evaluation harness, results manifest, reproduction job
 - **Constraints**: Sets frozen and hashed before tuning; retrieval evaluation runs the exact-search path; a missed target is published, never suppressed; every interval is computed by a method admissible for the estimator it bounds ({SAD:ADR-0022}) — recall@5 is a hit-or-miss proportion and takes Wilson, MRR is a mean of per-query reciprocal ranks and takes a percentile bootstrap over queries, and merge precision keeps its separately registered rule-of-three bound
@@ -660,6 +660,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0020 Ingested Derived Data Carries an Active or Superseded Generation | superseded by ADR-0021 | E006, E008, E009, E012 |
 | ADR-0021 Superseded Generations Are Removed at Promotion, Not Retained | accepted | E003, E006, E008, E009, E012 |
 | ADR-0022 Interval Method Is Selected Per Estimator, Not Per Document | accepted | E014, E015 |
+| ADR-0023 A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception | accepted | E003, E009 |
 
 ### Deployment Decisions
 
@@ -667,7 +668,7 @@ No Deployment & Operations Document exists, so no operational epics were extract
 
 ### Uncovered Items
 
-None. All 14 capabilities and all 18 accepted architecture decisions map to at least one epic, across 22 records of which 4 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
+None. All 14 capabilities and all 20 accepted architecture decisions map to at least one epic, across 23 records of which 3 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
 
 It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-0019, ADR-0020, and ADR-0021 had all landed, so three records — one of them a supersession — were absent from the only place this document checks whether a decision reached an epic. The recount convention was the mitigation and it did not fire, because it is prose in this section rather than a step anything performs. Recounting catches a wrong *number*; it does not catch a missing *row*, and a coverage table that silently omits a record reports full coverage of the subset it happens to list. The four rows added by this amendment were reconciled against `specs/adrs/` directly rather than against the previous count.
 
@@ -682,7 +683,7 @@ It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-
 | ExtractedValue | E003, E006 | E009, E012 |
 | PurchaseOrderLine | E003, E005 | E007, E009, E010, E017, E019 |
 | LifecycleEvent | E003, E005 | E007 |
-| ResolvedEntity | E003 (schema), E009 (populated) | E012, E014, E016 |
+| ResolvedEntity | E003 (schema), **E009 (schema extension and populated)** | E012, E014, E016 |
 | ReviewQueueItem | E009 | E016 |
 | ForecastRun | E003, E007 | E010, E012, E014 |
 | PosteriorDraws / SurvivalArray | E003 (schema), E007 (populated) | E010, E012, E019 |
