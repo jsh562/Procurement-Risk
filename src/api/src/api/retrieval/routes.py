@@ -28,6 +28,7 @@ from api.db import connection_options
 from api.retrieval.fusion import FUSION_SQL, retrieval_parameters
 from api.retrieval.report import LEXICAL_ARM_NAME, ranking_parameters_in_force
 from api.retrieval.results import MatchKind, RetrievalResult, results_from_rows
+from api.retrieval.router import recognise_part_numbers, resolve_part_numbers
 
 __all__ = ["MAX_QUERY_CHARACTERS", "corpus_encoder_identity", "router"]
 
@@ -211,6 +212,26 @@ def search(
                 ranked=True,
             )
 
+    # FR-010 to FR-014. The route runs *after* fusion and unions additively:
+    # every ranked result above is still here, and route matches are appended
+    # with a null fused rank and counted outside `limit`. Excluding what fusion
+    # already returned is what keeps the union additive rather than duplicating
+    # -- one chunk appearing twice would carry two disagreeing accounts of how
+    # it was found.
+    route = resolve_part_numbers(
+        connection,
+        recognise_part_numbers(q),
+        exclude_chunk_ids=[result.chunk_id for result in results],
+    )
+    if route.added_chunk_ids:
+        with connection.cursor() as cursor:
+            cursor.execute(_PROJECTION_SQL, {"ids": list(route.added_chunk_ids)})
+            results = results + results_from_rows(
+                cursor.fetchall(),
+                match_kind=MatchKind.DETERMINISTIC_IDENTIFIER,
+                ranked=False,
+            )
+
     parameters = ranking_parameters_in_force(config)
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -245,6 +266,7 @@ def search(
             }
             for result in results
         ],
+        "deterministic_route": route.as_dict(),
         # FR-009: never raised to reach a target. `results: []` with
         # `result_count: 0` is a complete, successful answer.
         "result_count": len(results),

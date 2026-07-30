@@ -193,3 +193,80 @@ def test_an_encoder_identity_mismatch_refuses_before_searching(
     assert detail["type"] == "encoder-identity-mismatch"
     assert detail["corpus_model_id"] == "other/model"
     assert detail["encoder_model_id"] != detail["corpus_model_id"]
+
+
+# ---------------------------------------------------------------------------
+# FR-010 to FR-014: the deterministic route, through the response
+# ---------------------------------------------------------------------------
+
+
+def test_the_response_reports_what_the_route_did(client: TestClient) -> None:
+    """The route's outcome is stated, not implied by the result list."""
+    body = client.get("/api/v1/retrieval/search", params={"q": "NRH-80347"}).json()
+    route = body["deterministic_route"]
+    assert route["recognised_tokens"] == ["NRH-80347"]
+    assert route["matched_tokens"] == ["NRH-80347"]
+
+
+def test_a_fall_through_is_reported_as_such(client: TestClient) -> None:
+    """FR-011. A well-formed designation the corpus lacks is not an empty answer."""
+    body = client.get("/api/v1/retrieval/search", params={"q": "ZZZ-99999"}).json()
+    route = body["deterministic_route"]
+    assert route["recognised_tokens"] == ["ZZZ-99999"]
+    assert route["matched_tokens"] == []
+    assert route["fell_through"] is True
+    assert body["result_count"] > 0, "hybrid retrieval still answers on its own"
+
+
+def test_the_route_adds_rather_than_replaces(client: TestClient) -> None:
+    """FR-012, measured against the same query with no recognisable token.
+
+    The comparison is the assertion: every chunk the plain query returned is
+    still present when the route fires.
+    """
+    plain = client.get("/api/v1/retrieval/search", params={"q": "pressure relief valve"}).json()
+    routed = client.get(
+        "/api/v1/retrieval/search", params={"q": "pressure relief valve NRH-80347"}
+    ).json()
+    plain_ids = {r["chunk_id"] for r in plain["results"]}
+    routed_ids = {r["chunk_id"] for r in routed["results"]}
+    assert plain_ids <= routed_ids, (
+        f"the route removed {sorted(plain_ids - routed_ids)}; FR-012 makes it a union"
+    )
+
+
+def test_a_route_match_carries_no_fused_rank(client: TestClient) -> None:
+    """FR-013. A deterministic match was never scored, so it has no rank.
+
+    Giving it one would let it sort among ranked results as though it had
+    competed — the additive union quietly becoming a substitution.
+    """
+    body = client.get("/api/v1/retrieval/search", params={"q": "NRH-80347"}).json()
+    for result in body["results"]:
+        if result["match_kind"] == "deterministic_identifier":
+            assert result["fused_rank"] is None
+        else:
+            assert result["fused_rank"] is not None
+
+
+def test_route_matches_are_counted_outside_limit(client: TestClient) -> None:
+    """FR-046. `limit` bounds the ranked portion only.
+
+    A single ceiling over both would make the route subtractive at exactly the
+    boundary FR-012 exists to protect.
+    """
+    body = client.get(
+        "/api/v1/retrieval/search", params={"q": "valve NRH-80347", "limit": 1}
+    ).json()
+    ranked = [r for r in body["results"] if r["match_kind"] == "ranked_relevance"]
+    assert len(ranked) <= 1
+    assert body["result_count"] == len(ranked) + body["deterministic_route"]["added_count"]
+
+
+def test_no_chunk_appears_twice(client: TestClient) -> None:
+    """One chunk, one account of how it was found."""
+    body = client.get(
+        "/api/v1/retrieval/search", params={"q": "pressure relief valve NRH-80347"}
+    ).json()
+    ids = [r["chunk_id"] for r in body["results"]]
+    assert len(ids) == len(set(ids))

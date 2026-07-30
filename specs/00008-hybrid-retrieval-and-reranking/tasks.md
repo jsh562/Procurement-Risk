@@ -125,13 +125,13 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 
 ## Phase 4: US2 - Type A Part Number, Get That Item (Priority: P1) 🎯 MVP
 
-- [ ] T052 [US2] {FR-010,FR-014} Declare the part-number pattern and recognise matching tokens anywhere in the query, in src/api/src/api/retrieval/router.py → exports: recognise_part_numbers
-- [ ] T053 [US2] {FR-010} Resolve recognised tokens by direct lookup before hybrid retrieval runs, on the three fused arms only, in retrieval/router.py after:T052
-- [ ] T054 [US2] {FR-011} Fall through to hybrid retrieval when the lookup matches nothing, never returning empty on the route alone, in retrieval/router.py after:T053
-- [ ] T055 [US2] {FR-012,FR-013} Union route matches additively with a null fused rank and a deterministic match kind, counted outside limit, in retrieval/router.py after:T054
-- [ ] T095 [US2] {FR-046} Bound the result array by rule and assert the bound, in src/api/src/api/retrieval/results.py and contracts/openapi.yaml after:T055
-- [ ] T056 [US2] {FR-010} [COMPLETES FR-010] Verify the pattern against the part numbers enumerated from the generator's pre-render document model, in src/api/tests/retrieval/test_part_number_coverage.py after:T055
-- [ ] T057 [P] [US2] {FR-011,FR-012,FR-014} Assert fall-through, the additive union against the route-disabled result, and arm_excludes_route on the single-arm paths, in src/api/tests/retrieval/test_router.py
+- [X] T052 [US2] {FR-010,FR-014} Declare the part-number pattern and recognise matching tokens anywhere in the query, in src/api/src/api/retrieval/router.py → exports: recognise_part_numbers
+- [X] T053 [US2] {FR-010} Resolve recognised tokens by direct lookup before hybrid retrieval runs, on the three fused arms only, in retrieval/router.py after:T052
+- [X] T054 [US2] {FR-011} Fall through to hybrid retrieval when the lookup matches nothing, never returning empty on the route alone, in retrieval/router.py after:T053
+- [X] T055 [US2] {FR-012,FR-013} Union route matches additively with a null fused rank and a deterministic match kind, counted outside limit, in retrieval/router.py after:T054
+- [X] T095 [US2] {FR-046} Bound the result array by rule and assert the bound, in src/api/src/api/retrieval/results.py and contracts/openapi.yaml after:T055
+- [X] T056 [US2] {FR-010} [COMPLETES FR-010] Verify the pattern against the part numbers enumerated from the generator's pre-render document model, in src/api/tests/retrieval/test_part_number_coverage.py after:T055
+- [X] T057 [P] [US2] {FR-011,FR-012,FR-014} Assert fall-through, the additive union against the route-disabled result, and arm_excludes_route on the single-arm paths, in src/api/tests/retrieval/test_router.py
 
 ---
 
