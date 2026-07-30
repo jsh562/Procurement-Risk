@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.config import RetrievalConfig, load_retrieval_config
 from api.db import connection_options
+from api.retrieval.digest import ordering_digest
 from api.retrieval.fusion import FUSION_SQL, retrieval_parameters
 from api.retrieval.readiness import UnrerankedReason, readiness
 from api.retrieval.report import LEXICAL_ARM_NAME, ranking_parameters_in_force
@@ -294,6 +295,10 @@ def search(
         # `result_count: 0` is a complete, successful answer.
         "result_count": len(results),
         "fused_candidate_count": len(fused),
+        # Taken here rather than at the fusion boundary: the deterministic route
+        # has already added its matches above, and they are part of the ordering
+        # the caller received.
+        "ordering_digest": ordering_digest(result.chunk_id for result in results),
     }
 
 

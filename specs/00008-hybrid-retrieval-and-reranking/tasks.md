@@ -185,16 +185,16 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T087 [US6] {FR-028} Return the requested candidate count from a filtered vector search under strict iterative scan (AD-003), in src/api/src/api/retrieval/arms.py after:T086
 - [X] T088 [US6] {FR-027,FR-028} Assert the connection-borne breadth is at or above the fetch depth and a filtered query returns the requested count, in src/api/tests/retrieval/test_vector_settings.py after:T087 ← T023:seeded_corpus
 - [X] T089 [US6] {FR-039,FR-040} Record the observed pgvector version and the breadth with the index settings, any value above the floor being a recorded change, in retrieval/parameters.py after:T088
-- [ ] T090 [US6] {FR-026} [COMPLETES FR-026] Build two differently configured application instances and compare the observable set FR-026 enumerates, in src/api/tests/retrieval/test_flag_parity.py after:T089 ← T023:seeded_corpus
+- [X] T090 [US6] {FR-026} [COMPLETES FR-026] Build two differently configured application instances and compare the observable set FR-026 enumerates, in src/api/tests/retrieval/test_flag_parity.py after:T089 ← T023:seeded_corpus
 
 ---
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T091 Add contract conformance for E008's own contract, following E010's module rather than extending it (AD-014), in src/api/tests/test_retrieval_contract_conformance.py after:T090
-- [ ] T092 [P] Verify api/retrieval and gateway/inference each reach the 80% per-package floor in the combined coverage report after:T091
-- [ ] T093 [P] Verify the architecture contracts stay green — api.retrieval forbidden, numpy admitted in both copies, the serving image's contents — in tests/checks/ after:T009
-- [ ] T098 [P] Extend the scratch-location check to the gateway tier so model download and session creation resolve temporary paths inside the checkout, in src/gateway/tests/test_scratch_location.py after:T018
+- [X] T091 Add contract conformance for E008's own contract, following E010's module rather than extending it (AD-014), in src/api/tests/test_retrieval_contract_conformance.py after:T090
+- [X] T092 [P] Verify api/retrieval and gateway/inference each reach the 80% per-package floor in the combined coverage report after:T091
+- [X] T093 [P] Verify the architecture contracts stay green — api.retrieval forbidden, numpy admitted in both copies, the serving image's contents — in tests/checks/ after:T009
+- [X] T098 [P] Extend the scratch-location check to the gateway tier so model download and session creation resolve temporary paths inside the checkout, in src/gateway/tests/test_scratch_location.py after:T018
 - [ ] T094 Run the gate measurement over the frozen set and record recall at five, MRR, their intervals, the comparator arm, the mode and the corpus size after:T091
 
 ---
