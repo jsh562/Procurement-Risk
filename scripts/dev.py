@@ -33,10 +33,10 @@ from _launcher import (  # noqa: E402
     Child,
     DatabaseNotFound,
     configure_streams,
+    ensure_database,
     lost_the_port,
     ports_file,
     publish,
-    resolve_database_port,
     terminate,
     unpublish,
 )
@@ -167,7 +167,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        db_port = resolve_database_port(args.db_port)
+        db_port = ensure_database(args.db_port)
     except DatabaseNotFound as exc:
         print(f"\n{exc}\n", file=sys.stderr)
         return 2

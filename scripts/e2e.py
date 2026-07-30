@@ -36,8 +36,8 @@ from _launcher import (  # noqa: E402
     REPO_ROOT,
     DatabaseNotFound,
     configure_streams,
+    ensure_database,
     publish,
-    resolve_database_port,
     unpublish,
 )
 from helpers.ports import is_bindable, resolve_host_port  # noqa: E402
@@ -59,7 +59,7 @@ DB_CREDENTIALS = "procurement:local-development-only"
 
 def main() -> int:
     try:
-        db_port = resolve_database_port()
+        db_port = ensure_database()
     except DatabaseNotFound as exc:
         print(f"\n{exc}\n", file=sys.stderr)
         return 2

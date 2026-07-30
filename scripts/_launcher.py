@@ -33,7 +33,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 sys.path.insert(0, str(REPO_ROOT / "tests" / "checks"))
 
-from helpers.ports import is_bindable  # noqa: E402
+from helpers.ports import is_bindable, resolve_host_port  # noqa: E402
+
+#: What `docker-compose.yml` publishes the database on unless overridden. Only a
+#: starting point for the search — the second checkout on a machine cannot have it.
+DEFAULT_DB_PORT = 5434
 
 
 def ports_file(role: str) -> Path:
@@ -110,13 +114,61 @@ def resolve_database_port(explicit: int | None = None) -> int:
     if published.returncode != 0 or not binding:
         raise DatabaseNotFound(
             "this checkout has no running database.\n"
-            f"  {published.stderr.strip() or published.stdout.strip()}\n"
-            "  Start it with:  docker compose up -d db\n"
-            "  Refusing to fall back to the committed default: another checkout is "
-            "probably on it, and this process would read and overwrite its data."
+            f"  {published.stderr.strip() or published.stdout.strip()}"
         )
     # `0.0.0.0:5434`, or an IPv6 form — the port is what follows the last colon.
     return int(binding.rsplit(":", 1)[1])
+
+
+def start_database() -> int:
+    """Bring up *this checkout's* database on a port that is free, and return it.
+
+    Started here rather than left to the developer because the obvious command
+    does not work in the situation that needs it. In a second checkout,
+    `docker compose up -d db` fails with
+
+        Bind for 0.0.0.0:5434 failed: port is already allocated
+
+    since the committed default is held by the first checkout's container — so an
+    error message telling someone to run it would be advice that fails exactly
+    when it is followed. The port is resolved the same way every other port here
+    is, and handed to Compose through the `PRC_DB_PORT` override the compose file
+    already publishes through.
+
+    `--wait` because the caller is about to connect: a container that is running
+    is not yet a database that answers, and the healthcheck is what tells them
+    apart.
+    """
+    resolution = resolve_host_port(DEFAULT_DB_PORT, name="db")
+    print(f"  {resolution.describe()}", flush=True)
+    started = subprocess.run(
+        ["docker", "compose", "up", "-d", "--wait", "db"],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PRC_DB_PORT": str(resolution.port)},
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if started.returncode != 0:
+        raise DatabaseNotFound(
+            "could not start this checkout's database.\n"
+            f"  {started.stderr.strip() or started.stdout.strip()}"
+        )
+    return resolution.port
+
+
+def ensure_database(explicit: int | None = None) -> int:
+    """The port of this checkout's database, starting it if it is not up.
+
+    Never falls back to the committed default. Falling back is how a launcher in a
+    checkout whose database is down ends up reading — and, through `seed.py`,
+    deleting — a sibling checkout's data.
+    """
+    try:
+        return resolve_database_port(explicit)
+    except DatabaseNotFound:
+        print("  no database for this checkout yet; starting one", flush=True)
+        return start_database()
 
 
 @dataclass(frozen=True)
