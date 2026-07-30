@@ -164,8 +164,18 @@ allowed_importers = ["gateway.provider"]
 name = "The provider-facing module does not reach the arithmetic modules"
 type = "forbidden"
 source_modules = ["gateway.provider"]
-forbidden_modules = ["gateway.compute"]
+forbidden_modules = ["gateway.compute", "gateway.inference"]
 allow_indirect_imports = false
+# `gateway.inference` joins from E008 ({SAD:ADR-0023}). It holds masked mean
+# pooling, L2 normalization and cross-encoder scoring -- arithmetic, in the same
+# root package as the single provider-facing module in the repository. Naming
+# only `gateway.compute` would leave the boundary guarding one of two, which is
+# the failure this project has already named once, on the api side.
+#
+# Extended in place rather than added as a separate contract, unlike the api
+# entry: there the packages are guarded for different reasons and a per-contract
+# message is worth having, while here both are the same boundary -- arithmetic
+# the provider must not reach -- and one message naming either is correct.
 
 # TR-002: the public surface is built from gateway-owned types only.
 #

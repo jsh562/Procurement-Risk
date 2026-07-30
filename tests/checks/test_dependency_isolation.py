@@ -89,6 +89,18 @@ SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
 #: rather than glossed: PyMC, ArviZ and pandas are still derived and never
 #: listed, but NumPy leaves the set the image is *guaranteed* to exclude, so it
 #: could later arrive by a route nobody intended with nothing reporting it.
+#:
+#: **`pgvector` does not belong here and must not be added** (E008, AD-016).
+#: `/src/model` declares it for one narrow reason — `register_vector` is what
+#: lets `chunk.embedding` be written by binary COPY instead of parsed as
+#: strings — and that is a bulk *write* path. E008 binds one query vector per
+#: request into a SELECT, where a text cast (`'[...]'::vector`) needs no
+#: adapter at all. If a future change makes `/src/api` declare `pgvector`, the
+#: assertion below will fire, and the fix is to remove the declaration and bind
+#: the vector as text — **not** to widen this set. Admitting it here would be a
+#: relaxation v1.2.9's exception does not cover, since that grants a
+#: local-inference runtime, its tokenizer and NumPy, and `pgvector` is none of
+#: the three; it would need a further amendment.
 SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
