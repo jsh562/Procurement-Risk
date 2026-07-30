@@ -88,8 +88,8 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 
 ## Phase 3: US1 - Ask A Question, Reach The Passage (Priority: P1) 🎯 MVP
 
-- [ ] T027 [US1] {FR-001} Write the pseudo-oracle property tests from the published definition over generated per-arm rank vectors in src/api/tests/retrieval/test_fusion_oracle.py — done only on an observed failure after:T015
-- [ ] T024 [US1] {FR-001,FR-002} Author the two-CTE reciprocal-rank fusion statement, one full outer join, in src/api/src/api/retrieval/fusion.py after:T027 → exports: fuse_candidates
+- [X] T027 [US1] {FR-001} Write the pseudo-oracle property tests from the published definition over generated per-arm rank vectors in src/api/tests/retrieval/test_fusion_oracle.py — done only on an observed failure after:T015
+- [X] T024 [US1] {FR-001,FR-002} Author the two-CTE reciprocal-rank fusion statement, one full outer join, in src/api/src/api/retrieval/fusion.py after:T027 → exports: fuse_candidates
 - [ ] T029 [US1] {FR-003} Assert over EXPLAIN that each arm's LIMIT survives CTE inlining and each node reports the fetch depth, in src/api/tests/retrieval/test_fusion_plan_shape.py — done only on an observed failure after:T024
 - [ ] T025 [US1] {FR-003,FR-037} Fetch 50 candidates per arm and cut the fused ordering to the reranked count of 50 in src/api/src/api/retrieval/fusion.py after:T029
 - [ ] T030 [US1] {FR-003} [COMPLETES FR-003] Assert the candidate set at the 50-row cut, with a tie engineered at the last in-window position, in src/api/tests/retrieval/test_candidate_set.py — done only on an observed failure after:T025 ← T023:seeded_corpus
