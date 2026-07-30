@@ -75,9 +75,17 @@ SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
 #: own docstring says it is not looking for.
 #:
 #: What TR-003 and TR-004 actually protect is the request-serving image staying
-#: free of PyMC, ArviZ, pandas and NumPy — the packages that make it fat. Those
-#: are still derived, never listed, and none of them appears here.
-SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+#: free of PyMC, ArviZ and pandas — the packages that make it fat. Those are
+#: still derived, never listed, and none of them appears here.
+#:
+#: NumPy is the exception, and it is a real cost rather than a tidy carve-out.
+#: {SAD:ADR-0023} puts local inference in the gateway, `onnxruntime` pulls NumPy
+#: transitively, and `model` goes on declaring NumPy for PyMC and pandas — so it
+#: is the one name that has to be *admitted* here rather than relocated out of
+#: the derived set. Project instructions v1.2.9 records the price in terms:
+#: the derived protection narrows from four heavy packages to three, and NumPy
+#: could henceforth arrive by an unintended route with nothing reporting it.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
 #: against it rather than against a repeated literal.
@@ -122,8 +130,13 @@ def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() ->
     Or it drifts to cover something the schema owner no longer declares, leaving
     a dead entry that quietly weakens nothing but tells the next reader a
     falsehood — so every member is required to still be declared by `model`.
+
+    NumPy is deliberately not in `heavy` any more, per project instructions
+    v1.2.9 and {SAD:ADR-0023}. That narrowing is asserted rather than left to
+    absence: a term silently dropped from a guard reads identically to one
+    nobody thought of, and this one was paid for on purpose.
     """
-    heavy = {"pymc", "arviz", "pandas", "numpy"}
+    heavy = {"pymc", "arviz", "pandas"}
     smuggled = heavy & SHARED_INFRASTRUCTURE
     assert not smuggled, (
         f"{sorted(smuggled)} is excluded from the derived modeling stack. That defeats "
@@ -141,6 +154,17 @@ def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() ->
     assert heavy <= declared, (
         f"{SCHEMA_OWNING_ENTRY} no longer declares {sorted(heavy - declared)}; the guard "
         f"above compares against a stack that has moved, so update the term."
+    )
+
+    # The narrowing itself, asserted. If NumPy leaves this set the derived
+    # protection widens back to four and {SAD:ADR-0023}'s runtime stops
+    # resolving in the gateway — a combination worth failing on rather than
+    # discovering in a build, in either direction.
+    assert "numpy" in SHARED_INFRASTRUCTURE, (
+        "NumPy was admitted deliberately (instructions v1.2.9, {SAD:ADR-0023}): the gateway's "
+        "local-inference runtime pulls it transitively while `model` keeps declaring it. "
+        "Removing it re-forbids a package the serving image is required to carry. If ADR-0023 "
+        "has been superseded, update this assertion and the instructions together."
     )
 
 
