@@ -31,11 +31,15 @@ from typing import Final
 
 import psycopg
 
+from api.config import RetrievalConfig
 from api.retrieval.parameters import FUSION_CONSTANT
 
 __all__ = [
     "FUSION_SQL",
+    "explain_plan",
     "fuse_candidates",
+    "retrieval_parameters",
+    "retrieval_statement",
 ]
 
 #: One arm's reciprocal-rank contribution, written from the published
@@ -106,6 +110,69 @@ FULL OUTER JOIN dense ON lexical.candidate = dense.candidate
 ORDER BY ({_fused_score("lexical.rank", "dense.rank")}) DESC,
          coalesce(lexical.candidate, dense.candidate) ASC
 """
+
+
+def retrieval_statement() -> str:
+    """The one ranking statement, as text.
+
+    Returned rather than exported as a constant so a caller cannot accumulate
+    onto it — FR-002 permits one statement, and a module-level string that
+    callers concatenate is how a second one arrives.
+    """
+    return FUSION_SQL
+
+
+def retrieval_parameters(
+    query: str,
+    embedding: Sequence[float],
+    *,
+    config: RetrievalConfig,
+) -> dict[str, object]:
+    """Bind the statement's parameters from configuration.
+
+    The fetch depth is **bound from configuration, never typed into the SQL**.
+    FR-003 makes it part of the ranking definition and FR-029 requires it
+    published with every result set; a literal in the statement could not be
+    published as *the value in force*, because nothing would keep the published
+    figure and the executed query in agreement.
+
+    The fused result is cut at the reranked count rather than at the fetch
+    depth. The two are equal by FR-018 and the configuration asserts it, but
+    they are different quantities: the depth is how many each arm contributes,
+    and the reranked count is how many of the fused ordering are scored. The
+    fused set of two 50-candidate arms may hold up to 100 distinct candidates,
+    so this cut is what makes "the top 50 of the fused ordering" true.
+    """
+    return {
+        "query": query,
+        "embedding": "[" + ",".join(repr(float(value)) for value in embedding) + "]",
+        "depth": config.fetch_depth,
+        "limit": config.reranked_count,
+    }
+
+
+def explain_plan(
+    connection: psycopg.Connection,
+    query: str,
+    embedding: Sequence[float],
+    *,
+    config: RetrievalConfig,
+) -> dict:
+    """The planner's chosen plan for the ranking statement, as a dict.
+
+    `EXPLAIN` without `ANALYZE`: the plan shape is the claim under test, and
+    executing the query would make the assertion depend on what happens to be
+    in the corpus. A plan-shape assertion that only holds on a populated
+    database is the empty-table failure this epic has already met once.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "EXPLAIN (FORMAT JSON) " + FUSION_SQL,
+            retrieval_parameters(query, embedding, config=config),
+        )
+        row = cursor.fetchone()
+    assert row is not None, "EXPLAIN returned no plan"
+    return row[0][0]["Plan"]
 
 
 def fuse_candidates(

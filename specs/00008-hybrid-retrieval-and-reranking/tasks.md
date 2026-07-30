@@ -90,10 +90,10 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 
 - [X] T027 [US1] {FR-001} Write the pseudo-oracle property tests from the published definition over generated per-arm rank vectors in src/api/tests/retrieval/test_fusion_oracle.py — done only on an observed failure after:T015
 - [X] T024 [US1] {FR-001,FR-002} Author the two-CTE reciprocal-rank fusion statement, one full outer join, in src/api/src/api/retrieval/fusion.py after:T027 → exports: fuse_candidates
-- [ ] T029 [US1] {FR-003} Assert over EXPLAIN that each arm's LIMIT survives CTE inlining and each node reports the fetch depth, in src/api/tests/retrieval/test_fusion_plan_shape.py — done only on an observed failure after:T024
-- [ ] T025 [US1] {FR-003,FR-037} Fetch 50 candidates per arm and cut the fused ordering to the reranked count of 50 in src/api/src/api/retrieval/fusion.py after:T029
-- [ ] T030 [US1] {FR-003} [COMPLETES FR-003] Assert the candidate set at the 50-row cut, with a tie engineered at the last in-window position, in src/api/tests/retrieval/test_candidate_set.py — done only on an observed failure after:T025 ← T023:seeded_corpus
-- [ ] T026 [US1] {FR-004} Apply the tie-break key inside each arm's CTE as well as in the final ordering, in retrieval/fusion.py (AD-001, HINT-001) after:T030
+- [X] T029 [US1] {FR-003} Assert over EXPLAIN that each arm's LIMIT survives CTE inlining and each node reports the fetch depth, in src/api/tests/retrieval/test_fusion_plan_shape.py — done only on an observed failure after:T024
+- [X] T025 [US1] {FR-003,FR-037} Fetch 50 candidates per arm and cut the fused ordering to the reranked count of 50 in src/api/src/api/retrieval/fusion.py after:T029
+- [X] T030 [US1] {FR-003} [COMPLETES FR-003] Assert the candidate set at the 50-row cut, with a tie engineered at the last in-window position, in src/api/tests/retrieval/test_candidate_set.py — done only on an observed failure after:T025 ← T023:seeded_corpus
+- [X] T026 [US1] {FR-004} Apply the tie-break key inside each arm's CTE as well as in the final ordering, in retrieval/fusion.py (AD-001, HINT-001) after:T030
 - [ ] T028 [US1] {FR-002} [COMPLETES FR-002] Capture the statements one search executes and assert exactly one ranking statement with no SET in src/api/tests/retrieval/test_single_statement.py after:T026
 - [ ] T031 [US1] {FR-020} Assert identical ordering twice, under seven flipped planner settings whose EXPLAIN plan differs, and across an exact-path rebuild, in src/api/tests/retrieval/test_determinism.py after:T026
 - [ ] T032 [US1] {FR-008,FR-013} Construct results only by private-factory projection from the chunk row, carrying page and match kind, in retrieval/results.py → exports: RetrievalResult
