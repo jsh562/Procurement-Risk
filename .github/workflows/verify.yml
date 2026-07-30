@@ -581,13 +581,30 @@ jobs:
         # `cd` in a subshell rather than `npm audit --prefix`: npm rejects
         # `--prefix` on several subcommands, and this repository has already
         # been bitten by that once with `npm ci --prefix`.
+        #
+        # The status variable is what makes the comment above true. This step
+        # used to end both commands with `|| true`, which is precisely the
+        # "swallowed the exit code" defect that comment warns against: the step
+        # exited zero, reported green, and `continue-on-error` had nothing to
+        # act on. Four advisories sat unseen behind it.
+        #
+        # Dropping `|| true` outright is not the fix either. The runner uses
+        # `bash -e`, so the first audit to find something would abort the step
+        # and the second would never run — reproducing the same bug one command
+        # to the right. Accumulating into `status` runs both and reports either.
+        #
+        # A failed audit and a found advisory both set it, deliberately: an
+        # audit that could not reach its index produced no result, and reporting
+        # green for that is the same lie as hiding a finding.
         run: |
+          status=0
           echo "::group::npm audit (production dependencies of src/web)"
-          ( cd src/web && npm audit --omit=dev ) || true
+          ( cd src/web && npm audit --omit=dev ) || { status=1; echo "npm audit: advisories found, or the audit itself failed"; }
           echo "::endgroup::"
           echo "::group::pip-audit (src/api)"
-          uv run --directory src/api --with pip-audit pip-audit || true
+          uv run --directory src/api --with pip-audit pip-audit || { status=1; echo "pip-audit: advisories found, or the audit itself failed"; }
           echo "::endgroup::"
+          exit $status
 
       - name: Build (web)
         working-directory: src/web

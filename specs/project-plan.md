@@ -14,25 +14,41 @@ dod_source: null
 
 > **`[X]` means the epic has passed QC and merged to the default branch** — its
 > workspace carries `.qc-passed` and its work is on `main`. Per
-> `amend-project/SKILL.md`, a ticked epic is **immutable**: only unchecked epics
-> may be adjusted by a later amendment.
+> `amend-project/SKILL.md`, a ticked epic is **immutable as to scope**: no later
+> amendment may add, remove, or redefine a ticked epic's objectives, requirements,
+> or deliverables.
 >
-> The six rows that were merged but unticked — E001 through E004, E006 and E010 —
-> are now ticked. This note previously described that gap as open and warned that
-> back-filling the rows would freeze them against adjustment in the same stroke as
-> recording their status. Both halves have now happened, in that order and in
-> parallel, which is worth keeping: the tick landed on the default branch while an
-> amendment was in flight against one of the rows it ticked.
+> **Immutability of scope is not immutability of the record.** A ticked epic's
+> artifacts MUST still be corrected to stay true of what was built, and three
+> kinds of change are therefore admitted against a ticked epic:
 >
-> **E006 carries one recorded exception.** Its tick is correct — it passed QC on
-> the scope it had. An amendment then gave it ownership of populating
-> `chunk.part_numbers`, which no epic had owned, so its scope grew *after* its gate
-> ran. The tick and the exception assert different things and both are true: see
-> E006 under Epic Details, which states that its markers no longer describe its
-> full scope and that it owes its gate again. Adjusting a ticked epic is otherwise
-> not permitted; the exception is written down here so it cannot be read as the
-> rule. Where a row and a workspace marker disagree, the marker is the epic's real
-> state.
+> 1. **Admitting a later epic's extension** of an object the ticked epic created,
+>    where that extension is licensed by a decision record — see {SAD:ADR-0024}.
+>    The ticked epic's normative documents record what the database now is; they
+>    do not thereby acquire new scope, and the extension is the later epic's work
+>    and the later epic's responsibility.
+> 2. **Correcting a statement that has become false** — a stale count, a
+>    superseded rationale, an enumeration overtaken by a later revision.
+> 3. **Discharging a propagation obligation** another epic recorded against it.
+>
+> None of these reopens the epic's QC verdict, and none is a scope change. What
+> the rule forbids is reaching back into finished work to change what it was for.
+>
+> **Why this was amended.** The rule previously read as immutability of the whole
+> row, and it collided with the obligation queue on its first real test. E009
+> extends two tables E003 created and reverses a privilege decision E003
+> recorded; those needed E003's `data-model.md` and its TR-083 amended, and both
+> amendments were recorded as obligations (P-6, P-9) precisely because a feature
+> branch may not perform them. E001–E004 had been left deliberately unticked so
+> they stayed adjustable — the earlier note said so in terms — and when the ticks
+> were back-filled to record status, the read-as-written effect was to freeze
+> E003 against amendments already owed to it. That would have left a normative
+> document permanently false about its own schema with no legal correction path,
+> which is a worse outcome than either the tick or the amendment was trying to
+> prevent. The tick and the obligation should not race; scoping immutability to
+> scope is what stops them racing. Recorded rather than resolved by unticking,
+> because the ticks are correct — E001–E006 and E007, E010 have all passed QC and
+> merged.
 
 ### Wave 1 — Foundation
 
@@ -141,12 +157,13 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 
 ### Integration Risks
 
-- **Migration collisions (E003, E004; also E005, E006).** Two epics adding schema migrations in the same wave will conflict on migration ordering. Mitigation: each epic claims its migration numbers at start and owns a disjoint table set.
+- **Migration collisions (E003, E004; also E005, E006).** Two epics adding schema migrations in the same wave will conflict on migration ordering. Mitigation: each epic claims its migration numbers at start — by committing a reserved-prefix marker to the default branch, where the next allocator's scan will find it — and owns a disjoint table set.
 - **Interface shell contention (E010, E011; later E012, E013).** Parallel interface epics both modify routing and layout. Mitigation: the shell — navigation, layout, data-fetching conventions — is established once in E010 and treated as read-only by later interface epics.
 - **Retrieval configuration surface (E008 vs E014).** E014 exercises the exact-search path while E008 owns the configuration flag. Mitigation: the flag controls index usage only; filters, fusion, fetch depth, and reranking are shared code, per ADR-0005.
 - **Inert weight-B arm, and the re-ingest that repairs it (E006 vs E008) — live now.** `chunk.part_numbers` is NULL on all 6,391 chunks E006 wrote, so the weight-B slot of the generated `search_vector` is empty corpus-wide. E008 is in flight against that corpus and its FR-005 correctly *reports* the inert weighting rather than repairing it — E008 reads the chunk table and writes nothing to it. The risk is ordering, not ownership: E006's repair requires a re-ingest, and any lexical-arm figure E008 measures beforehand describes a corpus that no longer exists once it lands. Two epics can each be correct and the published number still be stale. Mitigation: E008's per-layer empty-weighted-field proportion is published *with the ingest generation it was measured against* ({SAD:ADR-0021} already makes a generation the unit), so a figure and the corpus it describes cannot be separated; any retrieval figure measured pre-repair is re-run post-repair before it reaches a published result. The two are otherwise parallel-safe — E006 writes the column, E008 only reads it.
 - **Draw-array contract (E007 vs E010).** E007 writes both the canonical draw array and the derived survival array; E010 reads the latter. Mitigation: schema version on the forecast run, checked by the reader.
 - **Single-import-site regression (E005) — realized, and since repaired at `a18abb5`.** `tests/checks/test_single_import_site.py` permits exactly one file under `/src` to name `project-vendor-roster`. Seven did, so the required check "Cross-entry checks, image assertions, and supply chain" failed on `main` from `acfd1eb` until the repair. The count went 1→2 at `3bdc15a` and reached 7 by `915264a`, entirely within E005 — which had already repaired the identical breakage once, at `f732375`, by deriving the path from `model.roster.reader` instead of spelling it. The second repair took the same shape. Three offenders were generation-input manifest labels and three were test files, so this was name duplication rather than a second reader; the rule exists because the duplicate is the copy nobody remembers exists. Two details are worth keeping for whoever meets this next: a repair must reduce the count to one rather than reorder, because the companion assertion reads the first path-sorted mention and any survivor under `model/procurement/` keeps it red — and the same rule has now regressed twice in one epic, which says the check catches it but nothing prevents it. Mitigation for the class: what failed was not the check but noticing it, since the step is skipped whenever an earlier step aborts, and E007 aborted an earlier step on three consecutive runs. A required check that silently does not run is indistinguishable from one that passes.
+- **Standing dependency advisories with no forward fix (any epic building the interface) — live now.** Four advisories sit in `src/web`'s production tree: `postcss` path traversal and arbitrary file read via attacker-controlled `sourceMappingURL` (GHSA-r28c-9q8g-f849, GHSA-6g55-p6wh-862q, both high) and XSS in its stringify output (GHSA-qx2v-qp2m-jg93, moderate), plus `sharp`'s inherited libvips CVEs (GHSA-f88m-g3jw-g9cj, high). All four arrive transitively through `next`, which pins `postcss <=8.5.17` and `sharp <0.35.0`. **There is nothing to upgrade to.** 16.2.12 is the newest stable `next` and the vulnerable range runs to `16.3.0-preview.7`, so no released version resolves them; the only fix the tooling proposes is a downgrade to 9.3.3, seven majors back and a stack deviation in its own right. Exposure is bounded by what the advisories actually require: `postcss` processes CSS authored in this repository at build time rather than attacker-supplied CSS, and `sharp` handles images the product ships rather than images a user uploads. Mitigation: reported in CI, not gated — deliberate, since security is not among the project's required quality-control categories. Two things are recorded so they are not rediscovered: the reporting step exits zero despite a design note in the workflow stating it must not, so the finding lands in a collapsed log group rather than a failed step and repairing that is code work outside this plan; and the only prior record of this limitation lives in a completed epic's workspace, which is how it went unowned across four epics. **Reversal trigger**: a stable `next` release outside the vulnerable range, at which point the pins move and this entry closes. **Owner**: E015.
 - **Amendment during flight (any wave with more than one epic).** The contended resource is not two epics amending at once — it is one epic amending while the others are mid-flight. The amendment procedure re-derives whole managed sections rather than patching lines, this plan is rewritten by every amendment and holds every epic's entry, and unchecked epics are precisely the ones another epic's amendment may adjust. Meanwhile the in-flight branches keep validating against the instruction version they were cut from, and quality control treats any violation as critical — so an epic can pass its gate against a rule that no longer exists. Mitigation: amendments serialize on the default branch, and every feature records the instruction version its compliance audit ran against, so drift is detectable at the next gate rather than at merge.
 
 ### Shared Resource Conflicts
@@ -154,8 +171,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | Resource | Contending epics | Resolution |
 |---|---|---|
 | Governance documents | Any epic raising an amendment | Single writer: one amendment in flight at a time, performed on the default branch and landed before the next begins. A feature branch records the need and does not perform it. Every in-flight epic rebases and re-runs its compliance gate afterwards |
-| Decision record numbers | Any epic creating an ADR | Number claimed at epic start, as migration numbers are |
-| Migration sequence | E003, E004, E005, E006 | Numbers claimed at epic start; disjoint table ownership |
+| Decision record numbers | Any epic creating an ADR | Number claimed at epic start by committing a placeholder record to the default branch — status `claimed`, claiming epic named, no decision content — so the directory scan that allocates the next number can see it. A claim held only in a feature workspace is not a claim |
+| Migration sequence | E003, E004, E005, E006 | Prefix block claimed at epic start by a reserved-prefix marker committed to the default branch; disjoint table ownership |
 | Interface shell | E010, E011, E012, E013 | Established in E010, read-only thereafter |
 | Retrieval configuration | E008, E014 | Flag scope limited to index usage |
 | Model gateway module | E006, E011 | Introduced in E004; both consume, neither modifies |
@@ -346,7 +363,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 
 - **Category**: PRODUCT · **Priority**: P1
 - **Source**: {PRD:CAP-003}{SAD:ADR-0005}{SAD:ADR-0006}{SAD:ADR-0023}
-- **Scope**: Implement fused retrieval as a single database statement combining a weighted full-text arm and a dense vector arm by reciprocal rank fusion, then rerank the fused candidates with a locally loaded cross-encoder. A regex router sends part-number-shaped queries to a deterministic lookup that falls through to hybrid retrieval rather than replacing it. Also **relocates local inference into `/src/gateway`** per {SAD:ADR-0023} — the query encoder and the reranker sessions — and reconciles the two dependency guards that placement trips.
+- **Scope**: Implement fused retrieval as a single database statement combining a weighted full-text arm and a dense vector arm by reciprocal rank fusion, then rerank the fused candidates with a locally loaded cross-encoder. A regex router sends part-number-shaped queries to a deterministic lookup that falls through to hybrid retrieval rather than replacing it. Also **relocates local inference into `/src/gateway`** per {SAD:ADR-0024} — the query encoder and the reranker sessions — and reconciles the two dependency guards that placement trips.
 - **Actors**: Coordinator, developer
 - **Key entities**: Chunk, RetrievalResult
 - **Depends on**: E006
@@ -375,10 +392,10 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Source**: {PRD:CAP-004}
 - **Scope**: Link the same material across specification, submittal, and purchase-order records by normalizing manufacturer aliases and units, blocking on manufacturer and part-number prefix, scoring candidate pairs on string similarity and attribute agreement, and clustering. Pairs below the confidence threshold are withheld and routed to a review queue rather than merged.
 - **Actors**: Coordinator, developer
-- **Key entities**: ResolvedEntity, CandidatePair, ReviewQueueItem
-- **Depends on**: E005, E006
-- **Dependency contracts**: E009 needs extracted line items from E006 and procurement lines from E005
-- **Depended on by**: E014, E016
+- **Key entities**: ResolvedEntity, CandidatePair, ReviewQueueItem, ManufacturerAliasTable, LabeledPairSet, ThresholdCalibration, ResolutionRun, ResolvedEntityInducedPair, ResolutionFigure
+- **Depends on**: E002, E005, E006
+- **Dependency contracts**: E009 needs extracted line items from E006 and procurement lines from E005, and **the manufacturer catalogue E002 commits** — the alias table's initial contents derive from it and every resolution run records that catalogue's digest, so the edge is structural rather than incidental
+- **Depended on by**: E012, E014, E016
 - **Produces (shared)**: Resolved entity clusters, review-queue records, alias normalization tables
 - **Constraints**: Tuned for merge precision over recall; uncertain pairs withheld, never merged; the review-queue record shape must let a later workspace be additive
 - **Acceptance criteria**:
@@ -389,7 +406,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Specify input**:
   - Description: Resolve material identity across specification, submittal, and purchase-order records with precision-biased scoring and explicit routing of uncertain pairs to human review.
   - Actors: Coordinator, developer
-  - Key entities: ResolvedEntity, CandidatePair, ReviewQueueItem
+  - Key entities: ResolvedEntity, CandidatePair, ReviewQueueItem, ManufacturerAliasTable, LabeledPairSet, ThresholdCalibration, ResolutionRun, ResolvedEntityInducedPair, ResolutionFigure
   - Depends on artifacts: `specs/prd.md` (CAP-004, Product Principles), E005 lines, E006 extractions
   - Constraints: Precision over recall; refusal over incorrect merge; review-queue contract stable for later workspace
 
@@ -448,8 +465,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Scope**: Give the coordinator a detail view for a single line showing the plotted posterior distribution, the covariates driving the forecast, and links back to the originating document page for each linked specification, submittal, and purchase-order record.
 - **Actors**: Coordinator
 - **Key entities**: PurchaseOrderLine, PosteriorDraws, ResolvedEntity, Chunk
-- **Depends on**: E006, E007, E010
-- **Dependency contracts**: E012 needs the interface shell and risk-read module from E010, draw arrays from E007, and chunk page metadata from E006
+- **Depends on**: E006, E007, E009, E010
+- **Dependency contracts**: E012 needs the interface shell and risk-read module from E010, draw arrays from E007, and chunk page metadata from E006. It also needs **`resolved_entity_member` rows from E009**, and that edge is structural rather than convenient: the only route from a purchase-order line to a document page runs line → member → resolved entity → member → extracted value → chunk → document, and `extracted_value` is permanently forbidden a foreign key to `purchase_order_line`, so no shortcut exists to be found later. The table is empty until E009 writes it, which is why E012's third acceptance criterion is about the unresolved state rather than an edge case
 - **Depended on by**: —
 - **Produces (shared)**: Detail view, source-navigation component
 - **Constraints**: The plotted distribution reads the same artifact the risk figures derive from; the interface shell is consumed read-only
@@ -462,8 +479,8 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
   - Description: Build the single-line detail view with a plotted posterior distribution and navigation back to every originating source document page.
   - Actors: Coordinator
   - Key entities: PurchaseOrderLine, PosteriorDraws, ResolvedEntity, Chunk
-  - Depends on artifacts: `specs/prd.md` (CAP-007), E006 chunks, E007 draws, E010 shell
-  - Constraints: Single source of truth for distribution and summary figures
+  - Depends on artifacts: `specs/prd.md` (CAP-007), E006 chunks, E007 draws, E009 resolved-entity members, E010 shell
+  - Constraints: Single source of truth for distribution and summary figures; the identity traversal is built against the committed schema with frozen fixtures while E009's tables are empty, and E009's planned alter of those tables is the trigger to re-verify it
 
 ### E013 — Model Invocation Panel
 
@@ -495,9 +512,9 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Source**: {PRD:CAP-009}{SAD:ADR-0009}{SAD:ADR-0022}
 - **Scope**: Build the evaluation harness covering retrieval, identity resolution, and forecast calibration. Evaluation sets are canonicalized, hashed, and committed before any tuning; the harness verifies the hash and aborts on mismatch. **E007 performs the train/held-out split of E005's lines; E014 freezes and hashes the resulting set.** The two are deliberately separated: construction belongs with the epic that reads the lines, and the freeze-before-tuning guarantee belongs with the harness that would otherwise be tuning against its own evaluation set. Results are written to a committed manifest that a reproduction job diffs against within the published tolerance.
 - **Actors**: Developer, evaluator
-- **Key entities**: GoldenSetItem, LabeledPair, ResultsManifest
+- **Key entities**: GoldenSetItem, ResultsManifest
 - **Depends on**: E004, E007, E008, E009
-- **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007. It also needs E004's `replay` mode to resolve every model-dependent step with no network and no credential, and owns publishing replayed and live numbers side by side — the decoding-variance disclosure {SAD:ADR-0007} commits to, which E004 supplies the modes and the invocation record for but does not perform. Edge added during E004 planning.
+- **Dependency contracts**: E014 needs retrieval from E008, resolved entities from E009, and forecasts from E007. **`LabeledPair` is authored, frozen and hashed by E009, not by E014** — E014 consumes it and verifies its hash. The former arrangement was circular: it assigned E014 the entity while making E014 depend on E009, so E009 had no set to calibrate its thresholds against within its own scope. The separation it was meant to provide — construction apart from calibration — is reconstructed mechanically instead: E009 binds its threshold constants and its weight vector to the verified labeled-set hash and refuses to publish on divergence, so tuning against the evaluation set is detectable rather than merely forbidden ({SAD:ADR-0024} is a separate exception and does not cover this). It also needs E004's `replay` mode to resolve every model-dependent step with no network and no credential, and owns publishing replayed and live numbers side by side — the decoding-variance disclosure {SAD:ADR-0007} commits to, which E004 supplies the modes and the invocation record for but does not perform. Edge added during E004 planning.
 - **Depended on by**: E015
 - **Produces (shared)**: Frozen evaluation sets with hashes, evaluation harness, results manifest, reproduction job
 - **Constraints**: Sets frozen and hashed before tuning; retrieval evaluation runs the exact-search path; a missed target is published, never suppressed; every interval is computed by a method admissible for the estimator it bounds ({SAD:ADR-0022}) — recall@5 is a hit-or-miss proportion and takes Wilson, MRR is a mean of per-query reciprocal ranks and takes a percentile bootstrap over queries, and merge precision keeps its separately registered rule-of-three bound
@@ -526,12 +543,13 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 - **Dependency contracts**: E015 needs the results manifest and calibration artifacts from E014
 - **Depended on by**: E018
 - **Produces (shared)**: README, model card, limitations record set
-- **Constraints**: Limitations address epistemic validity only — deliberately excluded features belong in scope, not limitations; every published figure traceable to the results manifest, and every published interval carrying the name of its method plus, where resampled, its count and seed ({SAD:ADR-0022}) — a README figure that drops the method reintroduces exactly the ambiguity that let one interval name cover two estimators
+- **Constraints**: Limitations address epistemic validity, with one named exception — a standing supply-chain advisory that no released version resolves is carried here too, because it is a live claim about the shipped artifact rather than a feature choice and there is no other document that outlives the epic which found it. Deliberately excluded features remain out: they belong in scope, not limitations, and widening the section to admit an advisory must not be read as widening it to admit them. Every published figure traceable to the results manifest, and every published interval carrying the name of its method plus, where resampled, its count and seed ({SAD:ADR-0022}) — a README figure that drops the method reintroduces exactly the ambiguity that let one interval name cover two estimators
 - **Acceptance criteria**:
   - [ ] A model card documents intended use, factors, metrics, evaluation data, and caveats
   - [ ] Each limitation is written as scope decision, supporting evidence, reversal trigger, and production-scale alternative
   - [ ] No deliberately excluded feature appears as a limitation
   - [ ] The README carries the architecture diagram, the evaluation results, the calibration plot, and reproduction steps that work from a clean checkout
+  - [ ] The standing dependency advisories are published as a limitation record carrying their reversal trigger, or recorded as closed if a stable release has since resolved them
 - **Specify input**:
   - Description: Write the model card, limitations-as-decision-records, architecture diagram, and calibration reporting that let a skeptical reader audit the system without reading code.
   - Actors: Evaluator
@@ -680,6 +698,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0021 Superseded Generations Are Removed at Promotion, Not Retained | accepted | E003, E006, E008, E009, E012 |
 | ADR-0022 Interval Method Is Selected Per Estimator, Not Per Document | accepted | E014, E015 |
 | ADR-0023 Local Inference Lives in the Shared Gateway Package | accepted | E006, E008 |
+| ADR-0024 A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception | accepted | E003, E009 |
 
 ### Deployment Decisions
 
@@ -687,7 +706,7 @@ No Deployment & Operations Document exists, so no operational epics were extract
 
 ### Uncovered Items
 
-None. All 14 capabilities and all 19 accepted architecture decisions map to at least one epic, across 23 records of which 4 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
+None. All 14 capabilities and all 21 accepted architecture decisions map to at least one epic, across 24 records of which 3 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
 
 It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-0019, ADR-0020, and ADR-0021 had all landed, so three records — one of them a supersession — were absent from the only place this document checks whether a decision reached an epic. The recount convention was the mitigation and it did not fire, because it is prose in this section rather than a step anything performs. Recounting catches a wrong *number*; it does not catch a missing *row*, and a coverage table that silently omits a record reports full coverage of the subset it happens to list. The four rows added by this amendment were reconciled against `specs/adrs/` directly rather than against the previous count.
 
@@ -702,7 +721,7 @@ It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-
 | ExtractedValue | E003, E006 | E009, E012 |
 | PurchaseOrderLine | E003, E005 | E007, E009, E010, E017, E019 |
 | LifecycleEvent | E003, E005 | E007 |
-| ResolvedEntity | E003 (schema), E009 (populated) | E012, E014, E016 |
+| ResolvedEntity | E003 (schema), **E009 (schema extension and populated)** | E012, E014, E016 |
 | ReviewQueueItem | E009 | E016 |
 | ForecastRun | E003, E007 | E010, E012, E014 |
 | PosteriorDraws / SurvivalArray | E003 (schema), E007 (populated) | E010, E012, E019 |
@@ -742,5 +761,5 @@ Before starting any epic in Wave N+1, verify:
 2. The technical context document reflects any decision made or changed during Wave N; a material change means a superseding decision record, not an edit.
 3. Every shared artifact listed for Wave N under Shared Artifact Surface exists and is reachable by its declared consumers.
 4. Every dependency contract declared by a Wave N+1 epic is satisfiable against what Wave N actually produced — in particular the forecast-run schema version, the review-queue record shape, and the retrieval configuration flag's scope.
-5. Migration numbers and decision-record numbers for the next wave are claimed before any parallel epic begins, so concurrent schema work cannot collide and two epics cannot allocate the same ADR number.
+5. Migration numbers and decision-record numbers for the next wave are claimed before any parallel epic begins, **and each claim is visible on the default branch** — a placeholder record for an ADR number, a reserved-prefix marker for a migration block — so the scan that allocates the next number can see it. A claim held only on a feature branch does not satisfy this step: it was tried, and four renumbers in one day were the result.
 6. No epic enters the wave carrying a compliance audit against a superseded version of the project instructions. Any amendment landed during Wave N is picked up by rebasing, and the affected epics re-run their compliance gate before starting Wave N+1 work.

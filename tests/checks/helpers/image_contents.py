@@ -40,26 +40,21 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 #: `schema_constants` over the connection. Without this exclusion the denylist
 #: forbids the image the thing the design requires it to have.
 #:
-#: `numpy` joins on the same ground, from E008 ({SAD:ADR-0023}). The serving
-#: image is required to carry a local-inference runtime — ADR-0006 loads a
-#: cross-encoder session in it and ADR-0019 embeds the query on it at request
-#: time — and `onnxruntime` pulls NumPy transitively. Without this exclusion the
-#: denylist again forbids the image the thing the design requires it to have.
+#: What TR-013 protects is now PyMC, ArviZ and pandas — still derived, never
+#: listed, and none of them appears here.
 #:
-#: The width is load-bearing and is **NumPy alone**. `onnxruntime` and
-#: `tokenizers` are deliberately absent: this denylist derives from what `model`
-#: *directly* declares, and E008 relocated both to `/src/gateway`, so they leave
-#: it on their own. Naming them here would trip the companion assertion below
-#: that every excluded name is still declared by `model`. NumPy is different
-#: only because `model` goes on declaring it for PyMC and pandas while it also
-#: reaches the serving image through the runtime — so it is the one name that
-#: has to be admitted rather than relocated.
+#: NumPy is the fourth name and no longer among them. {SAD:ADR-0023} places the
+#: local-inference runtime in `/src/gateway`, `onnxruntime` pulls NumPy
+#: transitively, and the serving image is *required* to carry that runtime, so
+#: NumPy reaches the image by a sanctioned route. It cannot leave the derived
+#: denylist the way `onnxruntime` and `tokenizers` do — by being declared in the
+#: gateway instead of `/src/model` — because `/src/model` goes on declaring it
+#: for PyMC and pandas. Admitting it here is the only route, which is why
+#: project instructions v1.2.9 names NumPy as the single explicitly listed term.
 #:
-#: What TR-013 protects narrows accordingly, and the cost is stated rather than
-#: glossed: PyMC, ArviZ and pandas are still derived and never listed, but NumPy
-#: leaves the set the image is *guaranteed* to exclude, so it could later arrive
-#: by a route nobody intended with nothing reporting it. That is the price of
-#: ADR-0006 and it is paid here deliberately.
+#: The cost is stated rather than glossed, in v1.2.9's own words: the derived
+#: protection narrows from four heavy packages to three, so NumPy could
+#: henceforth arrive by an unintended route with nothing reporting it.
 SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 API_LOCK = REPO_ROOT / "src" / "api" / "uv.lock"
 MODEL_LOCK = REPO_ROOT / "src" / "model" / "uv.lock"

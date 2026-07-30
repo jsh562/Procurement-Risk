@@ -31,9 +31,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-sys.path.insert(0, str(REPO_ROOT / "tests" / "checks"))
+# The repository root, so the resolver is the *same module object* the root
+# checks import as `tests.checks.helpers.ports`. Putting `tests/checks` on the
+# path instead would import the same file under a second name, giving two module
+# objects, two sets of state, and a patch in a test that the launcher never sees.
+sys.path.insert(0, str(REPO_ROOT))
 
-from helpers.ports import is_bindable, resolve_host_port  # noqa: E402
+from tests.checks.helpers.ports import is_bindable, resolve_host_port  # noqa: E402
 
 #: What `docker-compose.yml` publishes the database on unless overridden. Only a
 #: starting point for the search — the second checkout on a machine cannot have it.
