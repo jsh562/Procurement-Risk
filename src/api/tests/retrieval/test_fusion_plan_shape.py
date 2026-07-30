@@ -106,22 +106,31 @@ def test_the_statement_binds_the_depth_from_configuration(
     statement could not be published as *the* value in force, because nothing
     would guarantee the published figure and the executed query agreed.
     """
-    config = load_retrieval_config(
-        {"PRC_RETRIEVAL_FETCH_DEPTH": "7", "PRC_RETRIEVAL_RERANKED_COUNT": "7"}
-    )
-    tight = explain_plan(connection, "bronze valve", [0.0] * 384, config=config)
-    tight_counts = sorted(node.get("Plan Rows", -1) for node in _limit_nodes(tight))
     default = load_retrieval_config({})
     loose = explain_plan(connection, "bronze valve", [0.0] * 384, config=default)
     loose_counts = sorted(node.get("Plan Rows", -1) for node in _limit_nodes(loose))
-    # The discriminating comparison: a depth *below* the corpus size binds the
-    # estimate, while a depth above it does not. If the statement carried a
-    # literal, both plans would be identical.
-    assert all(count <= 7 for count in tight_counts), (
-        f"a cut exceeds the configured depth of 7; found {tight_counts}"
+
+    # Self-calibrating rather than assuming a corpus size. A depth only binds the
+    # planner's estimate when it is *below* that estimate, so the discriminating
+    # depth is derived from what the planner just said rather than typed here.
+    # Typing one couples this assertion to the row count and to whether some
+    # other test happened to run ANALYZE first — which is exactly how it failed
+    # once, silently becoming a comparison of one plan against itself.
+    binding = max(1, max(loose_counts) - 1)
+    tight_config = load_retrieval_config(
+        {
+            "PRC_RETRIEVAL_FETCH_DEPTH": str(binding),
+            "PRC_RETRIEVAL_RERANKED_COUNT": str(binding),
+        }
+    )
+    tight = explain_plan(connection, "bronze valve", [0.0] * 384, config=tight_config)
+    tight_counts = sorted(node.get("Plan Rows", -1) for node in _limit_nodes(tight))
+
+    assert all(count <= binding for count in tight_counts), (
+        f"a cut exceeds the configured depth of {binding}; found {tight_counts}"
     )
     assert tight_counts != loose_counts, (
-        f"configuring the depth changed nothing in the plan (7 -> {tight_counts}, "
+        f"configuring the depth changed nothing in the plan ({binding} -> {tight_counts}, "
         f"{default.fetch_depth} -> {loose_counts}), which is what a literal in the "
         f"statement would look like"
     )

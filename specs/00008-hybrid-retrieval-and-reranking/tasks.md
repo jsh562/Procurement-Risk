@@ -94,12 +94,12 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T025 [US1] {FR-003,FR-037} Fetch 50 candidates per arm and cut the fused ordering to the reranked count of 50 in src/api/src/api/retrieval/fusion.py after:T029
 - [X] T030 [US1] {FR-003} [COMPLETES FR-003] Assert the candidate set at the 50-row cut, with a tie engineered at the last in-window position, in src/api/tests/retrieval/test_candidate_set.py — done only on an observed failure after:T025 ← T023:seeded_corpus
 - [X] T026 [US1] {FR-004} Apply the tie-break key inside each arm's CTE as well as in the final ordering, in retrieval/fusion.py (AD-001, HINT-001) after:T030
-- [ ] T028 [US1] {FR-002} [COMPLETES FR-002] Capture the statements one search executes and assert exactly one ranking statement with no SET in src/api/tests/retrieval/test_single_statement.py after:T026
-- [ ] T031 [US1] {FR-020} Assert identical ordering twice, under seven flipped planner settings whose EXPLAIN plan differs, and across an exact-path rebuild, in src/api/tests/retrieval/test_determinism.py after:T026
-- [ ] T032 [US1] {FR-008,FR-013} Construct results only by private-factory projection from the chunk row, carrying page and match kind, in retrieval/results.py → exports: RetrievalResult
-- [ ] T033 [US1] {FR-009} Report an empty result set as empty and never pad a short set to reach a target count, in src/api/src/api/retrieval/results.py after:T032
-- [ ] T034 [US1] {FR-008} Scan construction sites and assert the private factory is the only one (AD-004) in src/api/tests/retrieval/test_page_provenance.py after:T033
-- [ ] T104 [US1] {FR-009,FR-013} Assert an empty result set is reported empty, a short set is never padded, and match_kind is carried, in src/api/tests/retrieval/test_results.py after:T033
+- [X] T028 [US1] {FR-002} [COMPLETES FR-002] Capture the statements one search executes and assert exactly one ranking statement with no SET in src/api/tests/retrieval/test_single_statement.py after:T026
+- [X] T031 [US1] {FR-020} Assert identical ordering twice, under seven flipped planner settings whose EXPLAIN plan differs, and across an exact-path rebuild, in src/api/tests/retrieval/test_determinism.py after:T026
+- [X] T032 [US1] {FR-008,FR-013} Construct results only by private-factory projection from the chunk row, carrying page and match kind, in retrieval/results.py → exports: RetrievalResult
+- [X] T033 [US1] {FR-009} Report an empty result set as empty and never pad a short set to reach a target count, in src/api/src/api/retrieval/results.py after:T032
+- [X] T034 [US1] {FR-008} Scan construction sites and assert the private factory is the only one (AD-004) in src/api/tests/retrieval/test_page_provenance.py after:T033
+- [X] T104 [US1] {FR-009,FR-013} Assert an empty result set is reported empty, a short set is never padded, and match_kind is carried, in src/api/tests/retrieval/test_results.py after:T033
 - [ ] T035 [US1] {FR-005} Publish the per-layer proportion of retrieved chunks whose weighted fields are all empty, in src/api/src/api/retrieval/report.py after:T002 → exports: weighted_field_report
 - [ ] T099 [US1] {FR-049} Carry the ingest generation on every published retrieval figure beside the corpus size, in src/api/src/api/retrieval/report.py after:T035 → exports: ingest_generation
 - [ ] T106 [US1] {FR-051} [COMPLETES FR-051] Declare the closed no_interval_reason enum in contracts/openapi.yaml, require an interval or a denominator-plus-reason on every emitted figure, and refuse a figure carrying neither, in src/api/src/api/retrieval/report.py after:T099
