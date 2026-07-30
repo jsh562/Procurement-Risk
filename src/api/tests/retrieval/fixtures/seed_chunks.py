@@ -45,6 +45,7 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Final
 
 import psycopg
@@ -78,6 +79,25 @@ class SeededCorpus:
     @property
     def size(self) -> int:
         return len(self.chunk_ids)
+
+
+def _encoder_identity() -> tuple[str, str]:
+    """The identity the vendored encoder actually records.
+
+    Read from the committed artifact rather than typed here. FR-007 refuses
+    retrieval when the query encoder's identity differs from the one on the
+    chunks, so a fixture that wrote a plausible-looking revision would make
+    every route test fail the identity gate — which is exactly what a
+    hand-written `"main"` did, and exactly what the gate is for.
+    """
+    import json
+
+    record = json.loads(
+        (Path(__file__).resolve().parents[5] / "data" / "encoder" / "digests.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    return str(record["model_id"]), str(record["revision"])
 
 
 def _deterministic_id(seed: str) -> str:
@@ -296,8 +316,7 @@ def seeded_corpus(connection: psycopg.Connection) -> SeededCorpus:
                     row.part_numbers,
                     row.body_text,
                     "[" + ",".join(repr(v) for v in _unit_vector(row.key)) + "]",
-                    "sentence-transformers/all-MiniLM-L6-v2",
-                    "main",
+                    *_encoder_identity(),
                 ),
             )
     return SeededCorpus(

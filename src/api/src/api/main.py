@@ -15,6 +15,7 @@ from typing import Final
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.retrieval.routes import router as retrieval_router
 from api.routes.worklist import router as worklist_router
 
 #: The interface tier's origin, which is a *different* origin from this one:
@@ -57,3 +58,4 @@ app.add_middleware(
 )
 
 app.include_router(worklist_router)
+app.include_router(retrieval_router)
