@@ -26,10 +26,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Audited against**: `project-instructions.md` **v1.2.8** (last amended 2026-07-29) ·
-**Audit date**: 2026-07-29 · **Verdict**: PASS after remediation, with the amendments in
-§Pending Amendments outstanding. Recorded because this document moved four times in four days
-while this epic was in flight, and a compliance record that names no version cannot detect drift.
+**Audited against**: `project-instructions.md` **v1.2.9** (last amended 2026-07-29) ·
+**Audit date**: 2026-07-29 · **Verdict**: PASS after remediation. **All six blocking amendments have
+landed**; the two rows that were CONDITIONAL are closed by v1.2.9 itself. Recorded because this
+document moved five times in five days while this epic was in flight, and a compliance record that
+names no version cannot detect drift.
+
+*(Re-audited at Analyze against v1.2.9, as Governance requires of a feature whose recorded audit
+names a superseded version. The re-run was not a re-stamp: it found two build-breaking gaps —
+AD-015 and AD-016 below — that the v1.2.8 audit **could not** have found, because v1.2.9 is what
+placed inference in the gateway, and one standing Data Provenance MUST that both prior audits
+missed.)*
 
 | Principle / Section | Verdict | Where |
 |---|---|---|
@@ -37,16 +44,16 @@ while this epic was in flight, and a compliance record that names no version can
 | II. Uncertainty Is the Product | PASS | Recall with a Wilson interval, MRR with a percentile bootstrap, and an explicit unresolvable verdict where intervals overlap |
 | III. Precision Over Recall Where a Mistake Is Silent | PASS | FR-007 refuses on encoder-identity mismatch rather than answering; FR-009 returns empty as empty; the route is additive |
 | IV. Agent Output Style | PASS with a recorded exception | Template sections, plus two the template does not name: §Pending Amendments, which Governance requires of a branch that records an amendment it may not perform, and §Decisions Taken at Checklist's plan-side counterpart folded into §Checklist Outcome. Both carry an obligation no template section owns. The three summary epilogues an earlier draft carried were removed at Analyze — §IV forbids restating finished work, and each duplicated a section above it |
-| V. The Model Extracts, Code Computes | PASS with a scheduled contract change | All ranking arithmetic is in one statement inside the deterministic boundary, and AD-005 settles where reranker score-sorting sits. **`api.retrieval` is the third computation package, so the forbidden contract must name it** — E010 recorded the precedent when it added the second: a boundary that guards one of two is a boundary in name. Scheduled in §Project Structure and mapped at FR-002 |
+| V. The Model Extracts, Code Computes | PASS with **two** scheduled contract changes | All ranking arithmetic is in one statement inside the deterministic boundary, and AD-005 settles where reranker score-sorting sits. **`api.retrieval` is the third computation package, so the api forbidden contract must name it** — E010 recorded the precedent when it added the second: a boundary that guards one of two is a boundary in name. **The same argument reaches the gateway, and that is new at v1.2.9**: `src/gateway/pyproject.toml`'s contract forbids `gateway.provider` from reaching `gateway.compute`, and T020 puts masked mean pooling and L2 normalization into `gateway.inference` — a second arithmetic package in the same root as the single provider-facing module in the repository. Before v1.2.9 no inference lived in the gateway, so this gap did not exist to be found. Both changes are scheduled: T006 and **T102** (AD-015) |
 | VI. Evaluate Before You Tune | PASS with a scheduled deliverable | The fusion constant is already fixed at 60 by `specs/sad.md`'s sequence diagram, so FR-004's pre-registration is discharged against a registered document. **That answered the wrong clause on its own**: the principle governs *evaluation sets*, which must be frozen, hashed and committed before any tuning run, with the harness aborting on mismatch. SC-001 and SC-002 are measured at this epic's own gate on its own query set, so that set is E008's deliverable — see AD-010 and §Project Structure |
 | VII. Publish the Miss | PASS | Degraded mode is declared in every response; the sparse arm's contribution is a published row rather than an assumption; three limitations carry reversal triggers |
 | VIII. Honest Opponents | PASS | Reranking is reported against the strongest single arm, not only against fusion-only, which the spec itself calls weak |
-| Technology Stack | **CONDITIONAL — amendment required** | No new datastore. The stack names "ONNX Runtime **for INT8 CPU inference**"; this epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the INT8 one. E006 raised the same conflict **in its PR body**, which is not the amendment queue: nothing on that record obliges anyone to perform it, and FR-025 and FR-007 both depend on it. Raised here as **amendment 10**, blocking, with FR-047 and T096 as its verifier — by this plan's own standard, an obligation recorded only in prose has no verifier and nothing fails when it is skipped |
+| Technology Stack | **PASS** *(was CONDITIONAL; closed by v1.2.9)* | No new datastore. §Technology Stack now reads "ONNX Runtime **for local CPU inference, at whichever precision a given model ships — INT8 and FP32 graphs are both loaded**" (`project-instructions.md:50`), so FR-025's FP32 arm and AD-011/AD-013's two resident graphs are no longer a stack deviation. Landed `c8fb2ce` as queue item 10; FR-047 and T096 are the verifier. **One residual, and it is not covered by v1.2.9**: `pgvector` reads in §Technical Context above as a Python distribution, and `/src/model` declares it while `SHARED_INFRASTRUCTURE` admits only `psycopg`. Declaring it in `/src/api` would turn TR-004 red and would need a **seventh** amendment. It does not need declaring — see **AD-016** |
 | Testing & Quality Policy | PASS with three obligations | **The clause names risk arithmetic, fusion ranking and scoring functions, and it has two limbs — strict test-first and property tests — which are answered separately.** Fusion ranking's *property* limb is discharged by a **pseudo-oracle**, recorded in §VII's four-part limitation format with its independence assumption stated as empirically falsified rather than assumed (§Testing Strategy). Its *red-green* limb is **not** covered by that argument — SQL-residence removes the pure function a property test would target, and removes nothing about writing a test before the code it fails against. `tasks.md` therefore emits three ordered pairs for `fusion.py` (T027→T024, T029→T025, T030→T026), each completing on an observed failure. An earlier draft of this row extended the SQL argument across both limbs and emitted no pair. **`metrics.py` is a separate obligation and an easier one** — Wilson intervals, percentile bootstrap and the overlap verdict are pure scoring functions with no SQL obstacle, so they carry the mandatory test-first cycle and property tests directly. **That obligation is now carried by spec FR-042**, which names the properties and the generated input domains, rather than by this row and a table cell: a policy obligation recorded only in a plan has no verifier, and nothing fails when it is skipped. Ruff is the named lint and format gate and is in the Testing Strategy table |
-| Source Code Layout | **CONDITIONAL — amendment required** | New code under `/src/gateway` and `/src/api`; artifacts under `data/`. **But the clause reads "The gateway package carries neither a web framework nor the modeling stack", and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.** `onnxruntime` pulls NumPy transitively, so ADR-0023's decision contradicts this clause directly. Recorded as **amendment 3** and cited from ADR-0023; the design does not proceed on the strength of an ADR overriding a governing clause. **Amendment 3 covers both breached clauses, not only this one** — §Testing & Quality Policy separately asserts that the request-serving image contains no modeling-stack packages, and admitting NumPy to `SHARED_INFRASTRUCTURE` breaches that sentence too. An amendment naming §Source Code Layout alone would let T003 pass green with the image assertion still contradicted |
+| Source Code Layout | **PASS** *(was CONDITIONAL; closed by v1.2.9)* | New code under `/src/gateway` and `/src/api`. The clause now reads "The gateway package carries no web framework. It carries no modeling stack either, with one narrow exception admitted by {SAD:ADR-0023}: a shared local-inference runtime and its tokenizer, together with NumPy" (`project-instructions.md:69`), with **PyMC, ArviZ and pandas still forbidden**. The gateway holds exactly `onnxruntime`, `tokenizers` and transitive NumPy — the granted width and no more. The companion §Testing & Quality Policy narrowing landed in the same version bump, so the failure mode this queue named — T003 closing green while the image assertion stayed contradicted — did not occur. Landed `c8fb2ce` as queue item 3. **One residual**: the frozen evaluation set is committed, hashed data and the clause places data under `data/` — relocated to `data/evaluation_set/`, see §Project Structure |
 | Development Workflow | PASS with a scheduled check | Branch matches workspace matches epic. **§Temporary Files gains a verifier**: this is the one epic that downloads a model and runs a native toolchain, and `test_scratch_location.py` exists only under `src/api/tests/` — the tier that does neither. T017 carries the obligation and T098 extends the check to the gateway tier |
-| Data Provenance | PASS | FR-016 requires identity, revision, licence basis, source and digest for the vendored model, and — extended at Analyze — the quantization record for the *generated* INT8 graph plus a separate licence basis per graph, since a derived artifact does not inherit its source's licence by default |
-| Governance | **CONDITIONAL — 2 of 6 blocking items landed** | Ten amendments recorded, six blocking. **Items 1 (FR-034) and 9 (FR-048) landed together at `c422e24`**, correcting the Wilson-on-MRR defect in `specs/prd.md` and `specs/sad.md` in one decision. **Four remain**: the `specs/project-plan.md` `part_numbers` owner (item 2, FR-035), `project-instructions.md` §Source Code Layout **and** §Testing & Quality Policy (item 3, FR-044 — the one this design cannot proceed without), ADR-0023's `specs/sad.md` catalog row (item 4, FR-045), and §Technology Stack's INT8 qualifier (item 10, FR-047). Four further items are non-blocking. **Record-number note**: round 1 created ADR-0022 for its own decision, so this epic's record renumbered to **ADR-0023** — see §Pending Amendments |
+| Data Provenance | **PASS with a scheduled deliverable** | FR-016 requires identity, revision, licence basis, source and digest for the vendored model, and — extended at Analyze — the quantization record for the *generated* INT8 graph plus a separate licence basis per graph, since a derived artifact does not inherit its source's licence by default. **The clause has a second limb both prior audits missed**: *"Every synthetic dataset MUST ship a datasheet disclosing its generative assumptions."* AD-010's frozen evaluation set **is** a synthetic dataset — its judgements are generator-derived and every query is answerable by construction — and no datasheet existed. FR-016 covers the vendored *models*; nothing covered the generated *dataset*. Closed by **FR-050** and **T103** |
+| Governance | **PASS — all six blocking items landed** | Ten amendments recorded, six blocking, **all six now on the default branch**: items 1 and 9 at `c422e24` (the Wilson-on-MRR defect in `specs/prd.md` and `specs/sad.md`, one decision), item 2 at `04f47f2` (`chunk.part_numbers` owned by E006), items 3, 10 and 4 at `c8fb2ce` (v1.2.9's two clauses, the INT8 qualifier, and ADR-0023's catalog row). Verified by reading the default branch rather than by assertion. Four further items remain non-blocking. **Record-number note**: round 1 created ADR-0022 for its own decision, so this epic's record renumbered to **ADR-0023** — see §Pending Amendments |
 
 **Re-check after design**: PASS. The two boundary crossings design introduced — inference in the gateway, and the serving image admitting its runtime — are recorded in ADR-0023 rather than waved through.
 
@@ -143,6 +150,32 @@ reported with the set and digest it was taken on, and it is never published as t
 E014 **re-measures** the same criteria on its own frozen set and its figure is the published one.
 Neither is offered as confirmation of the other — two measurements on two sets are two facts, and
 presenting one as corroborating the other would claim a reproduction nobody performed.
+
+**AD-015: the gateway's computation-boundary contract names `gateway.inference` as well as
+`gateway.compute`** *(added 2026-07-29 at the v1.2.9 re-audit)*. `src/gateway/pyproject.toml` forbids
+`gateway.provider` from reaching `gateway.compute`, with `allow_indirect_imports = false`. T020 puts
+masked mean pooling and L2 normalization into `gateway.inference`, so after this epic the gateway
+holds **two** arithmetic packages in the same root as the single provider-facing module in the
+repository, and the contract names one. That is the precise standard this plan applies to itself on
+the api side — *a boundary that guards one of two is a boundary in name* — and E010 set the precedent
+by adding a contract rather than widening a list. **This gap is created by v1.2.9**: before the
+amendment no inference lived in the gateway, so the v1.2.8 audit could not have found it. Carried by
+**T102**. Related and deliberately left alone: AD-005's carve-out for reranker score-sorting is
+*outside* both contracts and named as such, so the carve-out stays checkable rather than asserted.
+
+**AD-016: `/src/api` does not declare the `pgvector` distribution; the query vector is bound as a
+text-cast parameter** *(added 2026-07-29 at the v1.2.9 re-audit)*. §Technical Context lists
+`pgvector` among Primary Dependencies, which reads as a Python package for the serving entry. It is
+not, and it must not become one. `/src/model` declares `pgvector>=0.4.2` for a stated and narrow
+reason — `register_vector` is what lets `chunk.embedding` be written by **binary COPY** rather than
+parsed as strings — and that is a bulk *write* path. E008 binds **one 384-dimension query vector per
+request** into a `SELECT`; binary COPY buys nothing at that volume, and `'[…]'::vector` needs no
+adapter. **The cost of getting this wrong is a red build, not a slow one**: `pgvector` is declared by
+`/src/model` and absent from `SHARED_INFRASTRUCTURE`, so declaring it in `/src/api` makes
+`modeling_stack & locked_distributions("api")` non-empty and TR-004 fails — and v1.2.9's exception
+does not cover it, since the granted width is a local-inference runtime, its tokenizer and NumPy.
+Declaring it would therefore require a **seventh blocking amendment**. Recorded because nothing in
+the artifacts said not to, and `register_vector` is the habitual reach. Carried by **T101**.
 
 ## Data Model Summary
 
@@ -461,6 +494,11 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 | FR-041 | Readiness, reporting | `retrieval/readiness.py`, `retrieval/report.py`, `src/api/tests/retrieval/test_degraded.py` | Degraded-path latency reported on FR-033's terms and asserted not slower than the reranked path |
 | FR-034, FR-035, FR-044, FR-045, **FR-047**, **FR-048**, **SC-015** | Recorded amendments | `spec.md` §Requirements; **verification**: the amending revision on the default branch, cited in the task that closes each — T001–T004, T096 and T097 against the six blocking items in §Pending Amendments (1, 2, 3, 4, 9, 10), which SC-015 now gates in full rather than gating two of four | Performed on the default branch, not here. The check is decidable at this epic's boundary: read the default branch for the revision, cite it in the closing task. FR-047 and FR-048 were added at Analyze: FR-048 closes the `specs/sad.md` twin of FR-034's `specs/prd.md` defect, which was queued against one registered document and not the other, and FR-047 closes the §Technology Stack INT8 qualifier that had been left to another epic's PR body — neither a queue nor a verifier |
 | **§Temporary Files** | Quantization tool, gateway inference | `src/model/tools/quantize_reranker.py`, `src/gateway/tests/test_scratch_location.py` (T017, T098) | Derived from `AGENTS.md` rather than from a spec requirement, and listed as derived so it is not an orphan. This is the one epic that downloads a model and runs a native toolchain, and the existing scratch check covers only the api tier — the tier that does neither |
+| **FR-043** | Evaluation set and harness | `data/evaluation_set/`; **verification**: `src/api/tests/retrieval/test_evaluation_set.py` (T049–T051) — perturbs a copy and asserts the harness exits non-zero **before emitting any measurement** | *(Row added 2026-07-29 at Analyze: FR-043 was added at Tasks and never entered this map, so the deliverable two published figures rest on was traceable only through AD-010's prose row.)* Frozen, hashed, committed before any tuning run; a re-tune emits the before and after figures together |
+| **FR-046** | Result assembly, contract | `src/api/src/api/retrieval/results.py`, `contracts/openapi.yaml`; **verification**: `src/api/tests/retrieval/test_router.py` (T095) | *(Row added 2026-07-29 at Analyze.)* Bounds the array by rule rather than by a round number: at most `limit` ranked plus one deterministic match per recognised token, query length capped. Bounds only the ranked portion because FR-012 counts route additions outside it |
+| **FR-049** | Reporting | `src/api/src/api/retrieval/report.py`; **verification**: `src/api/tests/retrieval/test_report.py`, `test_performance_report.py` (T099, T100, T068) | *(Row added 2026-07-29 at Analyze, in the same pass that added the requirement.)* The ingest generation on every emitted figure. T100 asserts the discriminating case directly: two figures differing **only** in generation must be distinguishable, because the repair changes no chunk count and a size qualifier cannot separate them |
+| **FR-050** | Evaluation set datasheet | `data/evaluation_set/DATASHEET.md`; **verification**: `tests/checks/test_vendored_model_provenance.py` (T103) | *(Added 2026-07-29 at the v1.2.9 re-audit.)* §Data Provenance requires a datasheet of every synthetic dataset. The frozen set is synthetic — generator-derived judgements, every query answerable by construction — and had none. Asserted cross-entry, beside the vendored-model provenance check, because both assert on what entered the repository rather than on a runtime path |
+| **AD-015, AD-016** | Architecture contracts, dependency declaration | `src/gateway/pyproject.toml`, `src/api/pyproject.toml`; **verification**: `tests/checks/` (T102, T101) | Derived from Principle V and TR-004 rather than from a spec requirement, and listed as derived so neither is an orphan. AD-015 extends the boundary to `gateway.inference`; AD-016 keeps the `pgvector` distribution out of the serving entry, which is what stops TR-004 going red |
 
 ## Project Structure
 
@@ -475,7 +513,7 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 + src/api/src/api/retrieval/routes.py                 entry points and readiness
 + src/api/src/api/retrieval/fusion.py                 the single ranking statement
 + src/api/src/api/retrieval/router.py                 part-number route, additive
-+ src/api/src/api/retrieval/arms.py                   arm selection, six paths
++ src/api/src/api/retrieval/arms.py                   arm selection, five request-selectable arms
 + src/api/src/api/retrieval/results.py                projection-only result construction
 + src/api/src/api/retrieval/parameters.py             ranking parameters in force
 + src/api/src/api/retrieval/metrics.py                recall, MRR, intervals, verdicts
@@ -487,9 +525,19 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 +                                                      the source graph's hash (Data Provenance)
 + src/model/tools/quantize_reranker.py                 the one-off quantization, beside the existing
 +                                                      provenance scripts; runs under `.tmp/`
-+ src/api/tests/retrieval/evaluation_set/              E008's own query set, frozen and hashed
++ data/evaluation_set/                                E008's own query set, frozen and hashed
 +                                                      before any measurement, with the harness
-+                                                      aborting on digest mismatch (Principle VI)
++                                                      aborting on digest mismatch (Principle VI).
++                                                      Under `data/`, not the api test tree: it is
++                                                      committed, hashed corpus data with a
++                                                      release-gate role, and Source Code Layout
++                                                      places data there. `data/reranker/` set the
++                                                      precedent in this same plan
++ data/evaluation_set/DATASHEET.md                     generative assumptions of a synthetic
++                                                      dataset, required of every one by
++                                                      Data Provenance (FR-050, T103)
++ src/api/tests/retrieval/evaluation_set/harness.py    the loader and its abort — code, so it
++                                                      stays in the tier that runs it
 + src/api/tests/retrieval/                            unit and integration tiers, named in the
 +                                                      Requirement Coverage Map so every requirement
 +                                                      reaches a verification and not only a
@@ -499,7 +547,7 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 +                                                      test_candidate_set.py, test_determinism.py,
 +                                                      test_parameters.py, test_router.py,
 +                                                      test_part_number_coverage.py,
-+                                                      test_page_provenance.py,
++                                                      test_results.py, test_page_provenance.py,
 +                                                      test_arms.py, test_flag_parity.py,
 +                                                      test_vector_settings.py, test_report.py,
 +                                                      test_metrics.py, test_readiness.py,
@@ -541,9 +589,11 @@ labelled. Collapsing the two would either refuse a serviceable request or serve 
 ```
 
 *(Reconciled at Analyze, 2026-07-29: seven paths tasks write were absent from this list, and
-`test_results.py` was listed with no task creating it — the projection assertions it implied are
-carried by `test_page_provenance.py` and the contract-conformance module, so it is removed rather
-than given a task. A structure list is read as the change surface; a path missing from it is a file
+`test_results.py` was listed with no task creating it. The first edition removed it, reasoning that
+`test_page_provenance.py` and the conformance module carried its assertions. **That was wrong and is
+reversed here**: this map names it as the verification for FR-008, FR-009 and FR-013, and FR-009's
+whole content — an empty result set reported as empty, a short set never padded — had an
+implementing task and no asserting one. The file is restored and **T104** creates it. A structure list is read as the change surface; a path missing from it is a file
 nobody reviewed for, and a path present with no author is a file nobody writes.)*
 
 **Brownfield Notes**
@@ -637,10 +687,16 @@ extends the gate to 3, 4, 9 and 10):
    reads "percentile bootstrap 95% interval resampled over the 50 queries, reported with its
    resample count and its seed". Recall@5 correctly keeps Wilson and was sharpened to name the
    proportion it is computed over. **T001 closes citing `c422e24`.**
-2. **`specs/project-plan.md`** — no epic owns the population of `chunk.part_numbers`, so the lexical
-   arm's field weighting is inert (spec FR-035).
-3. **`project-instructions.md` §Source Code Layout** — **new at Plan, and the one this design cannot
-   proceed without.** The clause reads *"The gateway package carries neither a web framework nor the
+2. ~~**`specs/project-plan.md`** — no epic owns the population of `chunk.part_numbers`, so the
+   lexical arm's field weighting is inert (spec FR-035).~~ **LANDED** at `04f47f2` (PR #26).
+   **T002 closes citing `04f47f2`** — the commit that performed it, not its merge `ee967c7`, matching
+   how items 1, 9, 3, 4 and 10 are cited. It landed wider than asked: E006 is **reopened** (its
+   `.completed` and `.qc-passed` no longer describe its full scope) and the risk register gained an
+   obligation on *this* epic, carried here as **FR-049**.
+3. ~~**`project-instructions.md` §Source Code Layout**~~ — **LANDED** at `c8fb2ce`, v1.2.9, reaching
+   **both** clauses as required. **T003 closes citing `c8fb2ce`**, and its text now names both.
+   Recorded as raised: **new at Plan, and the one this design cannot
+   proceed without.** The clause read *"The gateway package carries neither a web framework nor the
    modeling stack"*, and the Technology Stack defines that stack as PyMC, ArviZ, pandas and NumPy.
    ADR-0023 places inference in the gateway, and `onnxruntime` pulls NumPy transitively — so the
    decision contradicts the governing document. An ADR cannot override a `project-instructions.md`
@@ -650,8 +706,12 @@ extends the gate to 3, 4, 9 and 10):
    modeling-stack packages, and T007's admission of NumPy to `SHARED_INFRASTRUCTURE` breaches that
    sentence by the same reasoning that breaches §Source Code Layout. An amendment naming only the
    layout clause would let T003 close green while the image assertion stayed contradicted — the
-   failure mode this queue exists to prevent. FR-044 and T003 verify both clauses.
-4. **`specs/sad.md`** — the ADR catalog needs ADR-0023's row, appended after **ADR-0022**, which
+   failure mode this queue exists to prevent. FR-044 and T003 verify both clauses. **It did not
+   occur**: v1.2.9 moved both sentences in one version bump, and the granted width is exactly the
+   width asked — NumPy as the only explicitly listed term, PyMC/ArviZ/pandas still forbidden.
+4. ~~**`specs/sad.md`** — the ADR catalog needs ADR-0023's row~~ — **LANDED** at `c8fb2ce`, in the
+   same version bump as items 3 and 10. `specs/sad.md:295` carries it. **T004 closes citing
+   `c8fb2ce`.** Recorded as raised: the row is appended after **ADR-0022**, which
    round 1 added *(restated 2026-07-29: this read "after ADR-0021" and was written when 0022 was
    free)*. Gated because merging with the catalog missing an `accepted` record is the registered
    index disagreeing with the record set it indexes:
@@ -712,9 +772,11 @@ extends the gate to 3, 4, 9 and 10):
      bootstrap interval is now three values, not two.
    - ADR-0022 was created for the decision, which is what forced this epic's own record to renumber
      to **ADR-0023**.
-10. **`project-instructions.md` §Technology Stack** — names "ONNX Runtime **for INT8 CPU
+10. ~~**`project-instructions.md` §Technology Stack**~~ — **LANDED** at `c8fb2ce`, v1.2.9; the clause
+    now reads "for local CPU inference, at whichever precision a given model ships". **T096 closes
+    citing `c8fb2ce`.** Recorded as raised: it named "ONNX Runtime **for INT8 CPU
     inference**". This epic runs an FP32 encoder and, per FR-025, an FP32 reranker arm beside the
-    INT8 one, so the qualifier excludes two things the design ships. E006 raised the same conflict
+    INT8 one, so the qualifier excluded two things the design ships. E006 raised the same conflict
     **in its PR body**, which is not this queue: a PR body obliges nobody and is not a verifier, and
     this plan's own standard is that an obligation recorded only in prose fails silently. Raised here
     with an owner and a verifier rather than depended on (spec FR-047, task T096).
@@ -722,7 +784,7 @@ extends the gate to 3, 4, 9 and 10):
 **Sequencing** *(settled 2026-07-29 at Analyze)*. Governance serializes these: *"At most one amendment
 is in flight at a time, it is performed on the default branch, and it lands before the next begins."*
 An amendment is **one version bump**, so items amending the same document land together in one round.
-Four rounds, each landing before the next begins:
+Three rounds, each landing before the next began:
 
 | Round | Document | Items | What lands | Status |
 |---|---|---|---|---|
@@ -757,12 +819,11 @@ record numbers at epic start precisely to stop this, and the clause is written f
 branching from one baseline*; it does not reach an **amendment performed on the default branch while
 an epic is in flight**, which allocates against a tree the epic's claim cannot be seen in. Third
 instance of the shape after E006/E007's ADR-0018 and the `0300` migration block, and the first where
-the colliding allocation came from the amendment procedure rather than a sibling epic. Rounds 2, 3
-and 4 create no records, so the queue itself is not exposed again — but the next epic to run
+the colliding allocation came from the amendment procedure rather than a sibling epic. Rounds 2 and 3 created no records, so the queue itself was not exposed again — but the next epic to run
 concurrently with an amendment is.
 
-This plan does not assert they will land; it asserts implementation does not begin until rounds 1–4
-have, that SC-016's latency half is measured against the never-exceed settled at spec §Decisions
+This plan does not assert they will land; it asserts implementation does not begin until all three rounds
+have landed — which they now have, that SC-016's latency half is measured against the never-exceed settled at spec §Decisions
 Taken at Checklist and item 7 records rather than gates it, and it names the verifier: the amending
 revision on the default branch, cited in the task that closes each.
 
@@ -934,11 +995,17 @@ test — are carried in §Testing Strategy, which owns both remedies. They are n
 ## Inherited from E010, checked after its merge
 
 E010 merged (PR #17) while this epic was in planning. All four surfaces that collided with E007 were
-checked and none collided here: decision-record numbers still top out at 0021 so ADR-0023 stands,
-`specs/sad.md` still lacks the ADR-0023 row so amendment 4 is still owed, `project-instructions.md`
-is still v1.2.8 so this plan's compliance audit names the current version, and none of
-`pyproject.toml`, `image_contents.py`, `test_dependency_isolation.py` or `verify.yml` was touched.
-First clean merge with a sibling epic.
+checked and none collided **with E010**: none of `pyproject.toml`, `image_contents.py`,
+`test_dependency_isolation.py` or `verify.yml` was touched. First clean merge with a sibling epic.
+
+*(Restated 2026-07-29 at Analyze. As written at Plan this paragraph also recorded three point-in-time
+facts — that record numbers topped out at 0021, that `specs/sad.md` lacked the ADR row, and that
+`project-instructions.md` was v1.2.8 — and all three have since been overtaken. They were true when
+written and became false without anything in this document changing, which is the hazard a
+point-in-time record carries when it is phrased as a standing fact. The amendment rounds, not E010,
+overtook them: ADR-0022 was claimed on the default branch and forced this epic's record to **0023**,
+`specs/sad.md:295` now carries the row, and the instructions are at **v1.2.9**. See §Pending
+Amendments, which is the authority for all three.)*
 
 **One gap, of the class that does not announce itself.** E010's
 `src/api/tests/test_contract_conformance.py` names one contract by path

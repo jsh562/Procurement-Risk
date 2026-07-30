@@ -381,6 +381,15 @@ difference is which vector-search strategy executed.
   count is the primary driver of the reranking latency budget, so a change to it moves the quality
   figure and the performance figure together. Stating only the quality consequence would leave a
   developer free to change the count against a budget nobody told them it governed.
+
+  **Which 50, when the fused set holds more.** The two arms fetch 50 candidates each, so the fused
+  set may hold up to **100 distinct candidates** — and the two clauses above cannot both hold
+  literally when it does. The rule: the reranker scores the **top 50 of the fused ordering**. "The
+  fused candidate set" names the population reranking draws from; the reranked count of 50 names how
+  many of it are scored, and the total order AD-001 establishes is what selects them. *(Moved here
+  2026-07-29 at the v1.2.9 re-audit from FR-037, where it sat among restatements of three other
+  requirements. The contradiction it resolves is in **this** requirement, and an implementer reading
+  FR-018 alone had a genuine two-way read.)*
 - **FR-019** *(amended 2026-07-29)*: System MUST publish the distribution of candidate lengths
   against the reranker's sequence limit and the fraction of candidates truncated, because a
   truncated candidate is scored on its prefix and that is invisible in the result. **The sequence
@@ -390,16 +399,23 @@ difference is which vector-search strategy executed.
   per-candidate anchor of the latency budget, and all three are unanchored while it is only a name.
 
 - **FR-037** *(placed out of sequence; appended by number because requirement IDs are never
-  reused)*: System MUST treat three settings as **one derived constraint** rather than as three
-  independent parameters: FR-003 fixes the fetch depth at 50 candidates per arm; FR-018 fixes the
-  reranked count equal to that depth; FR-027 floors the approximate index's search breadth at that
-  same depth. Together they fix the reranker's per-query workload at exactly the 50 candidates the
-  latency budget is stated for, and no one of them says so on its own. Because the fused set of two
-  50-candidate arms may contain up to **100 distinct candidates**, the reranker scores the **top 50
-  of the fused ordering** — FR-018's reranked count is the binding number, and the total order AD-001
-  establishes is what selects them. Changing any one of the three changes the workload the budget was
-  set against, so each change MUST carry the re-measured latency figure FR-033 defines alongside the
-  re-measured quality figure FR-018 requires.
+  reused. Scope reduced 2026-07-29 at the v1.2.9 re-audit)*: System MUST **assert, in an automated
+  check**, that the three settings satisfy the derived relation **breadth ≥ fetch depth = reranked
+  count**, and that changing any one of them without the others fails that check. FR-003 fixes the
+  fetch depth at 50 candidates per arm; FR-018 fixes the reranked count equal to that depth; FR-027
+  floors the approximate index's search breadth at that same depth. Together they fix the reranker's
+  per-query workload at exactly the 50 candidates the latency budget is stated for, and no one of
+  them says so on its own — what this requirement adds is the *relation*, expressed as something a
+  test can execute.
+
+  *(Reduced at the re-audit. It previously read "MUST **treat** three settings as one derived
+  constraint rather than as three independent parameters" — a mental posture, not a system
+  behaviour, with no artifact and no assertion that could fail. That is the defect this spec's own
+  Remediation History records against the original FR-018, which "constrains a developer's motive
+  and can never be tested"; the pattern recurred at Checklist. The load-bearing content — the top 50
+  of a fused set of up to 100 — moved into **FR-018**, where the contradiction it resolves actually
+  lives. The change-discipline clause is dropped as a fourth restatement of a rule FR-003, FR-018
+  and FR-040 already carry.)*
 - **FR-038** *(placed out of sequence; appended by number because requirement IDs are never
   reused)*: System MUST set the reranker's intra-op and inter-op thread counts explicitly from
   configuration, by a stated derivation rule: **intra-op equal to the container's CPU quota in whole
@@ -518,13 +534,33 @@ difference is which vector-search strategy executed.
   degraded flag directly or by injecting an already-degraded component. A test that sets the flag
   proves the flag; the behaviour under test is the fallback that sets it.
 - **FR-041** *(placed out of sequence; appended by number because requirement IDs are never
-  reused)*: System MUST report the fusion-only degraded path's per-query latency on the same terms
-  FR-033 sets for the reranked path, and that latency MUST NOT exceed the reranked path's latency
-  over the same query set. The degraded path performs a strict subset of the reranked path's work, so
-  a degraded query that is not faster is a defect rather than an accepted cost. The expectation is
-  stated rather than assumed: "removing the reranker can only make a query faster" is an inference,
-  and a path nobody budgeted is a path nobody is obliged to measure — which is how a degraded surface
-  that is worse in a second dimension would go unnoticed.
+  reused. Given a span and a statistic 2026-07-29 at the v1.2.9 re-audit)*: System MUST report the
+  fusion-only degraded path's per-query latency, and that figure MUST NOT exceed the **never-exceed
+  400 ms** SC-016 fixes for the reranked path.
+
+  **The span is defined here rather than inherited, because FR-033's does not apply.** FR-033
+  measures "the reranker component's scoring call — entered with the fused candidate set, left with
+  its scores", and **on the degraded path that call does not occur**: inheriting "the same terms"
+  would leave the measured span empty and the requirement unfalsifiable. The degraded span is
+  therefore **total in-process query wall-clock** — entered when the route handler receives the
+  request, left when the response body is assembled — the only span both paths share. Every other
+  term of FR-033 carries over unchanged: workload, environment, measurement occasion, counter, arm,
+  and the corpus-size and ingest-generation qualifiers.
+
+  **Two statistics, because they answer different questions.** The **never-exceed** is the gate: a
+  single degraded query above 400 ms fails it, the rule SC-016 applies to the reranked path. The
+  **mean over the query set** is reported beside it and compared against the reranked path's mean,
+  which is where "removing the reranker made queries faster" is either visible or absent. A
+  per-query comparison between the two paths is deliberately **not** the gate — ordinary scheduling
+  jitter would falsify it on some query in every run, making a true claim fail routinely.
+
+  A path nobody budgeted is a path nobody is obliged to measure, which is how a degraded surface
+  that is worse in a second dimension would go unnoticed. *(The requirement previously rested on the
+  claim that the degraded path "performs a strict subset of the reranked path's work". Dropped:
+  response assembly differs — the fusion-only statement and the `unreranked_reason` field are work
+  the reranked path does not do — so it is not strictly a subset, and the text already conceded that
+  "removing the reranker can only make a query faster" is an inference. The empirical obligation
+  stands without it.)*
 
 **Measurability and configuration**
 
@@ -661,6 +697,17 @@ well-defined to consume.
     reflexivity — an interval compared with itself is unresolvable; and agreement with FR-032's
     closed-interval rule at the touching-endpoint boundary.
 
+  The generated input domains MUST reach the cases those properties are stated for: query-set sizes
+  from one upward, all-hit and all-miss sets, ties in reciprocal rank, and per-query values at both
+  ends of their range — so a property is neither reported as holding on inputs the harness never
+  produced nor falsified on one it cannot produce. **An empty query set is refused rather than
+  reported as a figure**: a proportion over zero queries is undefined, and Principle III records an
+  absent value as absent rather than storing a wrong one. *(Relocated 2026-07-29 at the v1.2.9
+  re-audit. This paragraph belongs to FR-042 and had drifted to sit under FR-048 — the Tasks wave
+  inserted FR-043–FR-046 between FR-042's bullets and its own trailing text, and the Analyze wave
+  pushed it two requirements further. Property-test input domains were normatively attached to an
+  amendment gate, where they mean nothing, and FR-042's properties had no stated domain.)*
+
 - **FR-043**: System MUST commit its own evaluation query set with its relevance judgements, hash it
   before any figure is measured against it, and MUST abort rather than report when the harness finds
   the digest does not match. Judgements are derived from the generator's pre-render document model,
@@ -668,7 +715,7 @@ well-defined to consume.
   real-world performance**, which MUST be published as such rather than as an estimate. The set may
   be measured against without limit; what is disciplined is **tuning after measurement**. Any change
   to a ranking parameter made after a figure has been measured MUST be recorded as a decision, the
-  set re-measured, and **the figure before the change and the figure after it published together**.
+  set re-measured, and **the figure before the change and the figure after it emitted together**.
   Publishing only the later figure satisfies the re-measurement and hides the tuning, which is the
   half that makes a re-tune visible. *(Added 2026-07-29. The set was committed to by AD-010 and
   depended on by SC-001 and SC-002, and no requirement obliged it — so a deliverable that two
@@ -676,9 +723,16 @@ well-defined to consume.
   the source; this makes it enforceable. The both-figures obligation was extended in on the same
   date: §Decisions Taken at Checklist replaced a run budget with it, and it was carried by that
   section and by `plan.md` alone.)*
-- **FR-044**: System MUST NOT begin implementation until the amendment against
-  `project-instructions.md` §Source Code Layout has landed on the default branch, verified by citing
-  the amending revision. That clause reads that the gateway package carries neither a web framework
+- **FR-044** *(satisfied 2026-07-29 at `c8fb2ce`, v1.2.9)*: This epic MUST NOT begin implementation
+  until the amendment against `project-instructions.md` **§Source Code Layout _and_ §Testing &
+  Quality Policy** has landed on the default branch, verified by citing
+  the amending revision. **Both clauses, not one** — the image assertion in §Testing & Quality Policy
+  is breached by admitting NumPy to `SHARED_INFRASTRUCTURE` by the same reasoning that breaches the
+  layout clause, and an amendment naming only the layout clause would let this requirement close
+  green while the image assertion stayed contradicted. **Landed**: v1.2.9 moved both sentences in one
+  version bump, granting exactly the asked width — NumPy as the only explicitly listed term, with
+  PyMC, ArviZ and pandas still forbidden in the gateway. As raised, the layout clause read that the
+  gateway package carries neither a web framework
   nor the modeling stack, and ADR-0023 places an inference runtime there which pulls NumPy — so
   until it lands, the design contradicts the governing document. *(Added 2026-07-29: FR-034 and
   FR-035 covered two of the four blocking amendments and this one, the most consequential, was
@@ -687,26 +741,47 @@ well-defined to consume.
   carries ADR-0023's row, verified by citing the amending revision. A registered index that omits an
   accepted record disagrees with the record set it indexes. *(Added 2026-07-29, same reason as
   FR-044.)*
-- **FR-046**: System MUST bound the returned result array by a stated rule rather than a fixed
-  ceiling: at most `limit` ranked results plus at most one deterministic match per part-number token
-  recognised in the query, with the query length capped. The rule bounds only the ranked portion by
-  `limit` because **FR-012** requires route matches be unioned additively and counted outside it — a
-  single ceiling over both would make the route subtractive at the boundary, which is the property
-  FR-012 exists to forbid. *(Added 2026-07-29. The contract declared a fixed maximum of 100 that
-  nothing derived — `limit` cuts the ranked portion to 50 before return and route additions are
-  counted outside it, so the cap silently assumed the route contributes at most 50. The rule was
-  resolved at checklist and recorded in `plan.md`, and no requirement or task carried it.)*
-- **FR-047**: System MUST NOT begin implementation until the amendment against
+- **FR-046** *(added 2026-07-29; quantified at the v1.2.9 re-audit)*: System MUST bound the returned
+  result array by a stated rule rather than a fixed ceiling: **at most `limit` ranked results, plus
+  at most one deterministic match per part-number token recognised in the query.**
+
+  Both free terms are numbers rather than adjectives. **`limit`** is the caller-supplied count of
+  *ranked* results, defaulting to **10** and capped at **50** — the fetch depth FR-003 fixes, because
+  a caller cannot ask for more ranked results than the fusion statement retrieves. **Query length**
+  is capped at **1,000 characters**, and a longer query is **refused with a 400** rather than
+  silently truncated: truncating a query changes what was asked without saying so, and this epic's
+  posture on truncation (FR-019) is to count it rather than hide it. The array therefore holds at
+  most 50 + *k* entries, where *k* is the number of distinct part-number tokens recognised within
+  1,000 characters.
+
+  The rule bounds only the ranked portion by `limit` because **FR-012** requires route matches be
+  unioned additively and counted outside it — a single ceiling over both would make the route
+  subtractive at the boundary, which is the property FR-012 exists to forbid. For the same reason
+  FR-012's "every result hybrid retrieval would have returned" is evaluated **at the same `limit`**:
+  the route may never remove a ranked result, but it is not a promise to widen `limit`. *(The
+  contract declared a fixed maximum of 100 that nothing derived — `limit` cuts the ranked portion to
+  50 before return and route additions are counted outside it, so the cap silently assumed the route
+  contributes at most 50. The rule was resolved at checklist and recorded in `plan.md`, and no
+  requirement or task carried it. At the re-audit it still read "with the query length capped" — a
+  cap with no number, no unit and no breach behaviour, in a spec that elsewhere pins B = 10,000,
+  PCG64, batch 50, breadth ≥ 50, 400 MB and 400 ms.)*
+- **FR-047** *(satisfied 2026-07-29 at `c8fb2ce`, v1.2.9)*: This epic MUST NOT begin implementation
+  until the amendment against
   `project-instructions.md` §Technology Stack has landed on the default branch, verified by citing
-  the amending revision. That clause names ONNX Runtime **"for INT8 CPU inference"**, and this epic
+  the amending revision. **Landed** — the clause now reads "for local CPU inference, at whichever
+  precision a given model ships — INT8 and FP32 graphs are both loaded". As raised, it named ONNX
+  Runtime **"for INT8 CPU inference"**, and this epic
   runs an FP32 query encoder and — per FR-025 — an FP32 reranker arm beside the INT8 one, so the
   qualifier excludes two things the design ships. *(Added 2026-07-29 at Analyze. E006 raised the same
   conflict in its PR body and E008's plan depended on that landing. A PR body is not the amendment
   queue: nobody is obliged to perform it, nothing fails when it is skipped, and both FR-025 and
   FR-007 rest on it. `plan.md` §Pending Amendments item 10.)*
-- **FR-048**: System MUST NOT begin implementation until the amendment against `specs/sad.md`'s
+- **FR-048** *(satisfied 2026-07-29 at `c422e24`)*: This epic MUST NOT begin implementation until
+  the amendment against `specs/sad.md`'s
   retrieval-metrics row has landed on the default branch, verified by citing the amending revision.
-  That row specifies a Wilson 95% interval for mean reciprocal rank, which is not a proportion —
+  **Landed** — `specs/sad.md` now carries two rows, recall@5 with a continuity-corrected Wilson
+  interval and MRR with a percentile bootstrap at B = 10,000, seed and bit generator recorded. As
+  raised, that row specified a Wilson 95% interval for mean reciprocal rank, which is not a proportion —
   **the identical defect FR-034 raises against `specs/prd.md`**. *(Added 2026-07-29 at Analyze.
   FR-034 queued one occurrence and this second one went unrecorded, so `specs/prd.md` would have been
   corrected while a second registered document went on specifying the invalid interval. Governance
@@ -714,23 +789,19 @@ well-defined to consume.
   `specs/sad.md` until this lands — the exposure FR-034 exists to close, left open on the other half.
   `plan.md` §Pending Amendments item 9.)*
 
-  The generated input domains MUST reach the cases those properties are stated for: query-set sizes
-  from one upward, all-hit and all-miss sets, ties in reciprocal rank, and per-query values at both
-  ends of their range — so a property is neither reported as holding on inputs the harness never
-  produced nor falsified on one it cannot produce. **An empty query set is refused rather than
-  reported as a figure**: a proportion over zero queries is undefined, and Principle III records an
-  absent value as absent rather than storing a wrong one.
-
 **Amendments this epic records and does not perform.** Governance serializes amendments onto the
 default branch: a feature branch records the need. Both are gated by SC-015 so the conflict they
 name has a bounded life.
 
-- **FR-034**: This epic MUST record an amendment request against `specs/prd.md`, whose retrieval
-  MRR row specifies a Wilson 95% interval for a statistic that is not a proportion. Until it
-  lands, a registered document and FR-031 disagree, and Governance holds that the registered
+- **FR-034** *(satisfied 2026-07-29 at `c422e24`)*: This epic MUST record an amendment request
+  against `specs/prd.md`, whose retrieval
+  MRR row specified a Wilson 95% interval for a statistic that is not a proportion. **Landed** — the
+  row now reads "percentile bootstrap 95% interval resampled over the 50 queries, reported with its
+  resample count and its seed", and the recall@5 row correctly kept Wilson. Until it
+  landed, a registered document and FR-031 disagreed, and Governance holds that the registered
   document wins — so the disagreement MUST be visible at every point a reader could act on it,
   not only inside FR-031.
-- **FR-035** *(satisfied 2026-07-29 at `ee967c7`)*: This epic MUST record an amendment request
+- **FR-035** *(satisfied 2026-07-29 at `04f47f2`)*: This epic MUST record an amendment request
   against `specs/project-plan.md` assigning the population of `chunk.part_numbers` to an owning
   epic. E003 defines the column and E006's acceptance criteria do not mention it, so a follow-up
   "against E006" currently records against nothing. The lexical arm's field weighting is inert
@@ -738,11 +809,29 @@ name has a bounded life.
   `.completed` and `.qc-passed` no longer describe its full scope. See FR-049, which the same
   amendment obliges of this epic.
 - **FR-049** *(added 2026-07-29, obliged by `specs/project-plan.md` §Risks "Inert weight-B arm,
-  and the re-ingest that repairs it")*: System MUST publish the **ingest generation** each
-  retrieval figure was measured against, alongside the corpus size FR-033 already requires, and
-  MUST re-run any figure measured before E006's `part_numbers` repair once that repair lands,
-  before the figure reaches a published result. {SAD:ADR-0021} already makes a generation the
-  unit, so the qualifier names an existing concept rather than inventing one.
+  and the re-ingest that repairs it"; given a detecting observable at the v1.2.9 re-audit)*: Every
+  retrieval figure this epic emits MUST carry an **`ingest_generation`** field naming the corpus
+  generation it was measured against, **and its corpus size**, and a figure emitted without one MUST
+  be **refused rather than emitted**. {SAD:ADR-0021} already makes a generation the unit, so the
+  qualifier names an existing concept rather than inventing one. The assertion is made **over the
+  emitted artifact rather than over intent** — the shape FR-031 and FR-006 use, for the same reason:
+  an obligation to "publish the generation" with no named field and no refusal rule is satisfied by
+  prose in a report nobody parses, and nothing fails when it is skipped.
+
+  **Why the corpus size is named here rather than inherited.** FR-033's qualifier is scoped to
+  FR-033's own figures — reranking latency and resident memory. It does not reach recall, MRR or
+  FR-005's proportion, so this requirement carries both halves for the figures it governs rather
+  than citing a scope FR-033 does not state.
+
+  **Re-measurement, and what happens if the repair does not land first.** A figure measured before
+  E006's `part_numbers` repair MUST be re-measured once that repair lands, and both MUST be
+  **emitted together** before either is offered as final. If the repair has not landed at this
+  epic's gate, figures are emitted with the pre-repair generation recorded and the re-measurement
+  obligation is **transferred as a recorded dependency on E006** rather than leaving this
+  requirement permanently unmet — E006's timeline is not this epic's to control, and a requirement
+  whose trigger is another epic's event needs a stated branch for the trigger never firing. The verb
+  is **emitted**, not published: §Excluded reserves publishing to E014, and the Measurement boundary
+  note exists so every obligation here is verifiable inside this epic's own gate.
 
   **The corpus-size qualifier does not cover this.** E006's repair populates a column on the
   documents already ingested, so a pre-repair and a post-repair corpus can report the **same
@@ -756,6 +845,19 @@ name has a bounded life.
   because the amendment that assigned FR-035's owner also imposed this on E008, and an obligation
   living only in another document's risk register has no verifier here — the failure shape this
   epic has now hit four times.)*
+- **FR-050** *(added 2026-07-29 at the v1.2.9 re-audit)*: System MUST ship a **datasheet** beside the
+  frozen evaluation set, disclosing its generative assumptions, and an automated check MUST fail if
+  the set is present without one. §Data Provenance requires this of **every synthetic dataset**, and
+  the frozen set is one: its relevance judgements are derived from the generator's pre-render
+  document model, so every query is answerable by construction. The datasheet MUST record the
+  generator identity, the seed, the document-model digest, the draw method, the query count, and the
+  **answerable-by-construction ceiling** — that recall measured this way is an upper bound on
+  real-world performance rather than an estimate of it, which FR-043 already requires published
+  beside the figure. *(Both prior audits missed this. FR-016 carries provenance for the vendored
+  **models** — identity, revision, licence basis, source, digest, and the quantization record for the
+  generated INT8 graph — and nothing carried it for the generated **dataset**. The asymmetry is easy
+  to miss precisely because the model half is thorough: a reader checking "is provenance handled?"
+  finds FR-016 and stops.)*
 
 ### Key Entities *(include for product or technical specs if feature involves data)*
 
@@ -773,13 +875,18 @@ name has a bounded life.
 - The chunk store is populated and its embeddings were produced by the pinned encoder identity.
   E006 delivers 6,391 chunks over 26 documents; the 25 synthetic transmittals carry chunks but
   **no extracted values**, because E006's extraction is blocked on recorded provider fixtures.
-- **The two amendments FR-034 and FR-035 raise will land on the default branch before
-  implementation begins.** Both are recorded and neither is performed here, because Governance
-  serializes amendments on the default branch and a feature branch records the need. Until the
-  `specs/prd.md` amendment lands, that document specifies a Wilson interval on mean reciprocal
-  rank while FR-031 forbids one — and Governance holds that the registered document wins where
-  a downstream artifact conflicts. SC-015 gates implementation on the amendments landing so the
-  conflict has a bounded life rather than an open one.
+- ~~**The two amendments FR-034 and FR-035 raise will land on the default branch before
+  implementation begins.**~~ **Discharged 2026-07-29 — no longer an assumption.** All **six**
+  blocking amendments landed: items 1 and 9 at `c422e24`, item 2 at `04f47f2`, items 3, 10 and 4 at
+  `c8fb2ce`. The conflict this entry described — a registered document specifying a Wilson interval
+  on mean reciprocal rank while FR-031 forbids one — exists in neither document now. Kept rather
+  than deleted because the *reasoning* still governs the next epic that needs an amendment:
+  Governance serializes them on the default branch, a feature branch records the need and does not
+  perform it, and SC-015 is what gave the conflict a bounded life rather than an open one.
+  *(Restated at the v1.2.9 re-audit. As written, this entry named **two** amendments where SC-015
+  names six, and asserted a present-tense conflict that three commits had already closed. An
+  assumption asserting a false present state is worse than a missing one — it reads as current and
+  is not.)*
 - A published retrieval target is read against the point estimate rather than an interval bound.
   At the frozen set's size a lower-bound reading would make the recall target effectively
   unattainable. **Reversal trigger**: an evaluation set large enough that the Wilson interval's
@@ -932,7 +1039,9 @@ Statement names, applied to its own gate.
   decidable at this epic's own boundary**: each is checked by reading the default branch for the
   revision that performed it, cited in the task that closes it, so this criterion is adjudicated here
   rather than asserted about another branch. Until items 1 and 9 land, two registered documents and
-  FR-031 disagree, and Governance holds the registered document wins.
+  FR-031 disagreed, and Governance holds the registered document wins — the exposure this gate
+  bounded rather than tolerated. **All six have now landed** (`c422e24`, `04f47f2`, `c8fb2ce`), so
+  this criterion is adjudicable and **met**.
 - **SC-016** [US3] *(amended 2026-07-29)*: Reranking latency and the resident memory of every model
   session the serving process holds are measured exactly as FR-033 prescribes and **fall within** the
   budgets `specs/sad.md` declares — resident set size **≤ 400 MB** for the serving container
@@ -954,6 +1063,7 @@ Statement names, applied to its own gate.
 
 | Term | Definition |
 |------|------------|
+| Layer | One of the corpus's two provenance strata — the partition FR-005 reports over: the **public layer** (real published documents) and the **synthetic layer** (generated transmittals and their field blocks). It matters because the weighting `search_vector` applies is inert on the synthetic layer, so a proportion reported over the corpus as a whole averages away the effect FR-005 exists to expose. |
 | Arm | One retrieval strategy contributing a ranked candidate list — here the lexical arm and the dense vector arm. |
 | Lexical arm | Retrieval by matching the query's words against the chunk store's field-weighted full-text column. Uses no corpus-wide term statistics and is **not** BM25. |
 | Dense arm | Retrieval by nearest-neighbour search over chunk embeddings produced by the pinned encoder. |
@@ -968,7 +1078,7 @@ Statement names, applied to its own gate.
 
 ## Compliance Check
 
-**Audited against**: `project-instructions.md` **v1.2.8** (last amended 2026-07-29) · **Audit
+**Audited against**: `project-instructions.md` **v1.2.9** (re-audited at Analyze once v1.2.9 landed) · **Audit
 date**: 2026-07-29 · **Verdict**: PASS after remediation, with two conditions that cannot be
 cleared on this branch.
 
@@ -989,7 +1099,16 @@ cleared on this branch.
 | Data Provenance | PASS (repaired at audit) | FR-016 recorded identity and digest but no **license basis or source** for a third-party binary entering the repository. Both are now required |
 | Governance | **CONDITIONAL — two items cannot clear on this branch** | See below |
 
-**The two conditions.**
+**The two conditions — both discharged 2026-07-29 at the v1.2.9 re-audit.** Condition 1 was closed by
+`c422e24`, which corrected **both** registered documents in one decision and landed wider than asked:
+`specs/sad.md`'s single retrieval-quality row was split in two, so recall@5 keeps a
+continuity-corrected Wilson interval — it genuinely is a proportion — while MRR takes a percentile
+bootstrap at B = 10,000 with its seed **and bit generator** pinned. Condition 2 was closed by
+`plan.md` §Pending Amendments, which now carries the queue with its order and a round-by-round record
+of what landed where; the specific instance it cited, E006's outstanding INT8 qualifier, turned out
+not to be in any queue at all — it lived in a PR body, which obliges nobody — and became item 10,
+landing at `c8fb2ce`. Both are retained below as raised, because the reasoning still governs the next
+epic that needs an amendment.
 
 1. **`specs/prd.md` and this spec disagree today.** The PRD's retrieval row specifies a Wilson
    95% interval on mean reciprocal rank; FR-031 forbids one, because MRR is a mean of reciprocal
@@ -1031,7 +1150,9 @@ disagree, and the clause wins. Two entries are therefore proposed and left unwri
   this project uses. Recorded as a measurement convention because it applies to every published
   proportion, not only to retrieval recall.
 
-## Decisions Taken at Checklist
+## Clarifications
+
+### Decisions Taken at Checklist
 
 Four decisions the three quality checklists surfaced and could not make from the artifacts. Each is
 recorded here with its reasoning, and the requirement or criterion it settles is amended in place
