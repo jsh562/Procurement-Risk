@@ -40,7 +40,8 @@ from _launcher import (  # noqa: E402
     publish,
     unpublish,
 )
-from helpers.ports import is_bindable, resolve_host_port  # noqa: E402
+
+from tests.checks.helpers.ports import is_bindable, resolve_host_port  # noqa: E402
 
 configure_streams()
 

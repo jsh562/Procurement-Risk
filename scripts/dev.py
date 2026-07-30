@@ -40,7 +40,8 @@ from _launcher import (  # noqa: E402
     terminate,
     unpublish,
 )
-from helpers.ports import Resolution, resolve_host_port  # noqa: E402
+
+from tests.checks.helpers.ports import Resolution, resolve_host_port  # noqa: E402
 
 configure_streams()
 
