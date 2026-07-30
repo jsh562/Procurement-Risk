@@ -17,32 +17,43 @@ dod_source: null
 > `amend-project/SKILL.md`, a ticked epic is **immutable**: only unchecked epics
 > may be adjusted by a later amendment.
 >
-> E001 through E004 are merged and remain unticked. That is a gap in this
-> document's bookkeeping, not a statement about those epics — the tick was never
-> applied as they landed, and back-filling four rows would freeze them against
-> adjustment in the same stroke as recording their status. Read an unticked row
-> as *not yet ticked*, and check the workspace marker for the epic's real state.
+> The six rows that were merged but unticked — E001 through E004, E006 and E010 —
+> are now ticked. This note previously described that gap as open and warned that
+> back-filling the rows would freeze them against adjustment in the same stroke as
+> recording their status. Both halves have now happened, in that order and in
+> parallel, which is worth keeping: the tick landed on the default branch while an
+> amendment was in flight against one of the rows it ticked.
+>
+> **E006 carries one recorded exception.** Its tick is correct — it passed QC on
+> the scope it had. An amendment then gave it ownership of populating
+> `chunk.part_numbers`, which no epic had owned, so its scope grew *after* its gate
+> ran. The tick and the exception assert different things and both are true: see
+> E006 under Epic Details, which states that its markers no longer describe its
+> full scope and that it owes its gate again. Adjusting a ticked epic is otherwise
+> not permitted; the exception is written down here so it cannot be read as the
+> rule. Where a row and a workspace marker disagree, the marker is the epic's real
+> state.
 
 ### Wave 1 — Foundation
 
 > One epic, and everything waits on it. The scaffold's real payload is the enforcement machinery — import contracts, architecture tests, and the image package assertion — because those turn later constraints into build failures rather than review comments. It also declares the project and vendor roster, the shared fixture both synthetic-data epics read.
 
-- [ ] E001 [P1] [TECHNICAL] {SAD:ADR-0010}{SAD:ADR-0003}{SAD:ADR-0007}{SAD:ADR-0008} Monorepo Scaffold and Contracts — four-entry layout, one-shot job profile, enforcement tests, shared roster
+- [X] E001 [P1] [TECHNICAL] {SAD:ADR-0010}{SAD:ADR-0003}{SAD:ADR-0007}{SAD:ADR-0008} Monorepo Scaffold and Contracts — four-entry layout, one-shot job profile, enforcement tests, shared roster
 
 ### Wave 2 — Data Layer, Model Boundary, and Corpus
 
 > The first parallel band. E003 and E004 both add migrations and are parallel-safe only because they own disjoint tables and pre-claimed prefix blocks — `0001`–`0099` and `0100`–`0199` ({SAD:ADR-0013}). One asymmetry, recorded during E004 planning: E003 owns the Alembic configuration and the runner in `/src/model`, so E004 authors revisions in its block but cannot apply them until that arrangement exists. The two remain parallel because authoring does not wait, only applying does. E002 adds no schema, so it is unconditionally parallel with both.
 
-- [ ] E002 [P1] [PRODUCT] [P] {PRD:CAP-001} Public Corpus and Manifest — real public-domain specs plus synthesized project documents, with provenance
-- [ ] E003 [P1] [TECHNICAL] [P] {SAD:ADR-0002}{SAD:ADR-0004}{SAD:ADR-0008} Core Data Schema — single-store schema with traceability enforced by constraints
-- [ ] E004 [P1] [TECHNICAL] [P] {SAD:ADR-0007} Traced Model Gateway — sole provider path, validation, invocation record, response fixtures
+- [X] E002 [P1] [PRODUCT] [P] {PRD:CAP-001} Public Corpus and Manifest — real public-domain specs plus synthesized project documents, with provenance
+- [X] E003 [P1] [TECHNICAL] [P] {SAD:ADR-0002}{SAD:ADR-0004}{SAD:ADR-0008} Core Data Schema — single-store schema with traceability enforced by constraints
+- [X] E004 [P1] [TECHNICAL] [P] {SAD:ADR-0007} Traced Model Gateway — sole provider path, validation, invocation record, response fixtures
 
 ### Wave 3 — Inputs
 
 > Synthetic history and document ingestion are fully independent: one produces procurement records, the other produces chunks and extracted line items.
 
 - [X] E005 [P1] [PRODUCT] [P] {PRD:CAP-001} Synthetic Procurement History — 200 lines with lifecycle events and disclosed assumptions
-- [ ] E006 [P1] [PRODUCT] [P] {PRD:CAP-002}{PRD:CAP-003}{SAD:ADR-0008} Document Ingestion and Extraction — structure-aware chunking with deterministic page provenance
+- [X] E006 [P1] [PRODUCT] [P] {PRD:CAP-002}{PRD:CAP-003}{SAD:ADR-0008} Document Ingestion and Extraction — structure-aware chunking with deterministic page provenance
 
 ### Wave 4 — Core Capabilities
 
@@ -54,7 +65,7 @@ dod_source: null
 
 ### Wave 5 — Primary Surfaces
 
-- [ ] E010 [P1] [PRODUCT] [P] {PRD:CAP-006}{SAD:ADR-0004} Risk-Ranked Coordinator Worklist — lines ordered by expected schedule harm
+- [X] E010 [P1] [PRODUCT] [P] {PRD:CAP-006}{SAD:ADR-0004} Risk-Ranked Coordinator Worklist — lines ordered by expected schedule harm
 - [ ] E011 [P1] [PRODUCT] [P] {PRD:CAP-008} Grounded Chat with Citations — answers carrying inline page references
 
 ### Wave 6 — Evidence Surfaces
