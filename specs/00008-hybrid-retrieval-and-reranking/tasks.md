@@ -74,10 +74,10 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T013 {FR-026,FR-038} Add retrieval configuration — index flag, breadth, fetch depth, intra-op and inter-op threads, memory budget — in src/api/src/api/config.py → exports: RetrievalConfig
 - [X] T014 {FR-027,FR-040} Carry the search breadth on the connection options, never a per-query SET (AD-002), in src/api/src/api/db.py after:T012 ← T013:RetrievalConfig
 - [X] T015 {FR-004} Fix the fusion constant 60, the tie-break key and the missing-arm convention as lowercase identifier tokens in src/api/src/api/retrieval/parameters.py → exports: RankingParameters
-- [ ] T016 {FR-016} Vendor the INT8 and FP32 reranker graphs with their tokenizer, digests, licence basis and source under data/reranker/ (AD-007, AD-011)
-- [ ] T017 {FR-016} Write the one-off dynamic quantization emitting the INT8 graph with generator identity, seed, date and source hash, resolving every scratch path through the checkout's own gitignored .tmp/ per AGENTS.md §Temporary Files, in src/model/tools/quantize_reranker.py after:T016
+- [X] T016 {FR-016} Vendor the INT8 and FP32 reranker graphs with their tokenizer, digests, licence basis and source under data/reranker/ (AD-007, AD-011)
+- [X] T017 {FR-016} Write the one-off dynamic quantization emitting the INT8 graph with generator identity, seed, date and source hash, resolving every scratch path through the checkout's own gitignored .tmp/ per AGENTS.md §Temporary Files, in src/model/tools/quantize_reranker.py after:T016
 - [X] T018 {FR-016} Verify identity, revision, licence basis, source and digest before session creation in src/gateway/src/gateway/inference/artifacts.py after:T003 → exports: verify_artifact
-- [ ] T019 {FR-016} [COMPLETES FR-016] Assert licence basis, source, quantization record and digest for both graphs in tests/checks/test_vendored_model_provenance.py after:T018
+- [X] T019 {FR-016} [COMPLETES FR-016] Assert licence basis, source, quantization record and digest for both graphs in tests/checks/test_vendored_model_provenance.py after:T018
 - [X] T020 {FR-007} Move masked mean pooling and L2 normalization into src/gateway/src/gateway/inference/encoder.py, fed by the truncating tokenizer (HINT-004) after:T018 → exports: embed_texts
 - [X] T021 {FR-007} Refuse retrieval when the query encoder identity differs from the identity recorded on the chunks, in gateway/inference/encoder.py after:T020 → exports: assert_encoder_identity
 - [X] T022 Repoint src/model/src/model/ingest/embed.py at gateway.inference.encoder so exactly one pooling implementation exists (ADR-0023) after:T021

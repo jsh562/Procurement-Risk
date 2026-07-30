@@ -79,6 +79,21 @@ class VerifiedArtifact:
         return self.directory / name
 
 
+def _absent(record: Mapping[str, object], field: str) -> bool:
+    """Whether `field` is genuinely missing, as opposed to falsy.
+
+    Absence and zero are different things, and conflating them is not
+    hypothetical here: the quantization seed is legitimately **0**, and a
+    truthiness test rejected the real artifact for omitting a field it carried.
+    An empty or whitespace-only string still counts as absent, because a
+    provenance field padded with a blank is the same nothing as no field.
+    """
+    value = record.get(field)
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -130,7 +145,7 @@ def verify_artifact(directory: Path, *, record_name: str = "provenance.json") ->
     if generated is not None:
         if not isinstance(generated, dict):
             raise ArtifactError(f"{record_path}: generated must be a JSON object")
-        missing_generated = [f for f in _REQUIRED_GENERATED_FIELDS if not generated.get(f)]
+        missing_generated = [f for f in _REQUIRED_GENERATED_FIELDS if _absent(generated, f)]
         if missing_generated:
             msg = (
                 f"{record_path} declares a generated artifact but omits "

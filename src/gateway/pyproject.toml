@@ -214,6 +214,30 @@ allow_indirect_imports = false
 # import leak, and the remaining half — a leaked SDK type reported *by name* —
 # cannot be a contract at all, because contracts report module paths. That is
 # `tests/test_public_surface.py` (T013), which OBJ1 VC3 designates for it.
+# FR-048 / {SAD:ADR-0023}. The inference package must not reach the provider,
+# and this contract is what lets the modeling entry import it at all.
+#
+# `tests/checks/test_model_facing_placement.py` enforces that only `model.llm`
+# imports the gateway, and its stated reason is that a module importing it from
+# anywhere else is *outside* the computation-boundary contract rather than in
+# violation of it — it would pass `lint-imports` while reaching the provider.
+# E008 needs `model.ingest` to import `gateway.inference.encoder`, so that check
+# now admits `gateway.inference` specifically. The exception is only safe while
+# the admitted package cannot itself reach the provider, and the modeling entry
+# cannot express that: import-linter refuses to name a subpackage of an external
+# package as forbidden, so `model.ingest -> gateway.provider` is not writable
+# from `/src/model`. It is writable here, where both modules are internal.
+#
+# `allow_indirect_imports = false` is what makes it hold by any route rather
+# than only by direct import.
+
+[[tool.importlinter.contracts]]
+name = "The inference package does not reach the model provider"
+type = "forbidden"
+source_modules = ["gateway.inference"]
+forbidden_modules = ["gateway.provider", "gateway.orchestrator"]
+allow_indirect_imports = false
+
 [[tool.importlinter.contracts]]
 name = "The gateway-owned type modules do not reach the provider module"
 type = "forbidden"

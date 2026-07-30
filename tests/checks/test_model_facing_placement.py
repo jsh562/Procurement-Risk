@@ -108,9 +108,45 @@ def gateway_importers(root: Path) -> list[GatewayImport]:
     return found
 
 
+#: The one gateway subpackage a module outside `model.llm` may import, from E008
+#: ({SAD:ADR-0023}).
+#:
+#: This is a narrowing, and the reason it is safe is that the guarantee moved
+#: rather than lapsed. The rule below exists because a module importing the
+#: gateway from outside `model.llm` is *outside* the computation-boundary
+#: contract rather than in violation of it — it would pass `lint-imports` while
+#: reaching the provider. `src/model/pyproject.toml` now carries "Ingestion
+#: reaches the shared encoder but never the model provider", which forbids
+#: `model.ingest` from reaching `gateway.provider` or `gateway.orchestrator` by
+#: **any** route, indirect imports included. So the modules this exception
+#: admits are contract-guarded, which is precisely what the placement rule was
+#: standing in for.
+#:
+#: `gateway.inference` holds arithmetic — masked mean pooling, L2 normalization,
+#: cross-encoder scoring — and no provider client. It is shared because a query
+#: embedded by a different pooling implementation than the corpus lands in a
+#: different vector space, silently.
+PERMITTED_GATEWAY_SUBPACKAGE = "gateway.inference"
+
+
+def _is_permitted_inference_import(entry: GatewayImport) -> bool:
+    """Whether `entry` names only the shared inference package.
+
+    Matched on the recorded statement rather than re-parsed, because the
+    statement is what a reader sees in the failure message and a check that
+    admitted a module on evidence the message does not show would be arguing
+    with its own output.
+    """
+    return PERMITTED_GATEWAY_SUBPACKAGE in entry.statement
+
+
 def _misplaced(importers: list[GatewayImport]) -> list[GatewayImport]:
     permitted = MODEL_PACKAGE / PERMITTED_SUBPACKAGE
-    return [entry for entry in importers if permitted not in entry.path.parents]
+    return [
+        entry
+        for entry in importers
+        if permitted not in entry.path.parents and not _is_permitted_inference_import(entry)
+    ]
 
 
 def test_only_model_llm_imports_the_gateway() -> None:

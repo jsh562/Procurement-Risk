@@ -101,6 +101,18 @@ dev = [
     "coverage==7.15.2",
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
+    # `tools/quantize_reranker.py` only. `onnxruntime.quantization` imports
+    # `onnx` for the graph surgery, and this is the dev group rather than
+    # `[project] dependencies` on purpose: the tool is run once by a developer
+    # to produce the committed INT8 graph and is never on a runtime path.
+    #
+    # The placement is load-bearing, not tidiness. The serving image's denylist
+    # is derived from this entry's `[project] dependencies`, so declaring `onnx`
+    # there would add it to the set the image is checked against -- correct in
+    # itself, but it would also make a build-time-only package look like part of
+    # the modeling stack the boundary exists to keep out. The runtime the image
+    # *does* need, `onnxruntime`, lives in `/src/gateway` ({SAD:ADR-0023}).
+    "onnx>=1.20.0",
     "pytest>=9.1.1",
     "pytest-alembic>=0.12.1",
     "pytest-cov>=7.1.0",
@@ -169,6 +181,7 @@ type = "forbidden"
 source_modules = ["model.corpus"]
 forbidden_modules = ["model.llm", "gateway"]
 allow_indirect_imports = false
+
 
 # FR-050 / Principle VIII: the baseline extractor is an honest opponent, and it
 # is only honest if it was authored from the *rendered* documents alone. The

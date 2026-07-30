@@ -1,0 +1,11 @@
+[importlinter]
+root_package = boundary_fixture
+
+[importlinter:contract:inference-provider-boundary]
+name = The inference package does not reach the model provider
+type = forbidden
+source_modules =
+    boundary_fixture.inference
+forbidden_modules =
+    boundary_fixture.provider
+allow_indirect_imports = False
