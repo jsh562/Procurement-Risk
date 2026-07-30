@@ -35,12 +35,10 @@
 | VI. Evaluate Before You Tune | N/A | No evaluation set, no tuning run |
 | VII. Publish the Miss | PASS | FR-025 fixes the census target at 100% before first measurement; two Recorded Limitations carry all four fields; FR-012 concedes the guarantee that cannot be kept |
 | VIII. Honest Opponents | N/A | No model claim, no baseline |
-| Governance | **FAIL until ADR-0025 lands on `main`** | Workspace number 00012 is on `origin/main`. ADR-0025 is **not** claimed: the record exists only on this feature branch, and v1.2.11 holds that "a claim recorded only in a feature workspace is not a claim" — a concurrent allocator scanning `specs/adrs/` on the default branch finds 0025 free and is correct to take it. The ADR Author is the authoring channel, not the claiming mechanism. Discharged by committing the record to `main`; the gate re-runs after |
+| Governance | **FAIL until ADR-0025 lands on `main`** | Workspace number 00012 is on `origin/main`. ADR-0025 is **not** claimed: the record is authored and pushed on `claim-adr-0025` (commit `7846bae`, carrying both catalog rows as one serialized amendment) but has not landed on the default branch — it is on no branch this feature carries. v1.2.11 holds that "a claim recorded only in a feature workspace is not a claim" — a concurrent allocator scanning `specs/adrs/` on the default branch finds 0025 free and is correct to take it. The ADR Author is the authoring channel, not the claiming mechanism. Discharged by committing the record to `main`; the gate re-runs after |
 | Source Layout / Testing Policy | PASS | New code lands under existing `/src/api` and `/src/web` entries; FR-046 puts the derivation under test-first property-based tests in the merge gate |
 
-**Re-check after design**: see [§ Post-Design Compliance](#post-design-compliance).
-
-**Version audited**: `project-instructions.md` **v1.2.11** (2026-07-29).
+**Version audited**: `project-instructions.md` **v1.2.11** (2026-07-29). Re-checked after design — see § Post-Design Compliance at the end of this plan.
 
 ## Architecture
 
@@ -236,6 +234,26 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 *Reversal trigger*: a corpus document large enough that inline streaming breaks the 1.5 s envelope, or any viewer in the supported set that ignores the `#page=` fragment — either means the reader no longer lands on the cited page, which is the outcome FR-020 exists for.
 
 *Production-scale alternative*: the ingestion boundary emits a per-page artifact at ingest time, where `pdfplumber` already runs, so the serving boundary streams a page rather than a document and the byte range is narrowed at source.
+
+## Post-Design Compliance
+
+Re-run after Phase 1, against **v1.2.11**, on stable artifacts. An earlier run was discarded rather than reported: it began while the contract was being rewritten underneath it, and a gate evaluated against a moving target evidences nothing.
+
+**Verdict: FAIL**, carried by one CRITICAL of repository state. Every principle bearing on the artifact's substance passed — I, III, IV, V and VII clean; II passed with the two MEDIUMs below, since its structural claims were verified against the schema rather than the prose.
+
+| Finding | Severity | Status |
+|---|---|---|
+| ADR-0025 is not claimed on the default branch; a concurrent allocator scanning `specs/adrs/` on `main` finds 0025 free and is correct to take it | CRITICAL | **Open.** Authored and pushed on `claim-adr-0025`; discharged by that merge, after which this gate re-runs |
+| The census correction reached `population` and nothing else — the schema's own description and both examples still encoded the per-view denominator, giving one census three denominators | MEDIUM | Resolved — description and both examples now run-scoped, and `total_count` records that the figure is identical on every line's response |
+| FR-024's second condition had no stated mechanism, and it is the expensive half | MEDIUM | Resolved — AD-010 measures it twice: a chunk-text proxy at request time, the corpus-page check at acceptance, with the proxy *established* by their agreement rather than assumed |
+| `conformance.py` implements none of `allOf`, `not`, `if`/`then`, `contains`; this contract uses all of them, so the conditionals carrying FR-006 would not run | MEDIUM | Resolved as scheduled work — listed in Testing Strategy as prerequisite, sequenced before any conformance task |
+| "Every object schema is `additionalProperties: false`" overstated by one — `Problem` is deliberately open per RFC 9457 | LOW | Resolved in both plan and contract |
+| `MissMass.need_by_offset_days` lacked `minimum: 1`, leaving FR-006's rule half-structural and documenting an unreachable negative case | LOW | Resolved |
+| The contract miscited E010 FR-027, which classifies criticality as *explanatory context*, not a comparison quantity | LOW | Resolved |
+| E010 FR-055's non-application reporting not adopted | LOW | Open — carried to Tasks, see Open Items |
+| The project-plan E009-dependency amendment appeared undischarged | LOW | Verified discharged: `df26303` is an ancestor of `main` |
+
+The auditor examined the FR-012 / FR-038 / FR-039 triple for a Principle II regression and found none, on a ground none of the three artifacts had stated: the value recoverable by counting to the twenty-fifth mark is one the response **already publishes** — `quantiles.median`, with its proportion and reference class attached. The marks add spread, not a new central summary, so the disclosed limit recovers nothing withheld.
 
 ## Open Items
 
