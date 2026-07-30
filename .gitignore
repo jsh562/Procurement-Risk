@@ -87,3 +87,16 @@ Thumbs.db
 # — and a committed one would be a snapshot of exactly the records that had not
 # yet reached Postgres.
 gateway-invocation-spool.sqlite3
+
+# Per-run forecast reports. `forecast-fit` writes one per run, named by run id, so
+# they accumulate one file per fit and never converge on a set worth reviewing.
+# Nothing reads them from the tree — no check, no CI step and no document
+# references this directory, and the model tier's tests write to their own
+# `report_root` fixture rather than here.
+#
+# The provenance they carry is not lost by leaving them untracked: each report
+# restates what the run already wrote to `forecast_run` — the code revision, the
+# input row hash, the seed and the artifact schema version — and the database is
+# the record of what a published figure descends from. A report is a rendering of
+# that, regenerable from the run it names.
+/data/forecast-reports/
