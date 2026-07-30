@@ -60,7 +60,7 @@ dod_source: null
 > The three hardest epics, and all three are independent. This is the widest parallel band in the plan.
 
 - [X] E007 [P1] [PRODUCT] [P] {PRD:CAP-005}{SAD:ADR-0004} Delivery Forecast Model — hierarchical censored model producing stored draws
-- [ ] E008 [P1] [PRODUCT] [P] {PRD:CAP-003}{SAD:ADR-0005}{SAD:ADR-0006} Hybrid Retrieval and Reranking — fused sparse and dense search with local reranking
+- [ ] E008 [P1] [PRODUCT] [P] {PRD:CAP-003}{SAD:ADR-0005}{SAD:ADR-0006}{SAD:ADR-0023} Hybrid Retrieval and Reranking — fused sparse and dense search with local reranking
 - [ ] E009 [P1] [PRODUCT] [P] {PRD:CAP-004} Cross-Document Identity Resolution — precision-biased linking with review routing
 
 ### Wave 5 — Primary Surfaces
@@ -345,25 +345,28 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 ### E008 — Hybrid Retrieval and Reranking
 
 - **Category**: PRODUCT · **Priority**: P1
-- **Source**: {PRD:CAP-003}{SAD:ADR-0005}{SAD:ADR-0006}
-- **Scope**: Implement fused retrieval as a single database statement combining a weighted full-text arm and a dense vector arm by reciprocal rank fusion, then rerank the fused candidates with a locally loaded quantized cross-encoder. A regex router sends part-number-shaped queries to a deterministic lookup that falls through to hybrid retrieval rather than replacing it.
+- **Source**: {PRD:CAP-003}{SAD:ADR-0005}{SAD:ADR-0006}{SAD:ADR-0023}
+- **Scope**: Implement fused retrieval as a single database statement combining a weighted full-text arm and a dense vector arm by reciprocal rank fusion, then rerank the fused candidates with a locally loaded cross-encoder. A regex router sends part-number-shaped queries to a deterministic lookup that falls through to hybrid retrieval rather than replacing it. Also **relocates local inference into `/src/gateway`** per {SAD:ADR-0023} — the query encoder and the reranker sessions — and reconciles the two dependency guards that placement trips.
 - **Actors**: Coordinator, developer
 - **Key entities**: Chunk, RetrievalResult
 - **Depends on**: E006
 - **Dependency contracts**: E008 needs the populated chunk table with vectors and page metadata from E006
 - **Depended on by**: E011, E014
 - **Produces (shared)**: Retrieval module, fusion statement, reranker session, retrieval configuration flag
-- **Constraints**: Fusion executes as one statement inside the deterministic boundary; the configuration flag controls index usage only; reranker runs within the container's memory budget
+- **Constraints**: Fusion executes as one statement inside the deterministic boundary; the configuration flag controls index usage only; reranker runs within the container's memory budget. The gateway may carry the local-inference runtime, its tokenizer and NumPy, and nothing else from the modeling stack — PyMC, ArviZ and pandas stay forbidden there (`project-instructions.md` v1.2.9). The shared-infrastructure exclusion is widened to **NumPy alone**: the runtime and tokenizer leave the derived denylist by being declared in the gateway instead of `/src/model`, and excluding them by name trips the staleness assertion
 - **Acceptance criteria**:
   - [ ] Sparse and dense arms fuse in a single statement with field weighting on the sparse arm
   - [ ] The part-number router falls through to hybrid retrieval on a miss and never excludes a correct result
   - [ ] The reranker loads once at startup, warms before readiness, and reranks within the latency budget on constrained CPU
   - [ ] A reranker load failure degrades to fusion-only ordering with the degraded mode flagged in the response
+  - [ ] The query encoder and reranker sessions are reached through `/src/gateway`, with neither Python boundary declaring the other, and the serving image still builds
+  - [ ] **Both narrowed guards are reconciled deliberately, with the reasoning recorded at the constant rather than the guard silenced** — the heavy set becomes `{pymc, arviz, pandas}` and the shared-infrastructure term admits NumPy in both mirrored locations. A guard weakened without a written reason is the failure the guard exists to prevent
+  - [ ] E008's compliance audit names `project-instructions.md` v1.2.9 or later, since the audit it carried was taken against v1.2.8 and this amendment moved the ground under it
 - **Specify input**:
   - Description: Build fused sparse and dense retrieval with a deterministic part-number route and local quantized cross-encoder reranking, configurable between exact and approximate vector search.
   - Actors: Coordinator, developer
   - Key entities: Chunk, RetrievalResult
-  - Depends on artifacts: `specs/adrs/0005-*`, `specs/adrs/0006-*`, E006 chunks
+  - Depends on artifacts: `specs/adrs/0005-*`, `specs/adrs/0006-*`, `specs/adrs/0023-*`, E006 chunks
   - Constraints: Single-statement fusion; router is additive; explicit runtime thread configuration
 
 ### E009 — Cross-Document Identity Resolution
@@ -676,6 +679,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0020 Ingested Derived Data Carries an Active or Superseded Generation | superseded by ADR-0021 | E006, E008, E009, E012 |
 | ADR-0021 Superseded Generations Are Removed at Promotion, Not Retained | accepted | E003, E006, E008, E009, E012 |
 | ADR-0022 Interval Method Is Selected Per Estimator, Not Per Document | accepted | E014, E015 |
+| ADR-0023 Local Inference Lives in the Shared Gateway Package | accepted | E006, E008 |
 
 ### Deployment Decisions
 
@@ -683,7 +687,7 @@ No Deployment & Operations Document exists, so no operational epics were extract
 
 ### Uncovered Items
 
-None. All 14 capabilities and all 18 accepted architecture decisions map to at least one epic, across 22 records of which 4 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
+None. All 14 capabilities and all 19 accepted architecture decisions map to at least one epic, across 23 records of which 4 are superseded. The count is the table above, recounted at each amendment rather than carried forward — it read 9 while the table held 14, having gone stale as ADR-0010 through ADR-0016 landed.
 
 It went stale a second time, and worse: the table stopped at ADR-0018 while ADR-0019, ADR-0020, and ADR-0021 had all landed, so three records — one of them a supersession — were absent from the only place this document checks whether a decision reached an epic. The recount convention was the mitigation and it did not fire, because it is prose in this section rather than a step anything performs. Recounting catches a wrong *number*; it does not catch a missing *row*, and a coverage table that silently omits a record reports full coverage of the subset it happens to list. The four rows added by this amendment were reconciled against `specs/adrs/` directly rather than against the previous count.
 
