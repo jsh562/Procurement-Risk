@@ -699,6 +699,7 @@ Wave 4 is the most valuable parallel band: the forecast model, retrieval stack, 
 | ADR-0022 Interval Method Is Selected Per Estimator, Not Per Document | accepted | E014, E015 |
 | ADR-0023 Local Inference Lives in the Shared Gateway Package | accepted | E006, E008 |
 | ADR-0024 A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception | accepted | E003, E009 |
+| ADR-0025 Stored Posterior Arrays Never Cross the Serving Boundary | accepted | E010, E012, E019 |
 
 ### Deployment Decisions
 
