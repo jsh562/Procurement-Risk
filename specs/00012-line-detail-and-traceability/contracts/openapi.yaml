@@ -8,9 +8,10 @@ info:
   summary: One purchase-order line's posterior, plotted and inspectable, with every linked record resolving to its source page.
   description: |
     Two read operations. Neither writes anything, and there is deliberately no write path on this
-    surface: the view is read-only (spec § Scope → Excluded) and FR-029 forbids writing to any
-    identity-resolution record, so the absence is a property of the operation table rather than a
-    convention somebody maintains.
+    surface: FR-069 requires the surface to expose no operation that writes anything, FR-029 forbids
+    writing to any identity-resolution record in particular, and the view is read-only (spec § Scope →
+    Excluded) — so the absence is a property of the operation table that a later revision must keep,
+    rather than a convention somebody maintains.
 
     **What this contract exists to prevent.** The product refuses to publish a single predicted
     delivery date. The stored artifacts make that refusal fragile — a consumer holding the draw array
@@ -24,8 +25,10 @@ info:
     obligations were its own to state. This contract states them.
 
     **Nothing at the boundary is re-chosen.** FR-036 requires every failure on this view to take "the
-    same form the serving boundary already establishes (E010 FR-043) rather than a new one", and this
-    document reads that as binding the whole boundary convention rather than the error shape alone.
+    same form the serving boundary already establishes (E010 FR-043) rather than a new one", and
+    **FR-067 fixes that reading**: it binds the whole boundary convention rather than the error shape
+    alone, so what follows discharges a requirement rather than resting on this document's own
+    interpretation. FR-068 states the conditional-request half of it in its own terms.
     Adopted from `specs/00010-risk-ranked-coordinator-worklist/contracts/openapi.yaml` unchanged: RFC
     9457 `application/problem+json` with a closed `type` set and `correlation_id` required on *every*
     problem including 422; `ETag` + `If-None-Match` → 304; `Cache-Control: private, no-cache`; the
@@ -43,11 +46,14 @@ info:
 
     **Two scalars a reader might expect are deliberately absent**, and the absences are recorded rather
     than implied:
-      - **`criticality`.** Scalar, stated, and a member of none of FR-038's five classes — therefore a
-        sixth. E010 FR-027 classifies it on the worklist as *explanatory context*, which that requirement
-        states "is not a comparison quantity and MUST be visually subordinate";
-        no E012 requirement puts it on this view, and Key Entities describes the entity read rather
-        than mandating publication. E017 owns the override; the worklist is where it is read.
+      - **`criticality`.** **FR-060 forbids it here**, and the requirement rather than this document is
+        now the ground: no E012 requirement puts it on this view, Key Entities describes the entity read
+        rather than mandating publication, E017 owns the override, and E010 FR-027 classifies it on the
+        worklist as *explanatory context*, which that requirement states "is not a comparison quantity
+        and MUST be visually subordinate". The earlier ground stated here — scalar, therefore a sixth
+        class under FR-038 — was the *adjective* reading FR-038 explicitly disclaims ("the domain is a
+        locus, not an adjective"), and a correct absence resting on a wrong reason is one argument away
+        from being reversed.
       - **`calendar_margin_days`.** E010's secondary-region figure. The same quantity is needed here to
         place FR-005's need-by mark on a day axis, so it appears as
         `Distribution.miss.need_by_offset_days` — a coordinate inside the encoding, which FR-039
@@ -100,13 +106,21 @@ tags:
 
 x-prohibited-members:
   description: |
-    FR-011 and FR-012. Member names that MUST NOT appear anywhere in a response from this boundary,
-    published machine-readably so a contract test asserts their absence by name rather than by reading
-    schemas. Every object in the 200 response tree is `additionalProperties: false`, which is what
-    makes the list enforceable rather than aspirational. The single exception is `Problem`, which is
-    `additionalProperties: true` because RFC 9457 contemplates extension members and E010's copy is
-    open for the same reason — it carries no figure, appears only on error responses, and is
-    therefore outside the tree this list governs.
+    FR-011, FR-012 and **FR-064**. Member names that MUST NOT appear anywhere in a response from this
+    boundary, published machine-readably so a contract test asserts their absence by name rather than by
+    reading schemas.
+
+    **This list is the assertion's aid, not the mechanism.** FR-064 requires the prohibition enforced by
+    the *shape* of this contract — every object in the 200 response tree is `additionalProperties:
+    false`, so a central summary arriving under a name no list anticipates is a schema violation rather
+    than a gap in an enumeration, and adding a member to a closed object is a breaking change under the
+    compatibility rule below, which reopens the check deliberately. FR-064 also requires the check to run
+    in the merge gate; a structural guarantee nothing validates guarantees nothing.
+
+    The single exception is `Problem`, which is `additionalProperties: true` because RFC 9457
+    contemplates extension members and E010's copy is open for the same reason. It is the one object on
+    this surface where "carries no figure" has to be *stated* rather than enforced, and FR-064 states it:
+    a problem document carries no figure of any of FR-038's five classes.
   stored_arrays: [draws, survival]
   central_summaries:
     - mean
@@ -121,14 +135,17 @@ x-prohibited-members:
 
 x-figure-classes:
   description: |
-    FR-038 closes the view's stated scalar figures in five classes and no sixth. The closure is
+    FR-038 closes the **view's** stated scalar figures in five classes and no sixth; **FR-063 closes the
+    response's in the same five**, which is what lets a payload cap discharge a requirement rather than
+    extend one — FR-038 fixes its domain by locus and a payload has no regions. The closure is
     structural: `StatedFigures` has exactly five properties, named for the five classes, and is
     `additionalProperties: false`. A sixth class requires adding a property to a closed object, which
-    this document's own compatibility rule calls breaking — so introducing one reopens FR-038's check
+    this document's own compatibility rule calls breaking — so introducing one reopens the check
     deliberately rather than by accident, which is what makes the check finite.
 
-    Each class lists the exact response locations of its members, so "no sixth" is checkable by walking
-    a response rather than by reading an interface's source. The distribution *encoding* is outside
+    Each class lists the exact response locations of its members, which is the "stated locations"
+    FR-063 requires, so "no sixth" is checkable by walking a response rather than by reading an
+    interface's source. The distribution *encoding* is outside
     this enumeration by FR-039; `meta` is artifact identification under FR-013 and Principle I, not a
     stated figure; identifiers locate a record and state no quantity about delivery risk.
   classes:
@@ -236,19 +253,23 @@ paths:
         they are not stored beside the posterior and are reconstructed on the serving side under
         FR-031's obligation, which is why an unreconciled value is withheld rather than shown.
 
-        **Absent data is a state carried in a 200, not a fault.** A line with no posterior — because no
-        run is active, because the active run does not cover it, or because the roster moved — returns
-        200 with a resolution state naming which. So does a line identifier that names nothing or names
-        a closed line (FR-044). Returning 404 or 500 for those would present an honest outcome as a
+        **Absent data is a state carried in a 200, not a fault — FR-061 requires it.** A line with no
+        posterior — because no run is active, because the active run does not cover it, or because the
+        roster moved — returns 200 with a resolution state naming which, and with the precedence rank
+        that state won under. So does a line identifier that names nothing or names a closed line
+        (FR-044). Returning 404 or 500 for those would present an honest outcome as a
         broken page, which is the one reading that sends a coordinator to chase an engineer instead of
         a vendor. It would also put one member of a closed five-member enumeration outside the payload
-        that carries the enumeration, leaving SC-018 unassertable against a response.
+        that carries the enumeration, leaving SC-018 unassertable against a response. The converse half
+        of FR-061 holds too: a condition in which the system could not answer is a problem document and
+        never a sixth resolution state.
 
-        **What is absent is absent.** Where FR-006 withholds the miss mass — the need-by date at or
-        before the run's anchor — the `miss` member is *not present*. It is not null, not zero, and not
-        a dash. A nullable field is one renderer away from a screen reading `0%`, which is the defect
-        the bounded forms exist to prevent. The root schema's conditionals make the rule enforceable
-        rather than documented.
+        **What is absent is absent (FR-066).** Where FR-006 withholds the miss mass — the need-by date
+        at or before the run's anchor — the `miss` member is *not present*. It is not null, not zero,
+        and not a dash. A nullable field is one renderer away from a screen reading `0%`, which is the
+        defect the bounded forms exist to prevent. The root schema's conditionals make the rule
+        enforceable rather than documented, and the `already_late` annotation carries the condition as
+        text so the absence is never its sole carrier.
       parameters:
         - $ref: '#/components/parameters/PoLineId'
         - $ref: '#/components/parameters/NeedByOverride'
@@ -375,12 +396,13 @@ components:
         is written; the parameter is the whole mechanism, and reloading without it restores the
         recorded date.
 
-        **Why this feature accepts a parameter its Scope excludes.** Scope excludes *editing*: this
-        view is read-only and offers no adjustment control, which remains E010's. It does not follow
-        that the view must be blind to an adjustment E010's control already made. FR-010 requires this
-        view's figures to derive from the same stored row the worklist's derive from, and SC-003
-        requires no case in which the two disagree — which is exactly what a coordinator who moved a
-        date on the worklist and then opened the line would meet if this parameter did not exist.
+        **Why this feature accepts a parameter its Scope excludes — FR-062 requires it.** Scope excludes
+        *editing*: this view is read-only and offers no adjustment control, which remains E010's. It does
+        not follow that the view must be blind to an adjustment E010's control already made. FR-010
+        requires this view's figures to derive from the same stored row the worklist's derive from, and
+        SC-003 requires no case in which the two disagree — which is exactly what a coordinator who moved
+        a date on the worklist and then opened the line would meet if this parameter did not exist. FR-062
+        states the honouring and FR-054 states what the reader is then told; neither is left to AD-008.
 
         **A bare date, not E010's `<po_line_id>:<date>` pair, and not repeatable.** The path already
         names the line, so the pairing E010 needs to disambiguate a repeatable parameter has nothing to
@@ -406,9 +428,10 @@ components:
       in: header
       required: false
       description: |
-        The validator from a prior response. Matching returns 304 with no body. The line payload
-        depends on the day through staleness, so a stored copy could show a run as current after the
-        day boundary made it stale — which is why neither response is shared-cacheable.
+        The validator from a prior response. Matching returns 304 with no body — the conditional
+        answer FR-068 requires, not a contract convenience. The line payload depends on the day through
+        staleness, so a stored copy could show a run as current after the day boundary made it stale —
+        which is why neither response is shared-cacheable.
       schema:
         type: string
       example: 'W/"sha256:1f0c9d2b8a4e6015c7b3d9012fa4e86b5c37d0912ae4f6b83c105d7e29ab4f60"'
@@ -419,15 +442,28 @@ components:
       description: |
         Weak validator over exactly the inputs admitted to the response, so an unchanged validator is a
         positive statement that the whole response is unchanged rather than merely that no figure
-        moved.
+        moved. **This list is the enumeration FR-068 requires**, and the check that requirement states
+        is two-sided: holding every input here fixed and repeating the request yields an unchanged
+        validator and an unchanged response, and changing each one in turn changes the validator.
 
         **`GET /lines/{po_line_id}`:** the active run identifier or its absence and its
         `artifact_schema_version`; `today` in the configured zone; `po_line_id` and the applied
         override; every stored field of the line the response derives from; the line's `line_posterior`
         row identity for the active run or its absence; the resolved entity the line belongs to and
         that entity's document-derived membership; the active ingestion generation of every document a
-        linked record cites; the corpus binding's manifest digest, because a source that resolved
-        yesterday and does not today moves `figures.evidence.source_census`; and `info.version`.
+        linked record cites; **the active resolution run's identifier and a digest over its whole
+        linked-record set — every record that run carries, the document each cites, and the ingestion
+        generation that document resolves through**; the corpus binding's manifest digest, because a
+        source that resolved yesterday and does not today moves
+        `figures.evidence.source_census`; and `info.version`.
+
+        **Why the resolution run's whole set and not this line's citations.** `source_census` is a
+        census over every linked record the active resolution run carries (FR-024) and is therefore
+        identical on every line's response. A resolution run that touches some *other* line moves it
+        while every input scoped to this line's own entity and its own citations stands still — so a
+        validator built from the per-line inputs alone would answer 304 and withhold a response whose
+        evidence figure had changed, which is not an incomplete validator but a false one (FR-068,
+        SC-033).
 
         **`GET /documents/{document_id}/source`:** `document_id`; the active ingestion generation for
         that document — its run identifier and `input_tuple_digest`, so a re-ingestion under changed
@@ -444,10 +480,12 @@ components:
     CacheControl:
       description: |
         Always `private, no-cache`. Revalidate every request and never serve from a shared cache. E010's
-        header, adopted with the same two reasons, both of which hold here: a response computed under
+        header, adopted with the same two reasons, both of which hold here and both of which **FR-068
+        now states as a requirement** rather than leaving to this header: a response computed under
         one adjustment set must not reach a request carrying a different one, and the payload is
         time-dependent through `today`. `private` rests on the adjustment set the request carries, not
-        on an identity this system does not have.
+        on an identity this system does not have — the session being what E010 FR-031 defines, since
+        the boundary FR-036 inherits from records that it has no reader identity to scope anything to.
       schema:
         type: string
         const: 'private, no-cache'
@@ -501,8 +539,11 @@ components:
         422 rather than 400 for all of them, including malformed path segments, and the choice is the
         convention E010 established for this boundary rather than the framework's default: it covers
         the malformed and the semantically inadmissible alike, so a consumer needs one branch and not
-        two. FastAPI's default `RequestValidationError` body does not match this schema; these
-        operations inherit the handler E010 registered rather than adding a second.
+        two. FR-067 adopts that status convention along with the rest of the boundary and states that a
+        request this surface **refuses** is a failure on this view — so the `correlation_id` required
+        here discharges FR-036 rather than inheriting another epic's habit. FastAPI's default
+        `RequestValidationError` body does not match this schema; these operations inherit the handler
+        E010 registered rather than adding a second.
       content:
         application/problem+json:
           schema:
@@ -584,8 +625,9 @@ components:
             does not read. A deliberate refusal rather than a breakdown: a reader meeting an unfamiliar
             artifact schema fails loudly rather than misreading array offsets, and a misread offset here
             would place fifty marks at wrong days with nothing on screen to show it. It is **not** a
-            sixth resolution state — FR-042's set stays canonical at five — and not a 503, because the
-            datastore is reachable and retrying changes nothing.
+            sixth resolution state — FR-042's set stays canonical at five, and FR-061 assigns a
+            condition in which the system could not answer to this vocabulary rather than to that one —
+            and not a 503, because the datastore is reachable and retrying changes nothing.
       content:
         application/problem+json:
           schema:
@@ -651,8 +693,13 @@ components:
       type: object
       description: |
         RFC 9457 problem details. Adopted from the serving boundary E010 established (E010 FR-043), not
-        re-chosen. Every problem carries a correlation identifier, including 422 — a reader who meets a
-        failure must be able to quote something that reaches its record (FR-036, SC-024).
+        re-chosen — the adoption FR-067 requires. Every problem carries a correlation identifier,
+        including 422, because FR-067 counts a refused request among FR-036's "every failure" — a reader
+        who meets one must be able to quote something that reaches its record (FR-036, SC-024).
+
+        **This object is the one on this surface that admits members it does not declare, and it carries
+        no figure.** FR-064 states that rather than leaving it to `additionalProperties: true` to imply
+        it: the openness belongs to RFC 9457's extension convention, not to a hole in FR-011 and FR-012.
       additionalProperties: true
       required: [type, title, status, correlation_id]
       properties:
@@ -661,7 +708,10 @@ components:
           format: uri
           description: |
             The set a consumer of these operations may encounter, closed at six. Four are E010's,
-            unchanged and never renamed in place; two are this feature's.
+            unchanged and never renamed in place; two are this feature's. **This is the vocabulary of
+            *conditions* FR-067 closes**, and it is what a reader quotes as the cause; where one
+            condition admits several causes — a source that cannot be produced — the specific cause
+            travels in `reason`, from the single enumeration FR-059 fixes.
 
             | `type` | Status | Condition |
             |---|---|---|
@@ -725,10 +775,10 @@ components:
     SourceUnresolvableReason:
       type: string
       description: |
-        FR-023 and FR-036's closed cause set for a source that cannot be produced. One enumeration
-        serving two places: the `reason` on a problem document, and the `reason` on a linked record
-        whose source this view already knows will not open. Two lists would let a citation be marked
-        unresolvable for one cause in the list and fail with another on opening.
+        FR-023 and FR-036's closed cause set for a source that cannot be produced, and **the one
+        enumeration FR-059 requires**. It serves two places: the `reason` on a problem document, and the
+        `reason` on a linked record whose source this view already knows will not open. Two lists would
+        let a citation be marked unresolvable for one cause in the list and fail with another on opening.
 
         | Reason | Status | What would change it |
         |---|---|---|
@@ -839,9 +889,12 @@ components:
       type: object
       description: |
         A quantile that carries the proportion it stands for. FR-012 forbids a quantile transmitted
-        *without* the member that pairs with it — a lone quantile is a central summary wearing a
-        percentile label, and this schema has no way to express one because `QuantilePair` requires
-        both.
+        *without* the member that pairs with it, and **FR-065 fixes that phrase as meaning both members
+        and not either**: `later_share` is the complementary frequency FR-004 requires, and
+        `QuantilePair` requires the other quantile of the pair. Both are enforced here rather than one,
+        so the prohibition does not depend on a reader picking the reading that happens to be
+        implemented. A lone quantile is a central summary wearing a percentile label; a pair carrying no
+        share is two bare durations read as a schedule.
       additionalProperties: false
       required: [percentile, days, later_share, reference_class]
       properties:
@@ -871,7 +924,8 @@ components:
         The same two quantiles the worklist publishes for this line (FR-004), read from the same stored
         row for the same active run so the two surfaces cannot disagree (FR-010, SC-003). Both members
         are required — that is what makes FR-012's "a quantile carried without the member that pairs
-        with it" unrepresentable rather than merely discouraged. Both are present even on a
+        with it", under the second of the two readings FR-065 fixes, unrepresentable rather than merely
+        discouraged. Both are present even on a
         near-degenerate posterior where they are equal; the contract offers no way to collapse them to
         one figure.
       additionalProperties: false
@@ -993,9 +1047,9 @@ components:
         shading. Both are required — neither alone is sufficient.
 
         **This member is absent entirely where FR-006 withholds it** (need-by at or before the run's
-        anchor). Absence is the encoding; there is no null and no zero to render. The absence is never
-        the sole carrier of the condition — the `already_late` annotation is present, and FR-040
-        requires it in the accessibility tree as text.
+        anchor). Absence is the encoding FR-066 requires; there is no null, no zero, no empty string and
+        no dash to render. The absence is never the sole carrier of the condition — the `already_late`
+        annotation is present, and FR-040 requires it in the accessibility tree as text.
       additionalProperties: false
       required: [need_by_offset_days, shade_from_mark_index, probability, measure]
       properties:
@@ -1061,8 +1115,9 @@ components:
         copy.
 
         A value that cannot be reconciled against the value the fit used is **withheld** — the covariate
-        carries `state: covariate_withheld` and no `observed_value` at all — rather than displayed
-        (FR-031). A reconstruction that drifts produces a confident, specific, unfalsifiable-looking
+        carries `state: covariate_withheld` and no `observed_value` at all, which is the absence-not-
+        sentinel encoding FR-066 requires and the named state that keeps the absence from being the sole
+        carrier — rather than displayed (FR-031). A reconstruction that drifts produces a confident, specific, unfalsifiable-looking
         claim about a model's reasoning, which Principle III requires the system refuse.
       additionalProperties: false
       required: [name, state]
@@ -1204,7 +1259,9 @@ components:
           description: |
             Present exactly when `page_state` is `source_unresolvable`. Marking a citation that will
             not open *before* the coordinator clicks it turns FR-023's stated failure from an
-            interruption into information, and it is the same predicate the census counts.
+            interruption into information, and it is the same predicate the census counts. **FR-059
+            requires the advance marking and the shared enumeration**; the per-record `page_state` it
+            sits beside is FR-042's composition rule read at the item level.
         span_present_on_page:
           type: boolean
           description: |
@@ -1320,7 +1377,9 @@ components:
           type: string
           const: chunk_body_text_proxy
           description: |
-            **How the second condition was measured, declared beside the figure.** At request time
+            **How the second condition was measured, declared beside the figure — FR-058 requires the
+            declaration on every instance published and requires the figure published as a proxy where
+            the basis is anything other than the cited page.** At request time
             the extracted span is checked against the page-scoped chunk text, not the corpus page:
             the serving boundary declares no PDF library and may not import the boundary that does.
             That check is near-tautological — the extractor read the value out of that chunk — so it
@@ -1350,7 +1409,7 @@ components:
           description: |
             FR-025. Empty when `meets_target` is true. Otherwise one entry per distinct cause with the
             count of records it accounts for, so a miss is published with its cause rather than as a
-            bare shortfall. `no_linked_records_to_measure` is carried at a zero denominator, where the target is unjudged rather than missed — without it a response doing what `meets_target` describes would fail this schema. `span_not_found_on_page` is the one shortfall cause outside
+            bare shortfall. `no_linked_records_to_measure` is carried at a zero denominator, where the target is unjudged rather than missed — the member FR-025 requires the unjudged verdict's cause to travel in, so a reader asking why the target is not met reads one place and not two; without it a response doing what `meets_target` describes would fail this schema. `span_not_found_on_page` is the one shortfall cause outside
             `SourceUnresolvableReason`: the source resolved and the span was not on the cited page,
             which is a different failure from the source not resolving and is why FR-024 states two
             conditions rather than one.
@@ -1473,7 +1532,12 @@ components:
     ForecastRunMeta:
       type: object
       description: |
-        **E010's schema, adopted unchanged.** Which run produced what the reader is looking at (FR-013,
+        **E010's schema, adopted unchanged** — the adoption FR-067 requires, and the **extent** of the
+        artifact identification this response carries: FR-013's four members are its floor, FR-038's
+        locus clause names seven to place them outside the figure domain, and this envelope is what the
+        response carries. The members beyond FR-013's four are here because FR-045 adopts E010's
+        staleness rule, FR-042 compares a roster and FR-006 and FR-008 read a horizon, not because this
+        feature widened a set. Which run produced what the reader is looking at (FR-013,
         SC-017). Without this a figure is unattributable, and an unattributable figure cannot be checked
         against the run that made it. Two runs can share an as-of date and neither version is derivable
         from a date, so the date alone does not resolve the artifact.
@@ -1540,8 +1604,9 @@ components:
     Meta:
       type: object
       description: |
-        **E010's envelope, adopted unchanged.** Artifact identification and request context — not a
-        stated figure, and outside FR-038's domain for the reason given in the document description.
+        **E010's envelope, adopted unchanged** under FR-067. Artifact identification and request context
+        — not a stated figure, and outside FR-038's domain (and FR-063's) for the reason given in the
+        document description.
       additionalProperties: false
       required: [generated_at, today, timezone, forecast_run, conventions]
       properties:
@@ -1711,11 +1776,14 @@ components:
     StatedFigures:
       type: object
       description: |
-        FR-038. **The view's stated scalar figures, closed in five classes and no sixth.** Exactly five
-        properties, all required, named for the five classes, and `additionalProperties: false`.
+        FR-038 and **FR-063**. **The stated scalar figures, closed in five classes and no sixth** — the
+        view's by FR-038, this response's by FR-063, in the same five. Exactly five properties, all
+        required, named for the five classes, and `additionalProperties: false`.
 
         This is the device that makes "no sixth" structural rather than a claim about whatever the
-        interface happens to render. A sixth class requires adding a property to a closed object, which
+        interface happens to render. FR-038 fixes its domain by locus and a payload has no regions,
+        which is why FR-063 states the payload half in its own terms: without it this cap would extend a
+        requirement rather than discharge one. A sixth class requires adding a property to a closed object, which
         this document's compatibility rule calls breaking and which fails schema validation for every
         strict consumer until the contract is amended — so introducing one reopens FR-038's check
         deliberately rather than by accident, which is what makes the check finite.
@@ -1772,12 +1840,13 @@ components:
     LineIdentity:
       type: object
       description: |
-        **E010's schema, plus the two match fields identity resolution turns on.** `manufacturer` and
-        `part_number` are absent from E010's copy because no E010 requirement needed them and its
-        FR-027 caps what a row may carry; neither reason applies here — FR-027 has no counterpart on
-        this view, FR-038 caps *scalar figures* and these are neither, and the two are what a resolved
-        entity normalizes, so a coordinator reading `no_resolved_entity` can see the values resolution
-        had to work with.
+        **E010's schema, plus the two match fields identity resolution turns on — required by FR-060.**
+        `manufacturer` and `part_number` are absent from E010's copy because no E010 requirement needed
+        them and its FR-027 caps what a row may carry; neither reason applies here — FR-027 has no
+        counterpart on this view, FR-038 and FR-063 cap *scalar figures* and these are neither, and the
+        two are what a resolved entity normalizes, so a coordinator reading `no_resolved_entity` can see
+        the values resolution had to work with. FR-060 owns that, so the two are not carried on this
+        document's presumption about what a reader wants.
       additionalProperties: false
       required: [project_id, po_number, line_number, description, manufacturer, part_number]
       properties:
@@ -1809,8 +1878,8 @@ components:
         any other. FR-028 requires it to render in either identity state; it renders under every
         resolution state but `absent_or_closed_line`, where there is no line to render.
 
-        **`criticality` is deliberately absent** — see the document description for the full record of
-        that decision. `vendor_id` and `material_category` are present because Key Entities names the
+        **`criticality` is deliberately absent, and FR-060 forbids it** — see the document description
+        for the full record of that decision. `vendor_id` and `material_category` are present because Key Entities names the
         pooling groups the fit shared strength across, and neither is a figure: they are the strata,
         not a quantity about this line.
       additionalProperties: false
@@ -1869,10 +1938,11 @@ components:
           minimum: 1
           maximum: 5
           description: |
-            The winning state's rank in FR-042's precedence, 1 highest. Publishing the rank makes the
-            applied order readable from the payload rather than inferred from a constant table, in the
-            spirit of E010 publishing `sort.tiebreak` and `staleness_basis`: a rule the server applied
-            and did not state is a rule a reader cannot check.
+            The winning state's rank in FR-042's precedence, 1 highest, **required by FR-061**.
+            Publishing the rank makes the applied order readable from the payload rather than inferred
+            from a constant table, in the spirit of E010 publishing `sort.tiebreak` and
+            `staleness_basis`: a rule the server applied and did not state is a rule a reader cannot
+            check.
         annotations:
           type: array
           description: |
@@ -2071,6 +2141,7 @@ components:
               population: linked_records_in_active_resolution_run
               resolved_count: 391
               total_count: 391
+              span_check_basis: chunk_body_text_proxy
               share: 1
               target_percent: 100
               meets_target: true
@@ -2209,6 +2280,7 @@ components:
               population: linked_records_in_active_resolution_run
               resolved_count: 388
               total_count: 391
+              span_check_basis: chunk_body_text_proxy
               share: 0.9923
               target_percent: 100
               meets_target: false
