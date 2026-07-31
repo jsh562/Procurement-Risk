@@ -294,6 +294,7 @@ Project-level architectural decisions are maintained as standalone MADR files un
 | ADR-0022 | Interval Method Is Selected Per Estimator, Not Per Document | accepted | 2026-07-29 | — | [0022-interval-method-is-selected-per-estimator.md](adrs/0022-interval-method-is-selected-per-estimator.md) |
 | ADR-0023 | Local Inference Lives in the Shared Gateway Package, and the Serving Image Admits Its Runtime | accepted | 2026-07-29 | — | [0023-local-inference-in-the-shared-gateway-package.md](adrs/0023-local-inference-in-the-shared-gateway-package.md) |
 | ADR-0024 | A Consuming Epic May Additively Extend Another Epic's Tables Under a Recorded Exception | accepted | 2026-07-29 | — | [0024-consuming-epic-may-additively-extend-another-epics-tables.md](adrs/0024-consuming-epic-may-additively-extend-another-epics-tables.md) |
+| ADR-0025 | Stored Posterior Arrays Never Cross the Serving Boundary; Surfaces Receive Derived, Resolution-Bounded Summaries | accepted | 2026-07-30 | — | [0025-stored-posterior-arrays-do-not-cross-the-serving-boundary.md](adrs/0025-stored-posterior-arrays-do-not-cross-the-serving-boundary.md) |
 
 <!-- Rows are managed by the ADR Author subagent. Do not embed full decision prose here. -->
 
