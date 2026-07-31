@@ -69,7 +69,7 @@ members. T003 therefore precedes T017.
 - [ ] T007 [P] {FR-010,FR-013} Read the same stored artifact row and run identification the worklist reads in src/api/src/api/risk_read/line_query.py → exports: load_line_detail()
 - [ ] T008 {FR-027} Resolve the three identity states in src/api/src/api/risk_read/traceability.py after:T004 (AD-003) → exports: resolve_identity_state()
 - [ ] T009 {FR-028} Test the traversal and all three identity states against frozen fixtures in src/api/tests/test_traceability.py after:T008 (HINT-003)
-- [ ] T010 [P] {FR-026,FR-040,FR-043} Commit the state copy for all three scopes in src/web/app/lines/[poLineId]/detailCopy.ts with a distinctness test → exports: RESOLUTION_COPY, SECTION_COPY
+- [ ] T010 [P] {FR-026,FR-040,FR-043,FR-053} Commit the state copy for all three scopes in src/web/app/lines/[poLineId]/detailCopy.ts, each entry naming what its state withholds or bounds, with a distinctness test applying the no-substring and unique-phrase rules across all three scopes together and treating a phrase as two or more contiguous words → exports: RESOLUTION_COPY, ANNOTATION_COPY, SECTION_COPY
 - [ ] T011 {FR-036} Add the router and RFC 9457 problem handling in src/api/src/api/routes/line_detail.py, registered in src/api/src/api/main.py after:T006 ← T006:resolve_detail_states
 
 ---
@@ -89,12 +89,12 @@ checks the commit order rather than merely the presence of tests (HINT-001).
 - [ ] T016 [US1] {FR-003,FR-011,FR-012,FR-037,FR-038} Compose figures in five classes and encoding with no array or central-summary member in src/api/src/api/routes/line_detail.py after:T015
 - [ ] T017 [US1] [P] {FR-006,FR-011,FR-012,FR-039} Validate live bodies and assert x-prohibited-members absence in src/api/tests/test_detail_conformance.py after:T016 ← T003:validate
 - [ ] T018 [US1] [P] {FR-042} [COMPLETES FR-042] Cover the five resolution states, the annotation sets, ETag/304 and every problem shape in src/api/tests/test_line_detail.py after:T016
-- [ ] T019 [US1] {FR-045} Build the route shell, fetch hook and stylesheet marking stale figures in src/web/app/lines/[poLineId]/page.tsx, src/web/app/lines/[poLineId]/useLineDetail.ts, src/web/app/lines/[poLineId]/page.module.css after:T010
-- [ ] T020 [US1] {FR-001,FR-003,FR-004,FR-009} Render fifty marks, the labelled quantile pair and a days-from-as-of axis in src/web/app/lines/[poLineId]/Distribution.tsx after:T019
-- [ ] T021 [US1] {FR-005,FR-006} [COMPLETES FR-006] Mark the need-by date, shade the mass beyond it and state it both directions with bound wording in src/web/app/lines/[poLineId]/Distribution.tsx after:T020
+- [ ] T019 [US1] {FR-045,FR-055} Build the route shell, fetch hook and stylesheet marking stale figures once inside the region holding them, naming the as-of date and the threshold, in src/web/app/lines/[poLineId]/page.tsx, src/web/app/lines/[poLineId]/useLineDetail.ts, src/web/app/lines/[poLineId]/page.module.css after:T010
+- [ ] T020 [US1] {FR-001,FR-003,FR-004,FR-009,FR-047} Render fifty marks, the labelled quantile pair and a days-from-as-of axis, each share naming its denominator and population in the delivered REFERENCE_CLASS wording, in src/web/app/lines/[poLineId]/Distribution.tsx after:T019 (AD-005, HINT-002)
+- [ ] T021 [US1] {FR-005,FR-006,FR-052,FR-054} [COMPLETES FR-006] Mark the need-by date, shade the mass beyond it and state it both directions with bound wording spoken as words, and state an in-force session what-if beside the recorded date, in src/web/app/lines/[poLineId]/Distribution.tsx after:T020 (AD-008)
 - [ ] T022 [US1] {FR-007,FR-008,FR-009} Render the increasing cumulative view after the distribution with the residual mass labelled in src/web/app/lines/[poLineId]/Cumulative.tsx after:T021
-- [ ] T023 [US1] {FR-014,FR-015,FR-016,FR-017} Render the five-item structured equivalent in the figures' own region in src/web/app/lines/[poLineId]/TextualEquivalent.tsx after:T022
-- [ ] T024 [US1] [P] {FR-035} Turn the existing line identity into the detail link, adding no row element, in src/web/app/worklist/Row.tsx and src/web/app/worklist/Row.test.tsx (HINT-005)
+- [ ] T023 [US1] {FR-014,FR-015,FR-016,FR-017,FR-048,FR-049} Render the five-item structured equivalent in the figures' own region from the same response members the figures render from, visible and in the accessibility tree alike with no second copy, and assert it states the same figures the plot states, in src/web/app/lines/[poLineId]/TextualEquivalent.tsx and src/web/app/lines/[poLineId]/TextualEquivalent.test.tsx after:T022
+- [ ] T024 [US1] [P] {FR-035,FR-056} Turn the existing line identity into the detail link with an accessible name identifying the line, adding no row element, in src/web/app/worklist/Row.tsx and src/web/app/worklist/Row.test.tsx (HINT-005)
 - [ ] T025 [US1] {FR-037,FR-040} Assert worklist-to-detail navigation, accessibility-tree state text and no central estimate in src/web/e2e/line-detail.spec.ts after:T023,T024
 
 ---
@@ -115,8 +115,8 @@ the agreement rather than assumed, and disagreement is published.
 - [ ] T029 [US2] {FR-024} Check the extracted span against chunk.body_text at request time and declare the runtime figure a proxy in src/api/src/api/risk_read/source_binding.py after:T028 (AD-010)
 - [ ] T030 [US2] {FR-021} Filter every chunk and document read through v_active_ingestion_generation in src/api/src/api/risk_read/traceability.py after:T026
 - [ ] T031 [US2] {FR-020,FR-021,FR-022} Stream the source inline with X-Source-Kind and X-Ingestion-Generation in src/api/src/api/routes/line_detail.py after:T027,T030 ← T027:resolve_source
-- [ ] T032 [US2] {FR-018,FR-019,FR-022} [COMPLETES FR-022] List each citation with title, page, span, confidence and layer marker in src/web/app/lines/[poLineId]/LinkedRecords.tsx after:T019,T031
-- [ ] T033 [US2] {FR-020,FR-020a,FR-023} [COMPLETES FR-023] Open the cited page at #page=N and render the named unresolvable failure rather than an empty frame in src/web/app/lines/[poLineId]/LinkedRecords.tsx after:T032
+- [ ] T032 [US2] {FR-018,FR-019,FR-022,FR-051} [COMPLETES FR-022] List each citation with title, page, span, layer marker and confidence rendered as a self-reported extraction score rather than a percentage, and render the census with its population, no-interval declaration and licensed reason in words, in src/web/app/lines/[poLineId]/LinkedRecords.tsx after:T019,T031
+- [ ] T033 [US2] {FR-020,FR-020a,FR-023,FR-050,FR-057} [COMPLETES FR-023] Open the cited page at #page=N, state on the offer that the whole document is served positioned at that page, and render the named unresolvable failure with its untruncated correlation identifier rather than an empty frame, in src/web/app/lines/[poLineId]/LinkedRecords.tsx after:T032
 - [ ] T034 [US2] {FR-024,FR-025} [COMPLETES FR-024] Re-measure span presence against real corpus pages with pdfplumber in src/model/tests/test_corpus_span_acceptance.py after:T029 (AD-010) — and write both counts, the two measurements and any disagreement between them to a committed evidence artifact under the feature workspace, because AD-010 promises disagreement is *published* and a test that measures then discards publishes nothing
 
 ---
@@ -148,9 +148,9 @@ are shown, with no contribution figure present and no causal claim made.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T043 [P] {FR-046} Assert the property tests and the detail conformance test both run in the merge gate, in tests/checks/test_detail_checks_run_in_the_gate.py after:T012,T017
-- [ ] T044 [P] {FR-038,FR-039,FR-041} Assert the five figure classes admit no sixth and every published percentage takes the bounded form, in src/api/tests/test_detail_conformance.py after:T041; additionally assert has_interval is false, no_interval_reason is the single licensed member, population is the active resolution run's whole linked-record set, span_check_basis declares the proxy, meets_target is null rather than true at a zero denominator, and total_count is identical across two different po_line_id responses
-- [ ] T045 [P] {FR-040} [COMPLETES FR-040] Assert every state the view resolves to is present as accessibility-tree text in src/web/e2e/line-detail.spec.ts after:T037,T042
+- [ ] T043 [P] {FR-046,FR-048} Assert the property tests, the detail conformance test and the equivalent/plot agreement test all run in the merge gate, in tests/checks/test_detail_checks_run_in_the_gate.py after:T012,T017,T023
+- [ ] T044 [P] {FR-038,FR-039,FR-041,FR-052} Assert the five figure classes admit no sixth and every published percentage — the quantiles' shares and the miss pair as well as the three FR-041 names — takes the bounded form, in src/api/tests/test_detail_conformance.py after:T041; additionally assert has_interval is false, no_interval_reason is the single licensed member, population is the active resolution run's whole linked-record set, span_check_basis declares the proxy, meets_target is null rather than true at a zero denominator, and total_count is identical across two different po_line_id responses
+- [ ] T045 [P] {FR-040,FR-049} [COMPLETES FR-040] Assert every state the view resolves to is present as accessibility-tree text and visible in the rendered output from the same carrier, in src/web/e2e/line-detail.spec.ts after:T037,T042
 - [ ] T046 {FR-024} [P] Assert the memoised per-document census keeps the response inside the 1.5 s p95 envelope, in src/api/tests/test_line_detail.py after:T028 (AD-009)
 
 ---

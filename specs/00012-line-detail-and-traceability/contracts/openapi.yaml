@@ -32,8 +32,8 @@ info:
     `meta` envelope with `ForecastRunMeta` and `Conventions`; `PercentFigure`; `ReferenceClass`. Where
     a schema here differs from E010's copy, the difference is stated in that schema and carries the
     requirement that forced it. Where a state name already exists — `roster_mismatch`, `not_covered`,
-    `no_active_run`, `stale_run`, `beyond_horizon`, `already_late` — it is adopted rather than minted,
-    so one line cannot carry differently-spelled states on the two surfaces.
+    `no_active_run`, `stale_run`, `beyond_horizon`, `already_late`, `calendar_passed` — it is adopted
+    rather than minted, so one line cannot carry differently-spelled states on the two surfaces.
 
     **The honest limit, stated rather than glossed.** Fifty equal-probability marks *are* the
     distribution, and counting to the twenty-fifth yields its middle. That is what plotting a
@@ -164,7 +164,7 @@ x-figure-classes:
 x-states:
   description: |
     FR-042 enumerates the view's states at three scopes. Resolution resolves to exactly one of five, in
-    the stated precedence. Annotation is zero or more of three and applies only where figures render.
+    the stated precedence. Annotation is zero or more of four and applies only where figures render.
     Section-scoped resolves to exactly one per rendered section, and each set carries its nominal
     member so "exactly one" never forces a degraded state permanently.
 
@@ -211,8 +211,9 @@ x-states:
       why: |
         `beyond_horizon` requires the effective need-by date to fall after `as_of_date + horizon_days`;
         `already_late` requires it to fall at or before `as_of_date`. The pair asserts both at once.
-        `maxItems: 2` on the array is what makes the exclusion partly structural; the remaining reason
-        no triple exists is this pair being in every one.
+        `maxItems: 2` on the array is what makes the exclusion structural; independently of that bound,
+        any triple drawn from these four members would contain at least two of the three date-derived
+        states, and every one of those pairs is excluded above.
   section_scoped:
     - {section: identity, nominal: resolved_with_members, requirement: FR-027}
     - {section: covariates, nominal: covariates_reconciled, requirement: FR-031}
@@ -1395,10 +1396,12 @@ components:
       type: string
       description: |
         Zero or more, determined independently, and only where the figures render. These annotate
-        rather than replace, which is why they cannot be members of the resolution set. All three names
-        are E010's, adopted rather than minted: `stale_run` is E010's page state, `beyond_horizon` and
-        `already_late` its row states for the same two conditions — so one line cannot carry
-        differently-spelled states on the two surfaces.
+        rather than replace, which is why they cannot be members of the resolution set. All four names
+        are E010's, adopted rather than minted: `stale_run` is E010's page state, and
+        `beyond_horizon`, `already_late` and `calendar_passed` are three of its eight row-level
+        degraded states, for the same three conditions — so one line cannot carry differently-spelled
+        states on the two surfaces. Every state here is carried by text in the accessibility tree
+        (FR-040) from copy committed at all three scopes (FR-053), `calendar_passed` included.
       enum:
         - stale_run
         - beyond_horizon
@@ -1873,8 +1876,10 @@ components:
         annotations:
           type: array
           description: |
-            FR-042's annotation scope. Empty in every resolution state but `figures_render`. Order is
-            not significant. `maxItems: 2` encodes the one excluded pair — see `x-states`.
+            FR-042's annotation scope — zero or more of four. Empty in every resolution state but
+            `figures_render`. Order is not significant. `maxItems: 2` holds with four members because
+            the three date-derived states exclude one another pairwise, so at most one ever joins
+            `stale_run` — the three excluded pairs and the eight admissible sets are in `x-states`.
           uniqueItems: true
           maxItems: 2
           items:
