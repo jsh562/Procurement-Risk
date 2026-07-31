@@ -33,10 +33,10 @@
 | IV. Agent Output Style | PASS | Tables throughout; Summary is three key-value lines |
 | V. The Model Extracts, Code Computes | PASS | All derivation is deterministic Python in `api.compute.distribution`; no model invocation on this surface |
 | VI. Evaluate Before You Tune | N/A | No evaluation set, no tuning run |
-| VII. Publish the Miss | PASS | FR-025 fixes the census target at 100% before first measurement; two Recorded Limitations carry all four fields; FR-012 concedes the guarantee that cannot be kept |
+| VII. Publish the Miss | PASS | FR-025 fixes the census target at 100% before first measurement; **three** Recorded Limitations in the spec and one in this plan carry all four fields — the third records that the ordering evidence behind FR-046's test-first obligation does not survive the squash merge, which was an implementation hint until it was written down; FR-058 requires a disagreement between the request-time proxy and the corpus measurement published beside the figure rather than reconciled away, with the figure still published; FR-012 concedes the guarantee that cannot be kept |
 | VIII. Honest Opponents | N/A | No model claim, no baseline |
 | Governance | PASS | Workspace number 00012 is on `origin/main`. **ADR-0025 is now claimed where the allocator looks** — `specs/adrs/0025-stored-posterior-arrays-do-not-cross-the-serving-boundary.md` is on `origin/main` at `f6e363f`, with its catalog rows in `specs/sad.md` and `specs/project-plan.md`, both of which now hold 25 records with no drift. This row read FAIL until that merge; the discharge is recorded rather than backdated |
-| Source Layout / Testing Policy | PASS | Code lands in four locations, each on stated ground: `/src/api` and `/src/web` (the feature's own entries), `/tests` (cross-entry verification with no single owning entry — the layout rule's own exception), and `/src/model` (a test beside the extraction output it covers). No new `/src` entry; FR-046 puts the derivation under test-first property-based tests in the merge gate |
+| Source Layout / Testing Policy | PASS | Code lands in four locations, each on stated ground: `/src/api` and `/src/web` (the feature's own entries), `/tests` (cross-entry verification with no single owning entry — the layout rule's own exception), and `/src/model` (a test beside the extraction output it covers). No new `/src` entry; FR-046 puts the derivation under test-first property-based tests in the merge gate, **FR-070 fixes what "in the merge gate" means** — a step of the `verify` job read from the parsed workflow, with a deselected, skipped or expected-to-fail check reported as unrun rather than passed — and FR-071 fixes what evidences test-first |
 
 **Version audited**: `project-instructions.md` **v1.2.11** (2026-07-29). Re-checked after design — see § Post-Design Compliance at the end of this plan.
 
@@ -79,7 +79,7 @@ Feature-local tradeoffs only. Project-wide architectural decisions belong in sta
 | AD-007 | Source-page binding location | storage / configuration | Configuration | The identifier is minted by a lossy transform that cannot be reversed; storage has no path column. Carried as a Recorded Limitation with its reversal trigger, not presented as free |
 | AD-008 | Whether the detail endpoint accepts the worklist's need-by what-if | reject (Scope excludes editing) / accept as pass-through | Accept as a pass-through query parameter | FR-005 marks the **effective** need-by date and Key Entities names "its recorded *and* effective need-by dates", while FR-010 requires the two surfaces be "incapable of disagreeing". A coordinator with an adjustment active on the worklist who opened the line would meet exactly that disagreement. Scope's exclusion binds the **control** — E012 offers no way to set an adjustment — not the pass-through of one already made |
 | AD-009 | The census denominator | records rendered on this view / every linked record the active run carries | The active run's whole linked-record set | FR-024 states the denominator in terms. The rendered subset is cheaper and is a *different claim* — a per-view sample reported in the grammar of a census. The envelope is met by the shape of the work instead: resolution is a property of the **document**, not of each record, so the figure is one aggregate grouped by document identifier with each distinct identifier resolved once and memoised for the process lifetime |
-| AD-010 | {SAD:ADR-0017} How FR-024's *second* condition — the extracted span is present on the cited page — is measured | against `chunk.body_text` / against the corpus PDF page / not measured | **Both, at different times**: `chunk.body_text` at request time, the corpus page at acceptance | The serving boundary declares no PDF library, so the corpus-page check cannot run per request. Checking only `chunk.body_text` is cheap and available but near-tautological — the extractor read the value out of that chunk, so it measures database self-consistency rather than link correctness, which is precisely what FR-024 exists to catch (*"a link that looks right is frequently not"*). So the runtime figure uses the chunk-text check and is **declared a proxy**, and SC-010's "measured over real corpus documents" is discharged by an acceptance check that re-measures the same condition against real corpus pages where `pdfplumber` is available. The proxy's validity is *established* by that agreement rather than assumed, and disagreement is published. Invokes **ADR-0017**, which this project holds for exactly this shape — a plan-phase artifact normative over a specify-phase requirement — rather than leaving SC-010 quietly divergent |
+| AD-010 | {SAD:ADR-0017} How FR-024's *second* condition — the extracted span is present on the cited page — is measured | against `chunk.body_text` / against the corpus PDF page / not measured | **Both, at different times**: `chunk.body_text` at request time, the corpus page at acceptance | The serving boundary declares no PDF library, so the corpus-page check cannot run per request. Checking only `chunk.body_text` is cheap and available but near-tautological — the extractor read the value out of that chunk, so it measures database self-consistency rather than link correctness, which is precisely what FR-024 exists to catch (*"a link that looks right is frequently not"*). So the runtime figure uses the chunk-text check and is **declared a proxy**, and SC-010's "measured over real corpus documents" is discharged by an acceptance check that re-measures the same condition against real corpus pages where `pdfplumber` is available. The proxy's validity is *established* by that agreement rather than assumed, and disagreement is published — **FR-058 now fixes what publication means and what a disagreement obliges**, and SC-010a names the artifact: both counts with their denominators, the corpus and resolution run each was taken over, and the records the two decide differently are written to `specs/00012-line-detail-and-traceability/evidence/span-check-agreement.md`; the request-time figure keeps being published with its basis declared and its proxy status intact rather than being withheld, and a disagreement of any size is the recorded reversal trigger for the request-time basis chosen here, because two censuses over the same records differing is a defect and not noise. Invokes **ADR-0017**, which this project holds for exactly this shape — a plan-phase artifact normative over a specify-phase requirement — rather than leaving SC-010 quietly divergent |
 
 ## Data Model Summary
 
@@ -120,6 +120,54 @@ The worklist contract is **not** touched. FR-035 makes an already-present identi
 | E2E | Playwright | Worklist → detail navigation, accessibility-tree assertions (SC-018, SC-031), no-central-estimate assertions (SC-001, SC-026, SC-032) | None | configured |
 | Security | pip-audit, npm audit | Dependency advisories, reported not gated | — | configured |
 | Coverage | pytest-cov, Vitest v8 | Target 80 per the derived QC policy | — | configured |
+
+**Gate membership, stated as a property rather than assumed (FR-070, SC-034).** Every tier above except the corpus-page acceptance check runs as a step of the `verify` job in `.github/workflows/verify.yml`, and T043 asserts that over the **parsed** workflow rather than over its text, following the delivered `tests/checks/test_worklist_checks_run_in_the_gate.py`. A check that is deselected, filtered out by a marker expression, skipped for a missing environment dependency, or marked expected-to-fail has not executed: it is reported as unrun and fails the gate rather than reporting green. The one exception is `src/model/tests/test_corpus_span_acceptance.py`, which needs `pdfplumber` and is therefore an **acceptance-tier** check by AD-010's construction — it is recorded as one and counted as no part of the gated evidence, which is the distinction the map below carries in its own column.
+
+### Criterion Coverage Map
+
+Every criterion, the check that owns it, and whether that check discharges it inside the gate or only at acceptance (FR-070). A criterion with no owning check is recorded as **unevidenced** here rather than assumed covered — that visibility is the point of the table, and five criteria are in that state today.
+
+| Criterion | Tier / owning check | Gate? | Task |
+|---|---|---|---|
+| SC-001 | E2E no-central-estimate assertions; contract conformance over the payload | gate | T025, T017 |
+| SC-002 | Integration — the miss pair carried in both directions. The **shaded region has no owning check** | gate (payload half) | T018 |
+| SC-003 | **Unevidenced** — nothing compares this view's figures against the worklist's for one line under one run | — | — |
+| SC-004 | Integration over the five resolution states and their precedence ranks | gate | T018 |
+| SC-005 | Unit (web) — the five contents, asserted conjunct by conjunct under FR-075 | gate | T023 |
+| SC-006 | Contract conformance — `residual` required. The rendered naming has no owning check | gate (payload half) | T017 |
+| SC-007 | Contract conformance plus the figure-class assertions | gate | T017, T044 |
+| SC-008 | Integration — problem shapes for the source endpoint. Fixture-evidenced and **unjudged at an empty record set** (FR-076); the 200 stream itself has no owning check | gate | T018 |
+| SC-009 | **Unevidenced** — no check asserts a citation's label, page and confidence before opening. Fixture-evidenced when one exists (FR-076) | — | — |
+| SC-010 | Contract conformance — census counts, target, declaration, licensed reason, unjudged verdict | gate | T044 |
+| SC-010a | Corpus-page re-measurement and the committed agreement artifact | **acceptance — not gated** | T034 |
+| SC-011 | Integration against frozen fixtures plus the copy distinctness test | gate | T009, T010 |
+| SC-012 | Integration — both identity states and the absent-or-closed line | gate | T018, T009 |
+| SC-013 | Contract conformance — `Covariate` closed, so no share member is representable | gate | T017, T041 |
+| SC-014 | Contract conformance — absence rather than a sentinel | gate | T017, T040 |
+| SC-015 | E2E accessibility-tree assertions | gate | T045 |
+| SC-016 | Unit (web) row test, counted by E010 FR-027's three-class procedure | gate | T024 |
+| SC-017 | Contract conformance — `meta` and its run identification required | gate | T017 |
+| SC-018 | Integration plus the cross-scope distinctness test | gate | T018, T010 |
+| SC-019 | E2E state text plus the route shell's stale mark | gate | T045, T019 |
+| SC-020 | Contract conformance — bounded form at every published percentage, bands included | gate | T044 |
+| SC-021 | Integration against frozen fixtures. Fixture-evidenced and **unjudged at an empty record set** (FR-076) | gate | T009, T030 |
+| SC-022 | Integration — no write under any interaction, no verb but GET | gate | T038 |
+| SC-023 | **Unevidenced** — no check asserts that a displayed covariate is one the run records | — | — |
+| SC-024 | Integration problem shapes plus the untruncated rendering assertion | gate | T018, T045 |
+| SC-025 | Property tests plus the gate-membership check | gate | T012, T043 |
+| SC-026 | E2E no-combination assertions plus figure-class closure. **Arity bound open** — see checklist CHK014 | gate | T025, T044 |
+| SC-027 | Property tests plus the schema's fifty-mark bounds | gate | T012, T017 |
+| SC-028 | Integration annotation sets plus the two root conditionals | gate | T018, T017 |
+| SC-029 | **Unevidenced** — nothing asserts document order, or that the visual order agrees with it | — | — |
+| SC-030 | Contract conformance — the payload carries no date an axis could lift. The rendered half has no owning check | gate (payload half) | T017 |
+| SC-031 | E2E accessibility assertions on the equivalent | gate | T025, T045 |
+| SC-032 | E2E plus contract conformance | gate | T025, T017 |
+| SC-033 | Integration two-sided validator check, the resolution run included | gate | T018 |
+| SC-034 | Gate-membership check over the parsed workflow | gate | T043 |
+| SC-035 | The committed red-run record, checked for the module, the failed properties and the commit | gate | T012 |
+| SC-036 | Rejection cases and clause-exercise coverage in the conformance test | gate | T017 |
+| SC-037 | The validator's own construct-coverage assertion against this contract | gate | T003 |
+| SC-038 | Identifier naming asserted across the check set | gate | T047 |
 
 ## Error Handling Strategy
 
@@ -204,6 +252,83 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 | FR-067 | Route, failures | `routes/line_detail.py`, `risk_read/failures.py` (reused) | The whole boundary convention adopted from E010, not the error shape alone; the run-metadata envelope is the extent of FR-013's identification; a refused request carries a correlation identifier; the condition carries the cause and `reason` refines it |
 | FR-068 | Route, read path, tests | `routes/line_detail.py`, `risk_read/line_query.py`, `src/api/tests/test_line_detail.py` | Validator over exactly the enumerated inputs — the active resolution run included, so a census that moved is never withheld as unchanged — 304 on a match, `private, no-cache` |
 | FR-069 | Route, tests | `routes/line_detail.py`, `src/api/tests/test_line_detail.py` | Two GETs and no write verb anywhere, asserted rather than assumed |
+| FR-070 | Gate check, workflow | `tests/checks/test_detail_checks_run_in_the_gate.py`, `.github/workflows/verify.yml` | "Executes in the gate" read from the parsed `verify` job; a deselected, skipped or expected-to-fail check reported as unrun; the corpus-page check recorded as acceptance-tier and excluded from gated evidence |
+| FR-071 | Tests, evidence artifact | `src/api/tests/test_distribution.py`, `specs/00012-line-detail-and-traceability/evidence/test-first-red-run.md` | The red run recorded before the derivation module exists, with the failed properties and the commit it was taken at |
+| FR-072 | Tests | `src/api/tests/test_distribution.py` | The four invariant families the property tests must hold, so a trivially-holding property is distinguishable from a constraining one |
+| FR-073 | Conformance test | `src/api/tests/test_detail_conformance.py` | A rejection case beside every acceptance case; every root conditional and `allOf`-reached member shown to have been evaluated |
+| FR-074 | Validator | `src/api/tests/conformance.py` | Construct coverage asserted against the contract itself, so a keyword added later fails rather than goes unevaluated |
+| FR-075 | Tests, all tiers | `src/api/tests/`, `src/web/app/lines/[poLineId]/`, `tests/checks/` | Every check names the identifier it discharges; SC-005, SC-010 and SC-018 asserted conjunct by conjunct |
+| FR-076 | Read path, tests | `risk_read/traceability.py`, `src/api/tests/test_traceability.py` | Claims over linked records report unjudged at an empty population and are recorded as fixture-evidenced |
+| FR-077 | Fixtures, read path | `src/api/tests/fixtures/frozen_run/`, `risk_read/traceability.py` | E009's `0500` ALTER is the re-verification trigger, `risk_read.traceability` the owner — a requirement rather than a risk-table cell |
+| FR-078 | Copy, UI | `src/web/app/lines/[poLineId]/detailCopy.ts`, `Covariates.tsx` | Association wording drawn from a closed set of three forms keyed by covariate name, so a causal claim is caught by set membership rather than by reading |
+
+### Requirement Coverage Map — the check that fails, and the criterion that measures
+
+The table above names what implements each requirement. This one names **what fails when it regresses** and **which criterion measures it**, because a file path is not a check and a requirement carrying task coverage with no criterion is unmeasured rather than covered. Rows marked **unevidenced** or **unmeasured** are recorded rather than filled: making them visible is what this table is for.
+
+| Req ID(s) | Check that fails on regression | Criterion |
+|---|---|---|
+| FR-001, FR-002 | T012 property tests; T017 schema bounds | SC-001, SC-027 |
+| FR-003, FR-012 | T017 conformance; T044 figure classes | SC-001, SC-007 |
+| FR-004 | T012; T017 | SC-005; SC-003 **unevidenced** |
+| FR-005, FR-006 | T012; T018 annotation sets; T017 root conditionals | SC-002, SC-028 |
+| FR-007, FR-008 | T012 band invariants. Rendered order **unevidenced** | SC-006, SC-029 |
+| FR-009 | T017 — the payload carries no other date. Rendered axis **unevidenced** | SC-030 |
+| FR-010, FR-013 | T018; T017 | SC-017; SC-003 **unevidenced** |
+| FR-011, FR-037, FR-038, FR-039 | T017, T044 | SC-007, SC-026, SC-032 |
+| FR-014, FR-015, FR-016 | T023 | SC-005, SC-031 |
+| FR-017 | T023, through FR-048's agreement test | SC-005 |
+| FR-018, FR-019, FR-020 | **Unevidenced**; fixture-evidenced when a record exists (FR-076) | SC-008, SC-009 |
+| FR-020a | **Unevidenced** — neither limb of the reversal trigger is measured (checklist CHK018) | — **unmeasured** |
+| FR-021 | T009, T030 | SC-021 |
+| FR-022 | T009; T032 | SC-009 **unevidenced** |
+| FR-023 | T018 problem shapes | SC-024 |
+| FR-024, FR-025 | T044 census assertions | SC-010 |
+| FR-026, FR-027, FR-028 | T009, T010 | SC-011, SC-012 |
+| FR-029 | T038 | SC-022 |
+| FR-030, FR-032 | **Unevidenced** — no check asserts the displayed set against the run's record | SC-023 **unevidenced** |
+| FR-031, FR-033, FR-034, FR-034a | T017 structural absence; T040 | SC-013, SC-014 |
+| FR-035 | T024 | SC-016 |
+| FR-036 | T018; T045 | SC-024 |
+| FR-040, FR-043 | T045; T010 distinctness | SC-015, SC-018 |
+| FR-041 | T044 | SC-020 |
+| FR-042 | T018 | SC-004, SC-018 |
+| FR-044 | T018 | SC-012 |
+| FR-045 | T045 | SC-019 |
+| FR-046 | T012, T043 | SC-025 |
+| FR-047 | **Unevidenced** — the comprehension question is recorded in § Open Items | — **unmeasured** |
+| FR-048, FR-049 | T023; T045 | SC-005, SC-015 |
+| FR-050 | **Unevidenced** | — **unmeasured** |
+| FR-051 | **Unevidenced** | — **unmeasured** |
+| FR-052 | T044 | SC-020 |
+| FR-053 | T010 | SC-018 |
+| FR-054 | **Unevidenced** | — **unmeasured** |
+| FR-055 | T045 | SC-019 |
+| FR-056 | T024 | SC-016 |
+| FR-057 | T045 | SC-024 |
+| FR-058 | T029; T034 | SC-010a (acceptance) |
+| FR-059 | T018; T033 | SC-024 |
+| FR-060 | T017 — `LineIdentity` closed over the six members | — **unmeasured** |
+| FR-061 | T018 | SC-018 |
+| FR-062 | T018 | SC-003 **unevidenced** |
+| FR-063 | T044 | SC-007, SC-026 |
+| FR-064 | T017, T043 | SC-007, SC-036 |
+| FR-065 | T012; T017 | SC-001 |
+| FR-066 | T014; T017 | SC-014, SC-028 |
+| FR-067 | T018 | SC-024 |
+| FR-068 | T018 | SC-033 |
+| FR-069 | T038 | SC-022 |
+| FR-070 | T043 | SC-034 |
+| FR-071 | T012 | SC-035 |
+| FR-072 | T012 | SC-025 |
+| FR-073 | T017 | SC-036 |
+| FR-074 | T003 | SC-037 |
+| FR-075 | T047 | SC-038 |
+| FR-076 | T009; T044 | SC-008, SC-009, SC-021 |
+| FR-077 | T004 | — trigger-borne, deliberately uncriterioned: nothing observable today, the trigger is a migration on another branch |
+| FR-078 | T042 | SC-013 |
+
+**Seven requirements reach no criterion** — FR-020a, FR-047, FR-050, FR-051, FR-054, FR-060 and FR-077 — and **five criteria have no owning check**: SC-003, SC-009, SC-023, SC-029 and the rendered halves of SC-002, SC-006 and SC-030. Both lists are recorded rather than closed here: closing them adds test scope and, for FR-020a and FR-047, needs the display and comprehension decisions § Open Items already carries.
 
 ## Project Structure
 
@@ -243,7 +368,12 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 ~ src/api/tests/fixtures/frozen_run/seed.py      # detail scenarios, all three identity states
 + src/api/tests/test_detail_conformance.py       # live bodies vs contracts/openapi.yaml
 + tests/checks/test_detail_checks_run_in_the_gate.py   # root: cross-entry, no single owner
++ tests/checks/test_detail_checks_name_what_they_discharge.py  # FR-075: a failing run names an identifier
 + src/model/tests/test_corpus_span_acceptance.py       # AD-010's corpus half
+
+# committed evidence, under the feature workspace rather than under /src
++ specs/00012-line-detail-and-traceability/evidence/test-first-red-run.md    # FR-071, SC-035
++ specs/00012-line-detail-and-traceability/evidence/span-check-agreement.md  # FR-058, SC-010a
 ```
 
 Two placements sit outside `/src/api` and `/src/web` on purpose. `tests/checks/…` is cross-entry verification with no single owning entry — the layout rule's stated exception, and the delivered precedent is `tests/checks/test_worklist_checks_run_in_the_gate.py`. `src/model/tests/…` covers a property of the extraction record `/src/model` produced, so it sits beside the output it verifies; that `pdfplumber` is only declared there is a consequence of that ownership, not the reason for it.
@@ -254,7 +384,7 @@ Two placements sit outside `/src/api` and `/src/web` on purpose. `tests/checks/�
 
 ## Implementation Hints
 
-- **[HINT-001]** Order: write `compute/distribution.py`'s property-based tests **before** its implementation. FR-046 makes test-first mandatory for this module, and QC checks the commit order, not just the presence of tests. Disclosed limit: feature branches are squash merged, so the ordering evidence exists only on the branch — this is a pre-merge review, not a gate a later auditor can re-run.
+- **[HINT-001]** Order: write `compute/distribution.py`'s property-based tests **before** its implementation. FR-046 makes test-first mandatory for this module, and QC checks the commit order, not just the presence of tests. Disclosed limit: feature branches are squash merged, so the ordering evidence exists only on the branch — this is a pre-merge review, not a gate a later auditor can re-run. **What now carries that is stated rather than hinted**: FR-071 requires a recorded red run over `src/api/tests/test_distribution.py`, taken before `compute/distribution.py` exists and committed to `specs/00012-line-detail-and-traceability/evidence/test-first-red-run.md` with the properties that failed and the commit it was taken at (SC-035), and the squash-merge limit itself is a Recorded Limitation in `spec.md` § Recorded Limitations with its scope decision, supporting evidence, reversal trigger and production-scale alternative. A hint is advice to whoever reads it; a Recorded Limitation is a disclosure Principle VII binds and a later reader can hold the feature to.
 - **[HINT-002]** Gotcha: `REFERENCE_CLASS` in `compute/probability.py` reads `out of 100 lines like this one`, not the spec's "comparable orders". Reuse the constant (AD-005); do not mint a second phrasing, and do not silently reword the delivered one — that would change the worklist's committed copy.
 - **[HINT-003]** Constraint: `resolved_entity_member` is **empty** until E009 runs. Every traversal test needs frozen fixtures, and the unresolved state is the path that actually renders today — build and test it first, not last.
 - **[HINT-004]** Gotcha: the miss mass at or before the anchor is **withheld**, which must be structural absence in the payload. A `null`, `0`, or `"—"` is one renderer away from a screen reading `0%` — the same defect E010's FR-054 names.

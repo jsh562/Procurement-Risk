@@ -117,6 +117,12 @@ x-prohibited-members:
     compatibility rule below, which reopens the check deliberately. FR-064 also requires the check to run
     in the merge gate; a structural guarantee nothing validates guarantees nothing.
 
+    **And FR-073 requires the check to be shown to bite.** Every structural claim here carries a rejection
+    case — a body constructed to violate it and shown to fail — beside the acceptance case it pairs with,
+    because a check shown only to accept a conforming body evidences that the body conforms and not that the
+    check discriminates. Every conditional below must likewise be shown to have been *evaluated* rather than
+    merely passed: a conditional whose `if` no committed body matches passes every response ever sent.
+
     The single exception is `Problem`, which is `additionalProperties: true` because RFC 9457
     contemplates extension members and E010's copy is open for the same reason. It is the one object on
     this surface where "carries no figure" has to be *stated* rather than enforced, and FR-064 states it:
@@ -171,7 +177,9 @@ x-figure-classes:
     `delivered_by` is listed under *mass* and introduces no sixth class, exactly as FR-038 states:
     FR-016 bounds every band by the quantiles FR-004 already labels, so the first bands' masses are the
     labelled quantile shares and the last band's is the complement of the residual mass FR-008 already
-    publishes.
+    publishes. That identity is also why **SC-020's enumeration now reaches each band's `delivered_by`**:
+    naming it adds no figure the view did not already publish, and it closes the criterion over every
+    location on this surface where a bounded percentage renders rather than over five of them.
   confidence_note: |
     Per-field confidence is listed under *evidence* but lives on each linked record, not in the figures
     block. FR-018 requires confidence to travel with the citation, because this is the surface on which
@@ -1017,8 +1025,10 @@ components:
         holds one value per day over the modelled horizon, and three bands is the resolution the figure
         needs rather than the stored array under another name.
 
-        Placed after the distribution in reading order by FR-007, and never the only encoding present:
-        `Distribution` requires `marks` alongside it.
+        Placed after the distribution in reading order by FR-007 — **reading order being document order**,
+        which the Glossary fixes and which FR-007 requires the visual order to agree with, so the two
+        readings of the view meet the two encodings in the same order — and never the only encoding
+        present: `Distribution` requires `marks` alongside it.
       additionalProperties: false
       required: [unit, counted_from, horizon_days, bands]
       properties:
@@ -1343,7 +1353,10 @@ components:
             surface that publishes it, not a per-line measurement. Zero is legal and meaningful: it
             is the state the product is in until identity resolution first runs, and `share` is null
             there rather than a
-            fabricated 100%.
+            fabricated 100%. **FR-076 generalises the same treatment to the criteria that quantify over
+            linked records** — SC-008, SC-009 and SC-021 report themselves unjudged at this state rather
+            than met, for the reason `meets_target` is null here: a universal over an empty list holds of
+            a system that was never built.
         share:
           type: [number, 'null']
           minimum: 0
@@ -1386,6 +1399,13 @@ components:
             evidences database self-consistency rather than link correctness, which is the thing
             FR-024 exists to catch. Published as a proxy rather than as the property it proxies; its
             agreement with the corpus-page measurement taken at acceptance is what establishes it.
+
+            **A disagreement does not remove this figure.** FR-058 states what one obliges: the basis stays
+            declared, the figure stays published as a declared proxy rather than being withheld or restated
+            as the property it stands for, and the disagreement is published beside both measurements as a
+            count of the records they decide differently, in the artifact SC-010a names. A disagreement of
+            any size is the recorded reversal trigger for this basis — two censuses over the same records
+            differing is a defect, not noise.
         has_interval:
           type: boolean
           const: false
@@ -2005,7 +2025,12 @@ components:
                   mass:
                     not:
                       required: [miss]
-        - description: FR-006 — the miss mass is present and labelled as an upper bound where the need-by date is beyond the horizon.
+        - description: >-
+            FR-006 — the miss mass is present and labelled as an upper bound where the need-by date is
+            beyond the horizon. No committed example matches this condition, so under FR-073 the check
+            must supply a body that does: a conditional nothing matches passes every response ever sent,
+            which is indistinguishable from a conditional that held. T004 seeds the beyond-horizon
+            scenario for exactly this reason.
           if:
             properties:
               annotations:
