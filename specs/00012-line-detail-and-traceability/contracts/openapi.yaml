@@ -1276,7 +1276,11 @@ components:
           type: [number, 'null']
           minimum: 0
           maximum: 1
+          x-authority: counts
           description: |
+            A convenience. `resolved_count` and `total_count` are authoritative — the census is
+            published as an exact count with its denominator, and this quotient is rounded for
+            display, so a reader checking the arithmetic uses the counts.
             `resolved_count / total_count`, exact, in the closed unit interval. Null exactly when
             `total_count` is zero.
 
@@ -1290,20 +1294,42 @@ components:
           const: 100
           description: Fixed at 100 before the first measurement is taken (FR-025).
         meets_target:
-          type: boolean
-          description: '`share == 1`. True where `total_count` is zero: nothing failed.'
+          type: [boolean, 'null']
+          description: |
+            `share == 1`, and **null exactly where `total_count` is zero** — the target is then
+            *unjudged*, not met. Reporting it met over an empty population publishes a gate nobody
+            failed, which is what FR-025's own sentence condemns, and zero is the state the product
+            is in until identity resolution first runs. `shortfall_causes` carries
+            `no_linked_records_to_measure` there, so the unjudged verdict travels with its cause.
+        span_check_basis:
+          type: string
+          const: chunk_body_text_proxy
+          description: |
+            **How the second condition was measured, declared beside the figure.** At request time
+            the extracted span is checked against the page-scoped chunk text, not the corpus page:
+            the serving boundary declares no PDF library and may not import the boundary that does.
+            That check is near-tautological — the extractor read the value out of that chunk — so it
+            evidences database self-consistency rather than link correctness, which is the thing
+            FR-024 exists to catch. Published as a proxy rather than as the property it proxies; its
+            agreement with the corpus-page measurement taken at acceptance is what establishes it.
         has_interval:
           type: boolean
           const: false
         no_interval_reason:
           type: string
           description: |
-            E009 FR-025's closed set of exactly two licensed reasons, adopted by reference. This figure
-            can only carry the census member.
+            The licensed no-interval reason, **stated locally rather than adopted wholesale from
+            E009**. E009 admits its first reason only to the three census figures its own
+            requirements name and closes the set — "no published figure may be recorded as a census
+            that is not one of those three". This share is a fourth, so adopting that set by
+            reference would import an availability rule under which neither member is available
+            here. The names are shared deliberately so one vocabulary describes both, and extending
+            E009's set to admit a fourth census is recorded in the spec as a shared-document
+            amendment, not performed on this branch.
           enum:
             - census_over_run_candidate_set
             - estimator_undefined_at_realized_denominator
-          default: census_over_run_candidate_set
+          const: census_over_run_candidate_set
         shortfall_causes:
           type: array
           description: |

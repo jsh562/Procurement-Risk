@@ -36,7 +36,7 @@
 | VII. Publish the Miss | PASS | FR-025 fixes the census target at 100% before first measurement; two Recorded Limitations carry all four fields; FR-012 concedes the guarantee that cannot be kept |
 | VIII. Honest Opponents | N/A | No model claim, no baseline |
 | Governance | PASS | Workspace number 00012 is on `origin/main`. **ADR-0025 is now claimed where the allocator looks** — `specs/adrs/0025-stored-posterior-arrays-do-not-cross-the-serving-boundary.md` is on `origin/main` at `f6e363f`, with its catalog rows in `specs/sad.md` and `specs/project-plan.md`, both of which now hold 25 records with no drift. This row read FAIL until that merge; the discharge is recorded rather than backdated |
-| Source Layout / Testing Policy | PASS | New code lands under existing `/src/api` and `/src/web` entries; FR-046 puts the derivation under test-first property-based tests in the merge gate |
+| Source Layout / Testing Policy | PASS | Code lands in four locations, each on stated ground: `/src/api` and `/src/web` (the feature's own entries), `/tests` (cross-entry verification with no single owning entry — the layout rule's own exception), and `/src/model` (a test beside the extraction output it covers). No new `/src` entry; FR-046 puts the derivation under test-first property-based tests in the merge gate |
 
 **Version audited**: `project-instructions.md` **v1.2.11** (2026-07-29). Re-checked after design — see § Post-Design Compliance at the end of this plan.
 
@@ -78,8 +78,8 @@ Feature-local tradeoffs only. Project-wide architectural decisions belong in sta
 | AD-006 | Day-grid band boundaries | fixed calendar grid / posterior quantiles | Posterior quantiles | FR-016 already decides this; research.md carried it as open and the spec closed it. Recorded so the plan does not reopen a settled question |
 | AD-007 | Source-page binding location | storage / configuration | Configuration | The identifier is minted by a lossy transform that cannot be reversed; storage has no path column. Carried as a Recorded Limitation with its reversal trigger, not presented as free |
 | AD-008 | Whether the detail endpoint accepts the worklist's need-by what-if | reject (Scope excludes editing) / accept as pass-through | Accept as a pass-through query parameter | FR-005 marks the **effective** need-by date and Key Entities names "its recorded *and* effective need-by dates", while FR-010 requires the two surfaces be "incapable of disagreeing". A coordinator with an adjustment active on the worklist who opened the line would meet exactly that disagreement. Scope's exclusion binds the **control** — E012 offers no way to set an adjustment — not the pass-through of one already made |
-| AD-010 | How FR-024's *second* condition — the extracted span is present on the cited page — is measured | against `chunk.body_text` / against the corpus PDF page / not measured | **Both, at different times**: `chunk.body_text` at request time, the corpus page at acceptance | The serving boundary declares no PDF library, so the corpus-page check cannot run per request. Checking only `chunk.body_text` is cheap and available but near-tautological — the extractor read the value out of that chunk, so it measures database self-consistency rather than link correctness, which is precisely what FR-024 exists to catch (*"a link that looks right is frequently not"*). So the runtime figure uses the chunk-text check and is **declared a proxy**, and SC-010's "measured over real corpus documents" is discharged by an acceptance check that re-measures the same condition against real corpus pages where `pdfplumber` is available. The proxy's validity is *established* by that agreement rather than assumed, and disagreement is published |
 | AD-009 | The census denominator | records rendered on this view / every linked record the active run carries | The active run's whole linked-record set | FR-024 states the denominator in terms. The rendered subset is cheaper and is a *different claim* — a per-view sample reported in the grammar of a census. The envelope is met by the shape of the work instead: resolution is a property of the **document**, not of each record, so the figure is one aggregate grouped by document identifier with each distinct identifier resolved once and memoised for the process lifetime |
+| AD-010 | {SAD:ADR-0017} How FR-024's *second* condition — the extracted span is present on the cited page — is measured | against `chunk.body_text` / against the corpus PDF page / not measured | **Both, at different times**: `chunk.body_text` at request time, the corpus page at acceptance | The serving boundary declares no PDF library, so the corpus-page check cannot run per request. Checking only `chunk.body_text` is cheap and available but near-tautological — the extractor read the value out of that chunk, so it measures database self-consistency rather than link correctness, which is precisely what FR-024 exists to catch (*"a link that looks right is frequently not"*). So the runtime figure uses the chunk-text check and is **declared a proxy**, and SC-010's "measured over real corpus documents" is discharged by an acceptance check that re-measures the same condition against real corpus pages where `pdfplumber` is available. The proxy's validity is *established* by that agreement rather than assumed, and disagreement is published. Invokes **ADR-0017**, which this project holds for exactly this shape — a plan-phase artifact normative over a specify-phase requirement — rather than leaving SC-010 quietly divergent |
 
 ## Data Model Summary
 
@@ -211,7 +211,19 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 + src/web/app/lines/[poLineId]/page.module.css
 ~ src/web/app/worklist/Row.tsx                   # identity becomes the link (FR-035)
 + src/web/e2e/line-detail.spec.ts
+
+# repository tooling and cross-entry verification
+~ scripts/dev.py                                 # corpus root -> api (NEW-CONFIG, AD-007)
+~ scripts/e2e.py                                 # same, for the suite
+~ .github/workflows/verify.yml                   # same, for the e2e step
+~ src/api/tests/conformance.py                   # + allOf/anyOf/not/if/then/contains/maxLength
+~ src/api/tests/fixtures/frozen_run/seed.py      # detail scenarios, all three identity states
++ src/api/tests/test_detail_conformance.py       # live bodies vs contracts/openapi.yaml
++ tests/checks/test_detail_checks_run_in_the_gate.py   # root: cross-entry, no single owner
++ src/model/tests/test_corpus_span_acceptance.py       # AD-010's corpus half
 ```
+
+Two placements sit outside `/src/api` and `/src/web` on purpose. `tests/checks/…` is cross-entry verification with no single owning entry — the layout rule's stated exception, and the delivered precedent is `tests/checks/test_worklist_checks_run_in_the_gate.py`. `src/model/tests/…` covers a property of the extraction record `/src/model` produced, so it sits beside the output it verifies; that `pdfplumber` is only declared there is a consequence of that ownership, not the reason for it.
 
 **Patterns to reuse**: `routes/worklist.py`'s compose-only handler with `get_connection` dependency; `risk_read/failures.py` for problems and correlation identifiers; `compute/probability.py`'s `PercentFigure`/`complement`; `worklist/stateCopy.ts` for a committed copy table; `worklist/useWorklist.ts` for the fetch convention; `worklist/Explain.tsx` for the popup transparency panels.
 **Tests to extend**: `src/api/tests/` integration patterns with a frozen clock; `src/web/app/worklist/*.test.tsx` rendering conventions.
@@ -219,7 +231,7 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 
 ## Implementation Hints
 
-- **[HINT-001]** Order: write `compute/distribution.py`'s property-based tests **before** its implementation. FR-046 makes test-first mandatory for this module, and QC checks the commit order, not just the presence of tests.
+- **[HINT-001]** Order: write `compute/distribution.py`'s property-based tests **before** its implementation. FR-046 makes test-first mandatory for this module, and QC checks the commit order, not just the presence of tests. Disclosed limit: feature branches are squash merged, so the ordering evidence exists only on the branch — this is a pre-merge review, not a gate a later auditor can re-run.
 - **[HINT-002]** Gotcha: `REFERENCE_CLASS` in `compute/probability.py` reads `out of 100 lines like this one`, not the spec's "comparable orders". Reuse the constant (AD-005); do not mint a second phrasing, and do not silently reword the delivered one — that would change the worklist's committed copy.
 - **[HINT-003]** Constraint: `resolved_entity_member` is **empty** until E009 runs. Every traversal test needs frozen fixtures, and the unresolved state is the path that actually renders today — build and test it first, not last.
 - **[HINT-004]** Gotcha: the miss mass at or before the anchor is **withheld**, which must be structural absence in the payload. A `null`, `0`, or `"—"` is one renderer away from a screen reading `0%` — the same defect E010's FR-054 names.
@@ -239,7 +251,7 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 
 Re-run after Phase 1, against **v1.2.11**, on stable artifacts. An earlier run was discarded rather than reported: it began while the contract was being rewritten underneath it, and a gate evaluated against a moving target evidences nothing.
 
-**Verdict: FAIL**, carried by one CRITICAL of repository state. Every principle bearing on the artifact's substance passed — I, III, IV, V and VII clean; II passed with the two MEDIUMs below, since its structural claims were verified against the schema rather than the prose.
+**Verdict: FAIL** at the time of the audit, carried by one CRITICAL of repository state. **Verdict after discharge: PASS (v1.2.11)** — stated here as well as below, because a reader scanning for "Verdict" should not have to travel fourteen rows to learn it was closed. Every principle bearing on the artifact's substance passed — I, III, IV, V and VII clean; II passed with the two MEDIUMs below, since its structural claims were verified against the schema rather than the prose.
 
 | Finding | Severity | Status |
 |---|---|---|
