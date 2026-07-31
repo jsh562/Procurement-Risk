@@ -10,7 +10,35 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.4",
     "psycopg[binary]>=3.2.3",
+    "onnxruntime>=1.24.1",
+    "tokenizers>=0.23.1",
 ]
+
+# Local inference lives here from E008 ({SAD:ADR-0023}). Both Python boundaries
+# already depend on this package, and E008 needs a query embedding at request
+# time -- so the alternative was either the serving entry declaring the modeling
+# entry, which the layout rule forbids outright, or a second pooling
+# implementation kept in step with the first by review. Neither is acceptable
+# for an embedding: a query embedded by a different implementation than the
+# corpus lands in a different vector space, with no error and degraded ranking
+# as the only symptom.
+#
+#   onnxruntime  {SAD:ADR-0019} pins the inference runtime for corpus and query
+#                embedding, and E008 adds the cross-encoder reranker session on
+#                the same runtime. Two graphs ship: INT8 for serving and FP32
+#                for measuring what quantization costs, both resident.
+#   tokenizers   The encoder's own tokenizer, standalone. Chunk sizes are
+#                measured in the encoder's word pieces against the 254-piece
+#                content budget, so counting with anything else measures a
+#                different thing than the model consumes. Declared without
+#                `transformers`: the tokenizer is all that is needed and the
+#                full library would pull a second inference stack in beside
+#                ONNX Runtime.
+#
+# This placement contradicted `project-instructions.md` §Source Code Layout
+# until v1.2.9, which excepts "a shared local-inference runtime and its
+# tokenizer, together with NumPy" -- and no more. PyMC, ArviZ and pandas remain
+# forbidden here; the exception is a named narrowing, not a general relaxation.
 
 # ADR-0014. The provider SDK is an extra, not a base dependency, so an
 # environment can exist in which this package imports and type-checks with no
@@ -136,8 +164,18 @@ allowed_importers = ["gateway.provider"]
 name = "The provider-facing module does not reach the arithmetic modules"
 type = "forbidden"
 source_modules = ["gateway.provider"]
-forbidden_modules = ["gateway.compute"]
+forbidden_modules = ["gateway.compute", "gateway.inference"]
 allow_indirect_imports = false
+# `gateway.inference` joins from E008 ({SAD:ADR-0023}). It holds masked mean
+# pooling, L2 normalization and cross-encoder scoring -- arithmetic, in the same
+# root package as the single provider-facing module in the repository. Naming
+# only `gateway.compute` would leave the boundary guarding one of two, which is
+# the failure this project has already named once, on the api side.
+#
+# Extended in place rather than added as a separate contract, unlike the api
+# entry: there the packages are guarded for different reasons and a per-contract
+# message is worth having, while here both are the same boundary -- arithmetic
+# the provider must not reach -- and one message naming either is correct.
 
 # TR-002: the public surface is built from gateway-owned types only.
 #
@@ -176,6 +214,30 @@ allow_indirect_imports = false
 # import leak, and the remaining half — a leaked SDK type reported *by name* —
 # cannot be a contract at all, because contracts report module paths. That is
 # `tests/test_public_surface.py` (T013), which OBJ1 VC3 designates for it.
+# FR-048 / {SAD:ADR-0023}. The inference package must not reach the provider,
+# and this contract is what lets the modeling entry import it at all.
+#
+# `tests/checks/test_model_facing_placement.py` enforces that only `model.llm`
+# imports the gateway, and its stated reason is that a module importing it from
+# anywhere else is *outside* the computation-boundary contract rather than in
+# violation of it — it would pass `lint-imports` while reaching the provider.
+# E008 needs `model.ingest` to import `gateway.inference.encoder`, so that check
+# now admits `gateway.inference` specifically. The exception is only safe while
+# the admitted package cannot itself reach the provider, and the modeling entry
+# cannot express that: import-linter refuses to name a subpackage of an external
+# package as forbidden, so `model.ingest -> gateway.provider` is not writable
+# from `/src/model`. It is writable here, where both modules are internal.
+#
+# `allow_indirect_imports = false` is what makes it hold by any route rather
+# than only by direct import.
+
+[[tool.importlinter.contracts]]
+name = "The inference package does not reach the model provider"
+type = "forbidden"
+source_modules = ["gateway.inference"]
+forbidden_modules = ["gateway.provider", "gateway.orchestrator"]
+allow_indirect_imports = false
+
 [[tool.importlinter.contracts]]
 name = "The gateway-owned type modules do not reach the provider module"
 type = "forbidden"

@@ -1,0 +1,9 @@
+{
+  "answerable_by_construction": true,
+  "ceiling_note": "Every query is answerable by construction, so recall measured on this set is an upper bound on real-world performance rather than an estimate of it (FR-043).",
+  "generator_id": "e008-evaluation-set",
+  "judgement_source": "generator pre-render document model",
+  "query_count": 3,
+  "seed": 0,
+  "sha256": "e1ee3c4015a99f14cef054aeae38c19159df1cbc25ac3544737c67c31ae3e3f6"
+}

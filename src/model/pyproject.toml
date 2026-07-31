@@ -13,7 +13,6 @@ dependencies = [
     "gateway",
     "jsonschema[format-nongpl]>=4.26.0",
     "numpy>=2.4.6",
-    "onnxruntime>=1.24.1",
     "pandas>=3.0.5",
     "pdfplumber>=0.11.10",
     "pgvector>=0.4.2",
@@ -23,7 +22,6 @@ dependencies = [
     "pysbd>=0.3.4",
     "reportlab>=5.0.0",
     "sqlalchemy>=2.0.51",
-    "tokenizers>=0.23.1",
 ]
 
 # ADR-0011: every job this entry owns is a console entry point invoked through
@@ -47,17 +45,17 @@ dependencies = [
 # E006 adds four, and each is a runtime dependency of the ingestion job rather
 # than tooling:
 #
-#   onnxruntime  {SAD:ADR-0019} pins the inference runtime for corpus and query
-#                embedding. FP32 export, per AD-014 -- ADR-0012 budgets roughly
-#                80 MB for full-precision weights, and INT8 would change the
-#                vectors every published retrieval figure is measured on.
-#   tokenizers   The encoder's own tokenizer, standalone. Chunk sizes are
-#                measured in the encoder's word pieces against the 254-piece
-#                content budget (HINT-001), so counting with anything else
-#                measures a different thing than the model consumes. Declared
-#                without `transformers`: the tokenizer is all that is needed and
-#                the full library would pull a second inference stack in beside
-#                ONNX Runtime.
+#   (onnxruntime and tokenizers were declared here until E008. {SAD:ADR-0023}
+#                moved both to /src/gateway, the package this entry and /src/api
+#                both already depend on, because E008 needs a query embedding at
+#                request time and the serving entry may not declare the modeling
+#                entry. This entry still imports them -- through the gateway --
+#                and no longer declares them. Their rationale moved with them.
+#                Relocating rather than duplicating is also what removes them
+#                from the serving image's derived denylist, which is computed
+#                from this file's *direct* declarations: naming them as
+#                exclusions instead would trip the companion assertion that
+#                every excluded name is still declared here.)
 #   pysbd        The pinned terminal sentence split below a paragraph, with
 #                character spans kept so every sentence maps back to an offset
 #                in its parent unit and page containment still holds.
@@ -103,6 +101,18 @@ dev = [
     "coverage==7.15.2",
     "hypothesis>=6.161.5",
     "import-linter>=2.13",
+    # `tools/quantize_reranker.py` only. `onnxruntime.quantization` imports
+    # `onnx` for the graph surgery, and this is the dev group rather than
+    # `[project] dependencies` on purpose: the tool is run once by a developer
+    # to produce the committed INT8 graph and is never on a runtime path.
+    #
+    # The placement is load-bearing, not tidiness. The serving image's denylist
+    # is derived from this entry's `[project] dependencies`, so declaring `onnx`
+    # there would add it to the set the image is checked against -- correct in
+    # itself, but it would also make a build-time-only package look like part of
+    # the modeling stack the boundary exists to keep out. The runtime the image
+    # *does* need, `onnxruntime`, lives in `/src/gateway` ({SAD:ADR-0023}).
+    "onnx>=1.20.0",
     "pytest>=9.1.1",
     "pytest-alembic>=0.12.1",
     "pytest-cov>=7.1.0",
@@ -171,6 +181,7 @@ type = "forbidden"
 source_modules = ["model.corpus"]
 forbidden_modules = ["model.llm", "gateway"]
 allow_indirect_imports = false
+
 
 # FR-050 / Principle VIII: the baseline extractor is an honest opponent, and it
 # is only honest if it was authored from the *rendered* documents alone. The

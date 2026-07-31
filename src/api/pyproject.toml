@@ -35,6 +35,12 @@ dev = [
     "pytest>=9.1.1",
     "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.1.0",
+    # FR-033's memory half. The resident set is read from the operating system
+    # and there is no portable stdlib route to it: `resource.getrusage` is POSIX
+    # only and reports a peak in platform-dependent units. Declared rather than
+    # made optional, because a memory figure that silently skips when its reader
+    # is absent is a requirement that appears satisfied and measures nothing.
+    "psutil>=7.1.3",
     "pyyaml>=6.0.3",
     "ruff>=0.16.0",
 ]
@@ -110,6 +116,23 @@ name = "Model-facing code does not reach the read-side computation package"
 type = "forbidden"
 source_modules = ["api.llm"]
 forbidden_modules = ["api.risk_read"]
+allow_indirect_imports = false
+
+# FR-002. `api.retrieval` is the third computation package: the ranking
+# statement, result projection, the metrics and the reporting surface are all
+# deterministic. A separate contract rather than a third entry in the list
+# above, following E010's precedent -- one contract per guarded package keeps
+# each failure message naming the boundary that actually broke.
+#
+# Indirect detection stays ON, as it is on both contracts above. Laundering the
+# dependency through an intermediate module is the evasion this exists to catch,
+# and the comment at the top of this section calls the setting load-bearing.
+
+[[tool.importlinter.contracts]]
+name = "Model-facing code does not reach the retrieval computation package"
+type = "forbidden"
+source_modules = ["api.llm"]
+forbidden_modules = ["api.retrieval"]
 allow_indirect_imports = false
 
 # FR-035. The worklist renders with the provider unreachable because it never

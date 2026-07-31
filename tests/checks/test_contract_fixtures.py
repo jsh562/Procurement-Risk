@@ -197,6 +197,24 @@ FIXTURE_FOR_CONTRACT = {
     # fixture fails `test_every_declared_contract_has_a_negative_fixture` — which
     # is the mechanism working, not an obstacle to it.
     "The baseline extractor does not reach the corpus generator": "baseline_independence",
+    # E008 / FR-002. The third computation package. Added with the contract
+    # itself for the reason the E006 note above gives — and the mechanism
+    # worked: declaring the contract without a fixture failed this module, which
+    # is how the fixture came to exist.
+    #
+    # The gateway's `gateway.inference` addition needed no new entry: E008
+    # extended the existing arithmetic-boundary contract in place rather than
+    # declaring a second one, so its fixture still evidences it. That is why the
+    # two were done differently — on the api side the packages are guarded for
+    # different reasons and a per-contract message is worth having; in the
+    # gateway both are the same boundary and one message naming either is right.
+    "Model-facing code does not reach the retrieval computation package": "retrieval_boundary",
+    # E008 / FR-048. This one guards an *exception*: `test_model_facing_placement.py`
+    # admits `gateway.inference` outside `model.llm`, and that is only safe while
+    # the admitted package cannot reach the provider. Its fixture violates both
+    # directly and through a relay, because the laundered route is the one that
+    # would actually occur.
+    "The inference package does not reach the model provider": "inference_provider_boundary",
 }
 
 # The step in verify.yml that executes this file.

@@ -75,9 +75,28 @@ SCHEMA_ASSET_NAMES = ("alembic.ini", "versions", "env.py", "script.py.mako")
 #: own docstring says it is not looking for.
 #:
 #: What TR-003 and TR-004 actually protect is the request-serving image staying
-#: free of PyMC, ArviZ, pandas and NumPy — the packages that make it fat. Those
-#: are still derived, never listed, and none of them appears here.
-SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+#: free of PyMC, ArviZ and pandas — the packages that make it fat. Those are
+#: still derived, never listed, and none of them appears here.
+#:
+#: NumPy is the exception, and it is a real cost rather than a tidy carve-out.
+#: {SAD:ADR-0023} puts local inference in the gateway, `onnxruntime` pulls NumPy
+#: transitively, and `model` goes on declaring NumPy for PyMC and pandas — so it
+#: is the one name that has to be *admitted* here rather than relocated out of
+#: the derived set. Project instructions v1.2.9 records the price in terms:
+#: the derived protection narrows from four heavy packages to three, and NumPy
+#: could henceforth arrive by an unintended route with nothing reporting it.
+#:
+#: **`pgvector` does not belong here and must not be added** (E008, AD-016).
+#: `/src/model` declares it for one narrow reason — `register_vector` is what
+#: lets `chunk.embedding` be written by binary COPY instead of parsed as
+#: strings — and that is a bulk *write* path. E008 binds one query vector per
+#: request into a SELECT, where a text cast (`'[...]'::vector`) needs no adapter
+#: at all. If a future change makes `/src/api` declare `pgvector`, the assertion
+#: below fires, and the fix is to remove the declaration and bind the vector as
+#: text — **not** to widen this set. v1.2.9's exception grants a local-inference
+#: runtime, its tokenizer and NumPy; `pgvector` is none of the three, so
+#: admitting it would need a further amendment.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 
 #: The entry that owns the schema (ADR-0013). Everything else is asserted
 #: against it rather than against a repeated literal.
@@ -122,8 +141,13 @@ def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() ->
     Or it drifts to cover something the schema owner no longer declares, leaving
     a dead entry that quietly weakens nothing but tells the next reader a
     falsehood — so every member is required to still be declared by `model`.
+
+    NumPy is deliberately not in `heavy` any more, per project instructions
+    v1.2.9 and {SAD:ADR-0023}. That narrowing is asserted rather than left to
+    absence: a term silently dropped from a guard reads identically to one
+    nobody thought of, and this one was paid for on purpose.
     """
-    heavy = {"pymc", "arviz", "pandas", "numpy"}
+    heavy = {"pymc", "arviz", "pandas"}
     smuggled = heavy & SHARED_INFRASTRUCTURE
     assert not smuggled, (
         f"{sorted(smuggled)} is excluded from the derived modeling stack. That defeats "
@@ -141,6 +165,17 @@ def test_the_shared_infrastructure_exclusion_cannot_hide_the_modeling_stack() ->
     assert heavy <= declared, (
         f"{SCHEMA_OWNING_ENTRY} no longer declares {sorted(heavy - declared)}; the guard "
         f"above compares against a stack that has moved, so update the term."
+    )
+
+    # The narrowing itself, asserted. If NumPy leaves this set the derived
+    # protection widens back to four and {SAD:ADR-0023}'s runtime stops
+    # resolving in the gateway — a combination worth failing on rather than
+    # discovering in a build, in either direction.
+    assert "numpy" in SHARED_INFRASTRUCTURE, (
+        "NumPy was admitted deliberately (instructions v1.2.9, {SAD:ADR-0023}): the gateway's "
+        "local-inference runtime pulls it transitively while `model` keeps declaring it. "
+        "Removing it re-forbids a package the serving image is required to carry. If ADR-0023 "
+        "has been superseded, update this assertion and the instructions together."
     )
 
 
@@ -534,7 +569,6 @@ DECLARED_BY_THE_MODELING_ENTRY: dict[str, str] = {
     "arviz": "the modeling stack, declared before E007 — sampler diagnostics",
     "jsonschema": "E002 — corpus manifest validation",
     "numpy": "the scaffold — arrays throughout",
-    "onnxruntime": "E006 — {SAD:ADR-0018}, the pinned embedding inference runtime",
     "pandas": "the modeling stack, declared before E007 — the summary frame",
     "pdfplumber": "E002 — corpus extraction",
     "pgvector": "E006 — the psycopg 3 adapter for bulk-loading embeddings",
@@ -544,7 +578,11 @@ DECLARED_BY_THE_MODELING_ENTRY: dict[str, str] = {
     "pysbd": "E006 — the pinned terminal sentence split below a paragraph",
     "reportlab": "E002 — corpus generation",
     "sqlalchemy": "E003 — the Core toolkit the driver is used through",
-    "tokenizers": "E006 — the encoder's own tokenizer, standalone",
+    # `onnxruntime` and `tokenizers` were here until E008 relocated both to
+    # /src/gateway ({SAD:ADR-0023}). This is an *equality* assertion, not a
+    # subset one, so leaving them would fail on symmetric difference the moment
+    # the manifest dropped them — the entry no longer declares them and reaches
+    # them through the gateway instead.
 }
 
 #: Imports `model.forecast` makes that the entry does not declare, with the

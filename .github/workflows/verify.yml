@@ -559,7 +559,8 @@ jobs:
           DATABASE_URL: postgresql://procurement:local-development-only@localhost:5432/procurement
         run: |
           taskset -c 0 uv run --directory src/api python -m pytest \
-            tests/test_worklist_benchmark.py -q -s
+            tests/test_worklist_benchmark.py \
+            tests/test_retrieval_benchmark.py -q -s
 
       # OBJ1 VC6 says "when the application builds". Nothing built it, so the
       # criterion was unevidenced and a scaffold that could not compile would
@@ -668,6 +669,8 @@ jobs:
           uv run coverage report --include='*/model/ingest/*' --fail-under=80
           uv run coverage report --include='*/model/llm/*' --fail-under=80
           uv run coverage report --include='*/model/compute/*' --fail-under=80
+          uv run coverage report --include='*/api/retrieval/*' --fail-under=80
+          uv run coverage report --include='*/gateway/inference/*' --fail-under=80
 
   # ---------------------------------------------------------------------------
   # T088 / FR-074 — the replay reproduction job

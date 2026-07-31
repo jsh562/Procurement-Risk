@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 
-from tokenizers import Tokenizer
+from gateway.inference.encoder import TokenizerLoadError, load_tokenizer
 
 from model.ingest.artifacts import ArtifactError, artifact_path, verified_encoder
 
@@ -67,7 +67,7 @@ class TokenizerError(ValueError):
 
 
 @lru_cache(maxsize=1)
-def encoder_tokenizer() -> Tokenizer:
+def encoder_tokenizer() -> object:
     """The pinned tokenizer, loaded once per process from the committed files.
 
     Cached because the Rust pipeline loads in well under a second but is asked
@@ -85,13 +85,14 @@ def encoder_tokenizer() -> Tokenizer:
             f"FR-019: the committed tokenizer is absent at {path}; the run fails rather "
             "than fetching it"
         )
+    # `truncate_at=None` is the whole point of this instance: measuring length
+    # with a truncating tokenizer reports the cap as the length, so an over-long
+    # unit would measure as fitting and the budget check would pass on exactly
+    # the units that break it. The embedding instance passes the cap instead.
     try:
-        tokenizer = Tokenizer.from_file(str(path))
-    except Exception as exc:  # noqa: BLE001 - any load failure is this module's
-        raise TokenizerError(f"cannot load the tokenizer at {path}: {exc}") from exc
-    tokenizer.no_truncation()
-    tokenizer.no_padding()
-    return tokenizer
+        return load_tokenizer(path, truncate_at=None)
+    except TokenizerLoadError as exc:
+        raise TokenizerError(str(exc)) from exc
 
 
 @lru_cache(maxsize=1)

@@ -40,9 +40,22 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 #: `schema_constants` over the connection. Without this exclusion the denylist
 #: forbids the image the thing the design requires it to have.
 #:
-#: What TR-013 protects is unchanged: PyMC, ArviZ, pandas and NumPy are still
-#: derived, never listed, and none of them appears here.
-SHARED_INFRASTRUCTURE = frozenset({"psycopg"})
+#: What TR-013 protects is now PyMC, ArviZ and pandas — still derived, never
+#: listed, and none of them appears here.
+#:
+#: NumPy is the fourth name and no longer among them. {SAD:ADR-0023} places the
+#: local-inference runtime in `/src/gateway`, `onnxruntime` pulls NumPy
+#: transitively, and the serving image is *required* to carry that runtime, so
+#: NumPy reaches the image by a sanctioned route. It cannot leave the derived
+#: denylist the way `onnxruntime` and `tokenizers` do — by being declared in the
+#: gateway instead of `/src/model` — because `/src/model` goes on declaring it
+#: for PyMC and pandas. Admitting it here is the only route, which is why
+#: project instructions v1.2.9 names NumPy as the single explicitly listed term.
+#:
+#: The cost is stated rather than glossed, in v1.2.9's own words: the derived
+#: protection narrows from four heavy packages to three, so NumPy could
+#: henceforth arrive by an unintended route with nothing reporting it.
+SHARED_INFRASTRUCTURE = frozenset({"psycopg", "numpy"})
 API_LOCK = REPO_ROOT / "src" / "api" / "uv.lock"
 MODEL_LOCK = REPO_ROOT / "src" / "model" / "uv.lock"
 # Resolved, not restated. A literal here and another in the workflow is how
