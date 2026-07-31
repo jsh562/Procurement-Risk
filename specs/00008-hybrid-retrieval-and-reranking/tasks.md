@@ -105,7 +105,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T106 [US1] {FR-051} [COMPLETES FR-051] Declare the closed no_interval_reason enum in contracts/openapi.yaml, require an interval or a denominator-plus-reason on every emitted figure, and refuse a figure carrying neither, in src/api/src/api/retrieval/report.py after:T099
 - [X] T036 [US1] {FR-006} Assert over the emitted artifacts that no figure or label names BM25 and the no-corpus-statistics statement is present, in retrieval/report.py and src/api/tests/retrieval/test_report.py after:T035
 - [X] T037 [US1] {FR-029} Emit the ranking parameters in force with every result an evaluation consumes, in src/api/src/api/retrieval/report.py after:T015
-- [X] T038 [US1] {FR-004,FR-029} [COMPLETES FR-004] Assert the three parameters are stable identifier tokens read from the one source in src/api/tests/retrieval/test_parameters.py after:T037
+- [X] T038 [US1] {FR-004,FR-029} [COMPLETES FR-004] Assert the three parameters are stable identifier tokens read from the one source in src/api/tests/retrieval/test_report.py after:T037
 - [X] T039 [US1] {FR-007} [COMPLETES FR-007] Embed the query through the gateway encoder, refusing on identity mismatch before any search, in src/api/src/api/retrieval/routes.py after:T021
 - [X] T040 [US1] {FR-008,FR-009} [COMPLETES FR-008] Wire GET /api/v1/retrieval/search to RetrievalResponse in retrieval/routes.py after:T039 ← T032:RetrievalResult
 - [X] T041 [US1] {FR-030,FR-042} Write failing property tests for recall at five and its Wilson interval in src/api/tests/retrieval/test_metrics.py — done only on an observed failure after:T001
@@ -144,16 +144,16 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T062 [US3] {FR-019} Truncate at the declared sequence limit and count truncated candidates rather than truncating silently, in reranker.py after:T061 → exports: TruncationReport
 - [X] T063 [US3] {FR-017,FR-025} Load and warm both the INT8 and FP32 sessions before readiness (AD-011, AD-013) in src/api/src/api/retrieval/readiness.py after:T062
 - [X] T064 [US3] {FR-017} [COMPLETES FR-017] Withhold readiness until warm-up completes, inside the lifespan hook (HINT-005), in retrieval/readiness.py and src/api/src/api/main.py after:T063
-- [X] T065 [US3] {FR-015,FR-018,FR-038} [COMPLETES FR-038] Cover load-once, the warmed shape, joint scoring of the fused set and the thread counts, in src/gateway/tests/test_inference.py after:T064
+- [X] T065 [US3] {FR-015,FR-018,FR-038} [COMPLETES FR-038] Cover load-once, the warmed shape, joint scoring of the fused set and the thread counts, in src/gateway/tests/test_inference_threads.py after:T064
 - [X] T066 [US3] {FR-019} Publish the sequence limit as a number with the candidate-length distribution and the truncated fraction, in retrieval/report.py ← T062:TruncationReport
 - [X] T067 [US3] {FR-033} Report per-query reranking latency with the fusion-statement and encoder times beside it, and per-session RSS against the budget, in retrieval/report.py after:T066
 - [X] T068 [US3] {FR-033,FR-049} Assert the report carries workload, environment, measurement point, occasion, counter, arm, corpus size and ingest generation, in src/api/tests/retrieval/test_performance_report.py after:T067
 - [X] T100 [US3] {FR-049} [COMPLETES FR-049] Assert two figures differing only in ingest generation are distinguishable, since the repair changes no chunk count, in src/api/tests/retrieval/test_report.py after:T099
 - [X] T069 [US3] {FR-033} [COMPLETES FR-033] Take the latency and memory figures under the one-vCPU quota after readiness, in src/api/tests/test_retrieval_benchmark.py after:T067
-- [X] T070 [US3] {FR-020} Assert the reranked ordering repeats identically and SC-007's three counters read zero after readiness, in src/api/tests/retrieval/test_readiness.py after:T064
+- [X] T070 [US3] {FR-020} Assert the reranked ordering repeats identically and SC-007's three counters read zero after readiness, in src/api/tests/retrieval/test_reranking.py after:T064
 - [X] T071 [US3] {FR-036} Select the strongest single arm by the fixed per-statistic rule and compute paired per-query differences against it, in retrieval/metrics.py after:T046
 - [X] T072 [US3] {FR-036} Label fusion-only as the weak comparator and record the selected arm and the statistic that selected it, in src/api/src/api/retrieval/report.py after:T071
-- [X] T073 [US3] {FR-036} [COMPLETES FR-036] Assert the selection rule over constructed figures, including the overlapping-interval case where both are reported, in src/api/tests/retrieval/test_metrics.py after:T072
+- [X] T073 [US3] {FR-036} [COMPLETES FR-036] Assert the selection rule over constructed figures, including the overlapping-interval case where both are reported, in src/api/tests/retrieval/test_performance_report.py after:T072
 
 ---
 
@@ -165,8 +165,8 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T077 [US4] {FR-022} State fusion-only and unreranked in every degraded response body and expose the degraded state at /readyz, in src/api/src/api/retrieval/routes.py after:T076
 - [X] T078 [US4] {FR-022} Carry a machine-readable unreranked reason — arm_excludes_reranking, no_candidates_to_score — without claiming fusion-only, in retrieval/routes.py after:T077
 - [X] T079 [US4] {FR-023} Record the mode a run executed in on every evaluation-facing output, in src/api/src/api/retrieval/report.py after:T078
-- [X] T080 [US4] {FR-024} Force load failure at the artifact-loading boundary and assert ready-degraded, the fusion-only statement with results, and the recorded mode, in src/api/tests/retrieval/test_degraded.py after:T079
-- [X] T081 [US4] {FR-041} Report the degraded path's per-query latency on FR-033's terms and assert it never exceeds the reranked path's over the same query set, in src/api/tests/retrieval/test_degraded.py after:T080
+- [X] T080 [US4] {FR-024} Force load failure at the artifact-loading boundary and assert ready-degraded, the fusion-only statement with results, and the recorded mode, in src/api/tests/retrieval/test_degraded_at_the_boundary.py after:T079
+- [X] T081 [US4] {FR-041} Report the degraded path's per-query latency on FR-033's terms and assert it never exceeds the reranked path's over the same query set, in src/api/tests/retrieval/test_degraded_at_the_boundary.py after:T080
 
 ---
 
@@ -175,7 +175,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 - [X] T082 [US5] {FR-025} Implement the five request-selectable arms — lexical, dense, fused, fused_reranked, fused_reranked_full_precision — in retrieval/arms.py after:T063 → exports: run_arm
 - [X] T083 [US5] {FR-025} Run lexical-only and dense-only without fusion or reranking, each returning results independently, in src/api/src/api/retrieval/arms.py after:T082
 - [X] T084 [US5] {FR-025} [COMPLETES FR-025] Assert each of the five arms returns independently and identically across two runs on an unrebuilt index, in src/api/tests/retrieval/test_arms.py after:T083 ← T023:seeded_corpus
-- [X] T085 [US5] {FR-037} [COMPLETES FR-037] Assert the derived 50/50/50 constraint over a fused set of up to 100, in src/api/tests/retrieval/test_workload.py after:T084
+- [X] T085 [US5] {FR-037} [COMPLETES FR-037] Assert the derived 50/50/50 constraint over a fused set of up to 100, in src/api/tests/retrieval/test_arms.py after:T084
 
 ---
 
@@ -183,7 +183,7 @@ E001 scaffolded the four entries, `import-linter`, `tests/checks` and the Compos
 
 - [X] T086 [US6] {FR-026} Make the exact/approximate flag control index usage only, with filters, fusion, depth and reranking shared, in src/api/src/api/config.py and retrieval/arms.py after:T082
 - [X] T087 [US6] {FR-028} Return the requested candidate count from a filtered vector search under strict iterative scan (AD-003), in src/api/src/api/retrieval/arms.py after:T086
-- [X] T088 [US6] {FR-027,FR-028} Assert the connection-borne breadth is at or above the fetch depth and a filtered query returns the requested count, in src/api/tests/retrieval/test_vector_settings.py after:T087 ← T023:seeded_corpus
+- [X] T088 [US6] {FR-027,FR-028} Assert the connection-borne breadth is at or above the fetch depth and a filtered query returns the requested count, in src/api/tests/retrieval/test_single_statement.py after:T087 ← T023:seeded_corpus
 - [X] T089 [US6] {FR-039,FR-040} Record the observed pgvector version and the breadth with the index settings, any value above the floor being a recorded change, in retrieval/parameters.py after:T088
 - [X] T090 [US6] {FR-026} [COMPLETES FR-026] Build two differently configured application instances and compare the observable set FR-026 enumerates, in src/api/tests/retrieval/test_flag_parity.py after:T089 ← T023:seeded_corpus
 
