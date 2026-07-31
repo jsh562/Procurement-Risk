@@ -330,10 +330,14 @@ paths:
         reader arrives at the page; the byte range is not narrowed. That is a real limitation and it is
         stated here rather than implied.
 
-        **FR-021 and FR-022 are discharged in headers, because the body is bytes.** A PDF stream cannot
-        carry the layer a document was drawn from or the generation it was read through, and both are
-        required at the moment of display rather than only in a list. `X-Source-Kind` and
-        `X-Ingestion-Generation` carry them. The document is resolved through
+        **FR-022 is discharged before the source opens, not in a header.** FR-079 opens a source in a
+        separate browsing context, so nothing this product controls is reachable once it does — a
+        response header carries no accessible name, and a document viewer's accessibility tree is not
+        a surface this feature governs. FR-080 therefore requires the provenance marking to reach the
+        reader on the record and in the accessible name of the control that opens it, both of which
+        are in the list. `X-Source-Kind` and `X-Ingestion-Generation` remain as machine-readable
+        corroboration for a client fetching the stream directly; they are not the carrier a reader
+        depends on. The document is resolved through
         `v_active_ingestion_generation`: a reader that does not filter receives the resident
         generation's rows with no run attribution and cannot distinguish no live generation from one,
         and both failures are silent.
@@ -1254,8 +1258,11 @@ components:
           enum: [REAL, SYNTHETIC]
           description: |
             Preserved at display (FR-022). A synthesized submittal must not be presented
-            indistinguishably from a real published specification. Carried here for the list, and in
-            the `X-Source-Kind` header when the source itself is served.
+            indistinguishably from a real published specification. **This is the reader-facing
+            carrier** — FR-080 requires the marking to arrive before the source opens, because
+            FR-079 opens it in a separate context where no header reaches a reader. It must also
+            appear in the accessible name of the control built from `href`. The `X-Source-Kind`
+            header corroborates for a direct fetch and is not a substitute.
         page_state:
           allOf:
             - $ref: '#/components/schemas/SourceSectionState'
@@ -1286,6 +1293,7 @@ components:
             link rather than building a URL, and present even when `page_state` is
             `source_unresolvable` — following it is how a reader obtains the correlation identifier
             FR-036 requires them to be able to quote.
+          x-opens-in: separate-browsing-context
           example: /api/v1/documents/prj-001-t0002-r0/source
 
     CensusFigure:
