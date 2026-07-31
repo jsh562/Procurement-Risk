@@ -256,7 +256,7 @@ A coordinator who wants to know why this line looks worse than a similar one see
 - **SC-001** [US1]: A coordinator opening any line covered by the active run can see the full spread of modelled delivery outcomes, and no central estimate appears anywhere on the view.
 - **SC-002** [US1]: For a line whose need-by date falls inside the distribution, the coordinator can both see the shaded mass beyond that date and read the same mass stated as a frequency in both directions.
 - **SC-003** [US1]: Every figure on the detail view that the worklist also publishes matches the worklist's figure for the same line under the same active run, with no case in which the two disagree.
-- **SC-004** [US1]: For a line that exists and is open, A line with no posterior in the active run resolves to one of the three named conditions on the view, never to an empty figure and never to an error page.
+- **SC-004** [US1]: A line that exists, is open, and has no posterior in the active run resolves to one of the three named conditions on the view, never to an empty figure and never to an error page.
 - **SC-005** [US1]: A reader using the textual equivalent alone obtains the reference class, the labelled quantile pair, the miss mass in both directions, the residual mass, and a banded summary of the day grid whose bands are bounded by the labelled quantiles, and is offered no single value as the answer.
 - **SC-006** [US1]: The cumulative view names the share of outcomes falling beyond the modelled horizon rather than ending at the horizon without comment.
 - **SC-007** [US1]: No response backing this view carries a stored draw array, a stored day-grid array, or any central summary of the distribution.
@@ -284,7 +284,7 @@ A coordinator who wants to know why this line looks worse than a similar one see
 - **SC-028** [US1]: A line whose need-by date falls beyond the modelled horizon carries the miss mass labelled as a bound, and a line whose need-by date is at or before the run's as-of date carries no miss figure at all while still rendering the distribution.
 - **SC-029** [US1]: The cumulative view follows the distribution in reading order and never appears as the only encoding present.
 - **SC-030** [US1]: No absolute calendar date appears as an axis, an axis tick label, or a figure title; the only calendar dates present are the need-by mark's label and labels attached to the labelled quantiles.
-- **SC-031** [US1]: The textual equivalent renders within the same region as the figures it describes, and is reachable without assistive technology.
+- **SC-031** [US1]: The textual equivalent renders within the same region as the figures it describes, and is present without any hover, focus, expansion, click or panel required to bring it into view — the same decidable form FR-015 fixes, so the criterion and the requirement cannot be satisfied to different standards.
 - **SC-032** [US1]: No single predicted delivery date for the line appears in any figure, axis, label, tooltip, or textual equivalent, nor in the response the view renders from.
 
 ## Glossary *(include when spec introduces 2+ domain-specific terms)*

@@ -178,7 +178,7 @@ Adopted from the delivered boundary (E010 FR-043 / `api.risk_read.failures`), no
 | FR-036 | Failures | `risk_read/failures.py` (reused) | Correlation identifier and closed-set cause, in the delivered form |
 | FR-040, FR-043 | Copy, UI | `detailCopy.ts` | Every state carried by accessibility-tree text; wording distinct by a decidable property |
 | FR-041 | Derivation | `compute/probability.py` (reused) | `PercentFigure` bounded form; residual mass, beyond-horizon bound, per-mark share |
-| FR-042 | State resolution | `risk_read/detail_states.py` | Three scopes: resolution (one of five, stated precedence adopting E010 FR-018a), annotation (zero or more of three), section-scoped (one per section, each with a nominal member) |
+| FR-042 | State resolution | `risk_read/detail_states.py` | Three scopes: resolution (one of five, stated precedence adopting E010 FR-018a), annotation (zero or more of four, incl. calendar-passed), section-scoped (one per section, each with a nominal member) |
 | FR-044 | State resolution | `risk_read/detail_states.py` | Absent or closed line → named outcome |
 | FR-045 | State resolution, UI | `risk_read/detail_states.py`, `page.tsx` | Stale run marks its own figures; no reliance on a banner elsewhere |
 | FR-046 | Derivation, tests | `compute/distribution.py`, `src/api/tests/test_distribution.py` | Test-first, property-based, in the merge gate |

@@ -192,9 +192,21 @@ x-states:
     - [stale_run]
     - [beyond_horizon]
     - [already_late]
+    - [calendar_passed]
     - [stale_run, beyond_horizon]
     - [stale_run, already_late]
+    - [stale_run, calendar_passed]
   annotation_excluded:
+    - set: [already_late, calendar_passed]
+      why: |
+        `already_late` requires the effective need-by date at or before `as_of_date`;
+        `calendar_passed` requires it after `as_of_date` and at or before today. Mutually exclusive
+        by construction — which is why `maxItems: 2` still holds with four members: the three
+        date-derived states exclude one another, so at most one ever joins `stale_run`.
+    - set: [beyond_horizon, calendar_passed]
+      why: |
+        `beyond_horizon` puts the need-by date after `as_of_date + horizon_days`, which is later
+        than today for any run whose horizon has not itself elapsed.
     - set: [beyond_horizon, already_late]
       why: |
         `beyond_horizon` requires the effective need-by date to fall after `as_of_date + horizon_days`;
@@ -1219,8 +1231,9 @@ components:
         The no-interval declaration travels with the figure rather than sitting elsewhere in the
         product: a census published with no declaration is indistinguishable from an estimate whose
         interval was quietly dropped. The licensed reason is drawn from the closed set of exactly two
-        that E009 FR-025 already fixes, **adopted by reference rather than enumerated again** — two
-        independently minted sets would let a figure be licensed under one and not the other. Only the
+        that E009 FR-025 fixes. **The names are shared; the availability rule is stated locally** —
+        see `no_interval_reason`, because E009 closes its set at three named figures and this share is
+        a fourth, so adopting the rule wholesale would license neither member here. Only the
         census member is available to this figure; the other is licensed only to an estimate that
         publishes no point estimate.
 
@@ -1237,6 +1250,7 @@ components:
         - population
         - resolved_count
         - total_count
+        - span_check_basis
         - share
         - target_percent
         - meets_target
@@ -1335,7 +1349,7 @@ components:
           description: |
             FR-025. Empty when `meets_target` is true. Otherwise one entry per distinct cause with the
             count of records it accounts for, so a miss is published with its cause rather than as a
-            bare shortfall. `span_not_found_on_page` is the one cause outside
+            bare shortfall. `no_linked_records_to_measure` is carried at a zero denominator, where the target is unjudged rather than missed — without it a response doing what `meets_target` describes would fail this schema. `span_not_found_on_page` is the one shortfall cause outside
             `SourceUnresolvableReason`: the source resolved and the span was not on the cited page,
             which is a different failure from the source not resolving and is why FR-024 states two
             conditions rather than one.
@@ -1349,6 +1363,8 @@ components:
                   - $ref: '#/components/schemas/SourceUnresolvableReason'
                   - type: string
                     const: span_not_found_on_page
+                  - type: string
+                    const: no_linked_records_to_measure
               count:
                 type: integer
                 minimum: 1
@@ -1387,6 +1403,7 @@ components:
         - stale_run
         - beyond_horizon
         - already_late
+        - calendar_passed
 
     IdentityState:
       type: string
