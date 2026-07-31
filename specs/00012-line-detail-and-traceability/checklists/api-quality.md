@@ -1,0 +1,56 @@
+# API Quality Requirements: Line Detail and Traceability
+**Created**: 2026-07-30 | **Feature**: [spec.md](../spec.md)
+
+## Contract Completeness
+
+- [ ] CHK001 Is the obligation to publish the rank the precedence rule applied stated by any requirement or criterion, given FR-042 fixes the order and SC-018 asks only that exactly one resolution state be reported? [Completeness, Spec §FR-042, §SC-018]
+- [ ] CHK002 Is the artifact identification a response must carry closed by a requirement, given FR-013 names four members, FR-038's locus clause names seven as outside the figure domain, and the adopted run-metadata envelope requires ten? [Completeness, Spec §FR-013, §FR-038]
+- [ ] CHK003 Is publishing the match fields identity resolution turns on — manufacturer and part number — owned by a requirement, given no FR names them and their inclusion rests on what a reader in the unresolved state is presumed to want? [Completeness, Spec §FR-026, §FR-027]
+- [ ] CHK004 Is the omission of criticality from the response owned by a requirement, given Key Entities names it on the line under inspection and its exclusion rests on FR-038's five classes plus another epic's classification of it? [Consistency, Spec §Key Entities, §FR-038]
+- [ ] CHK005 Is the form per-field confidence must take — carrying its basis, and distinguishable from the real frequencies rendered beside it — required anywhere, or does FR-018 require only that a confidence be carried? [Completeness, Spec §FR-018]
+- [ ] CHK006 Is the view's obligation to honour a session what-if made on another surface stated as a requirement, given Scope excludes editing and the pass-through rests on a plan decision's reading of FR-010? [Completeness, Spec §Scope, §FR-010; Plan §AD-008]
+- [ ] CHK007 Does FR-014 bind the response or only the rendered view, so that assembling the structured equivalent from the same members the figures render from is a stated obligation rather than a design inference? [Clarity, Spec §FR-014, §FR-016]
+
+## Structural Enforceability
+
+- [ ] CHK008 Do the requirements ask for the prohibited quantities to be *unrepresentable* in the response rather than merely absent from it, given FR-011 and FR-012 forbid what the response carries while the plan and contract both claim the prohibition is enforced structurally? [Completeness, Spec §FR-011, §FR-012; Plan §Requirement Coverage Map]
+- [ ] CHK009 Is FR-012's prohibition on a *class* of quantities reducible to a list of member names, and does any requirement state how it stays checkable when a later member could carry a central summary under a name no list anticipates? [Testability, Spec §FR-003, §FR-012]
+- [ ] CHK010 Does FR-012's "a quantile carried without the member that pairs with it" name which member pairs — the other quantile of the labelled pair, or the complementary frequency FR-004 requires — so the requirement is not dependent on both readings being implemented to be safe? [Clarity, Spec §FR-004, §FR-012]
+- [ ] CHK011 Do the requirements state how a withheld figure is encoded — a member absent rather than null, zero or a sentinel — given FR-006 and FR-031 say only "withheld" and the absence-not-null rule appears in a plan hint and the contract? [Completeness, Spec §FR-006, §FR-031; Plan §HINT-004]
+- [ ] CHK012 Is the fifty-mark count required of the response as well as of the plot, and is the agreement between a declared count and the length of the mark series owned by a requirement rather than by two independent schema constructs? [Consistency, Spec §FR-001, §FR-002, §FR-011]
+- [ ] CHK013 Is the bounded percentage form required for the cumulative bands' delivered-by shares, given FR-041 closes its list at three figures and SC-020 at five, and neither names them? [Completeness, Spec §FR-041, §SC-020]
+- [ ] CHK014 Is the obligation that the figures and the distribution encoding be *present* wherever the figures-render state is reported owned by a requirement, or do the requirements state only what is absent in the other four states? [Completeness, Spec §FR-028, §FR-042]
+- [ ] CHK015 Does FR-038 close what the *view renders* or what the *response carries*, so that a five-class cap on the payload discharges a requirement rather than extending one? [Clarity, Spec §FR-038, §FR-039]
+- [ ] CHK016 Is the prohibition on a figure appearing in an error body stated by a requirement, given the one object admitting unspecified members is the problem document and FR-037's enumeration is written over "the response the view renders from"? [Completeness, Spec §FR-011, §FR-037]
+- [ ] CHK017 Is the rule that no stored posterior array crosses this boundary owned by a requirement binding surfaces beyond this one, or does this feature assert it only for its own response with the general rule resting on a decision record no check enforces? [Completeness, Spec §FR-011, §SC-007; Plan §Open Items]
+
+## Failure and Degraded-State Coverage
+
+- [ ] CHK018 Is "absent data is a state carried in a successful response, not a fault" stated as a requirement, so an identifier naming no line, no active run, and a line the run does not cover are *required* to be successful outcomes rather than planned as such? [Completeness, Spec §FR-042, §FR-044; Plan §Error Handling Strategy]
+- [ ] CHK019 Do the requirements assign every condition this surface can meet to exactly one vocabulary — a resolution state inside a success, or a fault — given FR-042 closes the state set at five and names neither an unreadable datastore nor an unrecognised artifact schema version? [Completeness, Spec §FR-042; Plan §Error Handling Strategy]
+- [ ] CHK020 Is the annotation set's membership consistent across the artifacts, given FR-042 enumerates four annotations including the calendar-passed state carried from the worklist while the plan's coverage map and the contract's enumeration each carry three? [Consistency, Spec §FR-042; Plan §Requirement Coverage Map]
+- [ ] CHK021 Do the requirements state which annotation combinations are admissible and which are contradictory, given FR-042 says "zero or more" and "determined independently" while the contract admits six sets and caps the array at two? [Completeness, Spec §FR-042]
+- [ ] CHK022 Is the closed cause set for a source that cannot be produced enumerated by a requirement, or does FR-023's "naming the cause" leave both the reasons and their split across two failure statuses to the contract alone? [Completeness, Spec §FR-023, §FR-036]
+- [ ] CHK023 Does FR-036's "the same form the serving boundary already establishes" name what it binds — media type, problem document shape, the closed type vocabulary, the status convention — or does reading it as the whole boundary convention rest on an interpretation no requirement states? [Clarity, Spec §FR-036]
+- [ ] CHK024 Does FR-036 name which member carries the cause a reader quotes — the problem type or the per-reason enumeration — so a consumer branching on one is branching on the thing the requirement fixed? [Clarity, Spec §FR-036, §SC-024]
+- [ ] CHK025 Is a rejected request inside FR-036's "every failure on this view", so a correlation identifier on a malformed-parameter refusal discharges a requirement rather than inheriting another epic's convention? [Completeness, Spec §FR-036, §SC-024]
+- [ ] CHK026 Is a non-application of the pass-through need-by value owned by a requirement that fixes what the reader is told, given the one resolution state in which it goes unapplied is also the state whose response shape admits no member that could report it? [Completeness, Spec §FR-036; Plan §Open Items]
+- [ ] CHK027 Is a per-record page state — and the marking of a citation known in advance not to open — traceable to a requirement, given FR-042 scopes its third set to sections and FR-023 states a failure at the moment a page cannot be produced? [Completeness, Spec §FR-023, §FR-042]
+- [ ] CHK028 Does FR-022's "or its page displayed" state where the synthetic marking must reach a reader viewing a streamed source, given a response header is not present in the accessibility tree FR-040 governs? [Clarity, Spec §FR-022, §FR-040]
+
+## Evidence and Census Declarations
+
+- [ ] CHK029 Is the declaration that the request-time span check is a proxy required by any requirement, or does it originate in a plan decision and reach the response as a member no requirement names? [Completeness, Spec §FR-024, §SC-010a; Plan §AD-010]
+- [ ] CHK030 Do the requirements state which of the census's qualifying declarations are mandatory on every published instance, so a declaration missing from a response is a requirement violation rather than a permitted variation? [Testability, Spec §FR-024]
+- [ ] CHK031 Is the obligation to re-measure the second condition against real corpus documents and publish both measurements with any disagreement owned by a functional requirement, or does a success criterion stand alone behind a plan decision and a task? [Completeness, Spec §SC-010a; Plan §AD-010]
+- [ ] CHK032 Do the artifacts agree on whether the licensed no-interval reason set is adopted from another epic by reference or stated locally, given FR-024, the spec's own compliance record, and the two halves of the census schema each answer differently? [Consistency, Spec §FR-024, §Compliance Check]
+- [ ] CHK033 Does FR-025 fix where the unjudged verdict's cause is carried and whether it belongs to the same closed vocabulary as a shortfall's causes, given a zero denominator is not a shortfall and "nothing was measured" is not a reason any record failed? [Clarity, Spec §FR-025]
+- [ ] CHK034 Is the census being one run-level figure identical on every line's response — rather than a measurement about the line being read — stated by a requirement, given a reader meets it inside a single line's evidence region? [Clarity, Spec §FR-024, §FR-038]
+
+## Boundary Conventions, Caching and Read-Only Shape
+
+- [ ] CHK035 Is a conditional-request capability required by any requirement or measured by any success criterion, or does the validator-and-not-modified path exist in the contract alone? [Completeness, Spec §Requirements; contracts/openapi.yaml §parameters.IfNoneMatch]
+- [ ] CHK036 Is the validator required to cover every input the response depends on, given the census is a run-level figure over every linked record while the enumerated inputs are scoped to this line's own entity and its own citations? [Completeness, Spec §FR-024; contracts/openapi.yaml §headers.ETag]
+- [ ] CHK037 Is the response's non-shareability required anywhere, given the cache directive rests on a session-scoped adjustment this feature does not own and on a reader identity the product records itself as not having? [Completeness, Spec §Assumptions; contracts/openapi.yaml §headers.CacheControl]
+- [ ] CHK038 Is the read-only character of the whole surface required, or only the identity-resolution write FR-029 names, so that "no write verb anywhere" rests on Scope prose rather than on a requirement a later revision must satisfy? [Completeness, Spec §FR-029, §Scope]
+- [ ] CHK039 Does FR-004's "reference class" name what must be carried — the population phrase a reader reads, or the convention triple the payload carries — given the Glossary defines it as the population and the delivered wording differs from the spec's? [Clarity, Spec §FR-004, §Glossary; Plan §AD-005]
